@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0c">
+  <meta name="description" content="SALMOS — creer · amar · crear. Remeras y más.">
+  <title>SALMOS — Tienda</title>
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-row">
+      <a class="brand" href="#inicio" aria-label="SALMOS Inicio">
+        <img src="assets/logo-mark.png" alt="SALMOS">
+        <div class="brand-copy">
+          <div class="brand-title">SALMOS</div>
+          <div class="brand-sub">creer · amar · crear</div>
+        </div>
+      </a>
+
+      <label class="search-box" aria-label="Buscar productos">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/></svg>
+        <input id="searchInput" type="search" placeholder="Buscar en SALMOS..." autocomplete="off">
+      </label>
+
+      <div class="header-actions">
+        <button class="icon-btn" id="themeBtn" aria-label="Cambiar tema" title="Cambiar tema">
+          <svg id="themeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        </button>
+        <button class="icon-btn" id="cartBtn" aria-label="Abrir carrito" title="Carrito">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7h15l-1.5 8h-11z"/><path d="M6 7 5 3H2"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+          <span class="badge hidden" id="cartBadge">0</span>
+        </button>
+      </div>
+    </div>
+    <div class="shell category-bar">
+      <nav class="category-row" id="categoryRow" aria-label="Categorías"></nav>
+    </div>
+  </header>
+
+  <main id="inicio" class="shell">
+    <section class="hero" aria-label="SALMOS">
+      <img src="assets/hero-salmos.png" alt="SALMOS creer amar crear">
+      <div class="hero-overlay">
+        <div class="hero-kicker">Remeras y más</div>
+        <h1>Vestí lo que creés.</h1>
+        <p>Diseños con identidad, propósito y mensaje. Descubrí la colección SALMOS.</p>
+        <button class="btn btn-primary" id="heroShopBtn">Ver productos</button>
+      </div>
+    </section>
+
+    <section class="section" id="productos">
+      <div class="section-head">
+        <div>
+          <h2 id="productsTitle">Productos</h2>
+          <p id="productsSubtitle">Nuestra colección.</p>
+        </div>
+        <button class="btn btn-ghost hidden" id="clearFiltersBtn">Ver todos</button>
+      </div>
+      <div class="product-grid" id="productGrid"></div>
+    </section>
+
+    <section class="section hidden" id="featuredSection">
+      <div class="section-head">
+        <div><h2>Destacados</h2><p>Los elegidos de SALMOS.</p></div>
+      </div>
+      <div class="product-grid" id="featuredGrid"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="shell footer-grid">
+      <div>
+        <img class="footer-logo" src="assets/logo-mark.png" alt="SALMOS">
+        <strong>SALMOS</strong>
+        <p>creer · amar · crear</p>
+      </div>
+      <div>
+        <h4>Comprar</h4>
+        <div class="footer-links">
+          <a href="#productos">Productos</a>
+          <button class="link-action" id="footerCartBtn" style="border:0;background:none;padding:0;text-align:left;cursor:pointer">Carrito</button>
+        </div>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <div class="footer-links">
+          <a id="footerWhatsapp" target="_blank" rel="noopener">WhatsApp</a>
+          <a href="admin/">Administración</a>
+        </div>
+      </div>
+    </div>
+    <div class="shell footer-bottom">© <span id="year"></span> SALMOS · creer · amar · crear</div>
+  </footer>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="cartDrawer" aria-label="Carrito">
+    <div class="drawer-head">
+      <h3>Tu carrito</h3>
+      <button class="icon-btn" id="closeCartBtn" aria-label="Cerrar carrito">×</button>
+    </div>
+    <div class="drawer-body" id="cartItems"></div>
+    <div class="drawer-foot">
+      <div class="total-row"><span>Subtotal</span><strong id="cartSubtotal">$0</strong></div>
+      <button class="btn btn-primary full" id="checkoutBtn">Continuar compra</button>
+    </div>
+  </aside>
+
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <section class="modal" id="productModal" aria-label="Detalle de producto"></section>
+
+  <section class="modal checkout" id="checkoutModal" aria-label="Finalizar compra">
+    <button class="icon-btn modal-close" id="closeCheckoutBtn" aria-label="Cerrar">×</button>
+    <div class="checkout-wrap">
+      <div class="stepper"><div class="step active"></div><div class="step"></div><div class="step"></div></div>
+      <div id="checkoutContent"></div>
+    </div>
+  </section>
+
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
