@@ -106,15 +106,16 @@ img { display: block; max-width: 100%; }
 .chip:hover, .chip.active { color:#16120b; border-color:transparent; background:linear-gradient(135deg,var(--gold-2),var(--gold)); box-shadow:0 8px 20px rgba(217,167,45,.18); }
 
 .hero { margin:22px 0 36px; position:relative; overflow:hidden; border-radius:28px; border:1px solid var(--line); box-shadow:var(--shadow); min-height:360px; background:#0a0a0b; }
-.hero::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(0,0,0,.03)); pointer-events:none; }
+.hero::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,rgba(0,0,0,.70) 0%,rgba(0,0,0,.28) 34%,rgba(0,0,0,.05) 58%,rgba(0,0,0,0) 76%); pointer-events:none; }
 .hero img { width:100%; height:100%; min-height:360px; object-fit:cover; }
 .hero-overlay {
-  position:absolute; z-index:2; left:clamp(18px,5vw,62px); bottom:clamp(20px,5vw,54px); max-width:560px;
-  background:rgba(9,9,10,.58); backdrop-filter:blur(14px); padding:22px; border-radius:22px; border:1px solid rgba(255,255,255,.12);
+  position:absolute; z-index:2; left:clamp(20px,4vw,52px); bottom:clamp(22px,4vw,46px); max-width:430px;
+  background:transparent; padding:0; border:0; backdrop-filter:none;
+  text-shadow:0 2px 18px rgba(0,0,0,.92);
 }
 .hero-kicker { color:#f6ce58; text-transform:uppercase; letter-spacing:.22em; font-size:.74rem; font-weight:800; }
-.hero h1 { margin:8px 0 8px; font-size:clamp(2rem,5vw,4.2rem); line-height:.95; font-family:Georgia,serif; }
-.hero p { margin:0 0 18px; color:#e1ded6; max-width:47ch; }
+.hero h1 { margin:8px 0 8px; font-size:clamp(2rem,4.2vw,3.7rem); line-height:.96; font-family:Georgia,serif; max-width:9ch; }
+.hero p { margin:0 0 18px; color:#f0ede7; max-width:36ch; }
 
 .btn {
   border:0; border-radius:999px; min-height:46px; padding:0 20px; cursor:pointer; font-weight:800;
@@ -285,9 +286,9 @@ img { display: block; max-width: 100%; }
   .category-row { padding-bottom:10px; }
   .hero { min-height:300px; border-radius:22px; margin-top:12px; }
   .hero img { min-height:300px; }
-  .hero-overlay { left:12px; right:12px; bottom:12px; padding:16px; }
-  .hero h1 { font-size:2.2rem; }
-  .hero p { font-size:.9rem; margin-bottom:14px; }
+  .hero-overlay { left:18px; right:auto; bottom:18px; max-width:72%; padding:0; }
+  .hero h1 { font-size:2rem; max-width:8ch; }
+  .hero p { font-size:.86rem; margin-bottom:14px; max-width:30ch; }
   .product-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
   .product-card { border-radius:17px; }
   .product-body { padding:11px 11px 13px; }
