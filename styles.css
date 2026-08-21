@@ -116,53 +116,20 @@ img { display: block; max-width: 100%; }
 
 .hero { margin:22px 0 36px; position:relative; overflow:hidden; border-radius:28px; border:1px solid var(--line); box-shadow:var(--shadow); min-height:360px; background:#0a0a0b; }
 .hero img { width:100%; height:100%; min-height:360px; object-fit:cover; display:block; }
-.hero-seal {
-  position:absolute; z-index:2; right:clamp(18px,2.8vw,38px); bottom:clamp(16px,2.5vw,30px);
-  width:118px; height:118px; border-radius:50%; transform:rotate(-4deg);
-  display:grid; place-items:center; text-align:center;
-  border:1.7px solid rgba(229,176,45,.94);
-  background:radial-gradient(circle at 35% 30%, rgba(45,34,13,.52), rgba(8,8,9,.75) 72%);
-  box-shadow:0 8px 24px rgba(0,0,0,.42), 0 0 18px rgba(217,167,45,.10);
-  backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
-  pointer-events:none;
-}
-.hero-seal::before, .hero-seal::after { content:none; }
-.hero-seal-text {
-  width:76px;
-  font-family:"Cinzel", Georgia, "Times New Roman", serif;
-  font-size:.62rem;
-  font-weight:800;
-  line-height:1.42;
-  letter-spacing:.045em;
-  text-transform:uppercase;
-  text-align:center;
-  background:linear-gradient(180deg,#fff1a4 0%,#f0c14c 30%,#c88a16 72%,#f5d96f 100%);
-  -webkit-background-clip:text;
-  background-clip:text;
-  color:transparent;
-  text-shadow:0 1px 0 rgba(255,244,183,.12), 0 2px 7px rgba(0,0,0,.82);
-}
-.hero-seal-text span {
-  font:inherit;
-  text-decoration-line:underline;
-  text-decoration-thickness:1.5px;
-  text-underline-offset:3px;
-  text-decoration-color:#e3ad2a;
-}
-.hero-seal-star {
+/* Sello gráfico "Con toda su gloria" */
+.hero-seal-img {
   position:absolute;
-  color:#e7b12e;
-  font-size:.42rem;
-  line-height:1;
-  text-shadow:0 1px 6px rgba(0,0,0,.9);
+  z-index:2;
+  right:clamp(18px,2.8vw,38px);
+  bottom:clamp(16px,2.5vw,30px);
+  width:clamp(104px,11vw,138px);
+  height:auto;
+  min-height:0 !important;
+  object-fit:contain;
+  display:block;
+  pointer-events:none;
+  filter:drop-shadow(0 8px 20px rgba(0,0,0,.42));
 }
-.hero-seal-star-top { top:9px; left:50%; transform:translateX(-50%); }
-.hero-seal-star-left-1 { left:13px; top:31px; }
-.hero-seal-star-left-2 { left:8px; top:55px; }
-.hero-seal-star-left-3 { left:15px; top:79px; }
-.hero-seal-star-right-1 { right:13px; top:31px; }
-.hero-seal-star-right-2 { right:8px; top:55px; }
-.hero-seal-star-right-3 { right:15px; top:79px; }
 
 .btn {
   border:1px solid color-mix(in srgb,var(--gold) 42%,transparent); border-radius:999px; min-height:46px; padding:0 20px; cursor:pointer; font-weight:800;
@@ -333,16 +300,12 @@ img { display: block; max-width: 100%; }
   .category-row { padding-bottom:10px; }
   .hero { min-height:300px; border-radius:22px; margin-top:12px; }
   .hero img { min-height:300px; }
-  .hero-seal { right:12px; bottom:12px; width:90px; height:90px; border-width:1.4px; }
-  .hero-seal-text { width:60px; font-size:.49rem; line-height:1.38; letter-spacing:.035em; }
-  .hero-seal-star { font-size:.32rem; }
-  .hero-seal-star-top { top:7px; }
-  .hero-seal-star-left-1 { left:10px; top:24px; }
-  .hero-seal-star-left-2 { left:6px; top:43px; }
-  .hero-seal-star-left-3 { left:11px; top:61px; }
-  .hero-seal-star-right-1 { right:10px; top:24px; }
-  .hero-seal-star-right-2 { right:6px; top:43px; }
-  .hero-seal-star-right-3 { right:11px; top:61px; }
+  .hero-seal-img {
+    right:12px;
+    bottom:12px;
+    width:90px;
+    min-height:0 !important;
+  }
   .product-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
   .product-card { border-radius:17px; }
   .product-body { padding:11px 11px 13px; }
