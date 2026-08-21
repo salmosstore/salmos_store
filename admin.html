@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0c">
+  <title>SALMOS — Administración</title>
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="admin-sidebar" id="adminSidebar">
+      <div class="admin-brand"><img src="logo-mark.png" alt=""><div><strong>SALMOS</strong><small>Administración</small></div></div>
+      <nav class="admin-nav">
+        <button class="admin-nav-btn active" data-view="dashboard">⌂ <span>Dashboard</span></button>
+        <button class="admin-nav-btn" data-view="products">◫ <span>Productos</span></button>
+        <button class="admin-nav-btn" data-view="categories">▦ <span>Categorías</span></button>
+        <button class="admin-nav-btn" data-view="stock">◈ <span>Stock</span></button>
+        <button class="admin-nav-btn" data-view="orders">▤ <span>Pedidos</span></button>
+        <button class="admin-nav-btn" data-view="finance">$ <span>Finanzas</span></button>
+        <button class="admin-nav-btn" data-view="settings">⚙ <span>Configuración</span></button>
+      </nav>
+      <a class="btn btn-ghost full" href="index.html">Ver tienda</a>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-topbar">
+        <button class="icon-btn admin-menu-btn" id="adminMenuBtn">☰</button>
+        <div><div class="admin-eyebrow">Panel SALMOS</div><h1 id="viewTitle">Dashboard</h1></div>
+        <button class="icon-btn" id="adminThemeBtn" title="Cambiar tema">◐</button>
+      </header>
+      <section class="admin-content" id="adminContent"><div class="empty-state"><strong>Cargando panel...</strong></div></section>
+    </main>
+  </div>
+
+  <dialog class="admin-dialog" id="productDialog">
+    <form method="dialog" class="dialog-shell" id="productForm">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Producto</div><h2 id="productDialogTitle">Nuevo producto</h2></div><button class="icon-btn" value="cancel">×</button></div>
+      <div class="dialog-body" id="productFormBody"></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" value="cancel">Cancelar</button><button class="btn btn-primary" id="saveProductBtn" value="default">Guardar producto</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="admin-dialog small" id="movementDialog">
+    <form method="dialog" class="dialog-shell" id="movementForm">
+      <div class="dialog-head"><h2>Nuevo movimiento</h2><button class="icon-btn" value="cancel">×</button></div>
+      <div class="dialog-body">
+        <div class="form-grid">
+          <div class="field"><label>Tipo</label><select class="select" name="type"><option value="expense">Gasto</option><option value="investment">Inversión</option><option value="income">Ingreso extra</option></select></div>
+          <div class="field"><label>Categoría</label><input class="input" name="category" placeholder="Packaging, publicidad..."></div>
+          <div class="field full"><label>Descripción</label><input class="input" name="description" required></div>
+          <div class="field"><label>Importe</label><input class="input" name="amount" type="number" min="0" step="1" required></div>
+          <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
+        </div>
+      </div>
+      <div class="dialog-foot"><button class="btn btn-ghost" value="cancel">Cancelar</button><button class="btn btn-primary" id="saveMovementBtn" value="default">Guardar</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast-stack" id="toastStack"></div>
+  <script src="config.js"></script>
+  <script src="admin.js" defer></script>
+</body>
+</html>
