@@ -339,7 +339,10 @@
 
   function renderCategories() {
     const row = qs('#categoryRow');
-    row.innerHTML = `<button class="chip active" data-category="all">Todo</button>` + state.categories.map(c => `<button class="chip" data-category="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</button>`).join('');
+    const visibleCategorySlugs = new Set(state.products.map(p => p.category_slug).filter(Boolean));
+    const visibleCategories = state.categories.filter(c => visibleCategorySlugs.has(c.slug));
+    if (state.activeCategory !== 'all' && !visibleCategorySlugs.has(state.activeCategory)) state.activeCategory = 'all';
+    row.innerHTML = `<button class="chip ${state.activeCategory==='all'?'active':''}" data-category="all">Todo</button>` + visibleCategories.map(c => `<button class="chip ${state.activeCategory===c.slug?'active':''}" data-category="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</button>`).join('');
     row.addEventListener('click', e => {
       const btn = e.target.closest('[data-category]');
       if (!btn) return;
@@ -369,7 +372,6 @@
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
         <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
-        <div class="stock-note">${p.available_stock > 0 ? (p.available_stock <= 3 ? 'Últimas unidades' : 'Disponible') : 'Sin stock'}</div>
       </div>
     </article>`;
   }
@@ -402,36 +404,43 @@
   }
 
   function firstAvailableVariant(p, color) {
-    return (p.variants || []).find(v => (!color || v.color === color) && v.available_stock > 0) || (p.variants || []).find(v => !color || v.color === color) || null;
+    return (p.variants || []).find(v => (!color || v.color === color) && Number(v.available_stock) > 0) || null;
   }
 
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
     const images = p.images?.length ? p.images : [{ url: '', alt_text: p.name }];
-    const activeVariant = p.variants?.find(v => v.id === Number(state.selectedVariantId));
-    const colors = p.colors || [];
-    const sizes = [...new Set((p.variants || []).filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => v.size || 'Única'))];
+    const availableVariants = (p.variants || []).filter(v => Number(v.available_stock) > 0);
+    const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
+    const colors = [...new Set(availableVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
+    if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
+    if (!activeVariant) {
+      const fallback = firstAvailableVariant({ variants: availableVariants }, state.selectedColor);
+      state.selectedVariantId = fallback?.id || null;
+    }
+    const selected = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
+    const sizes = [...new Set(availableVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => v.size || 'Única'))];
     const modal = qs('#productModal');
     modal.innerHTML = `
       <button class="icon-btn modal-close" data-close-product aria-label="Cerrar">×</button>
       <div class="product-detail">
         <div class="detail-gallery">
           <div class="detail-main">${images[0].url ? `<img id="detailMainImage" src="${escapeHtml(images[0].url)}" alt="${escapeHtml(images[0].alt_text || p.name)}">` : '<div class="product-placeholder">SALMOS</div>'}<button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button></div>
-          ${images.length > 1 ? `<div class="thumb-row">${images.map((im,i)=>`<button class="thumb ${i===0?'active':''}" data-image="${escapeHtml(im.url)}"><img src="${escapeHtml(im.url)}" alt=""></button>`).join('')}</div>` : ''}
+          ${p.verse_text ? `<div class="detail-verse-under-image">${escapeHtml(p.verse_text)}</div>` : ''}
         </div>
         <div class="detail-info">
           <div class="hero-kicker">${escapeHtml(p.category_name || '')}</div>
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
+          ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
           ${colors.length > 1 || (colors.length === 1 && colors[0]) ? `<div class="detail-block"><span class="detail-label">Color</span><div class="option-row">${colors.map(c=>`<button class="option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join('')}</div></div>` : ''}
-          <div class="detail-block"><span class="detail-label">Talle / variante</span><div class="option-row">${sizes.map(size => { const v=(p.variants||[]).find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || (p.variants||[]).find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${!v || v.available_stock<=0?'disabled':''}>${escapeHtml(size)}</button>`; }).join('')}</div></div>
-          ${p.meaning_text || p.verse_text ? `<div class="meaning-box"><h4>El significado detrás del diseño</h4>${p.meaning_text ? `<div>${escapeHtml(p.meaning_text)}</div>`:''}${p.verse_text ? `<div class="verse">${escapeHtml(p.verse_text)}</div>`:''}</div>` : ''}
-          <div class="stock-note">${activeVariant?.available_stock > 0 ? `Stock disponible: ${activeVariant.available_stock}` : 'Seleccioná una variante disponible'}</div>
+          ${sizes.length ? `<div class="detail-block"><span class="detail-label">Talle / variante</span><div class="option-row">${sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join('')}</div></div>` : ''}
+          ${images.length > 1 ? `<div class="detail-block detail-thumbs-block"><span class="detail-label">Fotos</span><div class="thumb-row detail-thumbs-right">${images.map((im,i)=>`<button class="thumb ${i===0?'active':''}" data-image="${escapeHtml(im.url)}"><img src="${escapeHtml(im.url)}" alt=""></button>`).join('')}</div></div>` : ''}
           <div class="detail-actions">
-            <button class="btn btn-secondary" data-add-cart ${!activeVariant || activeVariant.available_stock<=0?'disabled':''}>Agregar al carrito</button>
-            <button class="btn btn-primary" data-buy-now ${!activeVariant || activeVariant.available_stock<=0?'disabled':''}>Comprar ahora</button>
+            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
+            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}>Comprar ahora</button>
           </div>
         </div>
       </div>`;
@@ -542,85 +551,97 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-ghost" id="useLocationBtn">📍 Usar mi ubicación actual</button></div>
         <div class="address-autocomplete" id="autocompleteHost"></div>
-        <div class="map-box hidden" id="mapBox"></div>
-        <div class="address-confirm hidden" id="addressConfirm"></div>
+        <div class="address-confirm ${state.shipping.address ? '' : 'hidden'}" id="addressConfirm">${state.shipping.address ? `<strong>Dirección seleccionada:</strong><br>${escapeHtml(state.shipping.address)}` : ''}</div>
         <div id="quoteHost"></div>
       </div>`;
     if (state.area) setupAddressAutocomplete().catch(err => toast(err.message, 'error'));
-    if (state.shipping.lat && state.shipping.lng) setTimeout(() => showMap(state.shipping.lat, state.shipping.lng, state.shipping.address), 0);
+    if (state.shipping.lat && state.shipping.lng) {
+      showMap(state.shipping.lat, state.shipping.lng, state.shipping.address).catch(err => toast(err.message,'error'));
+    }
   }
 
   async function resolveArea(query) {
     if (!query?.trim()) throw new Error('Ingresá una localidad o código postal.');
     const data = await api('/api/geo/resolve-area', { method:'POST', body: JSON.stringify({ query }) });
     state.area = { query, ...data };
+    state.shipping.address = null; state.shipping.lat = null; state.shipping.lng = null; state.shipping.costCents = 0; state.shipping.distanceKm = null;
     await setupAddressAutocomplete();
-    toast('Zona encontrada. Ahora elegí calle y altura.', 'success');
-  }
-
-  async function loadGoogle() {
-    if (window.google?.maps) { state.googleLoaded = true; return; }
-    if (state.googleLoaded) return;
-    const key = cfg.GOOGLE_MAPS_WEB_KEY || state.config?.googleMapsWebKey;
-    if (!key) throw new Error('Falta configurar la clave SALMOS-WEB de Google Maps.');
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&libraries=places`;
-      script.async = true; script.defer = true; script.onload = resolve; script.onerror = () => reject(new Error('No se pudo cargar Google Maps.'));
-      document.head.appendChild(script);
-    });
-    state.googleLoaded = true;
+    toast('Zona encontrada. Ahora escribí calle y altura.', 'success');
   }
 
   async function setupAddressAutocomplete() {
-    await loadGoogle();
     const host = qs('#autocompleteHost');
     if (!host || !state.area) return;
-    host.innerHTML = '<label class="detail-label">Calle y altura</label>';
-    const { PlaceAutocompleteElement } = await google.maps.importLibrary('places');
-    const ac = new PlaceAutocompleteElement({ includedRegionCodes: ['ar'] });
-    ac.placeholder = 'Empezá a escribir la calle y altura';
-    if (state.area.lat && state.area.lng) ac.locationBias = { center: { lat: state.area.lat, lng: state.area.lng }, radius: 18000 };
-    ac.style.width = '100%';
-    ac.addEventListener('gmp-select', async (event) => {
-      try {
-        const place = event.placePrediction.toPlace();
-        await place.fetchFields({ fields: ['formattedAddress','location','viewport','addressComponents'] });
-        const loc = place.location;
-        if (!loc) throw new Error('No pudimos ubicar esa dirección.');
-        state.shipping.address = place.formattedAddress;
-        state.shipping.lat = loc.lat(); state.shipping.lng = loc.lng();
-        state.shipping.costCents = 0; state.shipping.distanceKm = null;
-        await showMap(state.shipping.lat, state.shipping.lng, state.shipping.address, place.viewport);
-      } catch (e) { toast(e.message, 'error'); }
+    host.innerHTML = `
+      <label class="detail-label">Calle y altura</label>
+      <div class="address-search-row">
+        <input class="input" id="streetAddressInput" autocomplete="street-address" placeholder="Ej. Carrizo 455" value="${escapeHtml(state.shipping.address || '')}">
+        <button class="btn btn-secondary" id="confirmTypedAddressBtn">Usar dirección</button>
+      </div>
+      <div class="address-suggestions hidden" id="addressSuggestions"></div>
+      <div class="address-helper">Escribí al menos 3 caracteres. Te mostraremos direcciones cercanas a la zona elegida.</div>`;
+    const input = qs('#streetAddressInput');
+    if (!input) return;
+    let timer = null;
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      const list = qs('#addressSuggestions');
+      if (!list) return;
+      if (q.length < 3) { list.innerHTML=''; list.classList.add('hidden'); return; }
+      timer = setTimeout(() => fetchAddressSuggestions(q).catch(err => {
+        console.error(err);
+        list.innerHTML = `<div class="address-suggestion-empty">No pudimos traer sugerencias. Podés escribir la dirección completa y tocar “Usar dirección”.</div>`;
+        list.classList.remove('hidden');
+      }), 260);
     });
-    host.appendChild(ac);
-    state.autocomplete = ac;
   }
 
-  async function showMap(lat, lng, address, viewport = null) {
-    await loadGoogle();
-    const box = qs('#mapBox');
-    const confirm = qs('#addressConfirm');
-    if (!box || !confirm) return;
-    box.classList.remove('hidden'); confirm.classList.remove('hidden');
-    const center = { lat:Number(lat), lng:Number(lng) };
-    if (!state.googleMap) state.googleMap = new google.maps.Map(box, { center, zoom:17, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' });
-    else { state.googleMap.setCenter(center); state.googleMap.setZoom(17); }
-    if (viewport) state.googleMap.fitBounds(viewport);
-    if (state.googleMarker) state.googleMarker.setMap(null);
-    state.googleMarker = new google.maps.Marker({ position:center, map:state.googleMap, draggable:true, animation:google.maps.Animation.DROP });
-    state.googleMarker.addListener('dragend', async e => {
-      const p = e.latLng;
-      state.shipping.lat = p.lat(); state.shipping.lng = p.lng(); state.shipping.costCents = 0;
-      try {
-        const r = await api('/api/geo/reverse', { method:'POST', body:JSON.stringify({ lat:state.shipping.lat, lng:state.shipping.lng }) });
-        state.shipping.address = r.formattedAddress || state.shipping.address;
-        confirm.innerHTML = `<strong>Confirmá el punto:</strong><br>${escapeHtml(state.shipping.address || '')}`;
-      } catch { confirm.innerHTML = '<strong>Confirmá el punto marcado en el mapa.</strong>'; }
-      renderMotoQuoteButton();
+  async function fetchAddressSuggestions(input) {
+    const list = qs('#addressSuggestions');
+    if (!list || !state.area) return;
+    list.innerHTML = '<div class="address-suggestion-empty">Buscando...</div>';
+    list.classList.remove('hidden');
+    const data = await api('/api/geo/autocomplete', {
+      method:'POST',
+      body:JSON.stringify({
+        input,
+        area:{
+          query:state.area.query || '',
+          formattedAddress:state.area.formattedAddress || '',
+          lat:state.area.lat,
+          lng:state.area.lng
+        }
+      })
     });
-    confirm.innerHTML = `<strong>Confirmá el punto:</strong><br>${escapeHtml(address || '')}`;
+    const items = data.items || [];
+    list.innerHTML = items.length
+      ? items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')
+      : '<div class="address-suggestion-empty">No encontramos coincidencias. Escribí calle y altura completas y tocá “Usar dirección”.</div>';
+  }
+
+  async function confirmTypedAddress(addressText) {
+    const raw = String(addressText || '').trim();
+    if (raw.length < 5) throw new Error('Escribí calle y altura.');
+    const areaText = state.area?.formattedAddress || state.area?.query || '';
+    const full = raw.toLowerCase().includes('argentina') ? raw : `${raw}, ${areaText}, Argentina`;
+    const data = await api('/api/geo/validate-address', { method:'POST', body:JSON.stringify({ address:full }) });
+    const loc = data.geocode?.location || {};
+    const lat = Number(loc.latitude ?? loc.lat), lng = Number(loc.longitude ?? loc.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('No pudimos ubicar esa dirección. Probá escribiendo calle, altura y localidad.');
+    state.shipping.address = data.formattedAddress || raw;
+    state.shipping.lat = lat; state.shipping.lng = lng; state.shipping.costCents = 0; state.shipping.distanceKm = null;
+    await showMap(lat,lng,state.shipping.address);
+    await quoteMoto();
+  }
+
+  async function showMap(lat, lng, address) {
+    const confirm = qs('#addressConfirm');
+    if (!confirm) return;
+    state.shipping.lat = Number(lat); state.shipping.lng = Number(lng);
+    if (address) state.shipping.address = address;
+    confirm.classList.remove('hidden');
+    confirm.innerHTML = `<strong>Dirección seleccionada:</strong><br>${escapeHtml(state.shipping.address || '')}`;
     renderMotoQuoteButton();
   }
 
@@ -628,14 +649,37 @@
     const host = qs('#quoteHost');
     if (!host) return;
     if (!state.shipping.lat || !state.shipping.lng) { host.innerHTML=''; return; }
-    host.innerHTML = state.shipping.costCents ? `<div class="quote-box"><div><strong>${state.shipping.distanceKm} km</strong><div class="stock-note">Entrega estimada ${state.config?.shipping?.moto?.minHours || 1}–${state.config?.shipping?.moto?.maxHours || 4} h</div></div><strong class="price">${money(state.shipping.costCents)}</strong></div><div style="margin-top:9px"><a class="btn btn-ghost full" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a></div>` : `<button class="btn btn-primary full" id="quoteMotoBtn">Calcular motomensajería</button>`;
+    host.innerHTML = state.shipping.costCents
+      ? `<div class="quote-box"><div><strong>${state.shipping.distanceKm} km</strong><div class="delivery-note">Entrega estimada ${state.config?.shipping?.moto?.minHours || 1}–${state.config?.shipping?.moto?.maxHours || 4} h</div></div><strong class="price">${money(state.shipping.costCents)}</strong></div><div style="margin-top:9px"><a class="btn btn-ghost full" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a></div>`
+      : `<button class="btn btn-primary full" id="quoteMotoBtn">Calcular motomensajería</button>`;
     const toSummary = qs('#toSummaryBtn'); if (toSummary) toSummary.disabled = !state.shipping.costCents;
   }
 
   async function quoteMoto() {
+    if (!state.shipping.lat || !state.shipping.lng) throw new Error('Primero elegí una dirección.');
     const data = await api('/api/shipping/moto/quote', { method:'POST', body:JSON.stringify({ destination:{ lat:state.shipping.lat, lng:state.shipping.lng, address:state.shipping.address } }) });
     state.shipping.distanceKm = data.distanceKm; state.shipping.costCents = data.costCents; state.shipping.quoteId = data.quoteId;
     renderMotoQuoteButton();
+  }
+
+  async function useCurrentLocation() {
+    if (!navigator.geolocation) throw new Error('Tu navegador no permite obtener ubicación.');
+    const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
+      resolve,
+      err => {
+        if (err.code === 1) reject(new Error('Chrome tiene bloqueada tu ubicación. Tocá el ícono de ubicación junto a la dirección del sitio, permitila y volvé a probar.'));
+        else if (err.code === 2) reject(new Error('No pudimos detectar tu ubicación. Activá la ubicación del dispositivo y probá otra vez.'));
+        else reject(new Error('La ubicación tardó demasiado. Probá nuevamente.'));
+      },
+      { enableHighAccuracy:true, timeout:15000, maximumAge:30000 }
+    ));
+    const lat=pos.coords.latitude, lng=pos.coords.longitude;
+    const data = await api('/api/geo/reverse', { method:'POST', body:JSON.stringify({ lat,lng }) });
+    state.area = { query: data.locality || data.postalCode || 'Ubicación actual', formattedAddress:data.formattedAddress || '', lat, lng };
+    state.shipping.address = data.formattedAddress; state.shipping.lat=lat; state.shipping.lng=lng; state.shipping.costCents=0; state.shipping.distanceKm=null;
+    await setupAddressAutocomplete();
+    await showMap(lat,lng,data.formattedAddress);
+    await quoteMoto();
   }
 
   function motoWhatsappUrl() {
@@ -724,7 +768,9 @@
       const def=e.target.closest('[data-default-address]');if(def){const a=state.auth.addresses.find(x=>Number(x.id)===Number(def.dataset.defaultAddress));if(a){try{await authApi(`/api/account/addresses/${a.id}`,{method:'PUT',body:JSON.stringify({label:a.label,recipientName:a.recipient_name,phone:a.phone,formattedAddress:a.formatted_address,lat:a.lat,lng:a.lng,notes:a.notes,isDefault:true})});await refreshAccount()}catch(err){toast(err.message,'error')}}return;}
       const del=e.target.closest('[data-delete-address]');if(del){try{await authApi(`/api/account/addresses/${del.dataset.deleteAddress}`,{method:'DELETE'});await refreshAccount();toast('Dirección eliminada','success')}catch(err){toast(err.message,'error')}return;}
       const af=e.target.closest('[data-open-favorite]');if(af){closeAccount();await openProduct(Number(af.dataset.openFavorite));return;}
-      const useAddr=e.target.closest('[data-use-address]');if(useAddr){const a=state.auth.addresses.find(x=>Number(x.id)===Number(useAddr.dataset.useAddress));if(a){state.shipping.address=a.formatted_address;state.shipping.lat=Number(a.lat);state.shipping.lng=Number(a.lng);state.shipping.costCents=0;state.shipping.distanceKm=null;state.area={query:a.label||'Dirección guardada',lat:Number(a.lat),lng:Number(a.lng)};renderShippingDetail();setTimeout(()=>showMap(a.lat,a.lng,a.formatted_address).catch(err=>toast(err.message,'error')),0)}return;}
+      const useAddr=e.target.closest('[data-use-address]');if(useAddr){const a=state.auth.addresses.find(x=>Number(x.id)===Number(useAddr.dataset.useAddress));if(a){state.shipping.address=a.formatted_address;state.shipping.lat=Number(a.lat);state.shipping.lng=Number(a.lng);state.shipping.costCents=0;state.shipping.distanceKm=null;state.area={query:a.label||'Dirección guardada',formattedAddress:a.formatted_address,lat:Number(a.lat),lng:Number(a.lng)};renderShippingDetail();try{await quoteMoto()}catch(err){toast(err.message,'error')}}return;}
+      const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const text=addrSuggestion.dataset.addressText||'';const input=qs('#streetAddressInput');if(input)input.value=text;const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}return;}
+      if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
       const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-image]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const img=qs('#detailMainImage'); if(img) img.src=thumb.dataset.image; return; }

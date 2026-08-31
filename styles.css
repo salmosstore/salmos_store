@@ -425,3 +425,95 @@ img { display: block; max-width: 100%; }
   .favorite-btn { width:35px; height:35px; right:9px; top:9px; }
 }
 
+/* =========================================================
+   SALMOS · DETALLE DE PRODUCTO + DIRECCIÓN SIMPLIFICADA
+   ========================================================= */
+.detail-verse-under-image {
+  margin-top: 12px;
+  padding: 13px 15px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--line));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  line-height: 1.45;
+}
+.detail-meaning-plain {
+  margin-top: -4px;
+}
+.detail-thumbs-block {
+  margin-top: 2px;
+}
+.detail-thumbs-right {
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+.detail-thumbs-right .thumb {
+  width: 58px;
+  height: 58px;
+}
+.address-search-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+.address-suggestions {
+  margin-top: 7px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  overflow: hidden;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+}
+.address-suggestion {
+  width: 100%;
+  display: block;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.address-suggestion:last-child {
+  border-bottom: 0;
+}
+.address-suggestion:hover {
+  background: color-mix(in srgb, var(--gold) 10%, var(--surface-2));
+}
+.address-suggestion strong,
+.address-suggestion small {
+  display: block;
+}
+.address-suggestion small {
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.address-suggestion-empty,
+.address-helper {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.4;
+}
+.address-helper {
+  padding-inline: 2px;
+}
+.delivery-note {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .78rem;
+}
+@media (max-width:680px) {
+  .address-search-row {
+    grid-template-columns: 1fr;
+  }
+  .address-search-row .btn {
+    width: 100%;
+  }
+}
+
