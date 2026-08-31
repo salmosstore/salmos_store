@@ -101,12 +101,13 @@
     if (state.placesLib) return state.placesLib;
     const key = state.config?.googleMapsWebKey || cfg.GOOGLE_MAPS_WEB_KEY || '';
     if (!key) throw new Error('Google Places no está configurado para la tienda.');
-    if (!window.google?.maps?.importLibrary) {
+
+    if (!window.google?.maps?.importLibrary && !window.google?.maps?.places?.AutocompleteSuggestion) {
       const src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&libraries=places`;
       await new Promise((resolve,reject)=>{
         const existing=[...document.scripts].find(x=>x.src.includes('maps.googleapis.com/maps/api/js'));
         if(existing){
-          if(window.google?.maps?.importLibrary) return resolve();
+          if(window.google?.maps?.importLibrary || window.google?.maps?.places?.AutocompleteSuggestion) return resolve();
           existing.addEventListener('load',resolve,{once:true});
           existing.addEventListener('error',()=>reject(new Error('No se pudo cargar Google Places.')),{once:true});
           return;
@@ -116,8 +117,16 @@
         document.head.appendChild(el);
       });
     }
-    state.placesLib = await google.maps.importLibrary('places');
-    return state.placesLib;
+
+    if (window.google?.maps?.importLibrary) {
+      state.placesLib = await google.maps.importLibrary('places');
+      return state.placesLib;
+    }
+    if (window.google?.maps?.places?.AutocompleteSuggestion) {
+      state.placesLib = google.maps.places;
+      return state.placesLib;
+    }
+    throw new Error('Google Places se cargó incompleto. Recargá la página.');
   }
 
   function normalizeSearch(v='') {
@@ -697,7 +706,7 @@
       includedPrimaryTypes:['(regions)'],
       language:'es-AR',
       region:'ar',
-      locationBias:{center:{lat:-34.78,lng:-58.53},radius:90000}
+      locationBias:{center:{lat:-34.78,lng:-58.53},radius:50000}
     });
     const items=[];const seen=new Set();const q=expandedSearch(input);
     for(const s of suggestions){
