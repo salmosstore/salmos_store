@@ -47,7 +47,7 @@
         <div class="kpi"><small>Ventas del mes</small><strong>${money(k.salesCents)}</strong></div>
         <div class="kpi"><small>Pedidos pagados</small><strong>${k.paidOrders||0}</strong></div>
         <div class="kpi"><small>Ganancia neta estimada</small><strong>${money(k.netProfitCents)}</strong></div>
-        <div class="kpi"><small>Stock bajo</small><strong>${k.lowStockCount||0}</strong></div>
+        <div class="kpi"><small>Sin stock</small><strong>${k.lowStockCount||0}</strong></div>
       </div>
       <section class="admin-section"><div class="admin-section-head"><h2>Pedidos recientes</h2><button class="btn btn-ghost" data-go="orders">Ver todos</button></div>${ordersTable(d.recentOrders||[])}</section>
       <section class="admin-section"><div class="admin-section-head"><h2>Resumen financiero</h2><button class="btn btn-ghost" data-go="finance">Abrir finanzas</button></div>

@@ -41,6 +41,9 @@
     googleMap: null,
     googleMarker: null,
     autocomplete: null,
+    placesLib: null,
+    areaSessionToken: null,
+    streetSessionToken: null,
     area: null,
     order: null
   };
@@ -92,6 +95,51 @@
       if(old){ if(old.dataset.loaded==='1') return resolve(); old.addEventListener('load',resolve,{once:true}); old.addEventListener('error',reject,{once:true}); return; }
       const s=document.createElement('script');s.src=src;s.async=true;s.dataset.loaded='0';s.onload=()=>{s.dataset.loaded='1';resolve()};s.onerror=()=>reject(new Error('No se pudo cargar el acceso con Google.'));document.head.appendChild(s);
     });
+  }
+
+  async function ensurePlacesLibrary() {
+    if (state.placesLib) return state.placesLib;
+    const key = state.config?.googleMapsWebKey || cfg.GOOGLE_MAPS_WEB_KEY || '';
+    if (!key) throw new Error('Google Places no está configurado para la tienda.');
+    if (!window.google?.maps?.importLibrary) {
+      const src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&libraries=places`;
+      await new Promise((resolve,reject)=>{
+        const existing=[...document.scripts].find(x=>x.src.includes('maps.googleapis.com/maps/api/js'));
+        if(existing){
+          if(window.google?.maps?.importLibrary) return resolve();
+          existing.addEventListener('load',resolve,{once:true});
+          existing.addEventListener('error',()=>reject(new Error('No se pudo cargar Google Places.')),{once:true});
+          return;
+        }
+        const el=document.createElement('script');el.src=src;el.async=true;el.defer=true;
+        el.onload=resolve;el.onerror=()=>reject(new Error('No se pudo cargar Google Places.'));
+        document.head.appendChild(el);
+      });
+    }
+    state.placesLib = await google.maps.importLibrary('places');
+    return state.placesLib;
+  }
+
+  function normalizeSearch(v='') {
+    return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+
+  function expandedSearch(v='') {
+    return normalizeSearch(v)
+      .replace(/^sta\b/,'santa')
+      .replace(/^sto\b/,'santo')
+      .replace(/^av\b/,'avenida');
+  }
+
+  function viewportLiteral(vp) {
+    if (!vp) return null;
+    try {
+      const ne = typeof vp.getNorthEast === 'function' ? vp.getNorthEast() : null;
+      const sw = typeof vp.getSouthWest === 'function' ? vp.getSouthWest() : null;
+      if (ne && sw) return { north:ne.lat(), east:ne.lng(), south:sw.lat(), west:sw.lng() };
+      if ([vp.north,vp.east,vp.south,vp.west].every(Number.isFinite)) return vp;
+    } catch {}
+    return null;
   }
   async function initFirebaseAuth() {
     if (!cfg.FIREBASE_CONFIG?.apiKey) { state.auth.ready=true; return; }
@@ -577,25 +625,35 @@
   }
 
   async function resolveAreaChoice(item) {
-    if (!item?.placeId) throw new Error('Elegí una localidad de la lista.');
+    if (!item?.prediction) throw new Error('Elegí una localidad de la lista.');
     const status = qs('#areaStatus');
     if (status) { status.className='area-status loading'; status.textContent='Cargando zona...'; }
-    const data = await api('/api/geo/resolve-area', {
-      method:'POST',
-      body: JSON.stringify({ query:item.text || item.mainText || '', placeId:item.placeId })
-    });
-    state.area = { ...data, query:item.mainText || item.text || data.locality || '', selectedLabel:item.mainText || item.text || data.locality || '' };
-    state.shipping.address = null;
-    state.shipping.lat = null;
-    state.shipping.lng = null;
-    state.shipping.costCents = 0;
-    state.shipping.distanceKm = null;
-    state.areaSuggestions = [];
-    const input=qs('#areaInput');
-    if(input) input.value=state.area.selectedLabel || state.area.locality || item.mainText || item.text || '';
-    const list=qs('#areaSuggestions');
-    if(list){ list.innerHTML=''; list.classList.add('hidden'); }
-    if (status) { status.className='area-status ready'; status.textContent=`✓ Zona elegida: ${state.area.selectedLabel || state.area.locality || item.mainText || item.text || ''}`; }
+    const place = item.prediction.toPlace();
+    await place.fetchFields({ fields:['displayName','formattedAddress','location','viewport','addressComponents'] });
+    const lat=Number(place.location?.lat?.() ?? place.location?.lat);
+    const lng=Number(place.location?.lng?.() ?? place.location?.lng);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)) throw new Error('No pudimos ubicar esa localidad.');
+    const components=place.addressComponents || [];
+    const part=(type)=>{
+      const c=components.find(x=>(x.types||[]).includes(type));
+      return c?.longText || c?.long_name || '';
+    };
+    const label=item.mainText || place.displayName || item.text || '';
+    state.area = {
+      placeId:item.placeId || place.id || '',
+      query:label,
+      selectedLabel:label,
+      formattedAddress:place.formattedAddress || item.text || label,
+      locality:part('locality') || part('sublocality_level_1') || part('sublocality') || part('administrative_area_level_2') || label,
+      postalCode:part('postal_code'),
+      lat,lng,
+      viewport:viewportLiteral(place.viewport)
+    };
+    state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.shipping.distanceKm=null;
+    state.areaSuggestions=[];state.areaSessionToken=null;state.streetSessionToken=null;
+    const input=qs('#areaInput');if(input) input.value=label;
+    const list=qs('#areaSuggestions');if(list){list.innerHTML='';list.classList.add('hidden');}
+    if(status){status.className='area-status ready';status.textContent=`✓ Zona elegida: ${label}`;}
     await setupAddressAutocomplete();
   }
 
@@ -607,107 +665,112 @@
     input.addEventListener('input',()=>{
       clearTimeout(timer);
       const q=input.value.trim();
-      const chosen=String(state.area?.selectedLabel || state.area?.locality || state.area?.query || '').trim();
-      if(state.area && q.toLowerCase()!==chosen.toLowerCase()){
-        state.area=null;
-        state.areaSuggestions=[];
-        state.shipping.address=null;
-        state.shipping.lat=null;
-        state.shipping.lng=null;
-        state.shipping.costCents=0;
-        state.shipping.distanceKm=null;
-        const streetHost=qs('#autocompleteHost'); if(streetHost) streetHost.innerHTML='';
-        const confirm=qs('#addressConfirm'); if(confirm){confirm.innerHTML='';confirm.classList.add('hidden');}
-        const quote=qs('#quoteHost'); if(quote) quote.innerHTML='';
-        const status=qs('#areaStatus'); if(status){status.className='area-status';status.textContent='Elegí una localidad de la lista.';}
+      const chosen=String(state.area?.selectedLabel || '').trim();
+      if(state.area && normalizeSearch(q)!==normalizeSearch(chosen)){
+        state.area=null;state.areaSuggestions=[];state.areaSessionToken=null;state.streetSessionToken=null;
+        state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.shipping.distanceKm=null;
+        const streetHost=qs('#autocompleteHost');if(streetHost)streetHost.innerHTML='';
+        const confirm=qs('#addressConfirm');if(confirm){confirm.innerHTML='';confirm.classList.add('hidden');}
+        const quote=qs('#quoteHost');if(quote)quote.innerHTML='';
+        const status=qs('#areaStatus');if(status){status.className='area-status';status.textContent='Elegí una localidad de la lista.';}
       }
       const list=qs('#areaSuggestions');
-      if(q.length<2){ if(list){list.innerHTML='';list.classList.add('hidden');} return; }
+      if(q.length<2){if(list){list.innerHTML='';list.classList.add('hidden');}return;}
       timer=setTimeout(()=>fetchAreaSuggestions(q).catch(err=>{
         console.error(err);
-        if(list){list.innerHTML='';list.classList.add('hidden');}
-        const status=qs('#areaStatus'); if(status){status.className='area-status error';status.textContent='No pudimos cargar sugerencias. Intentá nuevamente.';}
-      }),180);
+        if(list){list.innerHTML='<div class="address-suggestion-empty">No pudimos cargar las localidades. Volvé a intentar.</div>';list.classList.remove('hidden');}
+        const status=qs('#areaStatus');if(status){status.className='area-status error';status.textContent='No pudimos cargar las sugerencias.';}
+      }),220);
     });
-    input.addEventListener('keydown',e=>{
-      if(e.key==='Enter') e.preventDefault();
-    });
+    input.addEventListener('keydown',e=>{if(e.key==='Enter')e.preventDefault();});
   }
 
   async function fetchAreaSuggestions(input) {
-    const list=qs('#areaSuggestions');
-    if(!list) return;
-    list.innerHTML='<div class="address-suggestion-empty">Buscando localidades...</div>';
-    list.classList.remove('hidden');
-    const data=await api('/api/geo/autocomplete-area',{
-      method:'POST',
-      body:JSON.stringify({input})
+    const list=qs('#areaSuggestions');if(!list)return;
+    list.innerHTML='<div class="address-suggestion-empty">Buscando localidades...</div>';list.classList.remove('hidden');
+    const {AutocompleteSuggestion,AutocompleteSessionToken}=await ensurePlacesLibrary();
+    if(!state.areaSessionToken) state.areaSessionToken=new AutocompleteSessionToken();
+    const {suggestions=[]}=await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+      input,
+      sessionToken:state.areaSessionToken,
+      includedRegionCodes:['ar'],
+      includedPrimaryTypes:['(regions)'],
+      language:'es-AR',
+      region:'ar',
+      locationBias:{center:{lat:-34.78,lng:-58.53},radius:90000}
     });
-    const items=data.items||[];
-    state.areaSuggestions=items;
-    if(!items.length){
-      list.innerHTML='<div class="address-suggestion-empty">No encontramos localidades con ese texto.</div>';
-      return;
+    const items=[];const seen=new Set();const q=expandedSearch(input);
+    for(const s of suggestions){
+      const p=s.placePrediction;if(!p)continue;
+      const main=p.mainText?.text || p.text?.text || '';
+      const secondary=p.secondaryText?.text || '';
+      const text=p.text?.text || [main,secondary].filter(Boolean).join(', ');
+      const matchText=expandedSearch(main+' '+text);
+      if(q && !matchText.includes(q)) continue;
+      if(seen.has(p.placeId))continue;seen.add(p.placeId);
+      items.push({placeId:p.placeId,text,mainText:main,secondaryText:secondary,prediction:p});
     }
-    list.innerHTML=items.map((x,i)=>`<button class="address-suggestion" data-area-suggestion="${i}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('') + '<div class="google-attribution">Sugerencias de Google</div>';
+    state.areaSuggestions=items;
+    if(!items.length){list.innerHTML='<div class="address-suggestion-empty">No encontramos localidades con ese texto.</div>';return;}
+    list.innerHTML=items.map((x,i)=>`<button class="address-suggestion" data-area-suggestion="${i}"><strong>${escapeHtml(x.mainText||x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')+'<div class="google-attribution">Sugerencias de Google</div>';
   }
 
   async function setupAddressAutocomplete() {
-    const host = qs('#autocompleteHost');
-    if (!host || !state.area) return;
-    host.innerHTML = `
+    const host=qs('#autocompleteHost');if(!host||!state.area)return;
+    host.innerHTML=`
       <label class="detail-label">Calle y altura</label>
       <div class="address-search-row">
-        <input class="input" id="streetAddressInput" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Calle y altura" value="${escapeHtml(state.shipping.address || '')}">
+        <input class="input" id="streetAddressInput" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Calle y altura" value="${escapeHtml(state.shipping.address||'')}">
         <button class="btn btn-secondary" id="confirmTypedAddressBtn">Usar dirección</button>
       </div>
       <div class="address-suggestions hidden" id="addressSuggestions"></div>
       <div class="address-helper">Escribí el nombre de la calle y elegí una sugerencia. Después agregá la altura.</div>`;
-    const input = qs('#streetAddressInput');
-    if (!input) return;
-    let timer = null;
-    input.addEventListener('input', () => {
-      clearTimeout(timer);
-      const q = input.value.trim();
-      const list = qs('#addressSuggestions');
-      if (!list) return;
-      if (q.length < 2) { list.innerHTML=''; list.classList.add('hidden'); return; }
-      timer = setTimeout(() => fetchAddressSuggestions(q).catch(err => {
-        console.error(err);
-        list.innerHTML = '';
-        list.classList.add('hidden');
-      }), 180);
+    const input=qs('#streetAddressInput');if(!input)return;
+    state.streetSessionToken=null;
+    let timer=null;
+    input.addEventListener('input',()=>{
+      clearTimeout(timer);const q=input.value.trim();const list=qs('#addressSuggestions');if(!list)return;
+      if(q.length<2){list.innerHTML='';list.classList.add('hidden');return;}
+      timer=setTimeout(()=>fetchAddressSuggestions(q).catch(err=>{console.error(err);list.innerHTML='';list.classList.add('hidden');}),220);
     });
   }
 
   async function fetchAddressSuggestions(input) {
-    const list = qs('#addressSuggestions');
-    if (!list || !state.area) return;
-    list.innerHTML = '<div class="address-suggestion-empty">Buscando calles en tu zona...</div>';
-    list.classList.remove('hidden');
-    const data = await api('/api/geo/autocomplete', {
-      method:'POST',
-      body:JSON.stringify({
-        input,
-        area:{
-          query:state.area.query || '',
-          formattedAddress:state.area.formattedAddress || '',
-          locality:state.area.locality || '',
-          postalCode:state.area.postalCode || '',
-          lat:state.area.lat,
-          lng:state.area.lng,
-          viewport:state.area.viewport || null
-        }
-      })
-    });
-    const items = data.items || [];
-    if (!items.length) {
-      list.innerHTML = '';
-      list.classList.add('hidden');
-      return;
+    const list=qs('#addressSuggestions');if(!list||!state.area)return;
+    list.innerHTML='<div class="address-suggestion-empty">Buscando calles...</div>';list.classList.remove('hidden');
+    const {AutocompleteSuggestion,AutocompleteSessionToken}=await ensurePlacesLibrary();
+    if(!state.streetSessionToken) state.streetSessionToken=new AutocompleteSessionToken();
+    const vp=state.area.viewport;
+    const request={
+      input,
+      sessionToken:state.streetSessionToken,
+      includedRegionCodes:['ar'],
+      includedPrimaryTypes:/\b\d{1,6}[A-Za-z]?\b/.test(input)?['street_address','route','premise']:['route'],
+      language:'es-AR',region:'ar'
+    };
+    if(vp && [vp.north,vp.east,vp.south,vp.west].every(Number.isFinite)){
+      const padLat=Math.max((vp.north-vp.south)*0.10,0.003);
+      const padLng=Math.max((vp.east-vp.west)*0.10,0.003);
+      request.locationRestriction={north:vp.north+padLat,east:vp.east+padLng,south:vp.south-padLat,west:vp.west-padLng};
+    }else{
+      request.locationRestriction={center:{lat:Number(state.area.lat),lng:Number(state.area.lng)},radius:12000};
     }
-    list.classList.remove('hidden');
-    list.innerHTML = items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText || x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('') + '<div class="google-attribution">Sugerencias de Google</div>';
+    const {suggestions=[]}=await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+    const q=expandedSearch(input.replace(/\b\d{1,6}[A-Za-z]?\b/g,' '));
+    const items=[];const seen=new Set();
+    for(const s of suggestions){
+      const p=s.placePrediction;if(!p)continue;
+      const main=p.mainText?.text || p.text?.text || '';
+      const secondary=p.secondaryText?.text || '';
+      const text=p.text?.text || [main,secondary].filter(Boolean).join(', ');
+      const mainNorm=expandedSearch(main);
+      if(q && !mainNorm.includes(q))continue;
+      if(seen.has(p.placeId))continue;seen.add(p.placeId);
+      items.push({placeId:p.placeId,text,mainText:main,secondaryText:secondary,prediction:p});
+    }
+    state.addressSuggestions=items;
+    if(!items.length){list.innerHTML='';list.classList.add('hidden');return;}
+    list.innerHTML=items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText||x.text)}"><strong>${escapeHtml(x.mainText||x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')+'<div class="google-attribution">Sugerencias de Google</div>';
   }
 
   async function confirmTypedAddress(addressText) {
@@ -753,21 +816,44 @@
     renderMotoQuoteButton();
   }
 
+  async function getBestCurrentPosition() {
+    if(!navigator.geolocation) throw new Error('Tu navegador no permite obtener ubicación.');
+    return await new Promise((resolve,reject)=>{
+      let best=null,done=false;
+      const finish=(value,error)=>{if(done)return;done=true;clearTimeout(timer);if(watchId!=null)navigator.geolocation.clearWatch(watchId);error?reject(error):resolve(value);};
+      const timer=setTimeout(()=>{
+        if(best) finish(best);
+        else finish(null,new Error('No pudimos detectar tu ubicación. Revisá que la ubicación del dispositivo esté activada.'));
+      },12000);
+      let watchId=navigator.geolocation.watchPosition(pos=>{
+        if(!best || Number(pos.coords.accuracy)<Number(best.coords.accuracy)) best=pos;
+        if(Number(pos.coords.accuracy)<=45) finish(pos);
+      },err=>{
+        if(err.code===1) finish(null,new Error('Chrome tiene bloqueada tu ubicación. Permitila desde el ícono junto a la dirección del sitio y volvé a probar.'));
+        else if(!best && err.code===2) finish(null,new Error('El dispositivo no pudo obtener una ubicación precisa.'));
+      },{enableHighAccuracy:true,timeout:11000,maximumAge:0});
+    });
+  }
+
   async function useCurrentLocation() {
-    if (!navigator.geolocation) throw new Error('Tu navegador no permite obtener ubicación.');
-    const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
-      resolve,
-      err => {
-        if (err.code === 1) reject(new Error('Chrome tiene bloqueada tu ubicación. Tocá el ícono de ubicación junto a la dirección del sitio, permitila y volvé a probar.'));
-        else if (err.code === 2) reject(new Error('No pudimos detectar tu ubicación. Activá la ubicación del dispositivo y probá otra vez.'));
-        else reject(new Error('La ubicación tardó demasiado. Probá nuevamente.'));
-      },
-      { enableHighAccuracy:true, timeout:15000, maximumAge:30000 }
-    ));
-    const lat=pos.coords.latitude, lng=pos.coords.longitude;
-    const data = await api('/api/geo/reverse', { method:'POST', body:JSON.stringify({ lat,lng }) });
-    state.area = { query: data.locality || data.postalCode || 'Ubicación actual', formattedAddress:data.formattedAddress || '', lat, lng };
-    state.shipping.address = data.formattedAddress; state.shipping.lat=lat; state.shipping.lng=lng; state.shipping.costCents=0; state.shipping.distanceKm=null;
+    const pos=await getBestCurrentPosition();
+    const lat=Number(pos.coords.latitude),lng=Number(pos.coords.longitude),accuracy=Math.round(Number(pos.coords.accuracy)||0);
+    const data=await api('/api/geo/reverse',{method:'POST',body:JSON.stringify({lat,lng})});
+    const zoneName=data.locality || data.postalCode || '';
+    if(!zoneName) throw new Error('Detectamos tu posición, pero no pudimos identificar la localidad. Elegila manualmente.');
+    let resolved=null;
+    try{resolved=await api('/api/geo/resolve-area',{method:'POST',body:JSON.stringify({query:zoneName})});}catch{}
+    state.area={...(resolved||{}),query:zoneName,selectedLabel:zoneName,formattedAddress:resolved?.formattedAddress||data.formattedAddress||zoneName,lat:resolved?.lat??lat,lng:resolved?.lng??lng,locality:zoneName,postalCode:data.postalCode||resolved?.postalCode||''};
+    const areaInput=qs('#areaInput');if(areaInput)areaInput.value=zoneName;
+    const status=qs('#areaStatus');
+    if(accuracy>100){
+      state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.shipping.distanceKm=null;
+      if(status){status.className='area-status ready';status.textContent=`✓ Zona detectada: ${zoneName}`;}
+      await setupAddressAutocomplete();
+      throw new Error(`La ubicación del dispositivo es aproximada (±${accuracy} m). Para no mandar el pedido a una dirección equivocada, completá calle y altura.`);
+    }
+    state.shipping.address=data.formattedAddress;state.shipping.lat=lat;state.shipping.lng=lng;state.shipping.costCents=0;state.shipping.distanceKm=null;
+    if(status){status.className='area-status ready';status.textContent=`✓ Zona detectada: ${zoneName}`;}
     await setupAddressAutocomplete();
     await showMap(lat,lng,data.formattedAddress);
     await quoteMoto();
@@ -877,7 +963,7 @@
       const af=e.target.closest('[data-open-favorite]');if(af){closeAccount();await openProduct(Number(af.dataset.openFavorite));return;}
       const useAddr=e.target.closest('[data-use-address]');if(useAddr){const a=state.auth.addresses.find(x=>Number(x.id)===Number(useAddr.dataset.useAddress));if(a){state.shipping.address=a.formatted_address;state.shipping.lat=Number(a.lat);state.shipping.lng=Number(a.lng);state.shipping.costCents=0;state.shipping.distanceKm=null;state.area={query:a.label||'Dirección guardada',formattedAddress:a.formatted_address,lat:Number(a.lat),lng:Number(a.lng)};renderShippingDetail();try{await quoteMoto()}catch(err){toast(err.message,'error')}}return;}
       const areaSuggestion=e.target.closest('[data-area-suggestion]');if(areaSuggestion){const item=(state.areaSuggestions||[])[Number(areaSuggestion.dataset.areaSuggestion)];if(item){try{await resolveAreaChoice(item)}catch(err){toast(err.message,'error')}}return;}
-      const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const text=addrSuggestion.dataset.addressText||'';const main=addrSuggestion.dataset.addressMain||text;const input=qs('#streetAddressInput');const hasNumber=/\b\d{1,6}[A-Za-z]?\b/.test(main);if(input){input.value=hasNumber?text:main;input.focus();if(!hasNumber)input.setSelectionRange(input.value.length,input.value.length);}const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');if(hasNumber){try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}}else{toast('Calle encontrada. Ahora agregá la altura.','success')}return;}
+      const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const item=(state.addressSuggestions||[])[Number(addrSuggestion.dataset.addressSuggestion)];const text=item?.text||addrSuggestion.dataset.addressText||'';const main=item?.mainText||addrSuggestion.dataset.addressMain||text;const input=qs('#streetAddressInput');const hasNumber=/\b\d{1,6}[A-Za-z]?\b/.test(main);if(input){input.value=hasNumber?text:main;input.focus();if(!hasNumber)input.setSelectionRange(input.value.length,input.value.length);}const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');state.streetSessionToken=null;if(hasNumber){try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}}else{toast('Calle encontrada. Ahora agregá la altura.','success')}return;}
       if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
       const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
