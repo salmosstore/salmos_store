@@ -496,10 +496,23 @@
     return (p.variants || []).find(v => (!color || v.color === color) && Number(v.available_stock) > 0) || null;
   }
 
+  function detailMediaType(item) {
+    if (item?.media_type) return item.media_type === 'video' ? 'video' : 'image';
+    return /\.(mp4|webm|mov|m4v|ogv)(?:$|\?)/i.test(String(item?.r2_key || item?.url || '')) ? 'video' : 'image';
+  }
+  function renderDetailMedia(item, productName='SALMOS') {
+    if (!item?.url) return '<div class="product-placeholder">SALMOS</div>';
+    if (detailMediaType(item) === 'video') return `<video class="detail-main-video" src="${escapeHtml(item.url)}" controls playsinline preload="metadata" aria-label="Video de ${escapeHtml(productName)}"></video>`;
+    return `<img class="detail-main-image" src="${escapeHtml(item.url)}" alt="${escapeHtml(item.alt_text || productName)}">`;
+  }
+  function firstProductImage(p) {
+    return (p?.images || []).find(item => detailMediaType(item) === 'image')?.url || '';
+  }
+
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
-    const images = p.images?.length ? p.images : [{ url: '', alt_text: p.name }];
+    const media = p.images?.length ? p.images : [{ url: '', alt_text: p.name, media_type:'image' }];
     const availableVariants = (p.variants || []).filter(v => Number(v.available_stock) > 0);
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(availableVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
@@ -515,8 +528,8 @@
       <button class="icon-btn modal-close" data-close-product aria-label="Cerrar">×</button>
       <div class="product-detail">
         <div class="detail-gallery">
-          <div class="detail-main">${images[0].url ? `<img id="detailMainImage" src="${escapeHtml(images[0].url)}" alt="${escapeHtml(images[0].alt_text || p.name)}">` : '<div class="product-placeholder">SALMOS</div>'}<button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button></div>
-          ${p.verse_text ? `<div class="detail-verse-under-image">${escapeHtml(p.verse_text)}</div>` : ''}
+          <div class="detail-main"><div class="detail-main-media" id="detailMainMedia">${renderDetailMedia(media[0],p.name)}</div><button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button></div>
+          ${p.verse_text ? `<div class="detail-verse-under-image"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
         </div>
         <div class="detail-info">
           <div class="hero-kicker">${escapeHtml(p.category_name || '')}</div>
@@ -526,7 +539,7 @@
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
           ${colors.length > 1 || (colors.length === 1 && colors[0]) ? `<div class="detail-block"><span class="detail-label">Color</span><div class="option-row">${colors.map(c=>`<button class="option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join('')}</div></div>` : ''}
           ${sizes.length ? `<div class="detail-block"><span class="detail-label">Talle / variante</span><div class="option-row">${sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join('')}</div></div>` : ''}
-          ${images.length > 1 ? `<div class="detail-block detail-thumbs-block"><span class="detail-label">Fotos</span><div class="thumb-row detail-thumbs-right">${images.map((im,i)=>`<button class="thumb ${i===0?'active':''}" data-image="${escapeHtml(im.url)}"><img src="${escapeHtml(im.url)}" alt=""></button>`).join('')}</div></div>` : ''}
+          ${media.length > 1 ? `<div class="detail-block detail-thumbs-block"><span class="detail-label">Fotos y videos</span><div class="thumb-row detail-thumbs-right">${media.map((im,i)=>`<button class="thumb media-thumb ${i===0?'active':''}" data-media-url="${escapeHtml(im.url)}" data-media-type="${detailMediaType(im)}" data-media-alt="${escapeHtml(im.alt_text||p.name)}" aria-label="${detailMediaType(im)==='video'?'Ver video':'Ver foto'} ${i+1}">${detailMediaType(im)==='video'?`<span class="video-thumb-icon">▶</span>`:`<img src="${escapeHtml(im.url)}" alt="">`}</button>`).join('')}</div></div>` : ''}
           <div class="detail-actions">
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
             <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}>Comprar ahora</button>
@@ -541,7 +554,7 @@
     if (!p || !v || v.available_stock <= 0) return;
     const existing = state.cart.find(x => x.variantId === v.id);
     if (existing) existing.qty = Math.min(existing.qty + 1, v.available_stock);
-    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, qty: 1, maxStock: v.available_stock, image: p.images?.[0]?.url || '' });
+    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, qty: 1, maxStock: v.available_stock, image: firstProductImage(p) });
     saveCart();
     closeModal('#productModal');
     toast('Producto agregado al carrito', 'success');
@@ -983,7 +996,7 @@
       if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
       const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
-      const thumb=e.target.closest('[data-image]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const img=qs('#detailMainImage'); if(img) img.src=thumb.dataset.image; return; }
+      const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }
       const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=v?.id||null; renderProductModal(); return; }
       const variant=e.target.closest('[data-variant]'); if(variant){ state.selectedVariantId=Number(variant.dataset.variant); renderProductModal(); return; }
       if(e.target.closest('[data-add-cart]')) { addSelectedToCart(false); return; }
