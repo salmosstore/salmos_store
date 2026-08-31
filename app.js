@@ -9,6 +9,15 @@
   const qs = (s, root = document) => root.querySelector(s);
   const qsa = (s, root = document) => [...root.querySelectorAll(s)];
 
+  function checkoutToken() {
+    let token = localStorage.getItem('salmos_checkout_token') || '';
+    if (!/^[A-Za-z0-9_-]{16,100}$/.test(token)) {
+      token = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g,'');
+      localStorage.setItem('salmos_checkout_token', token);
+    }
+    return token;
+  }
+
   const state = {
     config: null,
     categories: [],
@@ -20,6 +29,8 @@
     accountTab: 'profile',
     cartSyncTimer: null,
     paymentApprovedReturn: false,
+    checkoutToken: checkoutToken(),
+    pendingCheckout: loadJSON('salmos_pending_checkout', null),
     selectedProduct: null,
     selectedColor: null,
     selectedVariantId: null,
@@ -52,6 +63,7 @@
   async function api(path, options = {}) {
     const headers = new Headers(options.headers || {});
     if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+    if (!headers.has('X-Salmos-Checkout-Token')) headers.set('X-Salmos-Checkout-Token', state.checkoutToken);
     const res = await fetch(apiUrl(path), { ...options, headers });
     const text = await res.text();
     let data = null;
@@ -122,6 +134,7 @@
     if(!token) throw new Error('Ingresá con Google para usar esta función.');
     const headers=new Headers(options.headers||{});
     headers.set('Authorization',`Bearer ${token}`);
+    headers.set('X-Salmos-Checkout-Token', state.checkoutToken);
     if(!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) headers.set('Content-Type','application/json');
     let res=await fetch(apiUrl(path),{...options,headers});
     if(res.status===401){
@@ -520,7 +533,7 @@
     qs('#checkoutContent').innerHTML = `
       <h2>Entrega</h2><div class="checkout-sub">Elegí cómo querés recibir tu compra.</div>
       <div class="shipping-options">
-        <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm || 50} km · demora estimada ${pc.shipping?.moto?.minHours || 1}–${pc.shipping?.moto?.maxHours || 4} h</small></span><span class="shipping-price">${state.shipping.method==='moto' && state.shipping.costCents ? money(state.shipping.costCents) : 'Calcular'}</span></button>
+        <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm || 50} km · Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${pc.shipping?.moto?.minHours || 1} y ${pc.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad</small></span><span class="shipping-price">${state.shipping.method==='moto' && state.shipping.costCents ? money(state.shipping.costCents) : 'Calcular'}</span></button>
         <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?'Domicilio o sucursal':'Integración pendiente de habilitación'}</small></span><span class="shipping-price">${correoEnabled?'Calcular':'Próximamente'}</span></button>
         <button class="shipping-card ${state.shipping.method==='pickup'?'active':''} ${pickupEnabled?'':'disabled'}" data-shipping="pickup" ${pickupEnabled?'':'disabled'}><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${pickupEnabled?escapeHtml(pc.shipping.pickup.address || 'Coordinar retiro'):'Se habilitará desde administración'}</small></span><span class="shipping-price">Gratis</span></button>
       </div>
@@ -579,7 +592,7 @@
         <button class="btn btn-secondary" id="confirmTypedAddressBtn">Usar dirección</button>
       </div>
       <div class="address-suggestions hidden" id="addressSuggestions"></div>
-      <div class="address-helper">Escribí al menos 3 caracteres. Te mostraremos direcciones cercanas a la zona elegida.</div>`;
+      <div class="address-helper">Empezá a escribir la calle: las sugerencias aparecen desde las primeras letras. Después agregá la altura para confirmar la entrega.</div>`;
     const input = qs('#streetAddressInput');
     if (!input) return;
     let timer = null;
@@ -588,12 +601,12 @@
       const q = input.value.trim();
       const list = qs('#addressSuggestions');
       if (!list) return;
-      if (q.length < 3) { list.innerHTML=''; list.classList.add('hidden'); return; }
+      if (q.length < 2) { list.innerHTML=''; list.classList.add('hidden'); return; }
       timer = setTimeout(() => fetchAddressSuggestions(q).catch(err => {
         console.error(err);
         list.innerHTML = `<div class="address-suggestion-empty">No pudimos traer sugerencias. Podés escribir la dirección completa y tocar “Usar dirección”.</div>`;
         list.classList.remove('hidden');
-      }), 260);
+      }), 180);
     });
   }
 
@@ -616,13 +629,14 @@
     });
     const items = data.items || [];
     list.innerHTML = items.length
-      ? items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')
+      ? items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText || x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')
       : '<div class="address-suggestion-empty">No encontramos coincidencias. Escribí calle y altura completas y tocá “Usar dirección”.</div>';
   }
 
   async function confirmTypedAddress(addressText) {
     const raw = String(addressText || '').trim();
-    if (raw.length < 5) throw new Error('Escribí calle y altura.');
+    if (raw.length < 3) throw new Error('Escribí la calle.');
+    if (!/\b\d{1,6}[A-Za-z]?\b/.test(raw)) throw new Error('Ahora agregá la altura (número) para confirmar la dirección.');
     const areaText = state.area?.formattedAddress || state.area?.query || '';
     const full = raw.toLowerCase().includes('argentina') ? raw : `${raw}, ${areaText}, Argentina`;
     const data = await api('/api/geo/validate-address', { method:'POST', body:JSON.stringify({ address:full }) });
@@ -650,7 +664,7 @@
     if (!host) return;
     if (!state.shipping.lat || !state.shipping.lng) { host.innerHTML=''; return; }
     host.innerHTML = state.shipping.costCents
-      ? `<div class="quote-box"><div><strong>${state.shipping.distanceKm} km</strong><div class="delivery-note">Entrega estimada ${state.config?.shipping?.moto?.minHours || 1}–${state.config?.shipping?.moto?.maxHours || 4} h</div></div><strong class="price">${money(state.shipping.costCents)}</strong></div><div style="margin-top:9px"><a class="btn btn-ghost full" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a></div>`
+      ? `<div class="quote-box"><div><strong>${state.shipping.distanceKm} km</strong><div class="delivery-note">Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad</div></div><strong class="price">${money(state.shipping.costCents)}</strong></div><div style="margin-top:9px"><a class="btn btn-ghost full" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a></div>`
       : `<button class="btn btn-primary full" id="quoteMotoBtn">Calcular motomensajería</button>`;
     const toSummary = qs('#toSummaryBtn'); if (toSummary) toSummary.disabled = !state.shipping.costCents;
   }
@@ -706,7 +720,7 @@
       <h2>Revisá tu compra</h2><div class="checkout-sub">Antes de pagar, confirmá que esté todo correcto.</div>
       <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${escapeHtml([x.color,x.size].filter(Boolean).join(' · '))} · x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
       <div style="margin-top:16px"><div class="total-row"><span>Subtotal</span><strong>${money(subtotal)}</strong></div><div class="total-row"><span>Envío</span><strong>${state.shipping.costCents ? money(state.shipping.costCents) : 'Gratis'}</strong></div><div class="total-row grand"><span>Total</span><strong>${money(total)}</strong></div></div>
-      <div class="notice" style="margin-top:14px"><strong>${shippingMethodLabel()}</strong><br>${state.shipping.method==='moto' ? `${escapeHtml(state.shipping.address || '')}<br>${state.shipping.distanceKm} km · demora estimada ${state.config?.shipping?.moto?.minHours || 1}–${state.config?.shipping?.moto?.maxHours || 4} h` : ''}</div>
+      <div class="notice" style="margin-top:14px"><strong>${shippingMethodLabel()}</strong><br>${state.shipping.method==='moto' ? `${escapeHtml(state.shipping.address || '')}<br>${state.shipping.distanceKm} km<br>Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad` : ''}</div>
       ${state.shipping.method==='moto' ? `<a class="btn btn-ghost full" style="margin-top:10px" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a>` : ''}
       ${state.auth.user && state.shipping.method==='moto' ? `<label class="account-check save-address-check"><input type="checkbox" id="saveCheckoutAddress"> Guardar esta dirección en Mi cuenta</label>` : ''}
       <div class="checkout-actions"><button class="btn btn-ghost" id="backShippingBtn">Atrás</button><button class="btn btn-primary" id="payBtn">${state.config?.mercadopago?.enabled ? 'Pagar con Mercado Pago' : 'Crear pedido'}</button></div>
@@ -714,12 +728,20 @@
   }
   function shippingMethodLabel() { return state.shipping.method === 'moto' ? '🏍️ Motomensajería' : state.shipping.method === 'correo' ? '📦 Correo Argentino' : '📍 Retiro en SALMOS'; }
 
+  async function releaseOwnPendingReservation() {
+    try { await api('/api/orders/release-reservation', { method:'POST' }); } catch (err) { console.error(err); }
+    state.pendingCheckout = null;
+    localStorage.removeItem('salmos_pending_checkout');
+  }
+
   async function createOrderAndPay() {
     const btn=qs('#payBtn'); if (btn) { btn.disabled=true; btn.textContent='Procesando...'; }
     try {
       const orderHeaders=new Headers();const customerToken=await currentIdToken().catch(()=> '');if(customerToken)orderHeaders.set('Authorization',`Bearer ${customerToken}`);
       const order = await api('/api/orders', { method:'POST', headers:orderHeaders, body:JSON.stringify({ customer:state.customer, items:state.cart.map(x=>({variantId:x.variantId,quantity:x.qty})), shipping:state.shipping }) });
       state.order = order.order;
+      state.pendingCheckout = { id:order.order.id, code:order.order.code, at:Date.now() };
+      localStorage.setItem('salmos_pending_checkout', JSON.stringify(state.pendingCheckout));
       await saveCheckoutAddressIfRequested().catch(err=>console.error(err));
       if (state.config?.mercadopago?.enabled) {
         const pref = await api('/api/payments/mercadopago/preference', { method:'POST', body:JSON.stringify({ orderId:order.order.id }) });
@@ -731,14 +753,22 @@
     } catch (err) { toast(err.message,'error'); if(btn){btn.disabled=false;btn.textContent='Intentar nuevamente';} }
   }
 
-  function handlePaymentReturn() {
+  async function handlePaymentReturn() {
     const p = new URLSearchParams(location.search);
     const status = p.get('status') || p.get('collection_status');
-    const ref = p.get('external_reference');
-    if (!status) return;
-    if (status === 'approved') { state.cart=[]; saveCart(false); state.paymentApprovedReturn=true; toast(`Pago aprobado${ref ? ` · ${ref}` : ''}`, 'success'); }
-    else if (status === 'pending' || status === 'in_process') toast(`Pago pendiente${ref ? ` · ${ref}` : ''}`);
-    else toast(`El pago no fue aprobado${ref ? ` · ${ref}` : ''}`, 'error');
+    const returnKind = p.get('mp_return');
+    const ref = p.get('external_reference') || state.pendingCheckout?.code || '';
+    if (!status && !returnKind) return;
+    if (status === 'approved' || returnKind === 'success' && status === 'approved') {
+      state.cart=[]; saveCart(false); state.paymentApprovedReturn=true;
+      state.pendingCheckout=null; localStorage.removeItem('salmos_pending_checkout');
+      toast(`Pago aprobado${ref ? ` · ${ref}` : ''}`, 'success');
+    } else if (status === 'pending' || status === 'in_process' || returnKind === 'pending') {
+      toast(`Pago pendiente${ref ? ` · ${ref}` : ''}`);
+    } else {
+      await releaseOwnPendingReservation();
+      toast(`Pago cancelado o no aprobado${ref ? ` · ${ref}` : ''}. El producto volvió a quedar disponible.`, 'error');
+    }
     history.replaceState({},'',location.pathname+location.hash);
   }
 
@@ -769,7 +799,7 @@
       const del=e.target.closest('[data-delete-address]');if(del){try{await authApi(`/api/account/addresses/${del.dataset.deleteAddress}`,{method:'DELETE'});await refreshAccount();toast('Dirección eliminada','success')}catch(err){toast(err.message,'error')}return;}
       const af=e.target.closest('[data-open-favorite]');if(af){closeAccount();await openProduct(Number(af.dataset.openFavorite));return;}
       const useAddr=e.target.closest('[data-use-address]');if(useAddr){const a=state.auth.addresses.find(x=>Number(x.id)===Number(useAddr.dataset.useAddress));if(a){state.shipping.address=a.formatted_address;state.shipping.lat=Number(a.lat);state.shipping.lng=Number(a.lng);state.shipping.costCents=0;state.shipping.distanceKm=null;state.area={query:a.label||'Dirección guardada',formattedAddress:a.formatted_address,lat:Number(a.lat),lng:Number(a.lng)};renderShippingDetail();try{await quoteMoto()}catch(err){toast(err.message,'error')}}return;}
-      const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const text=addrSuggestion.dataset.addressText||'';const input=qs('#streetAddressInput');if(input)input.value=text;const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}return;}
+      const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const text=addrSuggestion.dataset.addressText||'';const main=addrSuggestion.dataset.addressMain||text;const input=qs('#streetAddressInput');const hasNumber=/\b\d{1,6}[A-Za-z]?\b/.test(main);if(input){input.value=hasNumber?text:main;input.focus();if(!hasNumber)input.setSelectionRange(input.value.length,input.value.length);}const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');if(hasNumber){try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}}else{toast('Calle encontrada. Ahora agregá la altura.','success')}return;}
       if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
       const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
@@ -798,7 +828,7 @@
   }
 
   async function boot() {
-    initTheme(); ensureAccountUi(); bindEvents(); handlePaymentReturn();
+    initTheme(); ensureAccountUi(); bindEvents(); await handlePaymentReturn();
     await Promise.all([loadStore(), initFirebaseAuth()]);
   }
   boot();
