@@ -588,11 +588,11 @@
     host.innerHTML = `
       <label class="detail-label">Calle y altura</label>
       <div class="address-search-row">
-        <input class="input" id="streetAddressInput" autocomplete="street-address" placeholder="Ej. Carrizo 455" value="${escapeHtml(state.shipping.address || '')}">
+        <input class="input" id="streetAddressInput" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Calle y altura" value="${escapeHtml(state.shipping.address || '')}">
         <button class="btn btn-secondary" id="confirmTypedAddressBtn">Usar dirección</button>
       </div>
       <div class="address-suggestions hidden" id="addressSuggestions"></div>
-      <div class="address-helper">Empezá a escribir la calle: las sugerencias aparecen desde las primeras letras. Después agregá la altura para confirmar la entrega.</div>`;
+      <div class="address-helper">Escribí la calle desde las primeras letras. Elegí una sugerencia y después agregá la altura.</div>`;
     const input = qs('#streetAddressInput');
     if (!input) return;
     let timer = null;
@@ -604,8 +604,8 @@
       if (q.length < 2) { list.innerHTML=''; list.classList.add('hidden'); return; }
       timer = setTimeout(() => fetchAddressSuggestions(q).catch(err => {
         console.error(err);
-        list.innerHTML = `<div class="address-suggestion-empty">No pudimos traer sugerencias. Podés escribir la dirección completa y tocar “Usar dirección”.</div>`;
-        list.classList.remove('hidden');
+        list.innerHTML = '';
+        list.classList.add('hidden');
       }), 180);
     });
   }
@@ -628,9 +628,13 @@
       })
     });
     const items = data.items || [];
-    list.innerHTML = items.length
-      ? items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText || x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')
-      : '<div class="address-suggestion-empty">No encontramos coincidencias. Escribí calle y altura completas y tocá “Usar dirección”.</div>';
+    if (!items.length) {
+      list.innerHTML = '';
+      list.classList.add('hidden');
+      return;
+    }
+    list.classList.remove('hidden');
+    list.innerHTML = items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText || x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('');
   }
 
   async function confirmTypedAddress(addressText) {
