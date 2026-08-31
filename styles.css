@@ -574,3 +574,55 @@ img { display: block; max-width: 100%; }
   .product-meta-row { gap:6px; }
   .product-meta-pill { width:100%; justify-content:space-between; }
 }
+
+
+/* =========================================================
+   SALMOS · CUPONES EN CHECKOUT
+   ========================================================= */
+.coupon-box {
+  margin-top:16px;
+  padding:15px;
+  border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));
+  border-radius:18px;
+  background:color-mix(in srgb,var(--surface) 86%,transparent);
+}
+.coupon-title {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  margin-bottom:10px;
+}
+.coupon-title small,
+.coupon-applied small,
+.field-help {
+  color:var(--muted);
+  font-size:.78rem;
+  line-height:1.4;
+}
+.coupon-row {
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:9px;
+}
+.coupon-applied {
+  margin-top:10px;
+  padding:10px 12px;
+  border-radius:13px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  background:color-mix(in srgb,var(--gold) 10%,var(--surface-2));
+  border:1px solid color-mix(in srgb,var(--gold) 24%,var(--line));
+}
+.coupon-applied strong,
+.coupon-applied small {
+  display:block;
+}
+.discount-row strong {
+  color:var(--gold-2);
+}
+@media (max-width:680px) {
+  .coupon-row { grid-template-columns:1fr; }
+  .coupon-row .btn { width:100%; }
+}

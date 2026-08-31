@@ -65,6 +65,7 @@
     areaSessionToken: null,
     streetSessionToken: null,
     area: null,
+    coupon: null,
     order: null
   };
 
@@ -638,6 +639,7 @@
     closeCart();
     state.checkoutStep = 1;
     state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
+    state.coupon = null;
     renderCheckout();
     openModal('#checkoutModal');
   }
@@ -825,38 +827,64 @@
   async function fetchAddressSuggestions(input) {
     const list=qs('#addressSuggestions');if(!list||!state.area)return;
     list.innerHTML='<div class="address-suggestion-empty">Buscando calles...</div>';list.classList.remove('hidden');
-    const {AutocompleteSuggestion,AutocompleteSessionToken}=await ensurePlacesLibrary();
-    if(!state.streetSessionToken) state.streetSessionToken=new AutocompleteSessionToken();
-    const vp=state.area.viewport;
-    const request={
-      input,
-      sessionToken:state.streetSessionToken,
-      includedRegionCodes:['ar'],
-      includedPrimaryTypes:/\b\d{1,6}[A-Za-z]?\b/.test(input)?['street_address','route','premise']:['route'],
-      language:'es-AR',region:'ar'
-    };
-    if(vp && [vp.north,vp.east,vp.south,vp.west].every(Number.isFinite)){
-      const padLat=Math.max((vp.north-vp.south)*0.10,0.003);
-      const padLng=Math.max((vp.east-vp.west)*0.10,0.003);
-      request.locationRestriction={north:vp.north+padLat,east:vp.east+padLng,south:vp.south-padLat,west:vp.west-padLng};
-    }else{
-      request.locationRestriction={center:{lat:Number(state.area.lat),lng:Number(state.area.lng)},radius:12000};
-    }
-    const {suggestions=[]}=await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
     const q=expandedSearch(input.replace(/\b\d{1,6}[A-Za-z]?\b/g,' '));
     const items=[];const seen=new Set();
-    for(const s of suggestions){
-      const p=s.placePrediction;if(!p)continue;
-      const main=p.mainText?.text || p.text?.text || '';
-      const secondary=p.secondaryText?.text || '';
-      const text=p.text?.text || [main,secondary].filter(Boolean).join(', ');
-      const mainNorm=expandedSearch(main);
-      if(q && !mainNorm.includes(q))continue;
-      if(seen.has(p.placeId))continue;seen.add(p.placeId);
-      items.push({placeId:p.placeId,text,mainText:main,secondaryText:secondary,prediction:p});
+
+    // Primera pasada: Places del navegador, priorizando la zona elegida sin encerrar
+    // demasiado la búsqueda. Así también contempla calles de localidades del mismo partido.
+    try{
+      const {AutocompleteSuggestion,AutocompleteSessionToken}=await ensurePlacesLibrary();
+      if(!state.streetSessionToken) state.streetSessionToken=new AutocompleteSessionToken();
+      const request={
+        input,
+        sessionToken:state.streetSessionToken,
+        includedRegionCodes:['ar'],
+        includedPrimaryTypes:/\b\d{1,6}[A-Za-z]?\b/.test(input)?['street_address','route','premise']:['route'],
+        language:'es-AR',region:'ar'
+      };
+      if(Number.isFinite(Number(state.area.lat))&&Number.isFinite(Number(state.area.lng))){
+        request.locationBias={center:{lat:Number(state.area.lat),lng:Number(state.area.lng)},radius:30000};
+      }
+      const {suggestions=[]}=await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+      for(const suggestion of suggestions){
+        const pred=suggestion.placePrediction;if(!pred)continue;
+        const main=pred.mainText?.text || pred.text?.text || '';
+        const secondary=pred.secondaryText?.text || '';
+        const text=pred.text?.text || [main,secondary].filter(Boolean).join(', ');
+        const matchText=expandedSearch(`${main} ${text}`);
+        if(q && !matchText.includes(q))continue;
+        const key=pred.placeId||text;
+        if(seen.has(key))continue;seen.add(key);
+        items.push({placeId:pred.placeId||'',text,mainText:main,secondaryText:secondary,prediction:pred});
+      }
+    }catch(err){console.error('Places navegador',err);}
+
+    // Si Google no encontró por el comienzo del nombre, consultamos el Worker.
+    // Ese respaldo también usa Text Search, que permite encontrar "Victoriano Carrizo"
+    // aunque la persona escriba solo "carr".
+    if(items.length<5){
+      try{
+        const data=await api('/api/geo/autocomplete',{method:'POST',body:JSON.stringify({input,area:state.area})});
+        for(const x of (data.items||[])){
+          const text=x.text||'';
+          const main=x.mainText||text;
+          const secondary=x.secondaryText||'';
+          const matchText=expandedSearch(`${main} ${text}`);
+          if(q && !matchText.includes(q))continue;
+          const key=x.placeId||text;
+          if(!text||seen.has(key))continue;seen.add(key);
+          items.push({placeId:x.placeId||'',text,mainText:main,secondaryText:secondary});
+          if(items.length>=7)break;
+        }
+      }catch(err){console.error('Respaldo de calles',err);}
     }
+
     state.addressSuggestions=items;
-    if(!items.length){list.innerHTML='';list.classList.add('hidden');return;}
+    if(!items.length){
+      list.innerHTML='<div class="address-suggestion-empty">No encontramos esa calle todavía. Podés seguir escribiendo o poner calle y altura y tocar “Usar dirección”.</div>';
+      list.classList.remove('hidden');
+      return;
+    }
     list.innerHTML=items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText||x.text)}"><strong>${escapeHtml(x.mainText||x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')+'<div class="google-attribution">Sugerencias de Google</div>';
   }
 
@@ -898,6 +926,7 @@
 
   async function quoteMoto() {
     if (!state.shipping.lat || !state.shipping.lng) throw new Error('Primero elegí una dirección.');
+    state.coupon=null;
     const data = await api('/api/shipping/moto/quote', { method:'POST', body:JSON.stringify({ destination:{ lat:state.shipping.lat, lng:state.shipping.lng, address:state.shipping.address } }) });
     state.shipping.distanceKm = data.distanceKm; state.shipping.costCents = data.costCents; state.shipping.quoteId = data.quoteId;
     renderMotoQuoteButton();
@@ -953,18 +982,59 @@
     return `https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`;
   }
 
+  async function applyCouponCode() {
+    const code=String(qs('#couponInput')?.value||'').trim();
+    if(!code){toast('Ingresá un código de cupón.','error');return;}
+    const btn=qs('#applyCouponBtn');
+    if(btn){btn.disabled=true;btn.textContent='Aplicando...';}
+    try{
+      const data=await api('/api/coupons/preview',{method:'POST',body:JSON.stringify({
+        code,
+        subtotalCents:cartSubtotal(),
+        shippingCostCents:state.shipping.costCents
+      })});
+      state.coupon=data;
+      toast(`Cupón ${data.code} aplicado`,'success');
+      renderCheckoutSummary();
+    }catch(err){
+      state.coupon=null;
+      toast(err.message,'error');
+      if(btn){btn.disabled=false;btn.textContent='Aplicar';}
+    }
+  }
+  function removeCouponCode(){state.coupon=null;renderCheckoutSummary();}
+
   function renderCheckoutSummary() {
-    const subtotal = cartSubtotal(), total = subtotal + state.shipping.costCents;
+    const subtotal=cartSubtotal();
+    const shippingBase=state.shipping.costCents;
+    const discount=state.coupon?.totalDiscountCents||0;
+    const total=state.coupon?.totalCents ?? (subtotal+shippingBase);
     qs('#checkoutContent').innerHTML = `
       <h2>Revisá tu compra</h2><div class="checkout-sub">Antes de pagar, confirmá que esté todo correcto.</div>
       <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${escapeHtml([x.color,x.size].filter(Boolean).join(' · '))} · x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
-      <div style="margin-top:16px"><div class="total-row"><span>Subtotal</span><strong>${money(subtotal)}</strong></div><div class="total-row"><span>Envío</span><strong>${state.shipping.costCents ? money(state.shipping.costCents) : 'Gratis'}</strong></div><div class="total-row grand"><span>Total</span><strong>${money(total)}</strong></div></div>
+
+      <div class="coupon-box">
+        <div class="coupon-title"><strong>¿Tenés un cupón de descuento?</strong><small>Ingresalo antes de pagar.</small></div>
+        <div class="coupon-row">
+          <input class="input" id="couponInput" autocomplete="off" placeholder="Código de cupón" value="${escapeHtml(state.coupon?.code||'')}">
+          <button class="btn btn-secondary" id="applyCouponBtn">Aplicar</button>
+        </div>
+        ${state.coupon?`<div class="coupon-applied"><div><strong>✓ ${escapeHtml(state.coupon.code)}</strong><small>${escapeHtml(state.coupon.label||'Descuento aplicado')}</small></div><button class="link-action" id="removeCouponBtn">Quitar</button></div>`:''}
+      </div>
+
+      <div style="margin-top:16px">
+        <div class="total-row"><span>Subtotal</span><strong>${money(subtotal)}</strong></div>
+        <div class="total-row"><span>Envío</span><strong>${shippingBase ? money(shippingBase) : 'Gratis'}</strong></div>
+        ${discount?`<div class="total-row discount-row"><span>Descuento · ${escapeHtml(state.coupon.code)}</span><strong>− ${money(discount)}</strong></div>`:''}
+        <div class="total-row grand"><span>Total</span><strong>${money(total)}</strong></div>
+      </div>
       <div class="notice" style="margin-top:14px"><strong>${shippingMethodLabel()}</strong><br>${state.shipping.method==='moto' ? `${escapeHtml(state.shipping.address || '')}<br>${state.shipping.distanceKm} km<br>Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad` : ''}</div>
       ${state.shipping.method==='moto' ? `<a class="btn btn-ghost full" style="margin-top:10px" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a>` : ''}
       ${state.auth.user && state.shipping.method==='moto' ? `<label class="account-check save-address-check"><input type="checkbox" id="saveCheckoutAddress"> Guardar esta dirección en Mi cuenta</label>` : ''}
       <div class="checkout-actions"><button class="btn btn-ghost" id="backShippingBtn">Atrás</button><button class="btn btn-primary" id="payBtn">${state.config?.mercadopago?.enabled ? 'Pagar con Mercado Pago' : 'Crear pedido'}</button></div>
       ${!state.config?.mercadopago?.enabled ? '<div class="stock-note" style="text-align:right">Mercado Pago quedará activo apenas soporte habilite la visualización de las credenciales.</div>' : ''}`;
   }
+
   function shippingMethodLabel() { return state.shipping.method === 'moto' ? '🏍️ Motomensajería' : state.shipping.method === 'correo' ? '📦 Correo Argentino' : '📍 Retiro en SALMOS'; }
 
   async function releaseOwnPendingReservation() {
@@ -977,7 +1047,7 @@
     const btn=qs('#payBtn'); if (btn) { btn.disabled=true; btn.textContent='Procesando...'; }
     try {
       const orderHeaders=new Headers();const customerToken=await currentIdToken().catch(()=> '');if(customerToken)orderHeaders.set('Authorization',`Bearer ${customerToken}`);
-      const order = await api('/api/orders', { method:'POST', headers:orderHeaders, body:JSON.stringify({ customer:state.customer, items:state.cart.map(x=>({variantId:x.variantId,quantity:x.qty})), shipping:state.shipping }) });
+      const order = await api('/api/orders', { method:'POST', headers:orderHeaders, body:JSON.stringify({ customer:state.customer, items:state.cart.map(x=>({variantId:x.variantId,quantity:x.qty})), shipping:state.shipping, couponCode:state.coupon?.code||'' }) });
       state.order = order.order;
       state.pendingCheckout = { id:order.order.id, code:order.order.code, at:Date.now() };
       localStorage.setItem('salmos_pending_checkout', JSON.stringify(state.pendingCheckout));
@@ -1029,6 +1099,10 @@
     window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
     document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&m.url!==img.src);const host=qs('#detailMainMedia');if(next&&host)host.innerHTML=renderDetailMedia(next,state.selectedProduct?.name||'SALMOS');}},true);
 
+    document.addEventListener('keydown',e=>{
+      if(e.target?.id==='couponInput' && e.key==='Enter'){e.preventDefault();applyCouponCode();}
+    });
+
     document.addEventListener('click', async e => {
       const fav=e.target.closest('[data-favorite-product]');if(fav){e.preventDefault();e.stopPropagation();await toggleFavorite(fav.dataset.favoriteProduct);return;}
       if(e.target.id==='googleSignInBtn'||e.target.id==='checkoutGoogleBtn'){await signInGoogle();return;}
@@ -1059,11 +1133,13 @@
         state.customer={name,phone,email:state.auth.user?.email||email}; localStorage.setItem('salmos_customer',JSON.stringify(state.customer)); if(state.auth.user)authApi('/api/account/profile',{method:'PUT',body:JSON.stringify({displayName:name,phone})}).catch(()=>{}); state.checkoutStep=2; renderCheckout(); return;
       }
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
-      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ state.shipping={method:ship.dataset.shipping,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; renderCheckout(); return; }
+      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ state.shipping={method:ship.dataset.shipping,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; state.coupon=null; renderCheckout(); return; }
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
       if(e.target.id==='quoteMotoBtn'){ try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteMoto();}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular motomensajería';} return; }
       if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(state.shipping.method==='moto'&&!state.shipping.costCents){toast('Primero calculá la motomensajería.','error');return;} state.checkoutStep=3;renderCheckout();return; }
       if(e.target.id==='backShippingBtn'){state.checkoutStep=2;renderCheckout();return;}
+      if(e.target.id==='applyCouponBtn'){await applyCouponCode();return;}
+      if(e.target.id==='removeCouponBtn'){removeCouponCode();return;}
       if(e.target.id==='payBtn'){await createOrderAndPay();return;}
       if(e.target.id==='finishNoPayBtn'){closeModal('#checkoutModal');return;}
     });

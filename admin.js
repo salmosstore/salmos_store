@@ -12,7 +12,7 @@
   const centsToPesos=v=>((Number(v)||0)/100).toFixed(0);
   const today=()=>new Date().toISOString().slice(0,10);
 
-  const state={view:'dashboard',categories:[],products:[],orders:[],settings:{},editingProduct:null,newFiles:[],mediaItems:[],mediaDragKey:null,financeRange:'month'};
+  const state={view:'dashboard',categories:[],products:[],orders:[],coupons:[],settings:{},editingProduct:null,editingCouponId:null,newFiles:[],mediaItems:[],mediaDragKey:null,financeRange:'month'};
 
   async function api(path, options={}){
     const headers=new Headers(options.headers||{});
@@ -64,9 +64,9 @@
   }
   function closeProductDialog(){const dialog=qs('#productDialog');if(dialog?.open)dialog.close();}
 
-  const titles={dashboard:'Dashboard',products:'Productos',categories:'Categorías',stock:'Stock',orders:'Pedidos',finance:'Finanzas',settings:'Configuración'};
+  const titles={dashboard:'Dashboard',products:'Productos',categories:'Categorías',stock:'Stock',orders:'Pedidos',coupons:'Cupones',finance:'Finanzas',settings:'Configuración'};
 
-  async function navigate(view){state.view=view;qs('#viewTitle').textContent=titles[view]||view;qsa('.admin-nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view));qs('#adminSidebar').classList.remove('open');const host=qs('#adminContent');host.innerHTML='<div class="empty-state"><strong>Cargando...</strong></div>';try{if(view==='dashboard')await renderDashboard();if(view==='products')await renderProducts();if(view==='categories')await renderCategories();if(view==='stock')await renderStock();if(view==='orders')await renderOrders();if(view==='finance')await renderFinance();if(view==='settings')await renderSettings()}catch(e){renderAccessError(e)}}
+  async function navigate(view){state.view=view;qs('#viewTitle').textContent=titles[view]||view;qsa('.admin-nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view));qs('#adminSidebar').classList.remove('open');const host=qs('#adminContent');host.innerHTML='<div class="empty-state"><strong>Cargando...</strong></div>';try{if(view==='dashboard')await renderDashboard();if(view==='products')await renderProducts();if(view==='categories')await renderCategories();if(view==='stock')await renderStock();if(view==='orders')await renderOrders();if(view==='coupons')await renderCoupons();if(view==='finance')await renderFinance();if(view==='settings')await renderSettings()}catch(e){renderAccessError(e)}}
 
   function renderAccessError(e){
     const msg=e.status===503?'El panel administrativo está preparado, pero todavía falta activar Cloudflare Access cuando el dominio quede activo.':e.status===401?'Tu sesión de Cloudflare Access no está autorizada para este panel.':e.message;
@@ -172,6 +172,75 @@
     const rows=qsa('tbody tr',qs('#adminContent')); rows.forEach((r,i)=>{const o=state.orders[i];if(!o)return;const td=document.createElement('td');td.innerHTML=`<select class="select order-status-select" data-order-id="${o.id}" style="min-width:145px"><option value="new" ${o.fulfillment_status==='new'?'selected':''}>Nuevo</option><option value="preparing" ${o.fulfillment_status==='preparing'?'selected':''}>Preparando</option><option value="ready" ${o.fulfillment_status==='ready'?'selected':''}>Listo</option><option value="on_the_way" ${o.fulfillment_status==='on_the_way'?'selected':''}>En camino</option><option value="delivered" ${o.fulfillment_status==='delivered'?'selected':''}>Entregado</option><option value="cancelled" ${o.fulfillment_status==='cancelled'?'selected':''}>Cancelado</option></select>`;r.appendChild(td)});
   }
 
+  function couponBenefitText(c){
+    if(c.applies_to==='shipping'&&c.discount_type==='free')return 'Envío gratis';
+    if(c.discount_type==='percent')return `${Number(c.value)||0}% en ${c.applies_to==='shipping'?'envío':'prendas'}`;
+    return `${money(Number(c.value)||0)} en ${c.applies_to==='shipping'?'envío':'prendas'}`;
+  }
+  function renderCouponEditor(c=null){
+    state.editingCouponId=c?.id?Number(c.id):null;
+    const title=qs('#couponEditorTitle');if(title)title.textContent=c?'Editar cupón':'Nuevo cupón';
+    const value=c?.discount_type==='fixed'?((Number(c.value)||0)/100):(Number(c?.value)||0);
+    const expires=c?.expires_at?String(c.expires_at).slice(0,10):'';
+    const form=qs('#couponForm');if(!form)return;
+    form.innerHTML=`
+      <div class="form-grid">
+        <div class="field"><label>Código</label><input class="input" name="code" required placeholder="SALMOS10" value="${escapeHtml(c?.code||'')}"></div>
+        <div class="field"><label>Aplica a</label><select class="select" name="applies_to"><option value="products" ${c?.applies_to!=='shipping'?'selected':''}>Prendas / productos</option><option value="shipping" ${c?.applies_to==='shipping'?'selected':''}>Envío</option></select></div>
+        <div class="field"><label>Tipo de descuento</label><select class="select" name="discount_type"><option value="percent" ${c?.discount_type==='percent'||!c?'selected':''}>Porcentaje (%)</option><option value="fixed" ${c?.discount_type==='fixed'?'selected':''}>Importe fijo ($)</option><option value="free" ${c?.discount_type==='free'?'selected':''}>Envío gratis</option></select></div>
+        <div class="field"><label>Valor</label><input class="input" name="value" type="number" min="0" step="1" value="${escapeHtml(value||'')}"><small class="field-help">Ej.: 10 para 10% o 2000 para $2.000.</small></div>
+        <div class="field"><label>Compra mínima (opcional)</label><input class="input" name="min_subtotal" type="number" min="0" step="1" value="${c?Math.round((Number(c.min_subtotal_cents)||0)/100):0}"></div>
+        <div class="field"><label>Vence (opcional)</label><input class="input" name="expires" type="date" value="${escapeHtml(expires)}"></div>
+        <div class="field full"><label class="toggle-label"><input type="checkbox" name="active" ${!c||Number(c.active)?'checked':''}> Cupón activo</label></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+        ${c?'<button type="button" class="btn btn-ghost" id="cancelCouponEditBtn">Cancelar edición</button>':''}
+        <button type="button" class="btn btn-primary" id="saveCouponBtn">${c?'Guardar cambios':'Crear cupón'}</button>
+      </div>`;
+  }
+  async function renderCoupons(){
+    const d=await api('/api/admin/coupons');state.coupons=d.items||[];
+    qs('#adminContent').innerHTML=`
+      <section class="settings-card">
+        <h3 id="couponEditorTitle">${state.editingCouponId?'Editar cupón':'Nuevo cupón'}</h3>
+        <p style="margin:0 0 14px;color:var(--muted)">Podés crear códigos para redes: envío gratis, descuento en el envío o descuento en las prendas.</p>
+        <form id="couponForm"></form>
+      </section>
+      <section class="admin-section">
+        <div class="admin-section-head"><h2>Cupones creados</h2></div>
+        <div class="admin-card admin-table-wrap"><table class="admin-table"><thead><tr><th>Código</th><th>Beneficio</th><th>Compra mínima</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>
+        ${state.coupons.length?state.coupons.map(c=>`<tr><td><strong>${escapeHtml(c.code)}</strong></td><td>${escapeHtml(couponBenefitText(c))}</td><td>${Number(c.min_subtotal_cents)?money(c.min_subtotal_cents):'—'}</td><td>${c.expires_at?new Date(c.expires_at).toLocaleDateString('es-AR'):'Sin vencimiento'}</td><td><span class="status ${Number(c.active)?'success':'warning'}">${Number(c.active)?'Activo':'Pausado'}</span></td><td><div class="admin-actions"><button class="btn btn-ghost" data-edit-coupon="${c.id}">Editar</button><button class="btn btn-danger" data-delete-coupon="${c.id}">Eliminar</button></div></td></tr>`).join(''):`<tr><td colspan="6">Todavía no creaste cupones.</td></tr>`}
+        </tbody></table></div>
+      </section>`;
+    const current=state.editingCouponId?state.coupons.find(x=>Number(x.id)===Number(state.editingCouponId)):null;
+    renderCouponEditor(current||null);
+  }
+  async function saveCouponFromForm(){
+    const form=qs('#couponForm');if(!form)return;
+    const fd=new FormData(form);
+    const appliesTo=fd.get('applies_to');
+    const discountType=fd.get('discount_type');
+    if(appliesTo==='products'&&discountType==='free')throw new Error('Envío gratis solo puede aplicarse al envío.');
+    let value=Number(fd.get('value'))||0;
+    if(discountType==='fixed')value=pesosToCents(value);
+    if(discountType==='free')value=0;
+    const expiresDate=String(fd.get('expires')||'').trim();
+    const payload={
+      code:String(fd.get('code')||'').trim(),
+      appliesTo,
+      discountType,
+      value,
+      minSubtotalCents:pesosToCents(fd.get('min_subtotal')),
+      expiresAt:expiresDate?`${expiresDate}T23:59:59-03:00`:null,
+      active:Boolean(fd.get('active'))
+    };
+    const id=state.editingCouponId;
+    await api(id?`/api/admin/coupons/${id}`:'/api/admin/coupons',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
+    state.editingCouponId=null;
+    toast(id?'Cupón actualizado':'Cupón creado','success');
+    await renderCoupons();
+  }
+
   function rangeDates(){const now=new Date();let from=new Date(now);if(state.financeRange==='today')from=new Date(now.getFullYear(),now.getMonth(),now.getDate());else if(state.financeRange==='week')from.setDate(now.getDate()-7);else if(state.financeRange==='month')from=new Date(now.getFullYear(),now.getMonth(),1);else if(state.financeRange==='year')from=new Date(now.getFullYear(),0,1);return {from:from.toISOString(),to:now.toISOString()}}
   async function renderFinance(){
     const r=rangeDates(),d=await api(`/api/admin/finance?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`);const s=d.summary||{};
@@ -188,7 +257,7 @@
     qs('#adminContent').innerHTML=`<form id="settingsForm">
       <div class="settings-grid">
         <section class="settings-card"><h3>Datos de SALMOS</h3><div class="field"><label>WhatsApp</label><input class="input" name="whatsapp" value="${escapeHtml(s.whatsapp||'5491162691341')}"></div><div class="field" style="margin-top:10px"><label>Instagram</label><input class="input" name="instagram" value="${escapeHtml(s.instagram||'')}"></div><div class="field" style="margin-top:10px"><label>Facebook</label><input class="input" name="facebook" value="${escapeHtml(s.facebook||'')}"></div></section>
-        <section class="settings-card"><h3>Motomensajería</h3><div class="field"><label>Precio por km</label><input class="input" type="number" name="moto_rate_per_km" value="${escapeHtml(s.moto_rate_per_km||'800')}"></div><div class="field" style="margin-top:10px"><label>Máximo de km</label><input class="input" type="number" name="moto_max_km" value="${escapeHtml(s.moto_max_km||'50')}"></div><div class="field" style="margin-top:10px"><label>Demora mínima / máxima (horas)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input class="input" type="number" name="moto_min_hours" value="${escapeHtml(s.moto_min_hours||'1')}"><input class="input" type="number" name="moto_max_hours" value="${escapeHtml(s.moto_max_hours||'4')}"></div></div></section>
+        <section class="settings-card"><h3>Motomensajería</h3><div class="field"><label>Precio por km</label><input class="input" type="number" name="moto_rate_per_km" value="${escapeHtml(s.moto_rate_per_km||'800')}"></div><div class="field" style="margin-top:10px"><label>Envío mínimo</label><input class="input" type="number" name="moto_min_charge" value="${escapeHtml(s.moto_min_charge||'2000')}"><small class="field-help">Aunque la distancia dé menos, nunca se cobrará menos de este importe.</small></div><div class="field" style="margin-top:10px"><label>Máximo de km</label><input class="input" type="number" name="moto_max_km" value="${escapeHtml(s.moto_max_km||'50')}"></div><div class="field" style="margin-top:10px"><label>Demora mínima / máxima (horas)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input class="input" type="number" name="moto_min_hours" value="${escapeHtml(s.moto_min_hours||'1')}"><input class="input" type="number" name="moto_max_hours" value="${escapeHtml(s.moto_max_hours||'4')}"></div></div></section>
         <section class="settings-card"><h3>Retiro</h3><label class="toggle-label"><input type="checkbox" name="pickup_enabled" ${s.pickup_enabled==='true'?'checked':''}> Habilitar retiro</label><div class="field" style="margin-top:10px"><label>Dirección</label><input class="input" name="pickup_address" value="${escapeHtml(s.pickup_address||'')}"></div><div class="field" style="margin-top:10px"><label>Instrucciones / horarios</label><textarea class="textarea" name="pickup_instructions">${escapeHtml(s.pickup_instructions||'')}</textarea></div></section>
         <section class="settings-card"><h3>Integraciones</h3><div class="notice">Mercado Pago y Correo Argentino se activan automáticamente cuando carguemos sus credenciales en Cloudflare. No hace falta tocar el código.</div></section>
       </div><div style="margin-top:16px;text-align:right"><button class="btn btn-primary" id="saveSettingsBtn">Guardar configuración</button></div>
@@ -208,6 +277,15 @@
     productDialog?.addEventListener('close',resetProductDialogState);
     qs('#productImagesInput')?.addEventListener?.('change',()=>{});
     document.addEventListener('change',async e=>{
+      if(e.target.closest?.('#couponForm') && (e.target.name==='applies_to'||e.target.name==='discount_type')){
+        const form=qs('#couponForm');if(form){
+          const applies=form.elements.applies_to?.value;
+          const type=form.elements.discount_type?.value;
+          if(applies==='products'&&type==='free')form.elements.discount_type.value='percent';
+          const free=form.elements.discount_type?.value==='free';
+          if(form.elements.value){form.elements.value.disabled=free;if(free)form.elements.value.value='0';}
+        }
+      }
       if(e.target.id==='productImagesInput'){addSelectedMedia([...e.target.files]);e.target.value=''}
       if(e.target.matches('.order-status-select')){try{await api(`/api/admin/orders/${e.target.dataset.orderId}/status`,{method:'PATCH',body:JSON.stringify({fulfillment_status:e.target.value})});toast('Estado actualizado','success')}catch(err){toast(err.message,'error')}}
     });
@@ -224,6 +302,10 @@
       const di=e.target.closest('[data-delete-image]');if(di){if(confirm('¿Eliminar esta foto?')){await api(`/api/admin/images/${di.dataset.deleteImage}`,{method:'DELETE'});di.closest('.image-preview').remove();toast('Foto eliminada','success')}return}
       if(e.target.id==='saveProductBtn'){e.preventDefault();const btn=e.target;try{btn.disabled=true;await saveProduct()}catch(err){toast(err.message,'error')}finally{btn.disabled=false}return}
       if(e.target.id==='newCategoryBtn'){const name=prompt('Nombre de la categoría:');if(name){try{await api('/api/admin/categories',{method:'POST',body:JSON.stringify({name})});state.categories=[];await renderCategories();toast('Categoría creada','success')}catch(err){toast(err.message,'error')}}return}
+      const ec=e.target.closest('[data-edit-coupon]');if(ec){state.editingCouponId=Number(ec.dataset.editCoupon);const c=state.coupons.find(x=>Number(x.id)===state.editingCouponId);renderCouponEditor(c||null);qs('#couponForm')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+      const dc=e.target.closest('[data-delete-coupon]');if(dc){if(confirm('¿Eliminar este cupón?')){await api(`/api/admin/coupons/${dc.dataset.deleteCoupon}`,{method:'DELETE'});if(Number(state.editingCouponId)===Number(dc.dataset.deleteCoupon))state.editingCouponId=null;toast('Cupón eliminado','success');await renderCoupons()}return}
+      if(e.target.id==='saveCouponBtn'){try{e.target.disabled=true;await saveCouponFromForm()}catch(err){toast(err.message,'error');e.target.disabled=false}return}
+      if(e.target.id==='cancelCouponEditBtn'){state.editingCouponId=null;renderCouponEditor(null);return}
       const fr=e.target.closest('[data-finance-range]');if(fr){state.financeRange=fr.dataset.financeRange;await renderFinance();return}
       if(e.target.id==='newMovementBtn'){const f=qs('#movementForm');f.reset();f.elements.date.value=today();qs('#movementDialog').showModal();return}
       if(e.target.id==='saveMovementBtn'){e.preventDefault();const f=new FormData(qs('#movementForm'));try{await api('/api/admin/finance',{method:'POST',body:JSON.stringify({type:f.get('type'),category:f.get('category'),description:f.get('description'),amount_cents:pesosToCents(f.get('amount')),occurred_at:new Date(`${f.get('date')}T12:00:00`).toISOString()})});qs('#movementDialog').close();toast('Movimiento guardado','success');await renderFinance()}catch(err){toast(err.message,'error')}return}
