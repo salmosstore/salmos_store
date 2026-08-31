@@ -560,51 +560,96 @@
         ${state.auth.user && state.auth.addresses.length ? `<div class="saved-addresses"><span class="detail-label">Direcciones guardadas</span><div class="saved-address-row">${state.auth.addresses.map(a=>`<button class="saved-address-btn ${state.shipping.address===a.formatted_address?'active':''}" data-use-address="${a.id}"><strong>${escapeHtml(a.label||'Dirección')}</strong><small>${escapeHtml(a.formatted_address)}</small></button>`).join('')}</div></div>` : ''}
         <div class="field area-field">
           <label>Primero: localidad o código postal</label>
-          <input class="input" id="areaInput" autocomplete="off" spellcheck="false" placeholder="Localidad o código postal" value="${escapeHtml(state.area?.query || '')}">
-          <div class="area-status ${state.area ? 'ready' : ''}" id="areaStatus">${state.area ? `✓ Zona: ${escapeHtml(state.area.locality || state.area.query || '')}` : 'Escribí tu localidad o código postal. La zona se detecta automáticamente.'}</div>
+          <input class="input" id="areaInput" autocomplete="off" spellcheck="false" placeholder="Localidad o código postal" value="${escapeHtml(state.area?.selectedLabel || state.area?.locality || state.area?.query || '')}">
+          <div class="address-suggestions hidden" id="areaSuggestions"></div>
+          <div class="area-status ${state.area ? 'ready' : ''}" id="areaStatus">${state.area ? `✓ Zona elegida: ${escapeHtml(state.area.selectedLabel || state.area.locality || state.area.query || '')}` : 'Escribí y elegí una localidad de la lista.'}</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-ghost" id="useLocationBtn">📍 Usar mi ubicación actual</button></div>
         <div class="address-autocomplete" id="autocompleteHost"></div>
         <div class="address-confirm ${state.shipping.address ? '' : 'hidden'}" id="addressConfirm">${state.shipping.address ? `<strong>Dirección seleccionada:</strong><br>${escapeHtml(state.shipping.address)}` : ''}</div>
         <div id="quoteHost"></div>
       </div>`;
-    setupAreaAutoResolve();
+    setupAreaAutocomplete();
     if (state.area) setupAddressAutocomplete().catch(err => toast(err.message, 'error'));
     if (state.shipping.lat && state.shipping.lng) {
       showMap(state.shipping.lat, state.shipping.lng, state.shipping.address).catch(err => toast(err.message,'error'));
     }
   }
 
-  async function resolveArea(query, options = {}) {
-    const typed = String(query || '').trim();
-    if (!typed) throw new Error('Ingresá una localidad o código postal.');
+  async function resolveAreaChoice(item) {
+    if (!item?.placeId) throw new Error('Elegí una localidad de la lista.');
     const status = qs('#areaStatus');
-    if (status) { status.className='area-status loading'; status.textContent='Buscando zona...'; }
-    const data = await api('/api/geo/resolve-area', { method:'POST', body: JSON.stringify({ query:typed }) });
-    state.area = { query:typed, ...data };
-    state.shipping.address = null; state.shipping.lat = null; state.shipping.lng = null; state.shipping.costCents = 0; state.shipping.distanceKm = null;
-    const input=qs('#areaInput'); if(input && input.value.trim()===typed) input.value=state.area.locality || typed;
-    if (status) { status.className='area-status ready'; status.textContent=`✓ Zona detectada: ${state.area.locality || typed}`; }
+    if (status) { status.className='area-status loading'; status.textContent='Cargando zona...'; }
+    const data = await api('/api/geo/resolve-area', {
+      method:'POST',
+      body: JSON.stringify({ query:item.text || item.mainText || '', placeId:item.placeId })
+    });
+    state.area = { ...data, query:item.mainText || item.text || data.locality || '', selectedLabel:item.mainText || item.text || data.locality || '' };
+    state.shipping.address = null;
+    state.shipping.lat = null;
+    state.shipping.lng = null;
+    state.shipping.costCents = 0;
+    state.shipping.distanceKm = null;
+    state.areaSuggestions = [];
+    const input=qs('#areaInput');
+    if(input) input.value=state.area.selectedLabel || state.area.locality || item.mainText || item.text || '';
+    const list=qs('#areaSuggestions');
+    if(list){ list.innerHTML=''; list.classList.add('hidden'); }
+    if (status) { status.className='area-status ready'; status.textContent=`✓ Zona elegida: ${state.area.selectedLabel || state.area.locality || item.mainText || item.text || ''}`; }
     await setupAddressAutocomplete();
-    if (!options.silent) toast(`Zona detectada: ${state.area.locality || typed}. Ahora escribí la calle.`, 'success');
   }
 
-  function setupAreaAutoResolve() {
-    const input=qs('#areaInput'); if(!input || input.dataset.autoBound==='1') return;
+  function setupAreaAutocomplete() {
+    const input=qs('#areaInput');
+    if(!input || input.dataset.autoBound==='1') return;
     input.dataset.autoBound='1';
-    let timer=null, lastResolved=String(state.area?.query||'').trim().toLowerCase();
-    const run=()=>{
+    let timer=null;
+    input.addEventListener('input',()=>{
+      clearTimeout(timer);
       const q=input.value.trim();
-      if(q.length<3){ const s=qs('#areaStatus'); if(s){s.className='area-status';s.textContent='Escribí al menos 3 caracteres para detectar la zona.';} return; }
-      if(q.toLowerCase()===lastResolved || q.toLowerCase()===String(state.area?.locality||'').trim().toLowerCase()) return;
-      resolveArea(q,{silent:true}).then(()=>{lastResolved=q.toLowerCase();}).catch(err=>{
-        const s=qs('#areaStatus'); if(s){s.className='area-status error';s.textContent='No pudimos reconocer esa zona todavía. Seguí escribiendo o probá con el código postal.';}
+      const chosen=String(state.area?.selectedLabel || state.area?.locality || state.area?.query || '').trim();
+      if(state.area && q.toLowerCase()!==chosen.toLowerCase()){
+        state.area=null;
+        state.areaSuggestions=[];
+        state.shipping.address=null;
+        state.shipping.lat=null;
+        state.shipping.lng=null;
+        state.shipping.costCents=0;
+        state.shipping.distanceKm=null;
+        const streetHost=qs('#autocompleteHost'); if(streetHost) streetHost.innerHTML='';
+        const confirm=qs('#addressConfirm'); if(confirm){confirm.innerHTML='';confirm.classList.add('hidden');}
+        const quote=qs('#quoteHost'); if(quote) quote.innerHTML='';
+        const status=qs('#areaStatus'); if(status){status.className='area-status';status.textContent='Elegí una localidad de la lista.';}
+      }
+      const list=qs('#areaSuggestions');
+      if(q.length<2){ if(list){list.innerHTML='';list.classList.add('hidden');} return; }
+      timer=setTimeout(()=>fetchAreaSuggestions(q).catch(err=>{
         console.error(err);
-      });
-    };
-    input.addEventListener('input',()=>{ clearTimeout(timer); const q=input.value.trim(); if(state.area && q.toLowerCase()!==String(state.area.locality||state.area.query||'').trim().toLowerCase()) { state.area=null; qs('#autocompleteHost').innerHTML=''; } timer=setTimeout(run,650); });
-    input.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);run();} });
-    input.addEventListener('blur',()=>{ const q=input.value.trim(); if(q.length>=3 && !state.area){clearTimeout(timer);timer=setTimeout(run,80);} });
+        if(list){list.innerHTML='';list.classList.add('hidden');}
+        const status=qs('#areaStatus'); if(status){status.className='area-status error';status.textContent='No pudimos cargar sugerencias. Intentá nuevamente.';}
+      }),180);
+    });
+    input.addEventListener('keydown',e=>{
+      if(e.key==='Enter') e.preventDefault();
+    });
+  }
+
+  async function fetchAreaSuggestions(input) {
+    const list=qs('#areaSuggestions');
+    if(!list) return;
+    list.innerHTML='<div class="address-suggestion-empty">Buscando localidades...</div>';
+    list.classList.remove('hidden');
+    const data=await api('/api/geo/autocomplete-area',{
+      method:'POST',
+      body:JSON.stringify({input})
+    });
+    const items=data.items||[];
+    state.areaSuggestions=items;
+    if(!items.length){
+      list.innerHTML='<div class="address-suggestion-empty">No encontramos localidades con ese texto.</div>';
+      return;
+    }
+    list.innerHTML=items.map((x,i)=>`<button class="address-suggestion" data-area-suggestion="${i}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('') + '<div class="google-attribution">Sugerencias de Google</div>';
   }
 
   async function setupAddressAutocomplete() {
@@ -617,7 +662,7 @@
         <button class="btn btn-secondary" id="confirmTypedAddressBtn">Usar dirección</button>
       </div>
       <div class="address-suggestions hidden" id="addressSuggestions"></div>
-      <div class="address-helper">Buscamos solamente calles dentro de <strong>${escapeHtml(state.area.locality || state.area.query || 'la zona elegida')}</strong>. Podés escribir una parte del nombre, por ejemplo “urs” o “carr”.</div>`;
+      <div class="address-helper">Escribí el nombre de la calle y elegí una sugerencia. Después agregá la altura.</div>`;
     const input = qs('#streetAddressInput');
     if (!input) return;
     let timer = null;
@@ -831,6 +876,7 @@
       const del=e.target.closest('[data-delete-address]');if(del){try{await authApi(`/api/account/addresses/${del.dataset.deleteAddress}`,{method:'DELETE'});await refreshAccount();toast('Dirección eliminada','success')}catch(err){toast(err.message,'error')}return;}
       const af=e.target.closest('[data-open-favorite]');if(af){closeAccount();await openProduct(Number(af.dataset.openFavorite));return;}
       const useAddr=e.target.closest('[data-use-address]');if(useAddr){const a=state.auth.addresses.find(x=>Number(x.id)===Number(useAddr.dataset.useAddress));if(a){state.shipping.address=a.formatted_address;state.shipping.lat=Number(a.lat);state.shipping.lng=Number(a.lng);state.shipping.costCents=0;state.shipping.distanceKm=null;state.area={query:a.label||'Dirección guardada',formattedAddress:a.formatted_address,lat:Number(a.lat),lng:Number(a.lng)};renderShippingDetail();try{await quoteMoto()}catch(err){toast(err.message,'error')}}return;}
+      const areaSuggestion=e.target.closest('[data-area-suggestion]');if(areaSuggestion){const item=(state.areaSuggestions||[])[Number(areaSuggestion.dataset.areaSuggestion)];if(item){try{await resolveAreaChoice(item)}catch(err){toast(err.message,'error')}}return;}
       const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const text=addrSuggestion.dataset.addressText||'';const main=addrSuggestion.dataset.addressMain||text;const input=qs('#streetAddressInput');const hasNumber=/\b\d{1,6}[A-Za-z]?\b/.test(main);if(input){input.value=hasNumber?text:main;input.focus();if(!hasNumber)input.setSelectionRange(input.value.length,input.value.length);}const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');if(hasNumber){try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}}else{toast('Calle encontrada. Ahora agregá la altura.','success')}return;}
       if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
       const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
