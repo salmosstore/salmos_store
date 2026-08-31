@@ -102,28 +102,47 @@
     const key = state.config?.googleMapsWebKey || cfg.GOOGLE_MAPS_WEB_KEY || '';
     if (!key) throw new Error('Google Places no está configurado para la tienda.');
 
-    if (!window.google?.maps?.importLibrary && !window.google?.maps?.places?.AutocompleteSuggestion) {
-      const src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&libraries=places`;
+    const hasImportLibrary = () => typeof window.google?.maps?.importLibrary === 'function';
+    const hasAutocompleteSuggestion = () => !!window.google?.maps?.places?.AutocompleteSuggestion;
+
+    if (!hasImportLibrary() && !hasAutocompleteSuggestion()) {
+      const src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&libraries=places`;
       await new Promise((resolve,reject)=>{
         const existing=[...document.scripts].find(x=>x.src.includes('maps.googleapis.com/maps/api/js'));
         if(existing){
-          if(window.google?.maps?.importLibrary || window.google?.maps?.places?.AutocompleteSuggestion) return resolve();
-          existing.addEventListener('load',resolve,{once:true});
-          existing.addEventListener('error',()=>reject(new Error('No se pudo cargar Google Places.')),{once:true});
+          // Si ya existe un script de Maps, esperamos brevemente a que termine de exponer Places.
+          let attempts=0;
+          const wait=()=>{
+            if(hasImportLibrary() || hasAutocompleteSuggestion()) return resolve();
+            if(++attempts>=30) return reject(new Error('Google Places se cargó incompleto. Recargá la página.'));
+            setTimeout(wait,100);
+          };
+          wait();
           return;
         }
         const el=document.createElement('script');el.src=src;el.async=true;el.defer=true;
-        el.onload=resolve;el.onerror=()=>reject(new Error('No se pudo cargar Google Places.'));
+        el.onload=()=>{
+          let attempts=0;
+          const wait=()=>{
+            if(hasImportLibrary() || hasAutocompleteSuggestion()) return resolve();
+            if(++attempts>=30) return reject(new Error('Google Places se cargó incompleto. Recargá la página.'));
+            setTimeout(wait,100);
+          };
+          wait();
+        };
+        el.onerror=()=>reject(new Error('No se pudo cargar Google Places.'));
         document.head.appendChild(el);
       });
     }
 
-    if (window.google?.maps?.importLibrary) {
-      state.placesLib = await google.maps.importLibrary('places');
+    // Primero usamos Places ya expuesto por el script. Evita llamar importLibrary cuando
+    // Google dejó una propiedad con ese nombre que no es una función.
+    if (hasAutocompleteSuggestion()) {
+      state.placesLib = google.maps.places;
       return state.placesLib;
     }
-    if (window.google?.maps?.places?.AutocompleteSuggestion) {
-      state.placesLib = google.maps.places;
+    if (hasImportLibrary()) {
+      state.placesLib = await google.maps.importLibrary('places');
       return state.placesLib;
     }
     throw new Error('Google Places se cargó incompleto. Recargá la página.');
@@ -705,8 +724,7 @@
       includedRegionCodes:['ar'],
       includedPrimaryTypes:['(regions)'],
       language:'es-AR',
-      region:'ar',
-      locationBias:{center:{lat:-34.78,lng:-58.53},radius:50000}
+      region:'ar'
     });
     const items=[];const seen=new Set();const q=expandedSearch(input);
     for(const s of suggestions){
@@ -873,17 +891,6 @@
     const orderTxt = state.order?.code ? ` ${state.order.code}` : '';
     const msg = `Hola, quiero consultar la demora de motomensajería para mi pedido${orderTxt}. Dirección: ${state.shipping.address || ''}. Distancia calculada: ${state.shipping.distanceKm || ''} km.`;
     return `https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`;
-  }
-
-  async function useCurrentLocation() {
-    if (!navigator.geolocation) throw new Error('Tu dispositivo no permite obtener ubicación.');
-    const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, () => reject(new Error('No pudimos obtener tu ubicación. Revisá el permiso del navegador.')), { enableHighAccuracy:true, timeout:12000, maximumAge:60000 }));
-    const lat=pos.coords.latitude, lng=pos.coords.longitude;
-    const data = await api('/api/geo/reverse', { method:'POST', body:JSON.stringify({ lat,lng }) });
-    state.area = { query: data.locality || data.postalCode || 'Ubicación actual', lat, lng };
-    state.shipping.address = data.formattedAddress; state.shipping.lat=lat; state.shipping.lng=lng; state.shipping.costCents=0;
-    await setupAddressAutocomplete();
-    await showMap(lat,lng,data.formattedAddress);
   }
 
   function renderCheckoutSummary() {
