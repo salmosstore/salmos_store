@@ -9,6 +9,26 @@
   const qs = (s, root = document) => root.querySelector(s);
   const qsa = (s, root = document) => [...root.querySelectorAll(s)];
 
+  function productPathSegment(value='') {
+    return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  }
+  function productPathKey(value='') { return productPathSegment(value).toLowerCase(); }
+  function productSharePath(product) { return `/${productPathSegment(product?.name||product?.slug||'producto')}`; }
+  function productShareUrl(product) { return `${location.origin}${productSharePath(product)}`; }
+  function currentProductPathKey() {
+    const raw=decodeURIComponent(location.pathname||'/').replace(/^\/+|\/+$/g,'');
+    if(!raw || /^(index\.html?|admin\.html?|404\.html?)$/i.test(raw) || raw.includes('/')) return '';
+    return productPathKey(raw);
+  }
+  function setProductPath(product) {
+    if(!product)return;
+    const path=productSharePath(product);
+    if(location.pathname!==path) history.replaceState({salmosProduct:Number(product.id)||null},'',path+location.search+location.hash);
+  }
+  function clearProductPath() {
+    if(currentProductPathKey()) history.replaceState({},'',`/${location.search}${location.hash}`);
+  }
+
   function checkoutToken() {
     let token = localStorage.getItem('salmos_checkout_token') || '';
     if (!/^[A-Za-z0-9_-]{16,100}$/.test(token)) {
@@ -420,6 +440,7 @@
       renderCart();
       const whatsapp = state.config?.whatsapp || cfg.STORE_WHATSAPP || '5491162691341';
       qs('#footerWhatsapp').href = `https://wa.me/${whatsapp}`;
+      await openProductFromCurrentPath();
     } catch (err) {
       console.error(err);
       qs('#productGrid').innerHTML = `<div class="empty-state" style="grid-column:1/-1"><strong>No pudimos cargar la tienda.</strong>${API ? escapeHtml(err.message) : 'Falta conectar el sitio con el Worker de SALMOS en config.js.'}</div>`;
@@ -480,7 +501,7 @@
     qs('#featuredGrid').innerHTML = items.map(productCard).join('');
   }
 
-  async function openProduct(id) {
+  async function openProduct(id, options={}) {
     try {
       const data = await api(`/api/products/${id}`);
       const p = data.item;
@@ -489,7 +510,31 @@
       state.selectedVariantId = firstAvailableVariant(p, state.selectedColor)?.id || null;
       renderProductModal();
       openModal('#productModal');
-    } catch (err) { toast(err.message, 'error'); }
+      if(options.updatePath!==false) setProductPath(p);
+      return p;
+    } catch (err) { toast(err.message, 'error'); return null; }
+  }
+
+  async function openProductFromCurrentPath() {
+    const key=currentProductPathKey();
+    if(!key)return;
+    const found=state.products.find(p=>productPathKey(p.name)===key || productPathKey(p.slug)===key);
+    if(found){await openProduct(found.id,{updatePath:false});return;}
+    // Si el enlace quedó viejo por un cambio de nombre, no rompemos la tienda.
+    toast('Ese producto no está disponible o el enlace cambió.','error');
+  }
+
+  async function shareSelectedProduct() {
+    const p=state.selectedProduct;if(!p)return;
+    const url=productShareUrl(p);
+    try{
+      if(navigator.share){await navigator.share({title:`${p.name} · SALMOS`,text:`Mirá ${p.name} en SALMOS`,url});return;}
+      await navigator.clipboard.writeText(url);
+      toast('Link del producto copiado','success');
+    }catch(err){
+      if(err?.name==='AbortError')return;
+      try{await navigator.clipboard.writeText(url);toast('Link del producto copiado','success')}catch{toast(url)}
+    }
   }
 
   function firstAvailableVariant(p, color) {
@@ -537,9 +582,11 @@
           <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
+          ${(p.fit||p.audience) ? `<div class="product-meta-row">${p.fit?`<span class="product-meta-pill"><small>Corte</small><strong>${escapeHtml(p.fit)}</strong></span>`:''}${p.audience?`<span class="product-meta-pill"><small>Para</small><strong>${escapeHtml(p.audience)}</strong></span>`:''}</div>` : ''}
           ${colors.length > 1 || (colors.length === 1 && colors[0]) ? `<div class="detail-block"><span class="detail-label">Color</span><div class="option-row">${colors.map(c=>`<button class="option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join('')}</div></div>` : ''}
           ${sizes.length ? `<div class="detail-block"><span class="detail-label">Talle / variante</span><div class="option-row">${sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join('')}</div></div>` : ''}
           ${media.length > 1 ? `<div class="detail-block detail-thumbs-block"><span class="detail-label">Fotos y videos</span><div class="thumb-row detail-thumbs-right">${media.map((im,i)=>`<button class="thumb media-thumb ${i===0?'active':''}" data-media-url="${escapeHtml(im.url)}" data-media-type="${detailMediaType(im)}" data-media-alt="${escapeHtml(im.alt_text||p.name)}" aria-label="${detailMediaType(im)==='video'?'Ver video':'Ver foto'} ${i+1}">${detailMediaType(im)==='video'?`<span class="video-thumb-icon">▶</span>`:`<img src="${escapeHtml(im.url)}" alt="">`}</button>`).join('')}</div></div>` : ''}
+          <button class="btn btn-ghost detail-share-btn" data-share-product type="button" title="Compartir este producto">↗ Compartir producto</button>
           <div class="detail-actions">
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
             <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}>Comprar ahora</button>
@@ -584,7 +631,7 @@
   function closeCart() { qs('#cartDrawer').classList.remove('open'); qs('#drawerBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); }
 
   function openModal(sel) { qs(sel).classList.add('open'); qs('#modalBackdrop').classList.add('open'); document.body.classList.add('no-scroll'); }
-  function closeModal(sel) { qs(sel).classList.remove('open'); if (!qsa('.modal.open').length) { qs('#modalBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); } }
+  function closeModal(sel) { qs(sel).classList.remove('open'); if(sel==='#productModal'){state.selectedProduct=null;state.selectedColor=null;state.selectedVariantId=null;clearProductPath();} if (!qsa('.modal.open').length) { qs('#modalBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); } }
 
   function startCheckout() {
     if (!state.cart.length) return;
@@ -979,6 +1026,8 @@
     qs('#clearFiltersBtn').addEventListener('click', () => { state.activeCategory='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
     qs('#searchInput').addEventListener('input', e => { state.query=e.target.value; renderProducts(); });
     qs('#year').textContent = new Date().getFullYear();
+    window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
+    document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&m.url!==img.src);const host=qs('#detailMainMedia');if(next&&host)host.innerHTML=renderDetailMedia(next,state.selectedProduct?.name||'SALMOS');}},true);
 
     document.addEventListener('click', async e => {
       const fav=e.target.closest('[data-favorite-product]');if(fav){e.preventDefault();e.stopPropagation();await toggleFavorite(fav.dataset.favoriteProduct);return;}
@@ -994,6 +1043,7 @@
       const areaSuggestion=e.target.closest('[data-area-suggestion]');if(areaSuggestion){const item=(state.areaSuggestions||[])[Number(areaSuggestion.dataset.areaSuggestion)];if(item){try{await resolveAreaChoice(item)}catch(err){toast(err.message,'error')}}return;}
       const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const item=(state.addressSuggestions||[])[Number(addrSuggestion.dataset.addressSuggestion)];const text=item?.text||addrSuggestion.dataset.addressText||'';const main=item?.mainText||addrSuggestion.dataset.addressMain||text;const input=qs('#streetAddressInput');const hasNumber=/\b\d{1,6}[A-Za-z]?\b/.test(main);if(input){input.value=hasNumber?text:main;input.focus();if(!hasNumber)input.setSelectionRange(input.value.length,input.value.length);}const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');state.streetSessionToken=null;if(hasNumber){try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}}else{toast('Calle encontrada. Ahora agregá la altura.','success')}return;}
       if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
+      if(e.target.closest('[data-share-product]')){await shareSelectedProduct();return;}
       const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }

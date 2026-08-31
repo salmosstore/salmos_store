@@ -534,3 +534,43 @@ img { display: block; max-width: 100%; }
   }
 }
 
+
+/* =========================================================
+   SALMOS · COMPARTIR / CORTE / PUBLICO DEL PRODUCTO
+   ========================================================= */
+.product-meta-row {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:14px;
+}
+.product-meta-pill {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:38px;
+  padding:7px 12px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--gold) 28%,var(--line));
+  background:var(--surface);
+}
+.product-meta-pill small {
+  color:var(--muted);
+  font-size:.7rem;
+  font-weight:800;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.product-meta-pill strong {
+  color:var(--text);
+  font-size:.84rem;
+}
+.detail-share-btn {
+  width:100%;
+  margin-top:18px;
+  min-height:42px;
+}
+@media (max-width:680px) {
+  .product-meta-row { gap:6px; }
+  .product-meta-pill { width:100%; justify-content:space-between; }
+}

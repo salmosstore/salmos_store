@@ -57,6 +57,12 @@
     for(const file of files){const mediaType=file.type?.startsWith('video/')||mediaTypeFromName(file.name)==='video'?'video':'image';const key=`new-${Date.now()}-${Math.random().toString(36).slice(2)}`;state.mediaItems.push({key,existing:false,file,url:URL.createObjectURL(file),name:file.name,mediaType})}
     state.newFiles=state.mediaItems.filter(x=>!x.existing).map(x=>x.file);renderMediaManager();
   }
+  function resetProductDialogState(){
+    for(const item of state.mediaItems||[]){if(!item.existing&&item.url?.startsWith('blob:')){try{URL.revokeObjectURL(item.url)}catch{}}}
+    state.newFiles=[];state.mediaItems=[];state.mediaDragKey=null;state.editingProduct=null;
+    const saveBtn=qs('#saveProductBtn');if(saveBtn)saveBtn.disabled=false;
+  }
+  function closeProductDialog(){const dialog=qs('#productDialog');if(dialog?.open)dialog.close();}
 
   const titles={dashboard:'Dashboard',products:'Productos',categories:'Categorías',stock:'Stock',orders:'Pedidos',finance:'Finanzas',settings:'Configuración'};
 
@@ -102,7 +108,7 @@
       const d=await api(`/api/admin/products/${id}`);
       state.editingProduct=duplicate?{...d.item,id:null,name:`${d.item.name} copia`,slug:'',variants:(d.item.variants||[]).map(v=>({...v,id:null})),images:[]}:d.item;
     }else state.editingProduct=null;
-    const p=state.editingProduct||{status:'draft',price_cents:0,compare_at_cents:0,cost_cents:0,weight_grams:400,height_cm:5,width_cm:25,depth_cm:30,is_featured:0,is_new:0,is_bestseller:0,variants:[{color:'Negro',size:'S',stock:0,sku:''},{color:'Negro',size:'M',stock:0,sku:''},{color:'Negro',size:'L',stock:0,sku:''},{color:'Negro',size:'XL',stock:0,sku:''},{color:'Negro',size:'XXL',stock:0,sku:''}],images:[]};
+    const p=state.editingProduct||{status:'draft',price_cents:0,compare_at_cents:0,cost_cents:0,weight_grams:400,height_cm:5,width_cm:25,depth_cm:30,is_featured:0,is_new:0,is_bestseller:0,fit:'',audience:'',variants:[{color:'Negro',size:'S',stock:0,sku:''},{color:'Negro',size:'M',stock:0,sku:''},{color:'Negro',size:'L',stock:0,sku:''},{color:'Negro',size:'XL',stock:0,sku:''},{color:'Negro',size:'XXL',stock:0,sku:''}],images:[]};
     state.mediaItems=(p.images||[]).map(im=>({key:`existing-${im.id}`,id:Number(im.id),existing:true,url:im.url,name:(im.r2_key||'').split('/').pop()||`Archivo ${im.id}`,mediaType:im.media_type||mediaTypeFromName(im.r2_key||im.url)}));
     qs('#productDialogTitle').textContent=p.id?'Editar producto':'Nuevo producto';
     const saveBtn=qs('#saveProductBtn');if(saveBtn)saveBtn.disabled=false;
@@ -112,6 +118,8 @@
         <div class="field full"><label>Nombre</label><input class="input" name="name" required value="${escapeHtml(p.name||'')}"></div>
         <div class="field"><label>Categoría</label><select class="select" name="category_id" required><option value="">Elegir...</option>${state.categories.map(c=>`<option value="${c.id}" ${Number(p.category_id)===Number(c.id)?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Estado</label><select class="select" name="status"><option value="draft" ${p.status==='draft'?'selected':''}>Borrador</option><option value="published" ${p.status==='published'?'selected':''}>Publicado</option><option value="hidden" ${p.status==='hidden'?'selected':''}>Oculto</option></select></div>
+        <div class="field"><label>Corte / fit</label><input class="input" name="fit" list="salmosFitOptions" placeholder="Elegí o escribí otro" value="${escapeHtml(p.fit||'')}"><datalist id="salmosFitOptions"><option value="Clásico"><option value="Oversize"><option value="Boxy fit"></datalist></div>
+        <div class="field"><label>Hombre / Mujer / Unisex</label><input class="input" name="audience" list="salmosAudienceOptions" placeholder="Elegí o escribí otro" value="${escapeHtml(p.audience||'')}"><datalist id="salmosAudienceOptions"><option value="Hombre"><option value="Mujer"><option value="Unisex"></datalist></div>
         <div class="field"><label>Precio</label><input class="input" name="price" type="number" min="0" value="${centsToPesos(p.price_cents)}"></div>
         <div class="field"><label>Precio anterior</label><input class="input" name="compare" type="number" min="0" value="${centsToPesos(p.compare_at_cents)}"></div>
         <div class="field"><label>Costo del producto</label><input class="input" name="cost" type="number" min="0" value="${centsToPesos(p.cost_cents)}"></div>
@@ -130,7 +138,7 @@
   async function saveProduct(){
     const form=qs('#productForm');const fd=new FormData(form);const variants=qsa('.variant-row',qs('#variantBuilder')).map(r=>({id:Number(qs('[data-v="id"]',r)?.value)||null,color:qs('[data-v="color"]',r).value.trim(),size:qs('[data-v="size"]',r).value.trim(),stock:Number(qs('[data-v="stock"]',r).value)||0,sku:qs('[data-v="sku"]',r).value.trim()})).filter(v=>v.color||v.size);
     if(!fd.get('name')?.trim()||!fd.get('category_id')) throw new Error('Completá nombre y categoría.');
-    const payload={name:fd.get('name').trim(),category_id:Number(fd.get('category_id')),status:fd.get('status'),price_cents:pesosToCents(fd.get('price')),compare_at_cents:pesosToCents(fd.get('compare')),cost_cents:pesosToCents(fd.get('cost')),short_description:fd.get('short_description')||'',meaning_text:fd.get('meaning_text')||'',verse_text:fd.get('verse_text')||'',verse_reference:fd.get('verse_reference')||'',is_new:fd.get('is_new')?1:0,is_featured:fd.get('is_featured')?1:0,is_bestseller:fd.get('is_bestseller')?1:0,weight_grams:Number(fd.get('weight_grams'))||0,height_cm:Number(fd.get('height_cm'))||0,width_cm:Number(fd.get('width_cm'))||0,depth_cm:Number(fd.get('depth_cm'))||0,variants};
+    const payload={name:fd.get('name').trim(),category_id:Number(fd.get('category_id')),status:fd.get('status'),price_cents:pesosToCents(fd.get('price')),compare_at_cents:pesosToCents(fd.get('compare')),cost_cents:pesosToCents(fd.get('cost')),short_description:fd.get('short_description')||'',meaning_text:fd.get('meaning_text')||'',verse_text:fd.get('verse_text')||'',verse_reference:fd.get('verse_reference')||'',fit:fd.get('fit')||'',audience:fd.get('audience')||'',is_new:fd.get('is_new')?1:0,is_featured:fd.get('is_featured')?1:0,is_bestseller:fd.get('is_bestseller')?1:0,weight_grams:Number(fd.get('weight_grams'))||0,height_cm:Number(fd.get('height_cm'))||0,width_cm:Number(fd.get('width_cm'))||0,depth_cm:Number(fd.get('depth_cm'))||0,variants};
     const id=state.editingProduct?.id;const d=await api(id?`/api/admin/products/${id}`:'/api/admin/products',{method:id?'PUT':'POST',body:JSON.stringify(payload)});const productId=d.item.id;
     const orderedIds=[];
     for(const item of state.mediaItems){
@@ -193,6 +201,11 @@
     qsa('.admin-nav-btn').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
     qs('#adminMenuBtn').addEventListener('click',()=>qs('#adminSidebar').classList.toggle('open'));
     qs('#adminThemeBtn').addEventListener('click',()=>setTheme(document.documentElement.dataset.theme==='light'?'dark':'light'));
+    const productDialog=qs('#productDialog');
+    const productCancelBtn=qs('#productDialog button[value="cancel"]');
+    if(productCancelBtn){productCancelBtn.type='button';productCancelBtn.setAttribute('formnovalidate','');productCancelBtn.addEventListener('click',e=>{e.preventDefault();closeProductDialog();});}
+    productDialog?.addEventListener('cancel',e=>{e.preventDefault();closeProductDialog();});
+    productDialog?.addEventListener('close',resetProductDialogState);
     qs('#productImagesInput')?.addEventListener?.('change',()=>{});
     document.addEventListener('change',async e=>{
       if(e.target.id==='productImagesInput'){addSelectedMedia([...e.target.files]);e.target.value=''}
