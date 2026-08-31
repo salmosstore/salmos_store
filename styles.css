@@ -330,3 +330,98 @@ img { display: block; max-width: 100%; }
   .shipping-price { grid-column:2; }
   .address-panel .row { display:grid; }
 }
+
+
+/* =========================================================
+   SALMOS · CUENTA GOOGLE / FAVORITOS / CARRITO SINCRONIZADO
+   ========================================================= */
+.favorite-btn {
+  position:absolute; z-index:4; right:12px; top:12px; width:38px; height:38px;
+  display:grid; place-items:center; border-radius:50%; cursor:pointer;
+  border:1px solid color-mix(in srgb,var(--gold) 42%,var(--line));
+  background:color-mix(in srgb,var(--surface-strong) 84%,transparent);
+  color:var(--muted); font-size:1.15rem; line-height:1; box-shadow:var(--shadow-soft);
+  backdrop-filter:blur(10px); transition:.18s ease;
+}
+.favorite-btn:hover { transform:translateY(-1px) scale(1.03); border-color:var(--gold); color:var(--gold-2); }
+.favorite-btn.active { color:#17120a; background:linear-gradient(135deg,var(--gold-2),var(--gold)); border-color:var(--gold-dark); }
+.detail-main { position:relative; }
+.detail-favorite { right:14px; top:14px; }
+
+.account-btn { overflow:hidden; }
+.account-avatar-small { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+.account-backdrop { z-index:109; }
+.account-drawer { z-index:110; width:min(520px,100%); }
+.account-kicker { color:var(--gold-2); font-size:.68rem; font-weight:900; letter-spacing:.18em; text-transform:uppercase; margin-bottom:3px; }
+.account-guest { min-height:60vh; display:flex; flex-direction:column; justify-content:center; gap:14px; text-align:center; }
+.account-guest h3 { margin:0; font-family:Georgia,serif; font-size:1.6rem; }
+.account-guest p { margin:0 auto 4px; color:var(--muted); max-width:38ch; line-height:1.55; }
+.account-google-mark {
+  width:58px; height:58px; border-radius:18px; margin:0 auto 4px; display:grid; place-items:center;
+  background:var(--surface); border:1px solid color-mix(in srgb,var(--gold) 35%,var(--line));
+  font:900 1.5rem/1 Arial,sans-serif; color:var(--gold-2); box-shadow:var(--shadow-soft);
+}
+.account-tabs {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding-bottom:14px; margin-bottom:16px; border-bottom:1px solid var(--line);
+}
+.account-tabs button {
+  min-height:40px; padding:0 8px; border-radius:999px; border:1px solid color-mix(in srgb,var(--gold) 25%,var(--line));
+  background:var(--surface); color:var(--muted); font-size:.78rem; font-weight:800; cursor:pointer;
+}
+.account-tabs button.active { color:#17120a; background:linear-gradient(135deg,var(--gold-2),var(--gold)); border-color:var(--gold-dark); }
+.account-tab-content { display:grid; gap:14px; }
+.account-profile { display:grid; gap:14px; }
+.account-identity { display:flex; align-items:center; gap:12px; padding:14px; border-radius:18px; background:var(--surface); border:1px solid var(--line); }
+.account-identity img { width:54px; height:54px; object-fit:cover; border-radius:50%; border:1px solid color-mix(in srgb,var(--gold) 45%,var(--line)); }
+.account-identity strong,.account-identity small { display:block; }
+.account-identity small { margin-top:4px; color:var(--muted); overflow-wrap:anywhere; }
+.account-list,.account-orders { display:grid; gap:10px; }
+.account-product-row {
+  width:100%; display:grid; grid-template-columns:58px 1fr auto; align-items:center; gap:12px;
+  padding:9px; border:1px solid var(--line); border-radius:17px; background:var(--surface); color:var(--text); text-align:left; cursor:pointer;
+}
+.account-product-row img,.account-product-placeholder { width:58px; height:58px; border-radius:13px; object-fit:cover; background:var(--surface-2); display:grid; place-items:center; }
+.account-product-row strong,.account-product-row small { display:block; }
+.account-product-row small { margin-top:4px; color:var(--gold-2); }
+.account-product-row b { font-size:1.4rem; color:var(--muted); }
+.account-order,.account-address {
+  display:grid; gap:8px; padding:14px; border-radius:18px; border:1px solid var(--line); background:var(--surface);
+}
+.account-order { grid-template-columns:1fr auto; }
+.account-order small { color:var(--muted); display:block; margin-top:3px; }
+.account-order-total { color:var(--gold-2); font-weight:900; }
+.account-statuses { grid-column:1/-1; display:flex; gap:7px; flex-wrap:wrap; }
+.account-statuses span,.mini-pill {
+  display:inline-flex; align-items:center; min-height:26px; padding:0 9px; border-radius:999px;
+  background:var(--surface-2); border:1px solid var(--line); font-size:.72rem; font-weight:800; color:var(--muted);
+}
+.mini-pill { margin-left:8px; color:var(--gold-2); border-color:color-mix(in srgb,var(--gold) 28%,var(--line)); }
+.account-address p { margin:7px 0 3px; color:var(--muted); line-height:1.45; }
+.account-address small { color:var(--muted); }
+.account-address-actions { display:flex; gap:7px; flex-wrap:wrap; }
+.account-address-actions .btn { min-height:36px; padding:0 12px; font-size:.75rem; }
+.account-address-form { margin-top:8px; padding:16px; border-radius:20px; border:1px solid color-mix(in srgb,var(--gold) 24%,var(--line)); background:color-mix(in srgb,var(--surface) 82%,transparent); display:grid; gap:11px; }
+.account-address-form h4 { margin:0 0 2px; font-family:Georgia,serif; }
+.account-check { display:flex; gap:9px; align-items:center; color:var(--muted); font-size:.86rem; cursor:pointer; }
+.account-check input { accent-color:var(--gold); width:17px; height:17px; }
+.account-checkout-note { margin-bottom:14px; }
+.inline-link { border:0; background:transparent; padding:0; cursor:pointer; }
+.saved-addresses { display:grid; gap:8px; margin-bottom:14px; }
+.saved-address-row { display:flex; gap:8px; overflow:auto hidden; scrollbar-width:none; padding-bottom:2px; }
+.saved-address-row::-webkit-scrollbar { display:none; }
+.saved-address-btn {
+  flex:0 0 min(260px,80vw); text-align:left; padding:11px 12px; border-radius:15px; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--text); cursor:pointer;
+}
+.saved-address-btn strong,.saved-address-btn small { display:block; }
+.saved-address-btn small { margin-top:4px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.saved-address-btn.active { border-color:var(--gold); box-shadow:0 0 0 2px rgba(217,167,45,.08); }
+.save-address-check { margin-top:12px; padding:10px 12px; border-radius:14px; background:var(--surface); border:1px solid var(--line); }
+
+@media (max-width:680px) {
+  .header-actions { gap:6px; }
+  .header-actions .icon-btn { width:42px; height:42px; }
+  .account-tabs { grid-template-columns:repeat(2,1fr); }
+  .favorite-btn { width:35px; height:35px; right:9px; top:9px; }
+}
+
