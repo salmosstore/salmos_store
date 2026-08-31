@@ -70,6 +70,8 @@
     if(id){const d=await api(`/api/admin/products/${id}`);state.editingProduct=duplicate?{...d.item,id:null,name:`${d.item.name} copia`,slug:'',variants:(d.item.variants||[]).map(v=>({...v,id:null}))}:d.item}else state.editingProduct=null;
     const p=state.editingProduct||{status:'draft',price_cents:0,compare_at_cents:0,cost_cents:0,weight_grams:400,height_cm:5,width_cm:25,depth_cm:30,is_featured:0,is_new:0,is_bestseller:0,variants:[{color:'Negro',size:'S',stock:0,sku:''},{color:'Negro',size:'M',stock:0,sku:''},{color:'Negro',size:'L',stock:0,sku:''},{color:'Negro',size:'XL',stock:0,sku:''},{color:'Negro',size:'XXL',stock:0,sku:''}],images:[]};
     qs('#productDialogTitle').textContent=p.id?'Editar producto':'Nuevo producto';
+    const saveBtn=qs('#saveProductBtn');
+    if(saveBtn) saveBtn.disabled=false;
     qs('#productFormBody').innerHTML=`
       <section class="form-section"><h3>Información</h3><div class="form-grid">
         <div class="field full"><label>Nombre</label><input class="input" name="name" required value="${escapeHtml(p.name||'')}"></div>
@@ -160,7 +162,7 @@
       const rv=e.target.closest('.remove-variant');if(rv){rv.closest('.variant-row').remove();return}
       const rn=e.target.closest('[data-remove-new-image]');if(rn){state.newFiles.splice(Number(rn.dataset.removeNewImage),1);qs('#newImages').innerHTML=state.newFiles.map((f,i)=>`<div class="image-preview"><img src="${URL.createObjectURL(f)}" alt=""><button type="button" data-remove-new-image="${i}">×</button></div>`).join('');return}
       const di=e.target.closest('[data-delete-image]');if(di){if(confirm('¿Eliminar esta foto?')){await api(`/api/admin/images/${di.dataset.deleteImage}`,{method:'DELETE'});di.closest('.image-preview').remove();toast('Foto eliminada','success')}return}
-      if(e.target.id==='saveProductBtn'){e.preventDefault();try{e.target.disabled=true;await saveProduct()}catch(err){toast(err.message,'error');e.target.disabled=false}return}
+      if(e.target.id==='saveProductBtn'){e.preventDefault();const btn=e.target;try{btn.disabled=true;await saveProduct()}catch(err){toast(err.message,'error')}finally{btn.disabled=false}return}
       if(e.target.id==='newCategoryBtn'){const name=prompt('Nombre de la categoría:');if(name){try{await api('/api/admin/categories',{method:'POST',body:JSON.stringify({name})});state.categories=[];await renderCategories();toast('Categoría creada','success')}catch(err){toast(err.message,'error')}}return}
       const fr=e.target.closest('[data-finance-range]');if(fr){state.financeRange=fr.dataset.financeRange;await renderFinance();return}
       if(e.target.id==='newMovementBtn'){const f=qs('#movementForm');f.reset();f.elements.date.value=today();qs('#movementDialog').showModal();return}
