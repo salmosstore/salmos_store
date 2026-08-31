@@ -558,28 +558,53 @@
     host.innerHTML = `
       <div class="address-panel">
         ${state.auth.user && state.auth.addresses.length ? `<div class="saved-addresses"><span class="detail-label">Direcciones guardadas</span><div class="saved-address-row">${state.auth.addresses.map(a=>`<button class="saved-address-btn ${state.shipping.address===a.formatted_address?'active':''}" data-use-address="${a.id}"><strong>${escapeHtml(a.label||'Dirección')}</strong><small>${escapeHtml(a.formatted_address)}</small></button>`).join('')}</div></div>` : ''}
-        <div class="row">
-          <div class="field" style="flex:1"><label>Primero: localidad o código postal</label><input class="input" id="areaInput" placeholder="Ej. Tristán Suárez o 1806" value="${escapeHtml(state.area?.query || '')}"></div>
-          <button class="btn btn-secondary" id="resolveAreaBtn">Buscar zona</button>
+        <div class="field area-field">
+          <label>Primero: localidad o código postal</label>
+          <input class="input" id="areaInput" autocomplete="off" spellcheck="false" placeholder="Localidad o código postal" value="${escapeHtml(state.area?.query || '')}">
+          <div class="area-status ${state.area ? 'ready' : ''}" id="areaStatus">${state.area ? `✓ Zona: ${escapeHtml(state.area.locality || state.area.query || '')}` : 'Escribí tu localidad o código postal. La zona se detecta automáticamente.'}</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-ghost" id="useLocationBtn">📍 Usar mi ubicación actual</button></div>
         <div class="address-autocomplete" id="autocompleteHost"></div>
         <div class="address-confirm ${state.shipping.address ? '' : 'hidden'}" id="addressConfirm">${state.shipping.address ? `<strong>Dirección seleccionada:</strong><br>${escapeHtml(state.shipping.address)}` : ''}</div>
         <div id="quoteHost"></div>
       </div>`;
+    setupAreaAutoResolve();
     if (state.area) setupAddressAutocomplete().catch(err => toast(err.message, 'error'));
     if (state.shipping.lat && state.shipping.lng) {
       showMap(state.shipping.lat, state.shipping.lng, state.shipping.address).catch(err => toast(err.message,'error'));
     }
   }
 
-  async function resolveArea(query) {
-    if (!query?.trim()) throw new Error('Ingresá una localidad o código postal.');
-    const data = await api('/api/geo/resolve-area', { method:'POST', body: JSON.stringify({ query }) });
-    state.area = { query, ...data };
+  async function resolveArea(query, options = {}) {
+    const typed = String(query || '').trim();
+    if (!typed) throw new Error('Ingresá una localidad o código postal.');
+    const status = qs('#areaStatus');
+    if (status) { status.className='area-status loading'; status.textContent='Buscando zona...'; }
+    const data = await api('/api/geo/resolve-area', { method:'POST', body: JSON.stringify({ query:typed }) });
+    state.area = { query:typed, ...data };
     state.shipping.address = null; state.shipping.lat = null; state.shipping.lng = null; state.shipping.costCents = 0; state.shipping.distanceKm = null;
+    const input=qs('#areaInput'); if(input && input.value.trim()===typed) input.value=state.area.locality || typed;
+    if (status) { status.className='area-status ready'; status.textContent=`✓ Zona detectada: ${state.area.locality || typed}`; }
     await setupAddressAutocomplete();
-    toast('Zona encontrada. Ahora escribí calle y altura.', 'success');
+    if (!options.silent) toast(`Zona detectada: ${state.area.locality || typed}. Ahora escribí la calle.`, 'success');
+  }
+
+  function setupAreaAutoResolve() {
+    const input=qs('#areaInput'); if(!input || input.dataset.autoBound==='1') return;
+    input.dataset.autoBound='1';
+    let timer=null, lastResolved=String(state.area?.query||'').trim().toLowerCase();
+    const run=()=>{
+      const q=input.value.trim();
+      if(q.length<3){ const s=qs('#areaStatus'); if(s){s.className='area-status';s.textContent='Escribí al menos 3 caracteres para detectar la zona.';} return; }
+      if(q.toLowerCase()===lastResolved || q.toLowerCase()===String(state.area?.locality||'').trim().toLowerCase()) return;
+      resolveArea(q,{silent:true}).then(()=>{lastResolved=q.toLowerCase();}).catch(err=>{
+        const s=qs('#areaStatus'); if(s){s.className='area-status error';s.textContent='No pudimos reconocer esa zona todavía. Seguí escribiendo o probá con el código postal.';}
+        console.error(err);
+      });
+    };
+    input.addEventListener('input',()=>{ clearTimeout(timer); const q=input.value.trim(); if(state.area && q.toLowerCase()!==String(state.area.locality||state.area.query||'').trim().toLowerCase()) { state.area=null; qs('#autocompleteHost').innerHTML=''; } timer=setTimeout(run,650); });
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);run();} });
+    input.addEventListener('blur',()=>{ const q=input.value.trim(); if(q.length>=3 && !state.area){clearTimeout(timer);timer=setTimeout(run,80);} });
   }
 
   async function setupAddressAutocomplete() {
@@ -592,7 +617,7 @@
         <button class="btn btn-secondary" id="confirmTypedAddressBtn">Usar dirección</button>
       </div>
       <div class="address-suggestions hidden" id="addressSuggestions"></div>
-      <div class="address-helper">Escribí la calle desde las primeras letras. Elegí una sugerencia y después agregá la altura.</div>`;
+      <div class="address-helper">Buscamos solamente calles dentro de <strong>${escapeHtml(state.area.locality || state.area.query || 'la zona elegida')}</strong>. Podés escribir una parte del nombre, por ejemplo “urs” o “carr”.</div>`;
     const input = qs('#streetAddressInput');
     if (!input) return;
     let timer = null;
@@ -613,7 +638,7 @@
   async function fetchAddressSuggestions(input) {
     const list = qs('#addressSuggestions');
     if (!list || !state.area) return;
-    list.innerHTML = '<div class="address-suggestion-empty">Buscando...</div>';
+    list.innerHTML = '<div class="address-suggestion-empty">Buscando calles en tu zona...</div>';
     list.classList.remove('hidden');
     const data = await api('/api/geo/autocomplete', {
       method:'POST',
@@ -622,8 +647,11 @@
         area:{
           query:state.area.query || '',
           formattedAddress:state.area.formattedAddress || '',
+          locality:state.area.locality || '',
+          postalCode:state.area.postalCode || '',
           lat:state.area.lat,
-          lng:state.area.lng
+          lng:state.area.lng,
+          viewport:state.area.viewport || null
         }
       })
     });
@@ -634,7 +662,7 @@
       return;
     }
     list.classList.remove('hidden');
-    list.innerHTML = items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText || x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('');
+    list.innerHTML = items.map((x,i)=>`<button class="address-suggestion" data-address-suggestion="${i}" data-address-text="${escapeHtml(x.text)}" data-address-main="${escapeHtml(x.mainText || x.text)}"><strong>${escapeHtml(x.mainText || x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('') + '<div class="google-attribution">Sugerencias de Google</div>';
   }
 
   async function confirmTypedAddress(addressText) {
@@ -821,7 +849,6 @@
       }
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
       const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ state.shipping={method:ship.dataset.shipping,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; renderCheckout(); return; }
-      if(e.target.id==='resolveAreaBtn'){ try{e.target.disabled=true;await resolveArea(qs('#areaInput').value);}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
       if(e.target.id==='quoteMotoBtn'){ try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteMoto();}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular motomensajería';} return; }
       if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(state.shipping.method==='moto'&&!state.shipping.costCents){toast('Primero calculá la motomensajería.','error');return;} state.checkoutStep=3;renderCheckout();return; }

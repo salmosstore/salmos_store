@@ -524,3 +524,18 @@ img { display: block; max-width: 100%; }
 .address-suggestion { padding:14px 15px; font-size:.9rem; }
 .address-suggestion strong { font-size:.92rem; line-height:1.3; }
 .address-suggestion small { font-size:.8rem; }
+
+
+/* =========================================================
+   DIRECCIONES V4 · ZONA AUTOMÁTICA + SOLO CALLES DE ESA ZONA
+   ========================================================= */
+.area-field { margin-bottom:0; }
+.area-status { min-height:22px; padding:6px 2px 0; color:var(--muted); font-size:.78rem; line-height:1.35; }
+.area-status.ready { color:color-mix(in srgb,var(--gold-2) 85%,#fff 15%); font-weight:800; }
+.area-status.loading { color:var(--muted); }
+.area-status.error { color:#e9a29b; }
+.google-attribution { padding:7px 13px; border-top:1px solid var(--line); color:var(--muted); font-size:.68rem; text-align:right; background:color-mix(in srgb,var(--surface-2) 70%,transparent); }
+.address-helper strong { color:var(--text); }
+.address-suggestion { min-height:58px; }
+.address-suggestion strong { font-size:.96rem; }
+.address-suggestion small { font-size:.82rem; }
