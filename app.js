@@ -709,7 +709,7 @@
     qs('#modalBackdrop').addEventListener('click', () => { closeModal('#productModal'); closeModal('#checkoutModal'); });
     qs('#closeCheckoutBtn').addEventListener('click', () => closeModal('#checkoutModal'));
     qs('#checkoutBtn').addEventListener('click', startCheckout);
-    qs('#heroShopBtn').addEventListener('click', () => qs('#productos').scrollIntoView({behavior:'smooth'}));
+    qs('#heroShopBtn')?.addEventListener('click', () => qs('#productos')?.scrollIntoView({behavior:'smooth'}));
     qs('#clearFiltersBtn').addEventListener('click', () => { state.activeCategory='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
     qs('#searchInput').addEventListener('input', e => { state.query=e.target.value; renderProducts(); });
     qs('#year').textContent = new Date().getFullYear();
