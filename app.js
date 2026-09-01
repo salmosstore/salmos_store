@@ -57,6 +57,7 @@
     checkoutStep: 1,
     customer: loadJSON('salmos_customer', { name: '', phone: '', email: '' }),
     shipping: { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null },
+    checkoutQuoteOnly: false,
     googleLoaded: false,
     googleMap: null,
     googleMarker: null,
@@ -325,7 +326,8 @@
       if(state.auth.user?.photoURL) host.innerHTML=`<img class="account-avatar-small" src="${escapeHtml(state.auth.user.photoURL)}" alt="">`;
       else host.innerHTML=`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>`;
     }
-    const n=state.auth.favoriteIds.size;if(badge){badge.textContent=n;badge.classList.toggle('hidden',!n);}
+    const favoritesBtn=qs('#favoritesBtn');if(favoritesBtn)favoritesBtn.classList.toggle('hidden',!state.auth.user);
+    const n=state.auth.favoriteIds.size;if(badge){badge.textContent=n;badge.classList.toggle('hidden',!state.auth.user||!n);}
     const adminLink=qs('#adminOnlyLink');if(adminLink){const adminEmail=String(cfg.ADMIN_EMAIL||'salmos.store7@gmail.com').toLowerCase();const allowed=Boolean(state.auth.user?.email && state.auth.user.email.toLowerCase()===adminEmail);adminLink.classList.toggle('hidden',!allowed);}
   }
   function openAccount(tab='profile') { state.accountTab=tab;renderAccountPanel();qs('#accountDrawer')?.classList.add('open');qs('#accountBackdrop')?.classList.add('open');document.body.classList.add('no-scroll'); }
@@ -616,12 +618,15 @@
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+          <div class="product-attribute-line" aria-label="Opciones del producto">
+            <div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static">—</span>'}</div></div>
+            <div class="product-attribute-cell"><span class="detail-label">Corte</span><span class="attribute-static">${escapeHtml(p.fit||'—')}</span></div>
+            <div class="product-attribute-cell"><span class="detail-label">Género</span><span class="attribute-static">${escapeHtml(p.audience||'—')}</span></div>
+            <div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.length?colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join(''):'<span class="attribute-static">—</span>'}</div></div>
+          </div>
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${colors.length > 1 || (colors.length === 1 && colors[0]) ? `<div class="detail-block"><span class="detail-label">Color</span><div class="option-row">${colors.map(c=>`<button class="option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join('')}</div></div>` : ''}
-          ${sizes.length ? `<div class="detail-block"><span class="detail-label">Talle</span><div class="option-row">${sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join('')}</div></div>` : ''}
-          ${(p.fit||p.audience) ? `<div class="product-meta-row">${p.fit?`<span class="product-meta-pill"><small>Corte</small><strong>${escapeHtml(p.fit)}</strong></span>`:''}${p.audience?`<span class="product-meta-pill"><small>Para</small><strong>${escapeHtml(p.audience)}</strong></span>`:''}</div>` : ''}
           <button class="btn btn-ghost detail-share-btn" data-share-product type="button" title="Compartir este producto">↗ Compartir producto</button>
           <div class="detail-actions">
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
@@ -676,7 +681,18 @@
   function startCheckout() {
     if (!state.cart.length) return;
     closeCart();
+    state.checkoutQuoteOnly = false;
     state.checkoutStep = 1;
+    state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
+    state.coupon = null;
+    renderCheckout();
+    openModal('#checkoutModal');
+  }
+
+  function startShippingQuote() {
+    closeCart();
+    state.checkoutQuoteOnly = true;
+    state.checkoutStep = 2;
     state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
     state.coupon = null;
     renderCheckout();
@@ -708,14 +724,15 @@
     const motoEnabled = pc.shipping?.moto?.enabled !== false;
     const correoEnabled = Boolean(pc.shipping?.correo?.enabled);
     qs('#checkoutContent').innerHTML = `
-      <h2>Entrega</h2><div class="checkout-sub">Elegí cómo querés recibir tu compra.</div>
+      <h2>${state.checkoutQuoteOnly?'Consultá el costo de envío':'Entrega'}</h2><div class="checkout-sub">${state.checkoutQuoteOnly?'Simulá el envío sin producto. Cuando termines, podés agregar una remera y hacer la compra normalmente.':'Elegí cómo querés recibir tu compra.'}</div>
+      ${state.checkoutQuoteOnly?'<div class="notice quote-only-notice"><strong>Simulación sin producto</strong><br>La cotización es solo para conocer el costo de entrega; no genera ningún pedido.</div>':''}
       <div class="shipping-options">
         <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm || 50} km · Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${pc.shipping?.moto?.minHours || 1} y ${pc.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad</small></span><span class="shipping-price">${state.shipping.method==='moto' && state.shipping.costCents ? money(state.shipping.costCents) : 'Calcular'}</span></button>
         <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?'Domicilio o sucursal':'Integración pendiente de habilitación'}</small></span><span class="shipping-price">${correoEnabled?'Calcular':'Próximamente'}</span></button>
         <button class="shipping-card ${state.shipping.method==='pickup'?'active':''} ${pickupEnabled?'':'disabled'}" data-shipping="pickup" ${pickupEnabled?'':'disabled'}><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${pickupEnabled?escapeHtml(pc.shipping.pickup.address || 'Coordinar retiro'):'Se habilitará desde administración'}</small></span><span class="shipping-price">Gratis</span></button>
       </div>
       <div id="shippingDetail"></div>
-      <div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method && (state.shipping.method!=='moto' || state.shipping.costCents>0) ? '' : 'disabled'}>Continuar</button></div>`;
+      ${state.checkoutQuoteOnly?'<div class="checkout-actions quote-only-actions"><button class="btn btn-ghost" id="closeQuoteCheckoutBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button></div>':`<div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method && (state.shipping.method!=='moto' || state.shipping.costCents>0) ? '' : 'disabled'}>Continuar</button></div>`}`;
     renderShippingDetail();
   }
 
@@ -1124,6 +1141,7 @@
 
   function bindEvents() {
     qs('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
+    qs('#searchBtn')?.addEventListener('click',()=>{const panel=qs('#headerSearchPanel');if(!panel)return;const opening=panel.classList.contains('hidden');panel.classList.toggle('hidden',!opening);qs('#searchBtn')?.classList.toggle('active',opening);if(opening)setTimeout(()=>qs('#searchInput')?.focus(),0);});
     qs('#accountBtn')?.addEventListener('click',()=>openAccount('profile'));
     qs('#favoritesBtn')?.addEventListener('click',()=>openAccount('favorites'));
     qs('#closeAccountBtn')?.addEventListener('click',closeAccount);
@@ -1133,6 +1151,7 @@
     qs('#modalBackdrop').addEventListener('click', () => { closeModal('#productModal'); closeModal('#checkoutModal'); });
     qs('#closeCheckoutBtn').addEventListener('click', () => closeModal('#checkoutModal'));
     qs('#checkoutBtn').addEventListener('click', startCheckout);
+    qs('#footerShippingQuoteBtn')?.addEventListener('click', startShippingQuote);
     qs('#heroShopBtn')?.addEventListener('click', () => qs('#productos')?.scrollIntoView({behavior:'smooth'}));
     qs('#flyersLaunchBtn')?.addEventListener('click',()=>{const sec=qs('#flyersSection');if(sec){sec.classList.remove('hidden');sec.scrollIntoView({behavior:'smooth',block:'start'});}});
     qs('#closeFlyersBtn')?.addEventListener('click',()=>qs('#flyersSection')?.classList.add('hidden'));
@@ -1177,6 +1196,8 @@
         state.customer={name,phone,email:state.auth.user?.email||email}; localStorage.setItem('salmos_customer',JSON.stringify(state.customer)); if(state.auth.user)authApi('/api/account/profile',{method:'PUT',body:JSON.stringify({displayName:name,phone})}).catch(()=>{}); state.checkoutStep=2; renderCheckout(); return;
       }
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
+      if(e.target.id==='closeQuoteCheckoutBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');return;}
+      if(e.target.id==='quoteAddProductBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
       const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ state.shipping={method:ship.dataset.shipping,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; state.coupon=null; renderCheckout(); return; }
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
       if(e.target.id==='quoteMotoBtn'){ try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteMoto();}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular motomensajería';} return; }

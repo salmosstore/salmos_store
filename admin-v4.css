@@ -27,3 +27,18 @@
 .flyer-admin-line>label:last-child{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:.8rem;font-weight:800}
 @media(max-width:900px){.admin-flyer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.report-filter-wrap{justify-items:start}}
 @media(max-width:620px){.admin-flyer-grid{grid-template-columns:1fr}.custom-date-filter{display:grid;grid-template-columns:1fr 1fr}.custom-date-filter .btn{grid-column:1/-1}.custom-date-filter .input{min-width:0;width:100%}.dashboard-filter-head{display:grid}.report-filter-wrap{justify-items:stretch}.finance-filters{display:grid;grid-template-columns:repeat(4,1fr)}.finance-filters .btn{padding:0 8px;min-height:40px}.admin-flyer-preview{height:330px}}
+
+
+/* SALMOS V5 · Stock: recuento por talle + filtros + orden */
+.stock-size-summary{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.stock-count-chip{min-width:76px;padding:9px 13px;border:1px solid color-mix(in srgb,var(--gold) 28%,var(--line));border-radius:14px;background:var(--surface);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.stock-count-chip span{color:var(--muted);font-size:.76rem;font-weight:900;text-transform:uppercase}
+.stock-count-chip strong{color:var(--gold-2);font-size:1.05rem}
+.stock-count-chip.total{background:color-mix(in srgb,var(--gold) 10%,var(--surface));border-color:color-mix(in srgb,var(--gold) 45%,var(--line))}
+.stock-filter-card{padding:14px;margin-bottom:14px}
+.stock-filter-grid{display:grid;grid-template-columns:repeat(5,minmax(125px,1fr));gap:10px}
+.stock-filter-grid label{display:grid;gap:6px;color:var(--muted);font-size:.76rem;font-weight:900;text-transform:uppercase;letter-spacing:.04em}
+.stock-filter-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px}
+.stock-filter-footer .btn{min-height:40px}
+@media(max-width:1050px){.stock-filter-grid{grid-template-columns:repeat(3,minmax(140px,1fr))}}
+@media(max-width:680px){.stock-filter-grid{grid-template-columns:1fr 1fr}.stock-filter-grid label:last-child{grid-column:1/-1}.stock-filter-footer{align-items:stretch;flex-direction:column}.stock-filter-footer .btn{width:100%}.stock-size-summary{display:grid;grid-template-columns:repeat(3,1fr)}.stock-count-chip{min-width:0}}
