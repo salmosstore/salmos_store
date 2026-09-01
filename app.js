@@ -66,7 +66,9 @@
     streetSessionToken: null,
     area: null,
     coupon: null,
-    order: null
+    order: null,
+    flyers: [],
+    shippingQueriesRemaining: null
   };
 
   function loadJSON(key, fallback) {
@@ -303,10 +305,9 @@
   }
   function ensureAccountUi() {
     const actions=qs('.header-actions');
-    if(actions && !qs('#favoritesBtn')){
-      const fav=document.createElement('button');fav.className='icon-btn';fav.id='favoritesBtn';fav.title='Favoritos';fav.setAttribute('aria-label','Favoritos');fav.innerHTML=`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span class="badge hidden" id="favoritesBadge">0</span>`;
+    if(actions && !qs('#accountBtn')){
       const acc=document.createElement('button');acc.className='icon-btn account-btn';acc.id='accountBtn';acc.title='Mi cuenta';acc.setAttribute('aria-label','Mi cuenta');acc.innerHTML=`<span id="accountButtonContent"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>`;
-      const cart=qs('#cartBtn');actions.insertBefore(fav,cart);actions.insertBefore(acc,cart);
+      const cart=qs('#cartBtn');actions.insertBefore(acc,cart||null);
     }
     if(!qs('#accountBackdrop')){
       document.body.insertAdjacentHTML('beforeend',`
@@ -325,6 +326,7 @@
       else host.innerHTML=`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>`;
     }
     const n=state.auth.favoriteIds.size;if(badge){badge.textContent=n;badge.classList.toggle('hidden',!n);}
+    const adminLink=qs('#adminOnlyLink');if(adminLink){const adminEmail=String(cfg.ADMIN_EMAIL||'salmos.store7@gmail.com').toLowerCase();const allowed=Boolean(state.auth.user?.email && state.auth.user.email.toLowerCase()===adminEmail);adminLink.classList.toggle('hidden',!allowed);}
   }
   function openAccount(tab='profile') { state.accountTab=tab;renderAccountPanel();qs('#accountDrawer')?.classList.add('open');qs('#accountBackdrop')?.classList.add('open');document.body.classList.add('no-scroll'); }
   function closeAccount() { qs('#accountDrawer')?.classList.remove('open');qs('#accountBackdrop')?.classList.remove('open');document.body.classList.remove('no-scroll'); }
@@ -422,6 +424,30 @@
     await loadAccountData(false);
   }
 
+  async function loadPublicFlyers() {
+    const launch=qs('#flyersLaunchBtn'),section=qs('#flyersSection'),host=qs('#flyerScroll');
+    if(!launch||!section||!host)return;
+    try{
+      const d=await api('/api/flyers');state.flyers=d.items||[];
+      launch.classList.toggle('hidden',!state.flyers.length);
+      if(!state.flyers.length){section.classList.add('hidden');host.innerHTML='';return;}
+      host.innerHTML=state.flyers.map(f=>`<article class="flyer-card"><div class="flyer-media">${String(f.mime_type||'').startsWith('video/')?`<video src="${escapeHtml(f.url)}" controls playsinline preload="metadata"></video>`:String(f.mime_type||'').includes('pdf')?`<a class="flyer-pdf" href="${escapeHtml(f.url)}" target="_blank" rel="noopener">PDF<br><small>${escapeHtml(f.title||'Flyer')}</small></a>`:`<img src="${escapeHtml(f.url)}" alt="${escapeHtml(f.title||'Flyer SALMOS')}">`}</div><div class="flyer-actions"><strong>${escapeHtml(f.title||'SALMOS')}</strong><button class="btn btn-ghost" data-share-flyer="${f.id}">Compartir</button></div></article>`).join('');
+    }catch(err){console.error(err);launch.classList.add('hidden');section.classList.add('hidden');}
+  }
+  async function shareFlyer(id){
+    const f=state.flyers.find(x=>Number(x.id)===Number(id));if(!f)return;
+    try{
+      if(navigator.share){
+        try{
+          const r=await fetch(f.url);const blob=await r.blob();const ext=(f.title||'flyer').split('.').pop();const file=new File([blob],f.file_name||`salmos-flyer.${ext}`,{type:f.mime_type||blob.type||'application/octet-stream'});
+          if(navigator.canShare?.({files:[file]})){await navigator.share({title:f.title||'SALMOS',files:[file]});return;}
+        }catch(err){if(err?.name==='AbortError')return;}
+        await navigator.share({title:f.title||'SALMOS',text:'SALMOS · creer · amar · crear',url:f.url});return;
+      }
+      await navigator.clipboard.writeText(f.url);toast('Link del flyer copiado','success');
+    }catch(err){if(err?.name!=='AbortError')toast('No pudimos compartir este flyer.','error');}
+  }
+
   function renderSkeletons() {
     qs('#productGrid').innerHTML = Array.from({ length: 8 }, () => '<div class="skeleton"></div>').join('');
   }
@@ -440,7 +466,8 @@
       renderFeatured();
       renderCart();
       const whatsapp = state.config?.whatsapp || cfg.STORE_WHATSAPP || '5491162691341';
-      qs('#footerWhatsapp').href = `https://wa.me/${whatsapp}`;
+      const wa=qs('#footerWhatsapp');if(wa)wa.href = `https://wa.me/${whatsapp}`;
+      await loadPublicFlyers().catch(err=>console.error('Flyers',err));
       await openProductFromCurrentPath();
     } catch (err) {
       console.error(err);
@@ -450,18 +477,25 @@
 
   function renderCategories() {
     const row = qs('#categoryRow');
+    const bar = qs('#categoryBar') || row?.closest('.category-bar');
+    if(!row) return;
     const visibleCategorySlugs = new Set(state.products.map(p => p.category_slug).filter(Boolean));
     const visibleCategories = state.categories.filter(c => visibleCategorySlugs.has(c.slug));
-    if (state.activeCategory !== 'all' && !visibleCategorySlugs.has(state.activeCategory)) state.activeCategory = 'all';
-    row.innerHTML = `<button class="chip ${state.activeCategory==='all'?'active':''}" data-category="all">Todo</button>` + visibleCategories.map(c => `<button class="chip ${state.activeCategory===c.slug?'active':''}" data-category="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</button>`).join('');
-    row.addEventListener('click', e => {
-      const btn = e.target.closest('[data-category]');
-      if (!btn) return;
-      state.activeCategory = btn.dataset.category;
-      qsa('.chip', row).forEach(x => x.classList.toggle('active', x === btn));
-      renderProducts();
-      qs('#productos').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    const showBar = visibleCategories.length > 1;
+    if(bar) bar.classList.toggle('hidden', !showBar);
+    if (!showBar || (state.activeCategory !== 'all' && !visibleCategorySlugs.has(state.activeCategory))) state.activeCategory = 'all';
+    row.innerHTML = showBar ? (`<button class="chip ${state.activeCategory==='all'?'active':''}" data-category="all">Todo</button>` + visibleCategories.map(c => `<button class="chip ${state.activeCategory===c.slug?'active':''}" data-category="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</button>`).join('')) : '';
+    if(row.dataset.bound!=='1'){
+      row.dataset.bound='1';
+      row.addEventListener('click', e => {
+        const btn = e.target.closest('[data-category]');
+        if (!btn) return;
+        state.activeCategory = btn.dataset.category;
+        qsa('.chip', row).forEach(x => x.classList.toggle('active', x === btn));
+        renderProducts();
+        qs('#productos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
   }
 
   function filteredProducts() {
@@ -490,16 +524,17 @@
   function renderProducts() {
     const items = filteredProducts();
     const title = state.activeCategory === 'all' ? 'Productos' : (state.categories.find(c => c.slug === state.activeCategory)?.name || 'Productos');
-    qs('#productsTitle').textContent = state.query ? `Resultados para “${state.query}”` : title;
-    qs('#productsSubtitle').textContent = items.length ? `${items.length} ${items.length === 1 ? 'producto' : 'productos'}` : 'No encontramos productos con ese filtro.';
-    qs('#clearFiltersBtn').classList.toggle('hidden', state.activeCategory === 'all' && !state.query);
-    qs('#productGrid').innerHTML = items.length ? items.map(productCard).join('') : `<div class="empty-state" style="grid-column:1/-1"><strong>No hay productos para mostrar.</strong>Probá otra categoría o búsqueda.</div>`;
+    const t=qs('#productsTitle'),sub=qs('#productsSubtitle'),clear=qs('#clearFiltersBtn');
+    if(t)t.textContent = state.query ? `Resultados para “${state.query}”` : title;
+    if(sub)sub.textContent = items.length ? `${items.length} ${items.length === 1 ? 'producto' : 'productos'}` : 'No encontramos productos con ese filtro.';
+    if(clear)clear.classList.toggle('hidden', state.activeCategory === 'all' && !state.query);
+    const grid=qs('#productGrid');if(!grid)return;
+    grid.innerHTML = items.length ? items.map(productCard).join('') : `<div class="empty-state" style="grid-column:1/-1"><strong>No hay productos para mostrar.</strong>Probá otra búsqueda.</div>`;
   }
 
   function renderFeatured() {
-    const items = state.products.filter(p => p.is_featured).slice(0, 4);
-    qs('#featuredSection').classList.toggle('hidden', !items.length);
-    qs('#featuredGrid').innerHTML = items.map(productCard).join('');
+    const section=qs('#featuredSection');if(section)section.classList.add('hidden');
+    const grid=qs('#featuredGrid');if(grid)grid.innerHTML='';
   }
 
   async function openProduct(id, options={}) {
@@ -572,21 +607,21 @@
     const modal = qs('#productModal');
     modal.innerHTML = `
       <button class="icon-btn modal-close" data-close-product aria-label="Cerrar">×</button>
-      <div class="product-detail">
-        <div class="detail-gallery">
-          <div class="detail-main"><div class="detail-main-media" id="detailMainMedia">${renderDetailMedia(media[0],p.name)}</div><button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button></div>
-          ${p.verse_text ? `<div class="detail-verse-under-image"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
+      <div class="product-detail product-detail-v4">
+        <div class="detail-gallery detail-gallery-scroll">
+          <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
+          <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button>
+          ${media.length>1?`<div class="media-dots">${media.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:''}
         </div>
-        <div class="detail-info">
-          <div class="hero-kicker">${escapeHtml(p.category_name || '')}</div>
+        <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
-          <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+          <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+          ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${(p.fit||p.audience) ? `<div class="product-meta-row">${p.fit?`<span class="product-meta-pill"><small>Corte</small><strong>${escapeHtml(p.fit)}</strong></span>`:''}${p.audience?`<span class="product-meta-pill"><small>Para</small><strong>${escapeHtml(p.audience)}</strong></span>`:''}</div>` : ''}
           ${colors.length > 1 || (colors.length === 1 && colors[0]) ? `<div class="detail-block"><span class="detail-label">Color</span><div class="option-row">${colors.map(c=>`<button class="option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join('')}</div></div>` : ''}
-          ${sizes.length ? `<div class="detail-block"><span class="detail-label">Talle / variante</span><div class="option-row">${sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join('')}</div></div>` : ''}
-          ${media.length > 1 ? `<div class="detail-block detail-thumbs-block"><span class="detail-label">Fotos y videos</span><div class="thumb-row detail-thumbs-right">${media.map((im,i)=>`<button class="thumb media-thumb ${i===0?'active':''}" data-media-url="${escapeHtml(im.url)}" data-media-type="${detailMediaType(im)}" data-media-alt="${escapeHtml(im.alt_text||p.name)}" aria-label="${detailMediaType(im)==='video'?'Ver video':'Ver foto'} ${i+1}">${detailMediaType(im)==='video'?`<span class="video-thumb-icon">▶</span>`:`<img src="${escapeHtml(im.url)}" alt="">`}</button>`).join('')}</div></div>` : ''}
+          ${sizes.length ? `<div class="detail-block"><span class="detail-label">Talle</span><div class="option-row">${sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join('')}</div></div>` : ''}
+          ${(p.fit||p.audience) ? `<div class="product-meta-row">${p.fit?`<span class="product-meta-pill"><small>Corte</small><strong>${escapeHtml(p.fit)}</strong></span>`:''}${p.audience?`<span class="product-meta-pill"><small>Para</small><strong>${escapeHtml(p.audience)}</strong></span>`:''}</div>` : ''}
           <button class="btn btn-ghost detail-share-btn" data-share-product type="button" title="Compartir este producto">↗ Compartir producto</button>
           <div class="detail-actions">
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
@@ -594,6 +629,10 @@
           </div>
         </div>
       </div>`;
+    const strip=qs('#detailMediaStrip');
+    if(strip && media.length>1){
+      strip.addEventListener('scroll',()=>{const i=Math.round(strip.scrollLeft/Math.max(1,strip.clientWidth));qsa('.media-dots span',modal).forEach((d,n)=>d.classList.toggle('active',n===i));},{passive:true});
+    }
   }
 
   function addSelectedToCart(openCheckoutNow = false) {
@@ -929,7 +968,9 @@
     state.coupon=null;
     const data = await api('/api/shipping/moto/quote', { method:'POST', body:JSON.stringify({ destination:{ lat:state.shipping.lat, lng:state.shipping.lng, address:state.shipping.address } }) });
     state.shipping.distanceKm = data.distanceKm; state.shipping.costCents = data.costCents; state.shipping.quoteId = data.quoteId;
+    if(Number.isFinite(Number(data.queriesRemaining))) state.shippingQueriesRemaining=Number(data.queriesRemaining);
     renderMotoQuoteButton();
+    if(Number.isFinite(state.shippingQueriesRemaining)) toast(`Cotización lista · te quedan ${state.shippingQueriesRemaining} consulta${state.shippingQueriesRemaining===1?'':'s'} hoy.`, 'success');
   }
 
   async function getBestCurrentPosition() {
@@ -1087,15 +1128,17 @@
     qs('#favoritesBtn')?.addEventListener('click',()=>openAccount('favorites'));
     qs('#closeAccountBtn')?.addEventListener('click',closeAccount);
     qs('#accountBackdrop')?.addEventListener('click',closeAccount);
-    qs('#cartBtn').addEventListener('click', openCart); qs('#footerCartBtn').addEventListener('click', openCart);
+    qs('#cartBtn')?.addEventListener('click', openCart); qs('#footerCartBtn')?.addEventListener('click', openCart);
     qs('#closeCartBtn').addEventListener('click', closeCart); qs('#drawerBackdrop').addEventListener('click', closeCart);
     qs('#modalBackdrop').addEventListener('click', () => { closeModal('#productModal'); closeModal('#checkoutModal'); });
     qs('#closeCheckoutBtn').addEventListener('click', () => closeModal('#checkoutModal'));
     qs('#checkoutBtn').addEventListener('click', startCheckout);
     qs('#heroShopBtn')?.addEventListener('click', () => qs('#productos')?.scrollIntoView({behavior:'smooth'}));
-    qs('#clearFiltersBtn').addEventListener('click', () => { state.activeCategory='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
+    qs('#flyersLaunchBtn')?.addEventListener('click',()=>{const sec=qs('#flyersSection');if(sec){sec.classList.remove('hidden');sec.scrollIntoView({behavior:'smooth',block:'start'});}});
+    qs('#closeFlyersBtn')?.addEventListener('click',()=>qs('#flyersSection')?.classList.add('hidden'));
+    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.activeCategory='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
     qs('#searchInput').addEventListener('input', e => { state.query=e.target.value; renderProducts(); });
-    qs('#year').textContent = new Date().getFullYear();
+    if(qs('#year')) qs('#year').textContent = new Date().getFullYear();
     window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
     document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&m.url!==img.src);const host=qs('#detailMainMedia');if(next&&host)host.innerHTML=renderDetailMedia(next,state.selectedProduct?.name||'SALMOS');}},true);
 
@@ -1104,6 +1147,7 @@
     });
 
     document.addEventListener('click', async e => {
+      const sf=e.target.closest('[data-share-flyer]');if(sf){e.preventDefault();await shareFlyer(sf.dataset.shareFlyer);return;}
       const fav=e.target.closest('[data-favorite-product]');if(fav){e.preventDefault();e.stopPropagation();await toggleFavorite(fav.dataset.favoriteProduct);return;}
       if(e.target.id==='googleSignInBtn'||e.target.id==='checkoutGoogleBtn'){await signInGoogle();return;}
       if(e.target.id==='signOutBtn'){await signOutGoogle();return;}

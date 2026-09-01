@@ -8,6 +8,7 @@
   <link rel="icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="admin-v4.css">
 </head>
 <body>
   <div class="admin-layout">
@@ -16,11 +17,12 @@
       <nav class="admin-nav">
         <button class="admin-nav-btn active" data-view="dashboard">⌂ <span>Dashboard</span></button>
         <button class="admin-nav-btn" data-view="products">◫ <span>Productos</span></button>
-        <button class="admin-nav-btn" data-view="categories">▦ <span>Categorías</span></button>
-        <button class="admin-nav-btn" data-view="stock">◈ <span>Stock</span></button>
         <button class="admin-nav-btn" data-view="orders">▤ <span>Pedidos</span></button>
+        <button class="admin-nav-btn" data-view="stock">◈ <span>Stock</span></button>
         <button class="admin-nav-btn" data-view="coupons">🎟 <span>Cupones</span></button>
-        <button class="admin-nav-btn" data-view="finance">$ <span>Finanzas</span></button>
+        <button class="admin-nav-btn" data-view="categories">▦ <span>Categorías</span></button>
+        <button class="admin-nav-btn" data-view="expenses">− <span>Gastos</span></button>
+        <button class="admin-nav-btn" data-view="flyers">▣ <span>Flyers</span></button>
         <button class="admin-nav-btn" data-view="settings">⚙ <span>Configuración</span></button>
       </nav>
       <a class="btn btn-ghost full" href="/">Ver tienda</a>
@@ -28,9 +30,9 @@
 
     <main class="admin-main">
       <header class="admin-topbar">
-        <button class="icon-btn admin-menu-btn" id="adminMenuBtn">☰</button>
+        <button class="icon-btn admin-menu-btn" id="adminMenuBtn" type="button">☰</button>
         <div><div class="admin-eyebrow">Panel SALMOS</div><h1 id="viewTitle">Dashboard</h1></div>
-        <button class="icon-btn" id="adminThemeBtn" title="Cambiar tema">◐</button>
+        <button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button>
       </header>
       <section class="admin-content" id="adminContent"><div class="empty-state"><strong>Cargando panel...</strong></div></section>
     </main>
@@ -46,17 +48,19 @@
 
   <dialog class="admin-dialog small" id="movementDialog">
     <form method="dialog" class="dialog-shell" id="movementForm">
-      <div class="dialog-head"><h2>Nuevo movimiento</h2><button class="icon-btn" value="cancel">×</button></div>
+      <div class="dialog-head"><div><div class="admin-eyebrow">Caja</div><h2 id="movementDialogTitle">Nuevo gasto / ingreso</h2></div><button class="icon-btn" value="cancel" formnovalidate>×</button></div>
       <div class="dialog-body">
         <div class="form-grid">
-          <div class="field"><label>Tipo</label><select class="select" name="type"><option value="expense">Gasto</option><option value="investment">Inversión</option><option value="income">Ingreso extra</option></select></div>
-          <div class="field"><label>Categoría</label><input class="input" name="category" placeholder="Packaging, publicidad..."></div>
-          <div class="field full"><label>Descripción</label><input class="input" name="description" required></div>
-          <div class="field"><label>Importe</label><input class="input" name="amount" type="number" min="0" step="1" required></div>
+          <div class="field"><label>Tipo</label><select class="select" name="type"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></div>
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
+          <div class="field full"><label>Motivo</label><input class="input" name="description" placeholder="Ej.: publicidad, compra de bolsas, ingreso extra..." required></div>
+          <div class="field"><label>Origen</label><input class="input" name="origin" placeholder="Ej.: Caja SALMOS, Mercado Pago"></div>
+          <div class="field"><label>Destino</label><input class="input" name="destination" placeholder="Ej.: Proveedor, imprenta"></div>
+          <div class="field"><label>Importe</label><input class="input" name="amount" type="number" min="0" step="1" required></div>
+          <div class="field full"><label>Comprobantes / imágenes (opcional)</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Podés adjuntar fotos de tickets, comprobantes o capturas.</small></div>
         </div>
       </div>
-      <div class="dialog-foot"><button class="btn btn-ghost" value="cancel">Cancelar</button><button class="btn btn-primary" id="saveMovementBtn" value="default">Guardar</button></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button><button class="btn btn-primary" id="saveMovementBtn" value="default">Guardar</button></div>
     </form>
   </dialog>
 
