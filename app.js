@@ -44,6 +44,9 @@
     products: [],
     activeCategory: 'all',
     query: '',
+    filters: { size:'', color:'', fit:'', audience:'', sort:'featured' },
+    searchOpen: false,
+    shippingQuoteOnly: false,
     cart: loadJSON('salmos_cart', []),
     auth: { ready:false, user:null, firebaseAuth:null, favoriteIds:new Set(), addresses:[], orders:[], profile:null, syncing:false },
     accountTab: 'profile',
@@ -326,6 +329,7 @@
       else host.innerHTML=`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>`;
     }
     const n=state.auth.favoriteIds.size;if(badge){badge.textContent=n;badge.classList.toggle('hidden',!n);}
+    const favBtn=qs('#favoritesBtn');if(favBtn)favBtn.classList.toggle('hidden',!state.auth.user);
     const adminLink=qs('#adminOnlyLink');if(adminLink){const adminEmail=String(cfg.ADMIN_EMAIL||'salmos.store7@gmail.com').toLowerCase();const allowed=Boolean(state.auth.user?.email && state.auth.user.email.toLowerCase()===adminEmail);adminLink.classList.toggle('hidden',!allowed);}
   }
   function openAccount(tab='profile') { state.accountTab=tab;renderAccountPanel();qs('#accountDrawer')?.classList.add('open');qs('#accountBackdrop')?.classList.add('open');document.body.classList.add('no-scroll'); }
@@ -498,13 +502,58 @@
     }
   }
 
+  function csvValues(value='') {
+    return String(value||'').split(',').map(x=>x.trim()).filter(Boolean);
+  }
+  function uniqueSorted(values) {
+    return [...new Set(values.map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es',{numeric:true,sensitivity:'base'}));
+  }
   function filteredProducts() {
     const q = state.query.trim().toLowerCase();
-    return state.products.filter(p => {
+    const f = state.filters;
+    let items = state.products.filter(p => {
       const cat = state.activeCategory === 'all' || p.category_slug === state.activeCategory;
-      const hay = !q || [p.name, p.short_description, p.category_name].some(x => String(x || '').toLowerCase().includes(q));
-      return cat && hay;
+      const colors=csvValues(p.available_colors), sizes=csvValues(p.available_sizes);
+      const hay = !q || [p.name,p.short_description,p.category_name,p.fit,p.audience,...colors,...sizes].some(x => String(x || '').toLowerCase().includes(q));
+      const sizeOk=!f.size || sizes.some(x=>x.toLowerCase()===f.size.toLowerCase());
+      const colorOk=!f.color || colors.some(x=>x.toLowerCase()===f.color.toLowerCase());
+      const fitOk=!f.fit || String(p.fit||'').toLowerCase()===f.fit.toLowerCase();
+      const audienceOk=!f.audience || String(p.audience||'').toLowerCase()===f.audience.toLowerCase();
+      return cat && hay && sizeOk && colorOk && fitOk && audienceOk;
     });
+    items=[...items];
+    if(f.sort==='price-asc') items.sort((a,b)=>Number(a.price_cents)-Number(b.price_cents));
+    else if(f.sort==='price-desc') items.sort((a,b)=>Number(b.price_cents)-Number(a.price_cents));
+    else if(f.sort==='name') items.sort((a,b)=>String(a.name).localeCompare(String(b.name),'es',{sensitivity:'base'}));
+    else if(f.sort==='stock') items.sort((a,b)=>Number(b.available_stock)-Number(a.available_stock));
+    return items;
+  }
+
+  function renderCatalogTools(items=filteredProducts()) {
+    const host=qs('#catalogTools'); if(!host)return;
+    const all=state.products;
+    const sizes=uniqueSorted(all.flatMap(p=>csvValues(p.available_sizes)));
+    const colors=uniqueSorted(all.flatMap(p=>csvValues(p.available_colors)));
+    const fits=uniqueSorted(all.map(p=>p.fit));
+    const audiences=uniqueSorted(all.map(p=>p.audience));
+    const units=items.reduce((sum,p)=>sum+Number(p.available_stock||0),0);
+    const f=state.filters;
+    const opt=(values,current,label)=>`<option value="">${label}</option>${values.map(v=>`<option value="${escapeHtml(v)}" ${v===current?'selected':''}>${escapeHtml(v)}</option>`).join('')}`;
+    host.innerHTML=`
+      <div class="catalog-stock"><strong>${items.length}</strong> ${items.length===1?'remera':'remeras'} · <strong>${units}</strong> unidades disponibles</div>
+      <div class="catalog-filter-row">
+        <select class="catalog-select" data-catalog-filter="size" aria-label="Filtrar por talle">${opt(sizes,f.size,'Talle')}</select>
+        <select class="catalog-select" data-catalog-filter="color" aria-label="Filtrar por color">${opt(colors,f.color,'Color')}</select>
+        <select class="catalog-select" data-catalog-filter="fit" aria-label="Filtrar por corte">${opt(fits,f.fit,'Corte')}</select>
+        <select class="catalog-select" data-catalog-filter="audience" aria-label="Filtrar por género">${opt(audiences,f.audience,'Género')}</select>
+        <select class="catalog-select catalog-sort" data-catalog-filter="sort" aria-label="Ordenar productos">
+          <option value="featured" ${f.sort==='featured'?'selected':''}>Ordenar</option>
+          <option value="price-asc" ${f.sort==='price-asc'?'selected':''}>Precio: menor a mayor</option>
+          <option value="price-desc" ${f.sort==='price-desc'?'selected':''}>Precio: mayor a menor</option>
+          <option value="name" ${f.sort==='name'?'selected':''}>Nombre A–Z</option>
+          <option value="stock" ${f.sort==='stock'?'selected':''}>Más stock</option>
+        </select>
+      </div>`;
   }
 
   function productCard(p) {
@@ -513,7 +562,7 @@
       : `<div class="product-placeholder">SALMOS</div>`;
     const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : ''].join('');
     return `<article class="product-card" data-product-id="${p.id}">
-      <div class="product-media">${image}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito">♥</button></div>
+      <div class="product-media">${image}<div class="product-tags">${tags}</div>${state.auth.user?`<button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito">♥</button>`:''}</div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
         <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
@@ -528,6 +577,7 @@
     if(t)t.textContent = state.query ? `Resultados para “${state.query}”` : title;
     if(sub)sub.textContent = items.length ? `${items.length} ${items.length === 1 ? 'producto' : 'productos'}` : 'No encontramos productos con ese filtro.';
     if(clear)clear.classList.toggle('hidden', state.activeCategory === 'all' && !state.query);
+    renderCatalogTools(items);
     const grid=qs('#productGrid');if(!grid)return;
     grid.innerHTML = items.length ? items.map(productCard).join('') : `<div class="empty-state" style="grid-column:1/-1"><strong>No hay productos para mostrar.</strong>Probá otra búsqueda.</div>`;
   }
@@ -595,7 +645,7 @@
     if (!p) return;
     const media = p.images?.length ? p.images : [{ url: '', alt_text: p.name, media_type:'image' }];
     const availableVariants = (p.variants || []).filter(v => Number(v.available_stock) > 0);
-    const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
+    let activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(availableVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
     if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
     if (!activeVariant) {
@@ -603,25 +653,31 @@
       state.selectedVariantId = fallback?.id || null;
     }
     const selected = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
+    if(selected?.color) state.selectedColor=selected.color;
     const sizes = [...new Set(availableVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => v.size || 'Única'))];
+    const stockTotal=availableVariants.reduce((sum,v)=>sum+Number(v.available_stock||0),0);
     const modal = qs('#productModal');
     modal.innerHTML = `
       <button class="icon-btn modal-close" data-close-product aria-label="Cerrar">×</button>
       <div class="product-detail product-detail-v4">
         <div class="detail-gallery detail-gallery-scroll">
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
-          <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button>
+          ${state.auth.user?`<button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button>`:''}
           ${media.length>1?`<div class="media-dots">${media.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:''}
         </div>
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+          <div class="detail-stock-count"><strong>Stock:</strong> ${stockTotal} ${stockTotal===1?'unidad disponible':'unidades disponibles'}</div>
+          <div class="detail-attributes-line">
+            <div class="detail-attribute"><span>Talle</span><div class="compact-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option mini ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join(''):'<b>Único</b>'}</div></div>
+            <div class="detail-attribute"><span>Corte</span><b>${escapeHtml(p.fit||'—')}</b></div>
+            <div class="detail-attribute"><span>Género</span><b>${escapeHtml(p.audience||'—')}</b></div>
+            <div class="detail-attribute"><span>Color</span><div class="compact-options">${colors.length?colors.map(c=>`<button class="option mini ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c||'Único')}</button>`).join(''):'<b>Único</b>'}</div></div>
+          </div>
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${colors.length > 1 || (colors.length === 1 && colors[0]) ? `<div class="detail-block"><span class="detail-label">Color</span><div class="option-row">${colors.map(c=>`<button class="option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join('')}</div></div>` : ''}
-          ${sizes.length ? `<div class="detail-block"><span class="detail-label">Talle</span><div class="option-row">${sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join('')}</div></div>` : ''}
-          ${(p.fit||p.audience) ? `<div class="product-meta-row">${p.fit?`<span class="product-meta-pill"><small>Corte</small><strong>${escapeHtml(p.fit)}</strong></span>`:''}${p.audience?`<span class="product-meta-pill"><small>Para</small><strong>${escapeHtml(p.audience)}</strong></span>`:''}</div>` : ''}
           <button class="btn btn-ghost detail-share-btn" data-share-product type="button" title="Compartir este producto">↗ Compartir producto</button>
           <div class="detail-actions">
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
@@ -675,10 +731,20 @@
 
   function startCheckout() {
     if (!state.cart.length) return;
+    state.shippingQuoteOnly=false;
     closeCart();
     state.checkoutStep = 1;
     state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
     state.coupon = null;
+    renderCheckout();
+    openModal('#checkoutModal');
+  }
+
+  function startShippingQuote() {
+    state.shippingQuoteOnly=true;
+    state.checkoutStep=2;
+    state.shipping={ method:'moto', costCents:0, distanceKm:null, address:null, lat:null, lng:null, quoteId:null };
+    state.coupon=null;
     renderCheckout();
     openModal('#checkoutModal');
   }
@@ -708,14 +774,14 @@
     const motoEnabled = pc.shipping?.moto?.enabled !== false;
     const correoEnabled = Boolean(pc.shipping?.correo?.enabled);
     qs('#checkoutContent').innerHTML = `
-      <h2>Entrega</h2><div class="checkout-sub">Elegí cómo querés recibir tu compra.</div>
+      <h2>${state.shippingQuoteOnly?'Consultar costo de envío':'Entrega'}</h2><div class="checkout-sub">${state.shippingQuoteOnly?'Simulá el envío sin producto. Para comprar, después elegí una remera y agregala al carrito.':'Elegí cómo querés recibir tu compra.'}</div>${state.shippingQuoteOnly?'<div class="notice shipping-quote-notice">Esta consulta no genera una compra ni reserva stock.</div>':''}
       <div class="shipping-options">
         <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm || 50} km · Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${pc.shipping?.moto?.minHours || 1} y ${pc.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad</small></span><span class="shipping-price">${state.shipping.method==='moto' && state.shipping.costCents ? money(state.shipping.costCents) : 'Calcular'}</span></button>
         <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?'Domicilio o sucursal':'Integración pendiente de habilitación'}</small></span><span class="shipping-price">${correoEnabled?'Calcular':'Próximamente'}</span></button>
         <button class="shipping-card ${state.shipping.method==='pickup'?'active':''} ${pickupEnabled?'':'disabled'}" data-shipping="pickup" ${pickupEnabled?'':'disabled'}><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${pickupEnabled?escapeHtml(pc.shipping.pickup.address || 'Coordinar retiro'):'Se habilitará desde administración'}</small></span><span class="shipping-price">Gratis</span></button>
       </div>
       <div id="shippingDetail"></div>
-      <div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method && (state.shipping.method!=='moto' || state.shipping.costCents>0) ? '' : 'disabled'}>Continuar</button></div>`;
+      <div class="checkout-actions">${state.shippingQuoteOnly?'<button class="btn btn-ghost" id="closeQuoteBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button>':`<button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method && (state.shipping.method!=='moto' || state.shipping.costCents>0) ? '' : 'disabled'}>Continuar</button>`}</div>`;
     renderShippingDetail();
   }
 
@@ -1123,7 +1189,8 @@
   }
 
   function bindEvents() {
-    qs('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
+    qs('#themeBtn')?.addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
+    qs('#searchToggleBtn')?.addEventListener('click',()=>{const box=qs('#searchCompact');const open=!box?.classList.contains('open');box?.classList.toggle('open',open);qs('#searchToggleBtn')?.setAttribute('aria-expanded',String(open));if(open)setTimeout(()=>qs('#searchInput')?.focus(),30);});
     qs('#accountBtn')?.addEventListener('click',()=>openAccount('profile'));
     qs('#favoritesBtn')?.addEventListener('click',()=>openAccount('favorites'));
     qs('#closeAccountBtn')?.addEventListener('click',closeAccount);
@@ -1133,11 +1200,13 @@
     qs('#modalBackdrop').addEventListener('click', () => { closeModal('#productModal'); closeModal('#checkoutModal'); });
     qs('#closeCheckoutBtn').addEventListener('click', () => closeModal('#checkoutModal'));
     qs('#checkoutBtn').addEventListener('click', startCheckout);
+    qs('#shippingQuoteBtn')?.addEventListener('click', startShippingQuote);
     qs('#heroShopBtn')?.addEventListener('click', () => qs('#productos')?.scrollIntoView({behavior:'smooth'}));
     qs('#flyersLaunchBtn')?.addEventListener('click',()=>{const sec=qs('#flyersSection');if(sec){sec.classList.remove('hidden');sec.scrollIntoView({behavior:'smooth',block:'start'});}});
     qs('#closeFlyersBtn')?.addEventListener('click',()=>qs('#flyersSection')?.classList.add('hidden'));
-    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.activeCategory='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
-    qs('#searchInput').addEventListener('input', e => { state.query=e.target.value; renderProducts(); });
+    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.activeCategory='all'; state.query=''; state.filters={size:'',color:'',fit:'',audience:'',sort:'featured'}; if(qs('#searchInput'))qs('#searchInput').value=''; renderCategories(); renderProducts(); });
+    qs('#searchInput')?.addEventListener('input', e => { state.query=e.target.value; renderProducts(); });
+    qs('#catalogTools')?.addEventListener('change',e=>{const sel=e.target.closest('[data-catalog-filter]');if(!sel)return;state.filters[sel.dataset.catalogFilter]=sel.value;renderProducts();});
     if(qs('#year')) qs('#year').textContent = new Date().getFullYear();
     window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
     document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&m.url!==img.src);const host=qs('#detailMainMedia');if(next&&host)host.innerHTML=renderDetailMedia(next,state.selectedProduct?.name||'SALMOS');}},true);
@@ -1176,6 +1245,8 @@
         if(name.length<3 || phone.length<6){toast('Completá nombre y WhatsApp.','error');return;}
         state.customer={name,phone,email:state.auth.user?.email||email}; localStorage.setItem('salmos_customer',JSON.stringify(state.customer)); if(state.auth.user)authApi('/api/account/profile',{method:'PUT',body:JSON.stringify({displayName:name,phone})}).catch(()=>{}); state.checkoutStep=2; renderCheckout(); return;
       }
+      if(e.target.id==='quoteAddProductBtn'){closeModal('#checkoutModal');state.shippingQuoteOnly=false;qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
+      if(e.target.id==='closeQuoteBtn'){state.shippingQuoteOnly=false;closeModal('#checkoutModal');return;}
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
       const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ state.shipping={method:ship.dataset.shipping,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; state.coupon=null; renderCheckout(); return; }
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }

@@ -724,3 +724,76 @@ img { display: block; max-width: 100%; }
   .store-bottom{grid-template-columns:minmax(0,1fr) 88px}
   .bottom-seal{width:88px}
 }
+
+/* =========================================================
+   SALMOS V5 · BANNER PRIMERO + BARRA ÚNICA + FILTROS
+   ========================================================= */
+.top-banner-wrap{padding-top:8px}
+.top-banner-wrap .hero.hero-compact{margin-bottom:7px}
+.site-header{top:0}
+.header-stack{padding-top:5px;padding-bottom:5px}
+.toolbar-row{display:flex;align-items:center;gap:7px;min-height:46px}
+.search-compact{display:flex;align-items:center;gap:7px;min-width:44px;flex:1 1 auto}
+.search-toggle{flex:0 0 44px}
+.search-expandable{width:0;min-width:0;opacity:0;pointer-events:none;padding-left:0;padding-right:0;border-color:transparent;overflow:hidden;transition:width .2s ease,opacity .16s ease,padding .2s ease,border-color .2s ease}
+.search-compact.open .search-expandable{width:min(430px,100%);opacity:1;pointer-events:auto;padding:0 14px;border-color:color-mix(in srgb,var(--gold) 28%,var(--line))}
+.search-expandable input{min-width:0}
+.compact-actions{margin-left:auto}
+#favoritesBtn{font-size:1.25rem;position:relative}
+
+.catalog-tools{display:grid;gap:9px;margin:4px 0 13px}
+.catalog-stock{font-size:.82rem;color:var(--muted);padding:0 2px}
+.catalog-stock strong{color:var(--gold-2)}
+.catalog-filter-row{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.catalog-filter-row::-webkit-scrollbar{display:none}
+.catalog-select{flex:0 0 auto;min-height:38px;max-width:190px;border:1px solid color-mix(in srgb,var(--gold) 24%,var(--line));border-radius:999px;background:var(--surface);color:var(--text);padding:0 30px 0 11px;font-weight:800;font-size:.76rem;outline:0}
+.catalog-sort{max-width:205px}
+
+.store-bottom{display:block;padding:0;border:0;background:transparent;box-shadow:none;margin:28px 0 22px}
+.delivery-promo{display:block}
+.shipping-quote-launch{width:100%;min-height:50px;justify-content:center;font-size:.95rem;font-weight:900}
+.shipping-mark{width:27px;height:27px;border-radius:50%;display:grid;place-items:center;background:#25d366;color:#07130b;font-weight:1000;font-size:1rem}
+
+.detail-stock-count{text-align:center;margin:12px 0 8px;color:var(--muted);font-size:.82rem}
+.detail-stock-count strong{color:var(--gold-2)}
+.detail-attributes-line{display:flex;gap:8px;align-items:stretch;overflow-x:auto;padding:2px 1px 6px;scrollbar-width:none}
+.detail-attributes-line::-webkit-scrollbar{display:none}
+.detail-attribute{flex:0 0 auto;min-width:112px;padding:8px 10px;border:1px solid color-mix(in srgb,var(--gold) 25%,var(--line));border-radius:15px;background:var(--surface);display:flex;flex-direction:column;gap:6px;justify-content:center}
+.detail-attribute>span{color:var(--muted);font-size:.66rem;font-weight:900;letter-spacing:.07em;text-transform:uppercase}
+.detail-attribute>b{font-size:.84rem;white-space:nowrap}
+.compact-options{display:flex;gap:5px;align-items:center;overflow-x:auto;scrollbar-width:none}
+.compact-options::-webkit-scrollbar{display:none}
+.option.mini{min-width:0;padding:6px 9px;font-size:.77rem;white-space:nowrap}
+.detail-verse-centered{margin-top:9px}
+.detail-actions{position:sticky;bottom:0;z-index:5;margin-top:auto;background:linear-gradient(180deg,transparent,var(--bg-soft) 28%);padding-top:28px;padding-bottom:max(4px,env(safe-area-inset-bottom))}
+.shipping-quote-notice{margin:-8px 0 14px}
+
+@media(max-width:680px){
+  .top-banner-wrap{padding-top:5px}
+  .top-banner-wrap .hero.hero-compact{margin-bottom:5px}
+  .toolbar-row{gap:5px;min-height:42px}
+  .search-compact{gap:5px;min-width:40px}
+  .search-toggle{width:40px;height:40px;flex-basis:40px}
+  .search-compact.open{min-width:0}
+  .search-compact.open .search-expandable{padding:0 10px;min-width:0}
+  .compact-actions .icon-btn{width:40px;height:40px;flex-basis:40px}
+  .catalog-tools{margin-top:2px;margin-bottom:10px}
+  .catalog-stock{font-size:.76rem}
+  .catalog-select{min-height:35px;font-size:.72rem;max-width:150px}
+  .catalog-sort{max-width:180px}
+  .store-bottom{margin:22px 0 16px}
+  .shipping-quote-launch{min-height:47px}
+  .detail-info-v4{padding-bottom:6px}
+  .detail-stock-count{margin-top:10px}
+  .detail-attributes-line{margin-inline:-2px}
+  .detail-attribute{min-width:102px;padding:8px 9px}
+  .detail-actions{grid-template-columns:1fr 1fr}
+}
+
+@media(max-width:390px){
+  .toolbar-row{gap:4px}
+  .search-compact{gap:4px}
+  .compact-actions{gap:4px}
+  .search-compact.open .search-expandable{padding:0 8px}
+  .catalog-select{max-width:138px}
+}
