@@ -58,6 +58,7 @@
     customer: loadJSON('salmos_customer', { name: '', phone: '', email: '' }),
     shipping: { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null },
     checkoutQuoteOnly: false,
+    shippingQuoteCarry: false,
     googleLoaded: false,
     googleMap: null,
     googleMarker: null,
@@ -626,7 +627,7 @@
     const sizes = [...new Set(availableVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => v.size || 'Única'))];
     const modal = qs('#productModal');
     modal.innerHTML = `
-      <button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button>
+      <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
       <div class="product-detail product-detail-v4">
         <div class="detail-gallery detail-gallery-scroll">
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
@@ -645,9 +646,9 @@
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
           <div class="detail-actions">
-            <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto">↗ Compartir</button>
-            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
-            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}>Comprar ahora</button>
+            <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
+            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>Agregar al carrito</span></button>
+            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>Comprar ahora</span></button>
           </div>
         </div>
       </div>`;
@@ -700,7 +701,9 @@
     closeCart();
     state.checkoutQuoteOnly = false;
     state.checkoutStep = 1;
-    state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
+    const keepQuotedShipping = state.shippingQuoteCarry && state.shipping.method === 'moto' && state.shipping.address && Number.isFinite(Number(state.shipping.lat)) && Number.isFinite(Number(state.shipping.lng));
+    if (!keepQuotedShipping) state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
+    state.shippingQuoteCarry = false;
     state.coupon = null;
     renderCheckout();
     openModal('#checkoutModal');
@@ -1220,8 +1223,8 @@
       }
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
       if(e.target.id==='closeQuoteCheckoutBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');return;}
-      if(e.target.id==='quoteAddProductBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
-      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ state.shipping={method:ship.dataset.shipping,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; state.coupon=null; renderCheckout(); return; }
+      if(e.target.id==='quoteAddProductBtn'){state.shippingQuoteCarry=Boolean(state.shipping.method==='moto'&&state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng)));state.checkoutQuoteOnly=false;closeModal('#checkoutModal');qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
+      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ const method=ship.dataset.shipping;if(method===state.shipping.method&&method==='moto'&&state.shipping.address){renderCheckout();return;}state.shipping={method,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; state.coupon=null; renderCheckout(); return; }
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
       if(e.target.id==='quoteMotoBtn'){ try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteMoto();}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular motomensajería';} return; }
       if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(state.shipping.method==='moto'&&!state.shipping.costCents){toast('Primero calculá la motomensajería.','error');return;} state.checkoutStep=3;renderCheckout();return; }

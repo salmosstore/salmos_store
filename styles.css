@@ -890,3 +890,87 @@ img { display: block; max-width: 100%; }
   .product-image-viewer{padding:8px}
   .product-image-viewer img{max-width:100%;max-height:92vh;border-radius:12px}
 }
+
+/* =========================================================
+   SALMOS V7 · AJUSTES FINOS 01/09/2026
+   X fuera de la foto, favorito compacto, iconos y continuidad del envío
+   ========================================================= */
+.product-modal-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  padding:10px 12px 0;
+  min-height:45px;
+}
+.product-modal-close{
+  position:static;
+  float:none;
+  top:auto;
+  margin:0;
+  width:35px;
+  height:35px;
+  min-width:35px;
+  min-height:35px;
+  padding:0;
+  border-radius:50%;
+  line-height:1;
+  flex:0 0 35px;
+}
+.detail-favorite{
+  width:35px !important;
+  height:35px !important;
+  min-width:35px !important;
+  min-height:35px !important;
+  max-width:35px !important;
+  max-height:35px !important;
+  flex:0 0 35px !important;
+  aspect-ratio:1 / 1 !important;
+  box-sizing:border-box;
+  padding:0 !important;
+  border-radius:999px !important;
+  display:grid !important;
+  place-items:center !important;
+  line-height:1 !important;
+  font-size:1rem;
+  right:10px;
+  top:10px;
+}
+.detail-action-icon{
+  width:16px;
+  height:16px;
+  min-width:16px;
+  display:inline-grid;
+  place-items:center;
+  flex:0 0 16px;
+}
+.detail-action-icon svg{width:100%;height:100%;display:block}
+.detail-actions .btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+}
+
+@media(max-width:680px){
+  .product-modal-topbar{padding:8px 12px 0;min-height:43px}
+  .product-modal-close{
+    width:34px;
+    height:34px;
+    min-width:34px;
+    min-height:34px;
+    flex-basis:34px;
+  }
+  .detail-favorite{
+    width:34px !important;
+    height:34px !important;
+    min-width:34px !important;
+    min-height:34px !important;
+    max-width:34px !important;
+    max-height:34px !important;
+    flex-basis:34px !important;
+    right:9px;
+    top:9px;
+  }
+  .detail-actions .btn{gap:5px}
+  .detail-action-icon{width:14px;height:14px;min-width:14px;flex-basis:14px}
+}
