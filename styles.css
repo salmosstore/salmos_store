@@ -1060,36 +1060,35 @@ img { display: block; max-width: 100%; }
   .detail-favorite .favorite-heart-icon{width:14px;height:14px;min-width:14px;min-height:14px;flex-basis:14px}
 }
 
-
 /* =========================================================
-   SALMOS V12 · compartir general + banner sin deformación
-   ÚNICAMENTE overrides del banner.
+   SALMOS V13 · banner de cabecera recortado a propósito
+   Se usa una imagen dedicada SIN "remeras y más".
+   La imagen conserva su proporción real tanto en PC como en celular.
    ========================================================= */
-
-/* La imagen conserva su proporción: no se estira horizontal/verticalmente. */
 .hero.hero-compact{
+  width:100%;
+  height:auto !important;
+  aspect-ratio:auto !important;
   overflow:hidden;
+  margin:8px 0 10px;
 }
 .hero.hero-compact>img:not(.hero-seal-img){
-  object-fit:cover !important;
+  display:block;
+  width:100%;
+  height:auto !important;
+  min-height:0 !important;
+  object-fit:contain !important;
+  object-position:center !important;
 }
-
-/* PC: apenas más alto que antes, sin convertirlo en un banner enorme. */
-@media(min-width:681px){
-  .hero.hero-compact{
-    width:100%;
-    height:auto;
-    aspect-ratio:4.6/1;
-    margin:8px 0 10px;
-  }
-}
-
-/* Celular: un poco más alto que los 2 cm anteriores para evitar el efecto aplastado. */
 @media(max-width:680px){
   .hero.hero-compact{
-    width:100%;
-    height:auto;
-    aspect-ratio:4.2/1;
+    height:auto !important;
+    aspect-ratio:auto !important;
     margin:0 0 6px;
+  }
+  .hero.hero-compact>img:not(.hero-seal-img){
+    width:100%;
+    height:auto !important;
+    object-fit:contain !important;
   }
 }
