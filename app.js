@@ -15,77 +15,6 @@
   function productPathKey(value='') { return productPathSegment(value).toLowerCase(); }
   function productSharePath(product) { return `/${productPathSegment(product?.name||product?.slug||'producto')}`; }
   function productShareUrl(product) { return `${location.origin}${productSharePath(product)}`; }
-  const DEFAULT_SHARE_META = {
-    title: 'SALMOS — Tienda',
-    description: 'SALMOS · creer · amar · crear · remeras y más',
-    image: `${location.origin}/banner-salmos.png`,
-    imageAlt: 'SALMOS · creer · amar · crear · remeras y más',
-    url: `${location.origin}/`
-  };
-  function clipText(value='', max=180) {
-    const clean = String(value || '').replace(/\s+/g, ' ').trim();
-    return clean.length > max ? `${clean.slice(0, max - 1).trim()}…` : clean;
-  }
-  function upsertMeta(attrName, attrValue, content) {
-    if (!attrValue) return;
-    let el = document.head.querySelector(`meta[${attrName}="${attrValue}"]`);
-    if (!el) {
-      el = document.createElement('meta');
-      el.setAttribute(attrName, attrValue);
-      document.head.appendChild(el);
-    }
-    el.setAttribute('content', String(content || ''));
-  }
-  function setCanonical(url) {
-    let link = document.head.querySelector('link[rel="canonical"]');
-    if (!link) {
-      link = document.createElement('link');
-      link.setAttribute('rel', 'canonical');
-      document.head.appendChild(link);
-    }
-    link.setAttribute('href', url || DEFAULT_SHARE_META.url);
-  }
-  function applyShareMeta({ title, description, image, imageAlt, url, type='website' } = {}) {
-    const meta = {
-      title: title || DEFAULT_SHARE_META.title,
-      description: clipText(description || DEFAULT_SHARE_META.description, 180),
-      image: image || DEFAULT_SHARE_META.image,
-      imageAlt: imageAlt || DEFAULT_SHARE_META.imageAlt,
-      url: url || DEFAULT_SHARE_META.url,
-      type
-    };
-    document.title = meta.title;
-    upsertMeta('name', 'description', meta.description);
-    upsertMeta('property', 'og:site_name', 'SALMOS');
-    upsertMeta('property', 'og:locale', 'es_AR');
-    upsertMeta('property', 'og:type', meta.type);
-    upsertMeta('property', 'og:title', meta.title);
-    upsertMeta('property', 'og:description', meta.description);
-    upsertMeta('property', 'og:url', meta.url);
-    upsertMeta('property', 'og:image', meta.image);
-    upsertMeta('property', 'og:image:alt', meta.imageAlt);
-    upsertMeta('name', 'twitter:card', 'summary_large_image');
-    upsertMeta('name', 'twitter:title', meta.title);
-    upsertMeta('name', 'twitter:description', meta.description);
-    upsertMeta('name', 'twitter:image', meta.image);
-    setCanonical(meta.url);
-  }
-  function applyDefaultShareMeta() {
-    applyShareMeta(DEFAULT_SHARE_META);
-  }
-  function applyProductShareMeta(product) {
-    if (!product) return applyDefaultShareMeta();
-    const image = firstProductImage(product) || DEFAULT_SHARE_META.image;
-    const description = product.short_description || product.verse_text || product.meaning_text || DEFAULT_SHARE_META.description;
-    applyShareMeta({
-      title: `${product.name} · SALMOS`,
-      description,
-      image,
-      imageAlt: product.name || 'Producto de SALMOS',
-      url: productShareUrl(product),
-      type: 'product'
-    });
-  }
   function currentProductPathKey() {
     const raw=decodeURIComponent(location.pathname||'/').replace(/^\/+|\/+$/g,'');
     if(!raw || /^(index\.html?|admin\.html?|404\.html?)$/i.test(raw) || raw.includes('/')) return '';
@@ -98,7 +27,6 @@
   }
   function clearProductPath() {
     if(currentProductPathKey()) history.replaceState({},'',`/${location.search}${location.hash}`);
-    applyDefaultShareMeta();
   }
 
   function checkoutToken() {
@@ -682,7 +610,6 @@
       state.selectedProduct = p;
       state.selectedColor = p.colors?.[0] || null;
       state.selectedVariantId = firstAvailableVariant(p, state.selectedColor)?.id || null;
-      applyProductShareMeta(p);
       renderProductModal();
       openModal('#productModal');
       if(options.updatePath!==false) setProductPath(p);
@@ -699,38 +626,11 @@
     toast('Ese producto no está disponible o el enlace cambió.','error');
   }
 
-  async function fetchShareImageFile(url, baseName='salmos') {
-    if (!url || typeof File === 'undefined') return null;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('No se pudo descargar la imagen a compartir.');
-      const blob = await res.blob();
-      const extFromType = String(blob.type || '').split('/')[1]?.split(';')[0] || '';
-      const extFromUrl = (String(url).match(/\.(png|jpe?g|webp|gif)(?:$|\?)/i) || [])[1] || '';
-      const ext = (extFromType || extFromUrl || 'jpg').replace(/jpeg/i, 'jpg');
-      const fileName = `${productPathSegment(baseName) || 'salmos'}.${ext}`;
-      return new File([blob], fileName, { type: blob.type || `image/${ext === 'jpg' ? 'jpeg' : ext}` });
-    } catch {
-      return null;
-    }
-  }
-
   async function shareSelectedProduct() {
     const p=state.selectedProduct;if(!p)return;
     const url=productShareUrl(p);
-    const title=`${p.name} · SALMOS`;
-    const text=clipText(p.short_description || p.verse_text || `Mirá ${p.name} en SALMOS`, 120);
     try{
-      if(navigator.share){
-        const imageUrl = firstProductImage(p);
-        const file = imageUrl ? await fetchShareImageFile(imageUrl, `${p.name}-salmos`) : null;
-        if(file && navigator.canShare?.({files:[file]})){
-          await navigator.share({title,text,url,files:[file]});
-          return;
-        }
-        await navigator.share({title,text,url});
-        return;
-      }
+      if(navigator.share){await navigator.share({title:`${p.name} · SALMOS`,text:`Mirá ${p.name} en SALMOS`,url});return;}
       await navigator.clipboard.writeText(url);
       toast('Link del producto copiado','success');
     }catch(err){
@@ -1426,7 +1326,6 @@
 
   async function boot() {
     initTheme();
-    applyDefaultShareMeta();
     restoreLastShipping({activateMoto:false,allowQuote:true,restoreCarry:true});
     ensureAccountUi(); bindEvents(); await handlePaymentReturn();
     await Promise.all([loadStore(), initFirebaseAuth()]);
