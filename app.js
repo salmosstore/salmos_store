@@ -592,6 +592,24 @@
     return (p?.images || []).find(item => detailMediaType(item) === 'image')?.url || '';
   }
 
+  function openProductImageViewer(src, alt='SALMOS') {
+    if (!src) return;
+    let viewer=qs('#productImageViewer');
+    if(!viewer){
+      viewer=document.createElement('div');
+      viewer.id='productImageViewer';
+      viewer.className='product-image-viewer';
+      document.body.appendChild(viewer);
+    }
+    viewer.innerHTML=`<button class="icon-btn product-image-viewer-close" data-close-image-viewer aria-label="Cerrar imagen">×</button><img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}">`;
+    viewer.classList.add('open');
+  }
+
+  function closeProductImageViewer(){
+    const viewer=qs('#productImageViewer');
+    if(viewer)viewer.classList.remove('open');
+  }
+
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
@@ -608,7 +626,7 @@
     const sizes = [...new Set(availableVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => v.size || 'Única'))];
     const modal = qs('#productModal');
     modal.innerHTML = `
-      <button class="icon-btn modal-close" data-close-product aria-label="Cerrar">×</button>
+      <button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button>
       <div class="product-detail product-detail-v4">
         <div class="detail-gallery detail-gallery-scroll">
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
@@ -619,16 +637,15 @@
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
           <div class="product-attribute-line" aria-label="Opciones del producto">
-            <div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static">—</span>'}</div></div>
-            <div class="product-attribute-cell"><span class="detail-label">Corte</span><span class="attribute-static">${escapeHtml(p.fit||'—')}</span></div>
-            <div class="product-attribute-cell"><span class="detail-label">Género</span><span class="attribute-static">${escapeHtml(p.audience||'—')}</span></div>
-            <div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.length?colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join(''):'<span class="attribute-static">—</span>'}</div></div>
+            <div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>
+            <div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit||'—')}</span></div>
+            <div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.length?colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>
           </div>
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          <button class="btn btn-ghost detail-share-btn" data-share-product type="button" title="Compartir este producto">↗ Compartir producto</button>
           <div class="detail-actions">
+            <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto">↗ Compartir</button>
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}>Agregar al carrito</button>
             <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}>Comprar ahora</button>
           </div>
@@ -869,7 +886,7 @@
         <button class="btn btn-secondary" id="confirmTypedAddressBtn">Usar dirección</button>
       </div>
       <div class="address-suggestions hidden" id="addressSuggestions"></div>
-      <div class="address-helper">Escribí el nombre de la calle y elegí una sugerencia. Después agregá la altura.</div>`;
+      <div class="address-helper">Te mostramos calles dentro de la localidad o código postal elegido. Escribí el nombre y después agregá la altura.</div>`;
     const input=qs('#streetAddressInput');if(!input)return;
     state.streetSessionToken=null;
     let timer=null;
@@ -898,8 +915,11 @@
         includedPrimaryTypes:/\b\d{1,6}[A-Za-z]?\b/.test(input)?['street_address','route','premise']:['route'],
         language:'es-AR',region:'ar'
       };
-      if(Number.isFinite(Number(state.area.lat))&&Number.isFinite(Number(state.area.lng))){
-        request.locationBias={center:{lat:Number(state.area.lat),lng:Number(state.area.lng)},radius:30000};
+      const areaBounds=viewportLiteral(state.area.viewport);
+      if(areaBounds){
+        request.locationRestriction=areaBounds;
+      }else if(Number.isFinite(Number(state.area.lat))&&Number.isFinite(Number(state.area.lng))){
+        request.locationRestriction={center:{lat:Number(state.area.lat),lng:Number(state.area.lng)},radius:12000};
       }
       const {suggestions=[]}=await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
       for(const suggestion of suggestions){
@@ -1162,6 +1182,7 @@
     document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&m.url!==img.src);const host=qs('#detailMainMedia');if(next&&host)host.innerHTML=renderDetailMedia(next,state.selectedProduct?.name||'SALMOS');}},true);
 
     document.addEventListener('keydown',e=>{
+      if(e.key==='Escape' && qs('#productImageViewer')?.classList.contains('open')){closeProductImageViewer();return;}
       if(e.target?.id==='couponInput' && e.key==='Enter'){e.preventDefault();applyCouponCode();}
     });
 
@@ -1180,6 +1201,8 @@
       const areaSuggestion=e.target.closest('[data-area-suggestion]');if(areaSuggestion){const item=(state.areaSuggestions||[])[Number(areaSuggestion.dataset.areaSuggestion)];if(item){try{await resolveAreaChoice(item)}catch(err){toast(err.message,'error')}}return;}
       const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const item=(state.addressSuggestions||[])[Number(addrSuggestion.dataset.addressSuggestion)];const text=item?.text||addrSuggestion.dataset.addressText||'';const main=item?.mainText||addrSuggestion.dataset.addressMain||text;const input=qs('#streetAddressInput');const hasNumber=/\b\d{1,6}[A-Za-z]?\b/.test(main);if(input){input.value=hasNumber?text:main;input.focus();if(!hasNumber)input.setSelectionRange(input.value.length,input.value.length);}const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');state.streetSessionToken=null;if(hasNumber){try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}}else{toast('Calle encontrada. Ahora agregá la altura.','success')}return;}
       if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
+      if(e.target.closest('[data-close-image-viewer]') || (e.target.id==='productImageViewer' && e.target.classList.contains('open'))){closeProductImageViewer();return;}
+      const detailImage=e.target.closest('.detail-main-image');if(detailImage){openProductImageViewer(detailImage.currentSrc||detailImage.src,detailImage.alt||state.selectedProduct?.name||'SALMOS');return;}
       if(e.target.closest('[data-share-product]')){await shareSelectedProduct();return;}
       const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }

@@ -783,3 +783,110 @@ img { display: block; max-width: 100%; }
   .header-main-actions .icon-btn{width:38px;height:38px;flex-basis:38px}
   .brand-icon-only .brand-icon{width:44px;height:44px}
 }
+
+/* =========================================================
+   SALMOS V6 · AJUSTES FINOS 01/09/2026
+   Detalle de producto, visor de imagen y acciones compactas
+   ========================================================= */
+.product-modal-close{
+  float:left;
+  margin:12px 0 -58px 12px;
+}
+.detail-favorite{
+  width:44px;
+  height:44px;
+  min-width:44px;
+  min-height:44px;
+  max-width:44px;
+  max-height:44px;
+  aspect-ratio:1/1;
+  padding:0;
+  line-height:1;
+  border-radius:50%;
+  flex:0 0 44px;
+}
+.detail-main-image{cursor:zoom-in}
+
+.product-attribute-line{grid-template-columns:repeat(3,minmax(0,1fr))}
+.product-attribute-line .compact-option.active,
+.product-attribute-line .attribute-chip{
+  min-height:31px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--gold) 38%,var(--line));
+  background:color-mix(in srgb,var(--gold-2) 27%,var(--surface));
+  color:var(--text);
+  box-shadow:none;
+  font-weight:900;
+}
+.product-attribute-line .attribute-chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  align-self:center;
+  white-space:normal;
+}
+:root[data-theme="light"] .product-attribute-line .compact-option.active,
+:root[data-theme="light"] .product-attribute-line .attribute-chip{
+  background:color-mix(in srgb,var(--gold-2) 22%,#fff);
+}
+
+.detail-actions{
+  grid-template-columns:.9fr 1.08fr 1.08fr;
+  align-items:stretch;
+}
+.detail-actions .btn{width:100%;min-width:0;padding-inline:12px;text-align:center}
+.detail-share-inline{color:var(--text)}
+
+.product-image-viewer{
+  position:fixed;
+  inset:0;
+  z-index:140;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:rgba(0,0,0,.92);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .18s ease;
+}
+.product-image-viewer.open{opacity:1;pointer-events:auto}
+.product-image-viewer img{
+  width:auto;
+  height:auto;
+  max-width:96vw;
+  max-height:94vh;
+  object-fit:contain;
+  border-radius:16px;
+  box-shadow:0 24px 70px rgba(0,0,0,.42);
+}
+.product-image-viewer-close{
+  position:fixed;
+  top:max(14px,env(safe-area-inset-top));
+  left:14px;
+  z-index:141;
+  width:46px;
+  height:46px;
+  background:rgba(20,20,20,.78);
+  color:#fff;
+  border-color:rgba(255,255,255,.24);
+}
+
+@media(max-width:680px){
+  .product-attribute-line{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .detail-favorite{
+    width:42px;
+    height:42px;
+    min-width:42px;
+    min-height:42px;
+    max-width:42px;
+    max-height:42px;
+    flex-basis:42px;
+    right:10px;
+    top:10px;
+  }
+  .detail-actions{grid-template-columns:.9fr 1.08fr 1.08fr;gap:7px}
+  .detail-actions .btn{min-height:44px;padding-inline:7px;font-size:.76rem;line-height:1.08}
+  .product-image-viewer{padding:8px}
+  .product-image-viewer img{max-width:100%;max-height:92vh;border-radius:12px}
+}
