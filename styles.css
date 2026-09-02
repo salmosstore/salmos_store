@@ -1059,3 +1059,37 @@ img { display: block; max-width: 100%; }
   }
   .detail-favorite .favorite-heart-icon{width:14px;height:14px;min-width:14px;min-height:14px;flex-basis:14px}
 }
+
+
+/* =========================================================
+   SALMOS V12 · compartir general + banner sin deformación
+   ÚNICAMENTE overrides del banner.
+   ========================================================= */
+
+/* La imagen conserva su proporción: no se estira horizontal/verticalmente. */
+.hero.hero-compact{
+  overflow:hidden;
+}
+.hero.hero-compact>img:not(.hero-seal-img){
+  object-fit:cover !important;
+}
+
+/* PC: apenas más alto que antes, sin convertirlo en un banner enorme. */
+@media(min-width:681px){
+  .hero.hero-compact{
+    width:100%;
+    height:auto;
+    aspect-ratio:4.6/1;
+    margin:8px 0 10px;
+  }
+}
+
+/* Celular: un poco más alto que los 2 cm anteriores para evitar el efecto aplastado. */
+@media(max-width:680px){
+  .hero.hero-compact{
+    width:100%;
+    height:auto;
+    aspect-ratio:4.2/1;
+    margin:0 0 6px;
+  }
+}

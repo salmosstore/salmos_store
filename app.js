@@ -626,23 +626,94 @@
     toast('Ese producto no está disponible o el enlace cambió.','error');
   }
 
+  function isMobileShareDevice() {
+    return Boolean(
+      navigator.userAgentData?.mobile ||
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+      (window.matchMedia?.('(pointer: coarse)').matches && window.innerWidth < 900)
+    );
+  }
+
+  async function copyLink(text, successMessage='Link copiado') {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error('Clipboard API no disponible');
+      }
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      input.style.pointerEvents = 'none';
+      document.body.appendChild(input);
+      input.select();
+      input.setSelectionRange(0, input.value.length);
+      const ok = document.execCommand?.('copy');
+      input.remove();
+      if (!ok) throw new Error('No se pudo copiar');
+    }
+    toast(successMessage, 'success');
+  }
+
+  async function fetchShareFile(url, name='salmos') {
+    try {
+      const res = await fetch(url, { cache:'force-cache' });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (!blob.type.startsWith('image/')) return null;
+      const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+      return new File([blob], `${productPathSegment(name) || 'salmos'}.${ext}`, { type: blob.type });
+    } catch {
+      return null;
+    }
+  }
+
+  async function sharePage() {
+    const url = `${location.origin}/`;
+    const title = 'SALMOS — Tienda';
+    const text = 'SALMOS · creer · amar · crear · remeras y más';
+
+    // En PC priorizamos algo que siempre funcione: copiar el enlace.
+    if (!isMobileShareDevice() || !navigator.share) {
+      try { await copyLink(url, 'Link de SALMOS copiado'); }
+      catch { toast(url); }
+      return;
+    }
+
+    try {
+      const file = await fetchShareFile(`${location.origin}/banner-salmos.png`, 'salmos');
+      if (file && navigator.canShare?.({ files:[file] })) {
+        await navigator.share({ title, text:`${text}\n${url}`, files:[file] });
+        return;
+      }
+      await navigator.share({ title, text, url });
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      try { await copyLink(url, 'Link de SALMOS copiado'); }
+      catch { toast(url); }
+    }
+  }
+
   async function shareSelectedProduct() {
     const p=state.selectedProduct;if(!p)return;
     const url=productShareUrl(p);
+
+    // En escritorio copiamos directamente: no dependemos de un menú de compartir
+    // que Chrome/Windows puede no abrir o no tener destinos configurados.
+    if (!isMobileShareDevice() || !navigator.share) {
+      try { await copyLink(url, 'Link del producto copiado'); }
+      catch { toast(url); }
+      return;
+    }
+
     try{
-      if(navigator.share){
-        try{
-          await navigator.share({title:`${p.name} · SALMOS`,text:`Mirá ${p.name} en SALMOS`,url});
-          return;
-        }catch(err){
-          // En PC algunos navegadores exponen navigator.share pero no llegan a abrir
-          // un destino de compartido. En ese caso dejamos el enlace copiado.
-        }
-      }
-      await navigator.clipboard.writeText(url);
-      toast('Link del producto copiado','success');
+      await navigator.share({title:`${p.name} · SALMOS`,text:`Mirá ${p.name} en SALMOS`,url});
     }catch(err){
-      try{await navigator.clipboard.writeText(url);toast('Link del producto copiado','success')}catch{toast(url)}
+      if(err?.name==='AbortError')return;
+      try{await copyLink(url, 'Link del producto copiado')}catch{toast(url)}
     }
   }
 
@@ -1259,6 +1330,7 @@
 
   function bindEvents() {
     qs('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
+    qs('#pageShareBtn')?.addEventListener('click', sharePage);
     qs('#searchBtn')?.addEventListener('click',()=>{const panel=qs('#headerSearchPanel');if(!panel)return;const opening=panel.classList.contains('hidden');panel.classList.toggle('hidden',!opening);qs('#searchBtn')?.classList.toggle('active',opening);if(opening)setTimeout(()=>qs('#searchInput')?.focus(),0);});
     qs('#accountBtn')?.addEventListener('click',()=>openAccount('profile'));
     qs('#favoritesBtn')?.addEventListener('click',()=>openAccount('favorites'));
