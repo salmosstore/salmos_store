@@ -974,3 +974,78 @@ img { display: block; max-width: 100%; }
   .detail-actions .btn{gap:5px}
   .detail-action-icon{width:14px;height:14px;min-width:14px;flex-basis:14px}
 }
+
+/* =========================================================
+   SALMOS V8 · PERSISTENCIA DE ENVÍO + FAVORITO MÓVIL
+   ========================================================= */
+.detail-favorite{
+  inline-size:34px !important;
+  block-size:34px !important;
+  width:34px !important;
+  height:34px !important;
+  min-inline-size:34px !important;
+  min-block-size:34px !important;
+  max-inline-size:34px !important;
+  max-block-size:34px !important;
+  min-width:34px !important;
+  min-height:34px !important;
+  max-width:34px !important;
+  max-height:34px !important;
+  flex:0 0 34px !important;
+  aspect-ratio:auto !important;
+  padding:0 !important;
+  margin:0 !important;
+  border-radius:50% !important;
+  overflow:hidden;
+  box-sizing:border-box !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  line-height:0 !important;
+  font-size:0 !important;
+  -webkit-appearance:none;
+  appearance:none;
+  transform:none !important;
+}
+.detail-favorite .favorite-heart-icon{
+  display:block;
+  width:15px;
+  height:15px;
+  min-width:15px;
+  min-height:15px;
+  flex:0 0 15px;
+  pointer-events:none;
+}
+.cart-shipping-carry{
+  padding:11px 0 12px;
+  margin-bottom:4px;
+  border-bottom:1px solid var(--line);
+}
+.cart-shipping-carry .total-row{padding:0}
+.cart-shipping-carry small{
+  display:block;
+  margin-top:5px;
+  color:var(--muted);
+  font-size:.76rem;
+  line-height:1.35;
+}
+
+@media(max-width:680px){
+  .detail-favorite{
+    inline-size:32px !important;
+    block-size:32px !important;
+    width:32px !important;
+    height:32px !important;
+    min-inline-size:32px !important;
+    min-block-size:32px !important;
+    max-inline-size:32px !important;
+    max-block-size:32px !important;
+    min-width:32px !important;
+    min-height:32px !important;
+    max-width:32px !important;
+    max-height:32px !important;
+    flex-basis:32px !important;
+    border-radius:50% !important;
+  }
+  .detail-favorite .favorite-heart-icon{width:14px;height:14px;min-width:14px;min-height:14px;flex-basis:14px}
+}

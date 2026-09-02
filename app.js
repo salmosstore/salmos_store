@@ -76,6 +76,70 @@
   function loadJSON(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
   }
+
+  const LAST_SHIPPING_KEY = 'salmos_last_shipping';
+  function localDayKey() {
+    const d=new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function readLastShipping() {
+    const saved=loadJSON(LAST_SHIPPING_KEY,null);
+    if(!saved || !saved.address || !Number.isFinite(Number(saved.lat)) || !Number.isFinite(Number(saved.lng))) return null;
+    return saved;
+  }
+  function saveLastShipping({withQuote=false,carry=state.shippingQuoteCarry}={}) {
+    if(!state.shipping.address || !Number.isFinite(Number(state.shipping.lat)) || !Number.isFinite(Number(state.shipping.lng))) return;
+    const previous=readLastShipping();
+    const sameAddress=Boolean(previous && String(previous.address).trim().toLowerCase()===String(state.shipping.address).trim().toLowerCase()
+      && Math.abs(Number(previous.lat)-Number(state.shipping.lat))<0.00001
+      && Math.abs(Number(previous.lng)-Number(state.shipping.lng))<0.00001);
+    const keepPreviousQuote=Boolean(!withQuote && sameAddress && previous.quotedDay===localDayKey() && Number(previous.costCents)>0);
+    const payload={
+      address:state.shipping.address,
+      lat:Number(state.shipping.lat),
+      lng:Number(state.shipping.lng),
+      area:state.area||null,
+      costCents:withQuote ? Number(state.shipping.costCents)||0 : keepPreviousQuote ? Number(previous.costCents)||0 : 0,
+      distanceKm:withQuote ? state.shipping.distanceKm : keepPreviousQuote ? previous.distanceKm : null,
+      quoteId:withQuote ? state.shipping.quoteId : keepPreviousQuote ? previous.quoteId : null,
+      quotedDay:withQuote && Number(state.shipping.costCents)>0 ? localDayKey() : keepPreviousQuote ? previous.quotedDay : null,
+      carryToCart:withQuote ? Boolean(carry && Number(state.shipping.costCents)>0) : keepPreviousQuote ? Boolean(previous.carryToCart) : false
+    };
+    localStorage.setItem(LAST_SHIPPING_KEY,JSON.stringify(payload));
+  }
+  function updateSavedShippingCarry(carry) {
+    const saved=readLastShipping();
+    if(!saved)return;
+    saved.carryToCart=Boolean(carry && saved.quotedDay===localDayKey() && Number(saved.costCents)>0);
+    localStorage.setItem(LAST_SHIPPING_KEY,JSON.stringify(saved));
+  }
+  function restoreLastShipping({activateMoto=false,allowQuote=true,restoreCarry=false}={}) {
+    const saved=readLastShipping();
+    if(!saved)return false;
+    const quoteValid=allowQuote && saved.quotedDay===localDayKey() && Number(saved.costCents)>0;
+    state.area=saved.area||state.area;
+    state.shipping={
+      method:activateMoto?'moto':null,
+      costCents:quoteValid?Number(saved.costCents):0,
+      distanceKm:quoteValid?saved.distanceKm:null,
+      address:saved.address,
+      lat:Number(saved.lat),
+      lng:Number(saved.lng),
+      quoteId:quoteValid?saved.quoteId:null
+    };
+    if(restoreCarry && quoteValid && saved.carryToCart && state.cart.length){
+      state.shipping.method='moto';
+      state.shippingQuoteCarry=true;
+    }
+    return true;
+  }
+  function sameSavedShippingAddress(saved=readLastShipping()) {
+    if(!saved || !state.shipping.address)return false;
+    return String(saved.address).trim().toLowerCase()===String(state.shipping.address).trim().toLowerCase()
+      && Math.abs(Number(saved.lat)-Number(state.shipping.lat))<0.00001
+      && Math.abs(Number(saved.lng)-Number(state.shipping.lng))<0.00001;
+  }
+
   function saveCart(sync = true) {
     localStorage.setItem('salmos_cart', JSON.stringify(state.cart));
     renderCart();
@@ -108,9 +172,8 @@
     if (meta) meta.content = actual === 'light' ? '#f6f2e8' : '#0b0b0c';
   }
   function initTheme() {
-    const saved = localStorage.getItem('salmos_theme');
-    const preferred = window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-    setTheme(saved || preferred);
+    // SALMOS siempre abre en oscuro. El usuario puede cambiar a claro durante la sesión.
+    setTheme('dark');
   }
 
 
@@ -631,7 +694,7 @@
       <div class="product-detail product-detail-v4">
         <div class="detail-gallery detail-gallery-scroll">
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
-          <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos">♥</button>
+          <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button>
           ${media.length>1?`<div class="media-dots">${media.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:''}
         </div>
         <div class="detail-info detail-info-v4">
@@ -687,7 +750,18 @@
       </div>`).join('');
     }
     qs('#cartSubtotal').textContent = money(cartSubtotal());
+    renderCartShippingCarry();
     qs('#checkoutBtn').disabled = !state.cart.length;
+  }
+  function renderCartShippingCarry() {
+    const subtotalEl=qs('#cartSubtotal');
+    const foot=subtotalEl?.closest('.drawer-foot');
+    if(!foot)return;
+    let box=qs('#cartShippingCarry',foot);
+    const show=Boolean(state.cart.length && state.shippingQuoteCarry && state.shipping.method==='moto' && state.shipping.address && Number(state.shipping.costCents)>0);
+    if(!show){box?.remove();return;}
+    if(!box){box=document.createElement('div');box.id='cartShippingCarry';box.className='cart-shipping-carry';foot.insertBefore(box,foot.firstChild);}
+    box.innerHTML=`<div class="total-row"><span>Envío cotizado</span><strong>${money(state.shipping.costCents)}</strong></div><small>${escapeHtml(state.shipping.address)}</small>`;
   }
   function cartSubtotal() { return state.cart.reduce((sum, x) => sum + x.priceCents * x.qty, 0); }
   function openCart() { qs('#cartDrawer').classList.add('open'); qs('#drawerBackdrop').classList.add('open'); document.body.classList.add('no-scroll'); }
@@ -702,8 +776,7 @@
     state.checkoutQuoteOnly = false;
     state.checkoutStep = 1;
     const keepQuotedShipping = state.shippingQuoteCarry && state.shipping.method === 'moto' && state.shipping.address && Number.isFinite(Number(state.shipping.lat)) && Number.isFinite(Number(state.shipping.lng));
-    if (!keepQuotedShipping) state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
-    state.shippingQuoteCarry = false;
+    if (!keepQuotedShipping) restoreLastShipping({activateMoto:false,allowQuote:true});
     state.coupon = null;
     renderCheckout();
     openModal('#checkoutModal');
@@ -713,7 +786,8 @@
     closeCart();
     state.checkoutQuoteOnly = true;
     state.checkoutStep = 2;
-    state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
+    const restored=restoreLastShipping({activateMoto:true,allowQuote:true});
+    if(!restored) state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
     state.coupon = null;
     renderCheckout();
     openModal('#checkoutModal');
@@ -979,6 +1053,8 @@
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('No pudimos ubicar esa dirección. Probá escribiendo calle, altura y localidad.');
     state.shipping.address = data.formattedAddress || raw;
     state.shipping.lat = lat; state.shipping.lng = lng; state.shipping.costCents = 0; state.shipping.distanceKm = null;
+    state.shippingQuoteCarry=false;
+    saveLastShipping({withQuote:false,carry:false});
     await showMap(lat,lng,state.shipping.address);
     await quoteMoto();
   }
@@ -1006,9 +1082,19 @@
   async function quoteMoto() {
     if (!state.shipping.lat || !state.shipping.lng) throw new Error('Primero elegí una dirección.');
     state.coupon=null;
+    const saved=readLastShipping();
+    if(saved && sameSavedShippingAddress(saved) && saved.quotedDay===localDayKey() && Number(saved.costCents)>0){
+      state.shipping.distanceKm=saved.distanceKm;
+      state.shipping.costCents=Number(saved.costCents);
+      state.shipping.quoteId=saved.quoteId||null;
+      renderMotoQuoteButton();
+      toast('Usamos la cotización guardada de hoy para no gastar otra consulta.','success');
+      return;
+    }
     const data = await api('/api/shipping/moto/quote', { method:'POST', body:JSON.stringify({ destination:{ lat:state.shipping.lat, lng:state.shipping.lng, address:state.shipping.address } }) });
     state.shipping.distanceKm = data.distanceKm; state.shipping.costCents = data.costCents; state.shipping.quoteId = data.quoteId;
     if(Number.isFinite(Number(data.queriesRemaining))) state.shippingQueriesRemaining=Number(data.queriesRemaining);
+    saveLastShipping({withQuote:true,carry:state.shippingQuoteCarry});
     renderMotoQuoteButton();
     if(Number.isFinite(state.shippingQueriesRemaining)) toast(`Cotización lista · te quedan ${state.shippingQueriesRemaining} consulta${state.shippingQueriesRemaining===1?'':'s'} hoy.`, 'success');
   }
@@ -1050,6 +1136,8 @@
       throw new Error(`La ubicación del dispositivo es aproximada (±${accuracy} m). Para no mandar el pedido a una dirección equivocada, completá calle y altura.`);
     }
     state.shipping.address=data.formattedAddress;state.shipping.lat=lat;state.shipping.lng=lng;state.shipping.costCents=0;state.shipping.distanceKm=null;
+    state.shippingQuoteCarry=false;
+    saveLastShipping({withQuote:false,carry:false});
     if(status){status.className='area-status ready';status.textContent=`✓ Zona detectada: ${zoneName}`;}
     await setupAddressAutocomplete();
     await showMap(lat,lng,data.formattedAddress);
@@ -1137,7 +1225,7 @@
         const pref = await api('/api/payments/mercadopago/preference', { method:'POST', body:JSON.stringify({ orderId:order.order.id }) });
         window.location.href = pref.initPoint;
       } else {
-        state.cart=[]; saveCart(false); if(state.auth.user) await syncCartNow([]);
+        state.cart=[]; state.shippingQuoteCarry=false; updateSavedShippingCarry(false); saveCart(false); if(state.auth.user) await syncCartNow([]);
         qs('#checkoutContent').innerHTML = `<div class="empty-state"><strong>Pedido ${escapeHtml(order.order.code)} creado.</strong>El pago online todavía está pendiente de las credenciales de Mercado Pago. El pedido ya quedó registrado para probar el flujo administrativo.</div><div style="margin-top:14px"><button class="btn btn-primary full" id="finishNoPayBtn">Volver a la tienda</button></div>`;
       }
     } catch (err) { toast(err.message,'error'); if(btn){btn.disabled=false;btn.textContent='Intentar nuevamente';} }
@@ -1150,7 +1238,7 @@
     const ref = p.get('external_reference') || state.pendingCheckout?.code || '';
     if (!status && !returnKind) return;
     if (status === 'approved' || returnKind === 'success' && status === 'approved') {
-      state.cart=[]; saveCart(false); state.paymentApprovedReturn=true;
+      state.cart=[]; state.shippingQuoteCarry=false; updateSavedShippingCarry(false); saveCart(false); state.paymentApprovedReturn=true;
       state.pendingCheckout=null; localStorage.removeItem('salmos_pending_checkout');
       toast(`Pago aprobado${ref ? ` · ${ref}` : ''}`, 'success');
     } else if (status === 'pending' || status === 'in_process' || returnKind === 'pending') {
@@ -1200,7 +1288,7 @@
       const def=e.target.closest('[data-default-address]');if(def){const a=state.auth.addresses.find(x=>Number(x.id)===Number(def.dataset.defaultAddress));if(a){try{await authApi(`/api/account/addresses/${a.id}`,{method:'PUT',body:JSON.stringify({label:a.label,recipientName:a.recipient_name,phone:a.phone,formattedAddress:a.formatted_address,lat:a.lat,lng:a.lng,notes:a.notes,isDefault:true})});await refreshAccount()}catch(err){toast(err.message,'error')}}return;}
       const del=e.target.closest('[data-delete-address]');if(del){try{await authApi(`/api/account/addresses/${del.dataset.deleteAddress}`,{method:'DELETE'});await refreshAccount();toast('Dirección eliminada','success')}catch(err){toast(err.message,'error')}return;}
       const af=e.target.closest('[data-open-favorite]');if(af){closeAccount();await openProduct(Number(af.dataset.openFavorite));return;}
-      const useAddr=e.target.closest('[data-use-address]');if(useAddr){const a=state.auth.addresses.find(x=>Number(x.id)===Number(useAddr.dataset.useAddress));if(a){state.shipping.address=a.formatted_address;state.shipping.lat=Number(a.lat);state.shipping.lng=Number(a.lng);state.shipping.costCents=0;state.shipping.distanceKm=null;state.area={query:a.label||'Dirección guardada',formattedAddress:a.formatted_address,lat:Number(a.lat),lng:Number(a.lng)};renderShippingDetail();try{await quoteMoto()}catch(err){toast(err.message,'error')}}return;}
+      const useAddr=e.target.closest('[data-use-address]');if(useAddr){const a=state.auth.addresses.find(x=>Number(x.id)===Number(useAddr.dataset.useAddress));if(a){state.shipping.address=a.formatted_address;state.shipping.lat=Number(a.lat);state.shipping.lng=Number(a.lng);state.shipping.costCents=0;state.shipping.distanceKm=null;state.shippingQuoteCarry=false;state.area={query:a.label||'Dirección guardada',formattedAddress:a.formatted_address,lat:Number(a.lat),lng:Number(a.lng)};saveLastShipping({withQuote:false,carry:false});renderShippingDetail();try{await quoteMoto()}catch(err){toast(err.message,'error')}}return;}
       const areaSuggestion=e.target.closest('[data-area-suggestion]');if(areaSuggestion){const item=(state.areaSuggestions||[])[Number(areaSuggestion.dataset.areaSuggestion)];if(item){try{await resolveAreaChoice(item)}catch(err){toast(err.message,'error')}}return;}
       const addrSuggestion=e.target.closest('[data-address-suggestion]');if(addrSuggestion){const item=(state.addressSuggestions||[])[Number(addrSuggestion.dataset.addressSuggestion)];const text=item?.text||addrSuggestion.dataset.addressText||'';const main=item?.mainText||addrSuggestion.dataset.addressMain||text;const input=qs('#streetAddressInput');const hasNumber=/\b\d{1,6}[A-Za-z]?\b/.test(main);if(input){input.value=hasNumber?text:main;input.focus();if(!hasNumber)input.setSelectionRange(input.value.length,input.value.length);}const list=qs('#addressSuggestions');if(list)list.classList.add('hidden');state.streetSessionToken=null;if(hasNumber){try{await confirmTypedAddress(text)}catch(err){toast(err.message,'error')}}else{toast('Calle encontrada. Ahora agregá la altura.','success')}return;}
       if(e.target.id==='confirmTypedAddressBtn'){try{e.target.disabled=true;e.target.textContent='Ubicando...';await confirmTypedAddress(qs('#streetAddressInput')?.value||'')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Usar dirección'}return;}
@@ -1223,8 +1311,8 @@
       }
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
       if(e.target.id==='closeQuoteCheckoutBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');return;}
-      if(e.target.id==='quoteAddProductBtn'){state.shippingQuoteCarry=Boolean(state.shipping.method==='moto'&&state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng)));state.checkoutQuoteOnly=false;closeModal('#checkoutModal');qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
-      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ const method=ship.dataset.shipping;if(method===state.shipping.method&&method==='moto'&&state.shipping.address){renderCheckout();return;}state.shipping={method,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null}; state.coupon=null; renderCheckout(); return; }
+      if(e.target.id==='quoteAddProductBtn'){state.shippingQuoteCarry=Boolean(state.shipping.method==='moto'&&state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng))&&Number(state.shipping.costCents)>0);if(state.shippingQuoteCarry){saveLastShipping({withQuote:true,carry:true});updateSavedShippingCarry(true);}state.checkoutQuoteOnly=false;closeModal('#checkoutModal');renderCart();qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
+      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ const method=ship.dataset.shipping;if(method===state.shipping.method&&method==='moto'&&state.shipping.address){renderCheckout();return;}if(method==='moto'){const currentAddress=state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng));if(currentAddress){state.shipping.method='moto';}else if(!restoreLastShipping({activateMoto:true,allowQuote:true})){state.shipping={method:'moto',costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null};}}else{state.shipping={method,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null};state.shippingQuoteCarry=false;updateSavedShippingCarry(false);} state.coupon=null; renderCheckout(); return; }
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
       if(e.target.id==='quoteMotoBtn'){ try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteMoto();}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular motomensajería';} return; }
       if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(state.shipping.method==='moto'&&!state.shipping.costCents){toast('Primero calculá la motomensajería.','error');return;} state.checkoutStep=3;renderCheckout();return; }
@@ -1237,7 +1325,9 @@
   }
 
   async function boot() {
-    initTheme(); ensureAccountUi(); bindEvents(); await handlePaymentReturn();
+    initTheme();
+    restoreLastShipping({activateMoto:false,allowQuote:true,restoreCarry:true});
+    ensureAccountUi(); bindEvents(); await handlePaymentReturn();
     await Promise.all([loadStore(), initFirebaseAuth()]);
   }
   boot();
