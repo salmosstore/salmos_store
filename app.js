@@ -630,11 +630,18 @@
     const p=state.selectedProduct;if(!p)return;
     const url=productShareUrl(p);
     try{
-      if(navigator.share){await navigator.share({title:`${p.name} · SALMOS`,text:`Mirá ${p.name} en SALMOS`,url});return;}
+      if(navigator.share){
+        try{
+          await navigator.share({title:`${p.name} · SALMOS`,text:`Mirá ${p.name} en SALMOS`,url});
+          return;
+        }catch(err){
+          // En PC algunos navegadores exponen navigator.share pero no llegan a abrir
+          // un destino de compartido. En ese caso dejamos el enlace copiado.
+        }
+      }
       await navigator.clipboard.writeText(url);
       toast('Link del producto copiado','success');
     }catch(err){
-      if(err?.name==='AbortError')return;
       try{await navigator.clipboard.writeText(url);toast('Link del producto copiado','success')}catch{toast(url)}
     }
   }
