@@ -347,6 +347,15 @@ img { display: block; max-width: 100%; }
 }
 .favorite-btn:hover { transform:translateY(-1px) scale(1.03); border-color:var(--gold); color:var(--gold-2); }
 .favorite-btn.active { color:#17120a; background:linear-gradient(135deg,var(--gold-2),var(--gold)); border-color:var(--gold-dark); }
+.favorite-btn .favorite-heart-icon {
+  display:block;
+  width:17px;
+  height:17px;
+  min-width:17px;
+  min-height:17px;
+  flex:0 0 17px;
+  pointer-events:none;
+}
 .detail-main { position:relative; }
 .detail-favorite { right:14px; top:14px; }
 
@@ -425,6 +434,7 @@ img { display: block; max-width: 100%; }
   .header-actions .icon-btn { width:42px; height:42px; }
   .account-tabs { grid-template-columns:repeat(2,1fr); }
   .favorite-btn { width:35px; height:35px; right:9px; top:9px; }
+  .favorite-btn .favorite-heart-icon { width:15px; height:15px; min-width:15px; min-height:15px; flex-basis:15px; }
 }
 
 /* =========================================================
