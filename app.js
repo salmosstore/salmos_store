@@ -701,32 +701,46 @@
     const p=state.selectedProduct;if(!p)return;
     const url=productShareUrl(p);
     const verse=[p.verse_text,p.verse_reference].filter(Boolean).join('\n');
-    const text=[`Mirá ${p.name} en SALMOS`,verse,url].filter(Boolean).join('\n\n');
+    const text=[
+      `Mirá ${p.name} en SALMOS`,
+      url,
+      verse
+    ].filter(Boolean).join('\n\n');
 
+    // En PC copiamos directamente el enlace del producto.
+    // No dependemos del menú de compartir de Chrome/Windows.
+    if (!isMobileShareDevice()) {
+      try { await copyLink(url, 'Link del producto copiado'); }
+      catch { toast(url); }
+      return;
+    }
+
+    // En celular mantenemos FOTO + NOMBRE + LINK + VERSÍCULO.
+    // No enviamos además el parámetro "url" cuando va la foto,
+    // porque WhatsApp terminaba mostrando el enlace dos veces.
     if (navigator.share) {
       try {
         const imageUrl = firstProductImage(p);
         const file = imageUrl ? await fetchShareFile(imageUrl, `${p.name}-salmos`) : null;
 
-        // Cuando el dispositivo/navegador permite archivos, compartimos nuevamente
-        // FOTO + NOMBRE + VERSÍCULO/CITA + LINK, como funcionaba antes.
         if (file && navigator.canShare?.({ files:[file] })) {
           await navigator.share({
             title:`${p.name} · SALMOS`,
             text,
-            url,
             files:[file]
           });
           return;
         }
 
-        // Fallback nativo si ese navegador no admite compartir archivos.
-        await navigator.share({title:`${p.name} · SALMOS`,text,url});
+        // Si ese celular no admite compartir la foto como archivo,
+        // compartimos el mismo contenido una sola vez.
+        await navigator.share({
+          title:`${p.name} · SALMOS`,
+          text
+        });
         return;
       } catch (err) {
-        // En celular, si el usuario cerró voluntariamente el menú, no hacemos nada.
-        if (err?.name==='AbortError' && isMobileShareDevice()) return;
-        // En PC, o si el menú no pudo abrirse, dejamos al menos el enlace copiado.
+        if (err?.name==='AbortError') return;
       }
     }
 
