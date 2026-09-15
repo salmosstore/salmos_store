@@ -515,7 +515,9 @@
   }
 
   function renderSkeletons() {
-    qs('#productGrid').innerHTML = Array.from({ length: 8 }, () => '<div class="skeleton"></div>').join('');
+    const grid=qs('#productGrid');if(grid)grid.innerHTML='';
+    document.body.classList.add('store-pending');
+    qs('#porPedido')?.classList.add('hidden');
   }
 
   async function loadStore() {
@@ -527,6 +529,8 @@
       state.config = publicConfig;
       state.categories = categories.items || [];
       state.products = products.items || [];
+      document.body.classList.remove('store-pending');
+      qs('#porPedido')?.classList.remove('hidden');
       renderCategories();
       renderProducts();
       renderFeatured();
@@ -537,7 +541,10 @@
       await openProductFromCurrentPath();
     } catch (err) {
       console.error(err);
-      qs('#productGrid').innerHTML = `<div class="empty-state" style="grid-column:1/-1"><strong>No pudimos cargar la tienda.</strong>${API ? escapeHtml(err.message) : 'Falta conectar el sitio con el Worker de SALMOS en config.js.'}</div>`;
+      const grid=qs('#productGrid');if(grid)grid.innerHTML='';
+      qs('#porPedido')?.classList.add('hidden');
+      // Si la API tarda o falla, no mostramos estados vacíos que parezcan falta de stock.
+      // La cabecera y el bloque de WhatsApp/cotización siguen disponibles.
     }
   }
 
@@ -596,8 +603,10 @@
     if(t)t.textContent = state.query ? `Resultados para “${state.query}”` : title;
     if(sub)sub.textContent = items.length ? `${items.length} ${items.length === 1 ? 'producto' : 'productos'}` : 'No encontramos productos con ese filtro.';
     if(clear)clear.classList.toggle('hidden', state.activeCategory === 'all' && !state.query);
-    const grid=qs('#productGrid'),orderGrid=qs('#orderProductGrid');
-    if(grid)grid.innerHTML = stockItems.length ? stockItems.map(productCard).join('') : (orderItems.length?'':`<div class="empty-state" style="grid-column:1/-1"><strong>No hay productos para mostrar.</strong>Probá otra búsqueda.</div>`);
+    const grid=qs('#productGrid'),orderGrid=qs('#orderProductGrid'),productsSection=qs('#productos');
+    const filtering=Boolean(state.query || state.activeCategory!=='all');
+    if(grid)grid.innerHTML = stockItems.length ? stockItems.map(productCard).join('') : (filtering?`<div class="empty-state" style="grid-column:1/-1"><strong>No encontramos productos con ese filtro.</strong>Probá otra búsqueda.</div>`:'');
+    if(productsSection)productsSection.classList.toggle('hidden',!stockItems.length&&!filtering);
     if(orderGrid)orderGrid.innerHTML=orderItems.map(productCard).join('');
   }
 
@@ -1448,10 +1457,16 @@
     window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;qs('#pwaInstallBtn')?.classList.add('hidden');toast('SALMOS quedó instalada','success')});
     qs('#pwaInstallBtn')?.addEventListener('click',async()=>{if(!deferredInstallPrompt){toast('Usá la opción “Instalar aplicación” de tu navegador.');return;}deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;qs('#pwaInstallBtn')?.classList.add('hidden')});
   }
+  const DTF_SHEET_PRICE_PESOS=12000;
+  const DTF_CONFIG_PER_SHEET_PESOS=3000;
+  const DTF_INDIVIDUAL_READY_PESOS=3000;
+  const DTF_INDIVIDUAL_CONFIG_PESOS=4000;
+  const DTF_SHEET_AREA_CM2=58*100;
+
   function customFileModeHint(kind,subtype,mode){
     if(kind!=='dtf')return 'Podés adjuntar imágenes o archivos de referencia. El original se guarda sin recomprimir.';
-    if(subtype==='sheet'&&mode==='ready')return 'Listo para imprimir: únicamente PNG a 300 DPI, máximo 58 cm de ancho × 100 cm de largo por archivo. Podés cargar varios.';
-    if(subtype==='sheet'&&mode==='configure')return 'A configurar: subí el diseño como lo tengas. Preparación: +$3.000 por cada plancha de 58 × 100 cm.';
+    if(subtype==='sheet'&&mode==='ready')return 'Plancha 58 × 100 cm: $12.000. Listo para imprimir admite únicamente PNG a 300 DPI, máximo 58 × 100 cm por archivo. Podés cargar varios.';
+    if(subtype==='sheet'&&mode==='configure')return 'Plancha 58 × 100 cm: $12.000 + $3.000 de configuración por cada plancha. Podés subir el diseño como lo tengas.';
     if(subtype==='individual'&&mode==='ready')return 'Diseño individual listo para imprimir: $3.000 por unidad. PNG a 300 DPI.';
     if(subtype==='individual'&&mode==='configure')return 'Diseño individual a configurar: $4.000 por unidad.';
     return 'Elegí las opciones para ver las condiciones.';
@@ -1475,34 +1490,133 @@
     }return results;
   }
   function closeCustomOrder(){closeModal('#customOrderModal');}
+  function dtfDesignRow(index,{label='',widthCm=30,heightCm=30,quantity=1}={}){
+    return `<div class="custom-dtf-design-row" data-dtf-design-row>
+      <div class="design-label-field"><label>Diseño</label><input class="input" data-dtf-label value="${escapeHtml(label||`Diseño ${index+1}`)}" placeholder="Nombre o referencia"></div>
+      <div><label>Ancho cm</label><input class="input" data-dtf-width type="number" min="1" max="58" step="0.5" value="${Number(widthCm)||30}"></div>
+      <div><label>Alto cm</label><input class="input" data-dtf-height type="number" min="1" max="100" step="0.5" value="${Number(heightCm)||30}"></div>
+      <div><label>Cantidad</label><input class="input" data-dtf-qty type="number" min="1" max="999" value="${Number(quantity)||1}"></div>
+      <button class="custom-dtf-remove" type="button" data-remove-dtf-design aria-label="Quitar diseño">×</button>
+    </div>`;
+  }
+  function collectDtfDesigns(form){
+    return qsa('[data-dtf-design-row]',form).map((row,i)=>({
+      label:qs('[data-dtf-label]',row)?.value.trim()||`Diseño ${i+1}`,
+      widthCm:Math.max(1,Math.min(58,Number(qs('[data-dtf-width]',row)?.value)||30)),
+      heightCm:Math.max(1,Math.min(100,Number(qs('[data-dtf-height]',row)?.value)||30)),
+      quantity:Math.max(1,Math.min(999,Math.trunc(Number(qs('[data-dtf-qty]',row)?.value)||1)))
+    }));
+  }
+  function dtfEstimate(form){
+    const subtype=form.elements.subtype?.value||'sheet',mode=form.elements.fileMode?.value||'ready';
+    const designs=collectDtfDesigns(form);const totalQty=designs.reduce((n,d)=>n+d.quantity,0);
+    const totalArea=designs.reduce((n,d)=>n+(d.widthCm*d.heightCm*d.quantity),0);
+    const areaSheets=Math.max(1,Math.ceil(totalArea/DTF_SHEET_AREA_CM2));
+    const requested=Math.max(1,Math.trunc(Number(form.elements.requestedSheets?.value)||1));
+    const estimatedSheets=Math.max(requested,areaSheets);
+    if(subtype==='individual'){
+      const unit=mode==='configure'?DTF_INDIVIDUAL_CONFIG_PESOS:DTF_INDIVIDUAL_READY_PESOS;
+      return {designs,totalQty,totalArea,requestedSheets:0,areaSheets:0,estimatedSheets:0,approxPerSheet:0,totalPesos:totalQty*unit,unitPesos:unit};
+    }
+    const first=designs[0]||{widthCm:30,heightCm:30};
+    const approxPerSheet=Math.max(1,Math.floor(DTF_SHEET_AREA_CM2/Math.max(1,first.widthCm*first.heightCm)));
+    const unit=DTF_SHEET_PRICE_PESOS+(mode==='configure'?DTF_CONFIG_PER_SHEET_PESOS:0);
+    return {designs,totalQty,totalArea,requestedSheets:requested,areaSheets,estimatedSheets,approxPerSheet,totalPesos:estimatedSheets*unit,unitPesos:unit};
+  }
+  function updateDtfEstimate(form){
+    const box=qs('#customDtfEstimate',form);if(!box)return;
+    const e=dtfEstimate(form),subtype=form.elements.subtype?.value||'sheet',mode=form.elements.fileMode?.value||'ready';
+    if(subtype==='individual'){
+      box.innerHTML=`<strong>Estimación:</strong> ${e.totalQty} ${e.totalQty===1?'diseño':'diseños'} × $${e.unitPesos.toLocaleString('es-AR')} = <span class="custom-dtf-price">$${e.totalPesos.toLocaleString('es-AR')}</span>. Seña estimada 50%: $${Math.round(e.totalPesos/2).toLocaleString('es-AR')}.`;
+      return;
+    }
+    const standard=e.designs.length===1&&Math.abs(e.designs[0].widthCm-30)<.01&&Math.abs(e.designs[0].heightCm-30)<.01;
+    const designMode=form.elements.designMode?.value||'same';
+    const ref=designMode==='different'
+      ? `Diseños diferentes: por superficie total el mínimo teórico es ${e.areaSheets} ${e.areaSheets===1?'plancha':'planchas'}; el acomodo real puede requerir más.`
+      : (standard?'Referencia: 30 × 30 cm ≈ 6 diseños por plancha por cálculo de superficie.':`Por superficie, ese tamaño da ≈ ${e.approxPerSheet} por plancha.`);
+    const warning=e.areaSheets>e.requestedSheets?` <span class="custom-dtf-warning">Elegiste ${e.requestedSheets} m/planchas, pero por superficie estimamos al menos ${e.areaSheets}.</span>`:'';
+    box.innerHTML=`<strong>Estimación:</strong> ${e.estimatedSheets} ${e.estimatedSheets===1?'plancha / metro':'planchas / metros'} × $${e.unitPesos.toLocaleString('es-AR')} = <span class="custom-dtf-price">$${e.totalPesos.toLocaleString('es-AR')}</span>. Seña estimada 50%: $${Math.round(e.totalPesos/2).toLocaleString('es-AR')}. ${ref}${warning}<br><small>La cantidad final de metros queda sujeta al acomodo real de los diseños y se confirma personalmente antes de producir.</small>`;
+  }
+  function renderCustomDynamicFields(form,kind,product=null){
+    const host=qs('#customDynamicFields',form);if(!host)return;
+    const productName=product?.name||form.elements.productName?.value||'';
+    if(kind==='clothing'){
+      host.innerHTML=`
+        <div class="custom-order-section-title">Ropa por pedido</div>
+        <div class="field"><label>Prenda</label><select class="select" name="subtype"><option value="clasica">Remera corte clásico</option><option value="oversize">Remera oversize</option><option value="crop-over">Remera crop over</option><option value="chomba">Chomba clásica</option><option value="gorra">Gorra</option></select></div>
+        <div class="field"><label>Terminación</label><select class="select" name="finish"><option value="estampada">Estampada</option><option value="lisa">Lisa</option></select></div>
+        <div class="field"><label>Diseño</label><select class="select" name="designSource"><option value="salmos" ${productName?'selected':''}>Diseño SALMOS</option><option value="personalizado">Diseño personalizado</option></select></div>
+        <div class="field"><label>Cantidad</label><input class="input" type="number" name="quantity" min="1" value="1"></div>
+        <div class="field full"><label>Archivos / referencias</label><input class="input" id="customOrderFiles" name="files" type="file" multiple accept="image/*,application/pdf,.psd,.ai,.eps,.svg"><div class="custom-file-hint" id="customFileHint">Podés adjuntar referencias. Guardamos el original sin recomprimir.</div></div>`;
+      return;
+    }
+    host.innerHTML=`
+      <div class="custom-order-section-title">DTF</div>
+      <div class="field"><label>Modalidad</label><select class="select" name="subtype"><option value="sheet">Por plancha / metro (58 × 100 cm)</option><option value="individual">Diseño individual</option></select></div>
+      <div class="field"><label>Preparación del archivo</label><select class="select" name="fileMode"><option value="ready">Listo para imprimir</option><option value="configure">A configurar</option></select></div>
+      <div class="field"><label>Origen del diseño</label><select class="select" name="designSource"><option value="salmos">Diseño SALMOS</option><option value="personalizado" selected>Diseño personalizado</option></select></div>
+      <div class="field"><label>Diseños</label><select class="select" name="designMode"><option value="same">Mismo diseño</option><option value="different">Diseños diferentes</option></select></div>
+      <div class="field" data-sheet-request-field><label>Metros / planchas solicitadas</label><input class="input" type="number" name="requestedSheets" min="1" step="1" value="1"><div class="custom-file-hint">1 plancha = 58 × 100 cm = 1 metro.</div></div>
+      <div class="custom-dtf-builder">
+        <div class="custom-dtf-builder-head"><strong>Tamaño y cantidad de cada diseño</strong><button class="btn btn-ghost hidden" type="button" id="addDtfDesignBtn">+ Agregar diseño</button></div>
+        <div class="custom-dtf-design-list" id="customDtfDesignList">${dtfDesignRow(0)}</div>
+        <div class="custom-dtf-estimate" id="customDtfEstimate"></div>
+      </div>
+      <div class="field full"><label>Archivos</label><input class="input" id="customOrderFiles" name="files" type="file" multiple accept="image/png,image/*,application/pdf,.psd,.ai,.eps,.svg,.tif,.tiff"><div class="custom-file-hint" id="customFileHint"></div><div class="custom-file-checks" id="customFileChecks"></div></div>`;
+    bindDtfBuilder(form);
+  }
+  function bindDtfBuilder(form){
+    const sync=()=>{
+      const subtype=form.elements.subtype?.value||'sheet',mode=form.elements.fileMode?.value||'ready',designMode=form.elements.designMode?.value||'same';
+      const sheetField=qs('[data-sheet-request-field]',form);if(sheetField)sheetField.classList.toggle('hidden',subtype!=='sheet');
+      const add=qs('#addDtfDesignBtn',form);if(add)add.classList.toggle('hidden',designMode!=='different');
+      const rows=qsa('[data-dtf-design-row]',form);if(designMode==='same'&&rows.length>1)rows.slice(1).forEach(r=>r.remove());
+      qsa('[data-remove-dtf-design]',form).forEach((b,i)=>b.classList.toggle('hidden',designMode==='same'||i===0&&qsa('[data-dtf-design-row]',form).length===1));
+      const hint=qs('#customFileHint',form);if(hint)hint.textContent=customFileModeHint('dtf',subtype,mode);
+      updateDtfEstimate(form);
+    };
+    form.addEventListener('input',e=>{if(e.target.closest('#customDynamicFields'))sync();});
+    form.addEventListener('change',async e=>{
+      if(e.target.closest('#customDynamicFields'))sync();
+      if(e.target.id==='customOrderFiles'&&form.elements.fileMode?.value==='ready'){
+        const checks=qs('#customFileChecks',form),res=await validateReadyDtfFiles([...e.target.files],form.elements.subtype.value);
+        if(checks)checks.innerHTML=res.map(x=>`<div class="custom-file-check ${x.ok?'ok':'bad'}">${escapeHtml(x.ok?'✓ '+x.text:'✕ '+x.text)}</div>`).join('');
+      }
+    });
+    qs('#addDtfDesignBtn',form)?.addEventListener('click',()=>{const list=qs('#customDtfDesignList',form);if(!list)return;list.insertAdjacentHTML('beforeend',dtfDesignRow(qsa('[data-dtf-design-row]',form).length));sync();});
+    qs('#customDtfDesignList',form)?.addEventListener('click',e=>{const b=e.target.closest('[data-remove-dtf-design]');if(!b)return;b.closest('[data-dtf-design-row]')?.remove();sync();});
+    sync();
+  }
+  function setCustomKind(form,kind,product=null){
+    form.elements.kind.value=kind;
+    qsa('[data-custom-type]',form).forEach(b=>b.classList.toggle('active',b.dataset.customType===kind));
+    renderCustomDynamicFields(form,kind,product);
+  }
   function openCustomOrder(kind='choose',product=null){
     const host=qs('#customOrderContent');if(!host)return;openModal('#customOrderModal');
-    if(kind==='choose'){host.innerHTML=`<div class="custom-order-head"><div class="eyebrow">SALMOS · Por Pedido</div><h2>¿Qué querés solicitar?</h2><p>Elegí una opción. El pedido queda registrado y te enviamos el resumen por WhatsApp.</p></div><div class="custom-kind-grid"><button class="custom-kind-card" data-custom-kind="clothing"><strong>Ropa</strong><span>Clásica, oversize, crop over o chomba.</span></button><button class="custom-kind-card" data-custom-kind="dtf"><strong>DTF</strong><span>Por plancha o diseño individual.</span></button></div>`;return;}
-    const isDtf=kind==='dtf';const productName=product?.name||'';
-    host.innerHTML=`<div class="custom-order-head"><div class="eyebrow">SALMOS · ${isDtf?'DTF':'Ropa por pedido'}</div><h2>${productName?escapeHtml(productName):isDtf?'Solicitar DTF':'Solicitar ropa'}</h2><p>Producción estimada: 24 a 72 hs, sujeta a cantidad y disponibilidad. La seña es del 50% cuando queda confirmado el total.</p></div>
+    const initialKind=kind==='dtf'?'dtf':'clothing',productName=product?.name||'';
+    host.innerHTML=`<div class="custom-order-head"><div class="eyebrow">SALMOS · Por pedido</div><h2>${productName?escapeHtml(productName):'Solicitar por pedido'}</h2><p>Completá una sola solicitud. Si es DTF, podés indicar medidas, cantidades y varios diseños.</p></div>
       <form class="custom-order-form" id="customOrderForm">
-        <input type="hidden" name="kind" value="${isDtf?'dtf':'clothing'}"><input type="hidden" name="productId" value="${product?.id||''}"><input type="hidden" name="productName" value="${escapeHtml(productName)}">
+        <input type="hidden" name="kind" value="${initialKind}"><input type="hidden" name="productId" value="${product?.id||''}"><input type="hidden" name="productName" value="${escapeHtml(productName)}">
+        <div class="custom-order-type-row">
+          <button class="custom-order-type-btn ${initialKind==='clothing'?'active':''}" type="button" data-custom-type="clothing"><strong>Ropa</strong><small>Remeras · Chombas · Gorras</small></button>
+          <button class="custom-order-type-btn ${initialKind==='dtf'?'active':''}" type="button" data-custom-type="dtf"><strong>DTF</strong><small>Por metro o individual</small></button>
+        </div>
         <div class="form-grid">
           <div class="field"><label>Nombre y apellido</label><input class="input" name="customerName" required value="${escapeHtml(state.customer?.name||'')}"></div>
           <div class="field"><label>WhatsApp</label><input class="input" name="customerPhone" required value="${escapeHtml(state.customer?.phone||'')}"></div>
           <div class="field full"><label>Email (opcional)</label><input class="input" type="email" name="customerEmail" value="${escapeHtml(state.auth.user?.email||state.customer?.email||'')}"></div>
-          ${isDtf?`<div class="field"><label>Modalidad</label><select class="select" name="subtype"><option value="sheet">Plancha 58 × 100 cm</option><option value="individual">Diseño individual</option></select></div>
-          <div class="field"><label>Archivo</label><select class="select" name="fileMode"><option value="ready">Listo para imprimir</option><option value="configure">A configurar</option></select></div>
-          <div class="field"><label>Cantidad de diseños / unidades</label><input class="input" type="number" name="quantity" min="1" value="1"></div><div class="field"><label>Planchas (si corresponde)</label><input class="input" type="number" name="sheets" min="1" value="1"></div>`:
-          `<div class="field"><label>Prenda</label><select class="select" name="subtype"><option value="clasica">Remera corte clásico</option><option value="oversize">Remera oversize</option><option value="crop-over">Remera crop over</option><option value="chomba">Chomba clásica</option></select></div>
-          <div class="field"><label>Terminación</label><select class="select" name="finish"><option value="estampada">Estampada</option><option value="lisa">Lisa</option></select></div>
-          <div class="field"><label>Diseño</label><select class="select" name="designSource"><option value="salmos">Diseño SALMOS</option><option value="personalizado">Diseño personalizado</option></select></div>
-          <div class="field"><label>Cantidad</label><input class="input" type="number" name="quantity" min="1" value="1"></div>`}
-          ${isDtf?`<div class="field full"><label>Diseño</label><select class="select" name="designSource"><option value="salmos">Diseño SALMOS</option><option value="personalizado">Diseño personalizado</option></select></div>`:''}
-          <div class="field full"><label>Archivos</label><input class="input" id="customOrderFiles" name="files" type="file" ${isDtf?'multiple':''} accept="${isDtf?'image/png,image/*,application/pdf,.psd,.ai,.eps,.svg,.tif,.tiff':'image/*,application/pdf,.psd,.ai,.eps,.svg'}"><div class="custom-file-hint" id="customFileHint"></div><div class="custom-file-checks" id="customFileChecks"></div></div>
-          <div class="field full"><label>Aclaraciones</label><textarea class="textarea" name="notes" rows="4" placeholder="Talles, colores, ubicación de estampa, medidas, observaciones..."></textarea></div>
+          <div id="customDynamicFields" class="form-grid-nested" style="display:contents"></div>
+          <div class="field full"><label>Aclaraciones</label><textarea class="textarea" name="notes" rows="4" placeholder="Talles, colores, ubicación de estampa, medidas especiales u observaciones..."></textarea></div>
         </div>
-        <div class="order-conditions"><strong>Condiciones:</strong> el pedido se prepara entre 24 y 72 hs según cantidad y disponibilidad. Una vez confirmado el total, la seña para iniciar es del 50%. Los archivos originales se conservan sin recomprimir.</div>
+        <div class="order-conditions"><strong>Condiciones:</strong> tiempo estimado de 24 a 72 hs, sujeto a cantidad y disponibilidad. El trabajo se confirma con una seña del 50%. En DTF por metro, el cálculo final queda sujeto al orden y acomodo real de los diseños.</div>
         <button class="btn btn-primary full" type="submit" id="submitCustomOrderBtn">Enviar solicitud</button>
       </form>`;
-    const form=qs('#customOrderForm',host);const updateHint=()=>{const fd=new FormData(form),hint=qs('#customFileHint',form);if(hint)hint.textContent=customFileModeHint(kind,fd.get('subtype'),fd.get('fileMode'));};
-    form.addEventListener('change',async e=>{updateHint();if(e.target.id==='customOrderFiles'&&kind==='dtf'&&form.elements.fileMode.value==='ready'){const checks=qs('#customFileChecks',form),res=await validateReadyDtfFiles([...e.target.files],form.elements.subtype.value);checks.innerHTML=res.map(x=>`<div class="custom-file-check ${x.ok?'ok':'bad'}">${escapeHtml(x.ok?'✓ '+x.text:'✕ '+x.text)}</div>`).join('');}});
-    form.addEventListener('submit',submitCustomOrder);updateHint();
+    const form=qs('#customOrderForm',host);
+    qsa('[data-custom-type]',form).forEach(b=>b.addEventListener('click',()=>setCustomKind(form,b.dataset.customType,product)));
+    setCustomKind(form,initialKind,product);
+    form.addEventListener('submit',submitCustomOrder);
   }
   async function submitCustomOrder(e){
     e.preventDefault();const form=e.currentTarget,btn=qs('#submitCustomOrderBtn',form),fd=new FormData(form),kind=fd.get('kind'),subtype=fd.get('subtype'),fileMode=fd.get('fileMode')||'',files=[...(form.elements.files?.files||[])];
@@ -1510,12 +1624,22 @@
       btn.disabled=true;btn.textContent='Preparando pedido...';
       if(kind==='dtf'&&fileMode==='ready'&&files.length){const res=await validateReadyDtfFiles(files,subtype);const bad=res.find(x=>!x.ok);if(bad)throw new Error(`Revisá el archivo: ${bad.text}`);}
       const notes=[fd.get('finish')?`Terminación: ${fd.get('finish')}`:'',fd.get('notes')||''].filter(Boolean).join('\n');
-      const payload={customerName:fd.get('customerName'),customerPhone:fd.get('customerPhone'),customerEmail:fd.get('customerEmail'),kind,subtype,productId:fd.get('productId'),productName:fd.get('productName'),designSource:fd.get('designSource'),fileMode,quantity:Number(fd.get('quantity'))||1,sheets:Number(fd.get('sheets'))||0,notes};
+      let designs=[],requestedSheets=0,estimated=null,quantity=Number(fd.get('quantity'))||1;
+      if(kind==='dtf'){
+        estimated=dtfEstimate(form);designs=estimated.designs;quantity=estimated.totalQty;requestedSheets=estimated.requestedSheets;
+      }
+      const payload={customerName:fd.get('customerName'),customerPhone:fd.get('customerPhone'),customerEmail:fd.get('customerEmail'),kind,subtype,productId:fd.get('productId'),productName:fd.get('productName'),designSource:fd.get('designSource')||'personalizado',fileMode,designMode:fd.get('designMode')||'',quantity,requestedSheets,sheets:requestedSheets,designs,notes};
       const created=await api('/api/custom-orders',{method:'POST',body:JSON.stringify(payload)});const order=created.item;
       if(files.length){btn.textContent='Subiendo archivos originales...';const up=new FormData();up.append('uploadToken',order.uploadToken);files.forEach(f=>up.append('files',f));await api(`/api/custom-orders/${order.id}/files`,{method:'POST',body:up});}
       const known=Number(order.knownExtraCents)||0,total=Number(order.quotedTotalCents)||0,deposit=Number(order.depositCents)||0,whatsapp=state.config?.whatsapp||'5491162691341';
-      const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,kind==='dtf'?`DTF: ${subtype==='sheet'?'plancha 58x100':'individual'} · ${fileMode==='ready'?'listo para imprimir':'a configurar'}`:`Ropa: ${subtype}`,fd.get('productName')?`Diseño: ${fd.get('productName')}`:'',`Cantidad: ${Number(fd.get('quantity'))||1}`,total?`Total: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total de impresión.`:`La seña será del 50% del total confirmado.`)].filter(Boolean).join('\n');
-      qs('#customOrderContent').innerHTML=`<div class="custom-order-result"><div class="eyebrow">Solicitud recibida</div><h2>Tu pedido quedó registrado</h2><div class="code">${escapeHtml(order.code)}</div><p>Guardamos los archivos originales. ${deposit?`Seña a abonar para confirmar: <strong>${money(deposit)}</strong>.`:''} Ahora podés enviarnos el resumen por WhatsApp para continuar.</p><a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${encodeURIComponent(whatsapp)}?text=${encodeURIComponent(summary)}">Continuar por WhatsApp</a><button class="btn btn-ghost" type="button" id="finishCustomOrderBtn">Cerrar</button></div>`;
+      const dtfDetail=kind==='dtf'?[
+        `DTF: ${subtype==='sheet'?'por plancha/metro 58x100':'individual'} · ${fileMode==='ready'?'listo para imprimir':'a configurar'}`,
+        `Diseños: ${(fd.get('designMode')||'same')==='different'?'diferentes':'mismo diseño'}`,
+        designs.map(d=>`${d.label}: ${d.widthCm}×${d.heightCm} cm × ${d.quantity}`).join(' | '),
+        subtype==='sheet'?`Metros solicitados: ${requestedSheets} · estimados: ${Number(order.estimatedSheets)||estimated?.estimatedSheets||requestedSheets}`:''
+      ].filter(Boolean):[];
+      const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,...dtfDetail,kind==='clothing'?`Ropa: ${subtype}`:'',fd.get('productName')?`Diseño: ${fd.get('productName')}`:'',`Cantidad total: ${quantity}`,total?`Total estimado: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total.`:`La seña será del 50% del total confirmado.`),kind==='dtf'&&subtype==='sheet'?'La cantidad final de metros queda sujeta al acomodo de los diseños.':''].filter(Boolean).join('\n');
+      qs('#customOrderContent').innerHTML=`<div class="custom-order-result"><div class="eyebrow">Solicitud recibida</div><h2>Tu pedido quedó registrado</h2><div class="code">${escapeHtml(order.code)}</div><p>Guardamos los archivos originales. ${deposit?`Seña estimada: <strong>${money(deposit)}</strong>. El total se confirma antes de producir.`:''} Ahora podés enviarnos el resumen por WhatsApp para acordar los detalles finales.</p><a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${encodeURIComponent(whatsapp)}?text=${encodeURIComponent(summary)}">Continuar por WhatsApp</a><button class="btn btn-ghost" type="button" id="finishCustomOrderBtn">Cerrar</button></div>`;
     }catch(err){toast(err.message,'error');btn.disabled=false;btn.textContent='Enviar solicitud';}
   }
   document.addEventListener('click',e=>{
