@@ -61,3 +61,15 @@ tr.sorting{opacity:.55;outline:1px dashed var(--gold)}
 @media(max-width:480px){
   .custom-admin-grid{grid-template-columns:1fr}
 }
+
+/* ===== SALMOS v7 · panel más limpio / preparación interna ===== */
+.bulk-price-card.hidden{display:none!important}
+.compact-admin-note{font-size:11px;padding:9px 11px;margin:8px 0 12px}
+.internal-stock-note{display:block;color:var(--muted);font-size:9.5px;margin-top:3px;line-height:1.25}
+.internal-prep-box{padding:11px 12px;border:1px solid color-mix(in srgb,var(--gold) 20%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--surface) 94%,transparent)}
+.internal-prep-title{font-size:10.5px;font-weight:900;color:var(--gold-2);margin-bottom:8px}
+@media(max-width:760px){
+  .admin-section-head>.admin-actions{width:100%;justify-content:flex-start}
+  .bulk-price-card{padding:12px}
+  .internal-prep-box .toggle-row{display:grid;gap:7px}
+}

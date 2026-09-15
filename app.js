@@ -70,6 +70,9 @@
     coupon: null,
     order: null,
     flyers: [],
+    designCatalog: [],
+    designCatalogLoaded: false,
+    designCatalogPromise: null,
     shippingQueriesRemaining: null
   };
 
@@ -1463,6 +1466,77 @@
   const DTF_INDIVIDUAL_CONFIG_PESOS=4000;
   const DTF_SHEET_AREA_CM2=58*100;
 
+  async function loadSalmosDesignCatalog(){
+    if(state.designCatalogLoaded)return state.designCatalog;
+    if(state.designCatalogPromise)return state.designCatalogPromise;
+    state.designCatalogPromise=api('/api/designs').then(d=>{
+      state.designCatalog=Array.isArray(d?.items)?d.items:[];
+      state.designCatalogLoaded=true;
+      return state.designCatalog;
+    }).finally(()=>{state.designCatalogPromise=null});
+    return state.designCatalogPromise;
+  }
+  function selectedSalmosDesigns(form){
+    const ids=qsa('[name="selectedDesignIds"]:checked',form).map(x=>Number(x.value)).filter(Number.isInteger);
+    const byId=new Map(state.designCatalog.map(d=>[Number(d.id),d]));
+    return ids.map(id=>byId.get(id)||{id,name:`Diseño #${id}`}).filter(Boolean);
+  }
+  function updateDesignPickerCards(form){
+    qsa('.salmos-design-card',form).forEach(card=>card.classList.toggle('selected',Boolean(qs('input[type="checkbox"]',card)?.checked)));
+  }
+  function syncDtfRowsFromSelectedDesigns(form){
+    if(form.elements.kind?.value!=='dtf'||form.elements.designSource?.value!=='salmos')return;
+    const selected=selectedSalmosDesigns(form);if(!selected.length)return;
+    const list=qs('#customDtfDesignList',form);if(!list)return;
+    const designMode=form.elements.designMode?.value||'same';
+    if(designMode==='same_sizes'){
+      const name=selected[0].name;
+      const rows=qsa('[data-dtf-design-row]',list);
+      if(!rows.length)list.innerHTML=dtfDesignRow(0,{label:name});
+      qsa('[data-dtf-design-row]',list).forEach((row,i)=>{const input=qs('[data-dtf-label]',row);if(input)input.value=name;});
+      return;
+    }
+    const existing=new Map(collectDtfDesigns(form).map(d=>[String(d.label||'').trim(),d]));
+    const wanted=designMode==='same'?selected.slice(0,1):selected;
+    list.innerHTML=wanted.map((d,i)=>dtfDesignRow(i,{...(existing.get(d.name)||{}),label:d.name})).join('');
+  }
+  async function refreshSalmosDesignPicker(form){
+    const box=qs('#salmosDesignPicker',form);if(!box)return;
+    const source=form.elements.designSource?.value||'personalizado';
+    box.classList.toggle('hidden',source!=='salmos');
+    if(source!=='salmos')return;
+    const previous=new Set(qsa('[name="selectedDesignIds"]:checked',form).map(x=>Number(x.value)));
+    const initialId=Number(form.elements.productId?.value)||0;
+    box.innerHTML='<div class="salmos-design-loading">Cargando diseños SALMOS…</div>';
+    try{
+      const items=await loadSalmosDesignCatalog();
+      if(!items.length){box.innerHTML='<div class="notice">Todavía no hay diseños publicados para elegir.</div>';return;}
+      box.innerHTML=`<div class="salmos-design-picker-head"><strong>Elegí diseño SALMOS</strong><small>Podés marcar uno o varios.</small></div><div class="salmos-design-grid">${items.map(d=>{const checked=previous.has(Number(d.id))||(!previous.size&&initialId===Number(d.id));return `<label class="salmos-design-card ${checked?'selected':''}"><input type="checkbox" name="selectedDesignIds" value="${Number(d.id)}" ${checked?'checked':''}><span class="salmos-design-thumb">${d.primary_image_url?`<img src="${escapeHtml(d.primary_image_url)}" alt="${escapeHtml(d.name)}" loading="lazy">`:'<span>SALMOS</span>'}</span><span class="salmos-design-name">${escapeHtml(d.name)}</span></label>`}).join('')}</div>`;
+      if(form.elements.kind?.value==='dtf'&&['same','same_sizes'].includes(form.elements.designMode?.value||'same')){
+        const checked=qsa('[name="selectedDesignIds"]:checked',form);checked.slice(1).forEach(x=>x.checked=false);
+      }
+      updateDesignPickerCards(form);
+      syncDtfRowsFromSelectedDesigns(form);
+      if(form.elements.kind?.value==='dtf')updateDtfEstimate(form);
+    }catch(err){box.innerHTML=`<div class="notice">No pudimos cargar los diseños. ${escapeHtml(err.message||'')}</div>`;}
+  }
+  function bindDesignPicker(form){
+    if(form.dataset.designPickerBound==='1')return;form.dataset.designPickerBound='1';
+    form.addEventListener('change',e=>{
+      if(e.target.name==='designSource'){refreshSalmosDesignPicker(form);return;}
+      if(e.target.name==='designMode'){
+        if(['same','same_sizes'].includes(form.elements.designMode?.value||'same')){
+          const checked=qsa('[name="selectedDesignIds"]:checked',form);checked.slice(1).forEach(x=>x.checked=false);
+        }
+        updateDesignPickerCards(form);syncDtfRowsFromSelectedDesigns(form);updateDtfEstimate(form);return;
+      }
+      if(e.target.name==='selectedDesignIds'){
+        if(form.elements.kind?.value==='dtf'&&['same','same_sizes'].includes(form.elements.designMode?.value||'same')&&e.target.checked){qsa('[name="selectedDesignIds"]',form).forEach(x=>{if(x!==e.target)x.checked=false;});}
+        updateDesignPickerCards(form);syncDtfRowsFromSelectedDesigns(form);if(form.elements.kind?.value==='dtf')updateDtfEstimate(form);
+      }
+    });
+  }
+
   function customFileModeHint(kind,subtype,mode){
     if(kind!=='dtf')return 'Podés adjuntar imágenes o archivos de referencia. El original se guarda sin recomprimir.';
     if(subtype==='sheet'&&mode==='ready')return 'Plancha 58 × 100 cm: $12.000. Listo para imprimir admite únicamente PNG a 300 DPI, máximo 58 × 100 cm por archivo. Podés cargar varios.';
@@ -1534,7 +1608,9 @@
     const designMode=form.elements.designMode?.value||'same';
     const ref=designMode==='different'
       ? `Diseños diferentes: por superficie total el mínimo teórico es ${e.areaSheets} ${e.areaSheets===1?'plancha':'planchas'}; el acomodo real puede requerir más.`
-      : (standard?'Referencia: 30 × 30 cm ≈ 6 diseños por plancha por cálculo de superficie.':`Por superficie, ese tamaño da ≈ ${e.approxPerSheet} por plancha.`);
+      : designMode==='same_sizes'
+        ? `Mismo diseño en diferentes medidas: por superficie total el mínimo teórico es ${e.areaSheets} ${e.areaSheets===1?'plancha':'planchas'}; el acomodo real puede requerir más.`
+        : (standard?'Referencia: 30 × 30 cm ≈ 6 diseños por plancha por cálculo de superficie.':`Por superficie, ese tamaño da ≈ ${e.approxPerSheet} por plancha.`);
     const warning=e.areaSheets>e.requestedSheets?` <span class="custom-dtf-warning">Elegiste ${e.requestedSheets} m/planchas, pero por superficie estimamos al menos ${e.areaSheets}.</span>`:'';
     box.innerHTML=`<strong>Estimación:</strong> ${e.estimatedSheets} ${e.estimatedSheets===1?'plancha / metro':'planchas / metros'} × $${e.unitPesos.toLocaleString('es-AR')} = <span class="custom-dtf-price">$${e.totalPesos.toLocaleString('es-AR')}</span>. Seña estimada 50%: $${Math.round(e.totalPesos/2).toLocaleString('es-AR')}. ${ref}${warning}<br><small>La cantidad final de metros queda sujeta al acomodo real de los diseños y se confirma personalmente antes de producir.</small>`;
   }
@@ -1548,6 +1624,7 @@
         <div class="field"><label>Terminación</label><select class="select" name="finish"><option value="estampada">Estampada</option><option value="lisa">Lisa</option></select></div>
         <div class="field"><label>Diseño</label><select class="select" name="designSource"><option value="salmos" ${productName?'selected':''}>Diseño SALMOS</option><option value="personalizado">Diseño personalizado</option></select></div>
         <div class="field"><label>Cantidad</label><input class="input" type="number" name="quantity" min="1" value="1"></div>
+        <div class="field full salmos-design-picker hidden" id="salmosDesignPicker"></div>
         <div class="field full"><label>Archivos / referencias</label><input class="input" id="customOrderFiles" name="files" type="file" multiple accept="image/*,application/pdf,.psd,.ai,.eps,.svg"><div class="custom-file-hint" id="customFileHint">Podés adjuntar referencias. Guardamos el original sin recomprimir.</div></div>`;
       return;
     }
@@ -1556,7 +1633,8 @@
       <div class="field"><label>Modalidad</label><select class="select" name="subtype"><option value="sheet">Por plancha / metro (58 × 100 cm)</option><option value="individual">Diseño individual</option></select></div>
       <div class="field"><label>Preparación del archivo</label><select class="select" name="fileMode"><option value="ready">Listo para imprimir</option><option value="configure">A configurar</option></select></div>
       <div class="field"><label>Origen del diseño</label><select class="select" name="designSource"><option value="salmos">Diseño SALMOS</option><option value="personalizado" selected>Diseño personalizado</option></select></div>
-      <div class="field"><label>Diseños</label><select class="select" name="designMode"><option value="same">Mismo diseño</option><option value="different">Diseños diferentes</option></select></div>
+      <div class="field"><label>Diseños</label><select class="select" name="designMode"><option value="same">Mismo diseño · misma medida</option><option value="same_sizes">Mismo diseño · diferentes medidas</option><option value="different">Diseños diferentes</option></select></div>
+      <div class="field full salmos-design-picker hidden" id="salmosDesignPicker"></div>
       <div class="field" data-sheet-request-field><label>Metros / planchas solicitadas</label><input class="input" type="number" name="requestedSheets" min="1" step="1" value="1"><div class="custom-file-hint">1 plancha = 58 × 100 cm = 1 metro.</div></div>
       <div class="custom-dtf-builder">
         <div class="custom-dtf-builder-head"><strong>Tamaño y cantidad de cada diseño</strong><button class="btn btn-ghost hidden" type="button" id="addDtfDesignBtn">+ Agregar diseño</button></div>
@@ -1570,9 +1648,16 @@
     const sync=()=>{
       const subtype=form.elements.subtype?.value||'sheet',mode=form.elements.fileMode?.value||'ready',designMode=form.elements.designMode?.value||'same';
       const sheetField=qs('[data-sheet-request-field]',form);if(sheetField)sheetField.classList.toggle('hidden',subtype!=='sheet');
-      const add=qs('#addDtfDesignBtn',form);if(add)add.classList.toggle('hidden',designMode!=='different');
+      const designSource=form.elements.designSource?.value||'personalizado';
+      const add=qs('#addDtfDesignBtn',form);
+      if(add){
+        add.textContent=designMode==='same_sizes'?'+ Agregar medida':'+ Agregar diseño';
+        add.classList.toggle('hidden',designMode==='same'||(designMode==='different'&&designSource==='salmos'));
+      }
       const rows=qsa('[data-dtf-design-row]',form);if(designMode==='same'&&rows.length>1)rows.slice(1).forEach(r=>r.remove());
-      qsa('[data-remove-dtf-design]',form).forEach((b,i)=>b.classList.toggle('hidden',designMode==='same'||i===0&&qsa('[data-dtf-design-row]',form).length===1));
+      if(designSource==='salmos')syncDtfRowsFromSelectedDesigns(form);
+      const currentRows=qsa('[data-dtf-design-row]',form);
+      qsa('[data-remove-dtf-design]',form).forEach((b,i)=>b.classList.toggle('hidden',designMode==='same'||(i===0&&currentRows.length===1)));
       const hint=qs('#customFileHint',form);if(hint)hint.textContent=customFileModeHint('dtf',subtype,mode);
       updateDtfEstimate(form);
     };
@@ -1584,7 +1669,7 @@
         if(checks)checks.innerHTML=res.map(x=>`<div class="custom-file-check ${x.ok?'ok':'bad'}">${escapeHtml(x.ok?'✓ '+x.text:'✕ '+x.text)}</div>`).join('');
       }
     });
-    qs('#addDtfDesignBtn',form)?.addEventListener('click',()=>{const list=qs('#customDtfDesignList',form);if(!list)return;list.insertAdjacentHTML('beforeend',dtfDesignRow(qsa('[data-dtf-design-row]',form).length));sync();});
+    qs('#addDtfDesignBtn',form)?.addEventListener('click',()=>{const list=qs('#customDtfDesignList',form);if(!list)return;const mode=form.elements.designMode?.value||'same';const selected=selectedSalmosDesigns(form);const label=mode==='same_sizes'&&form.elements.designSource?.value==='salmos'&&selected[0]?selected[0].name:'';list.insertAdjacentHTML('beforeend',dtfDesignRow(qsa('[data-dtf-design-row]',form).length,{label}));sync();});
     qs('#customDtfDesignList',form)?.addEventListener('click',e=>{const b=e.target.closest('[data-remove-dtf-design]');if(!b)return;b.closest('[data-dtf-design-row]')?.remove();sync();});
     sync();
   }
@@ -1592,6 +1677,7 @@
     form.elements.kind.value=kind;
     qsa('[data-custom-type]',form).forEach(b=>b.classList.toggle('active',b.dataset.customType===kind));
     renderCustomDynamicFields(form,kind,product);
+    refreshSalmosDesignPicker(form);
   }
   function openCustomOrder(kind='choose',product=null){
     const host=qs('#customOrderContent');if(!host)return;openModal('#customOrderModal');
@@ -1614,6 +1700,7 @@
         <button class="btn btn-primary full" type="submit" id="submitCustomOrderBtn">Enviar solicitud</button>
       </form>`;
     const form=qs('#customOrderForm',host);
+    bindDesignPicker(form);
     qsa('[data-custom-type]',form).forEach(b=>b.addEventListener('click',()=>setCustomKind(form,b.dataset.customType,product)));
     setCustomKind(form,initialKind,product);
     form.addEventListener('submit',submitCustomOrder);
@@ -1624,21 +1711,29 @@
       btn.disabled=true;btn.textContent='Preparando pedido...';
       if(kind==='dtf'&&fileMode==='ready'&&files.length){const res=await validateReadyDtfFiles(files,subtype);const bad=res.find(x=>!x.ok);if(bad)throw new Error(`Revisá el archivo: ${bad.text}`);}
       const notes=[fd.get('finish')?`Terminación: ${fd.get('finish')}`:'',fd.get('notes')||''].filter(Boolean).join('\n');
+      const designSource=fd.get('designSource')||'personalizado';
+      const selectedDesigns=designSource==='salmos'?selectedSalmosDesigns(form):[];
+      if(designSource==='salmos'&&!selectedDesigns.length)throw new Error('Elegí al menos un diseño SALMOS.');
+      if(kind==='dtf'&&['same','same_sizes'].includes(fd.get('designMode')||'same')&&selectedDesigns.length>1)throw new Error('Para “Mismo diseño” elegí un solo diseño SALMOS.');
       let designs=[],requestedSheets=0,estimated=null,quantity=Number(fd.get('quantity'))||1;
       if(kind==='dtf'){
+        syncDtfRowsFromSelectedDesigns(form);
         estimated=dtfEstimate(form);designs=estimated.designs;quantity=estimated.totalQty;requestedSheets=estimated.requestedSheets;
       }
-      const payload={customerName:fd.get('customerName'),customerPhone:fd.get('customerPhone'),customerEmail:fd.get('customerEmail'),kind,subtype,productId:fd.get('productId'),productName:fd.get('productName'),designSource:fd.get('designSource')||'personalizado',fileMode,designMode:fd.get('designMode')||'',quantity,requestedSheets,sheets:requestedSheets,designs,notes};
+      const firstSelected=selectedDesigns[0]||null;
+      const selectedNames=selectedDesigns.map(d=>d.name).join(' · ');
+      const payload={customerName:fd.get('customerName'),customerPhone:fd.get('customerPhone'),customerEmail:fd.get('customerEmail'),kind,subtype,productId:firstSelected?.id||fd.get('productId'),productName:selectedNames||fd.get('productName'),designSource,fileMode,designMode:fd.get('designMode')||'',quantity,requestedSheets,sheets:requestedSheets,designs,selectedDesigns:selectedDesigns.map(d=>({id:d.id})),notes};
       const created=await api('/api/custom-orders',{method:'POST',body:JSON.stringify(payload)});const order=created.item;
       if(files.length){btn.textContent='Subiendo archivos originales...';const up=new FormData();up.append('uploadToken',order.uploadToken);files.forEach(f=>up.append('files',f));await api(`/api/custom-orders/${order.id}/files`,{method:'POST',body:up});}
       const known=Number(order.knownExtraCents)||0,total=Number(order.quotedTotalCents)||0,deposit=Number(order.depositCents)||0,whatsapp=state.config?.whatsapp||'5491162691341';
       const dtfDetail=kind==='dtf'?[
         `DTF: ${subtype==='sheet'?'por plancha/metro 58x100':'individual'} · ${fileMode==='ready'?'listo para imprimir':'a configurar'}`,
-        `Diseños: ${(fd.get('designMode')||'same')==='different'?'diferentes':'mismo diseño'}`,
+        `Diseños: ${(fd.get('designMode')||'same')==='different'?'diferentes':(fd.get('designMode')||'same')==='same_sizes'?'mismo diseño en diferentes medidas':'mismo diseño'}`,
         designs.map(d=>`${d.label}: ${d.widthCm}×${d.heightCm} cm × ${d.quantity}`).join(' | '),
         subtype==='sheet'?`Metros solicitados: ${requestedSheets} · estimados: ${Number(order.estimatedSheets)||estimated?.estimatedSheets||requestedSheets}`:''
       ].filter(Boolean):[];
-      const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,...dtfDetail,kind==='clothing'?`Ropa: ${subtype}`:'',fd.get('productName')?`Diseño: ${fd.get('productName')}`:'',`Cantidad total: ${quantity}`,total?`Total estimado: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total.`:`La seña será del 50% del total confirmado.`),kind==='dtf'&&subtype==='sheet'?'La cantidad final de metros queda sujeta al acomodo de los diseños.':''].filter(Boolean).join('\n');
+      const selectedSummary=selectedDesigns.length?`Diseño(s) SALMOS: ${selectedDesigns.map(d=>d.name).join(' · ')}`:(fd.get('productName')?`Diseño: ${fd.get('productName')}`:'');
+      const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,...dtfDetail,kind==='clothing'?`Ropa: ${subtype}`:'',selectedSummary,`Cantidad total: ${quantity}`,total?`Total estimado: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total.`:`La seña será del 50% del total confirmado.`),kind==='dtf'&&subtype==='sheet'?'La cantidad final de metros queda sujeta al acomodo de los diseños.':''].filter(Boolean).join('\n');
       qs('#customOrderContent').innerHTML=`<div class="custom-order-result"><div class="eyebrow">Solicitud recibida</div><h2>Tu pedido quedó registrado</h2><div class="code">${escapeHtml(order.code)}</div><p>Guardamos los archivos originales. ${deposit?`Seña estimada: <strong>${money(deposit)}</strong>. El total se confirma antes de producir.`:''} Ahora podés enviarnos el resumen por WhatsApp para acordar los detalles finales.</p><a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${encodeURIComponent(whatsapp)}?text=${encodeURIComponent(summary)}">Continuar por WhatsApp</a><button class="btn btn-ghost" type="button" id="finishCustomOrderBtn">Cerrar</button></div>`;
     }catch(err){toast(err.message,'error');btn.disabled=false;btn.textContent='Enviar solicitud';}
   }

@@ -1112,8 +1112,6 @@ img { display: block; max-width: 100%; }
 .made-order-request:hover,.made-order-request:focus-visible{color:#fff0b5}
 .order-product-grid:empty{display:none}
 .order-product-grid:not(:empty){margin-top:10px}
-.product-card.order-mode .product-media::after{content:"POR PEDIDO";position:absolute;left:10px;bottom:10px;background:#080808;color:#f0bd39;border:1px solid rgba(240,189,57,.55);font-size:10px;font-weight:900;letter-spacing:.08em;padding:6px 8px;border-radius:999px}
-.product-card.order-mode .price::after{content:" · seña 50%";font-size:10px;color:var(--muted);font-weight:600}
 .custom-order-modal{width:min(760px,calc(100vw - 20px));max-height:min(88vh,900px);overflow:auto}
 .custom-order-shell{position:relative;padding:26px}
 .custom-order-close{position:absolute;right:14px;top:14px;z-index:2}
@@ -1198,4 +1196,27 @@ img { display: block; max-width: 100%; }
   .custom-dtf-design-row{grid-template-columns:1fr 1fr}
   .custom-dtf-design-row .design-label-field{grid-column:1/-1}
   .custom-dtf-design-row .custom-dtf-remove{grid-column:2;justify-self:end}
+}
+
+
+/* ===== SALMOS v7 · afinado visual + selector de diseños ===== */
+.made-order-section{padding-top:7px;margin-top:6px}
+.made-order-compact-head h2{font-size:12px;letter-spacing:.07em}
+.made-order-categories{font-size:10.8px;color:var(--muted)}
+.made-order-note{font-size:9.5px;margin:2px 0 7px;max-width:920px}
+.made-order-request{font-size:10px;text-decoration-thickness:1px}
+.salmos-design-picker{grid-column:1/-1;border:1px solid color-mix(in srgb,var(--gold) 20%,var(--line));border-radius:14px;padding:10px;background:color-mix(in srgb,var(--surface) 94%,transparent)}
+.salmos-design-picker-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.salmos-design-picker-head strong{font-size:12px;color:var(--gold-2)}
+.salmos-design-picker-head small,.salmos-design-loading{font-size:10.5px;color:var(--muted)}
+.salmos-design-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:7px;max-height:300px;overflow:auto;padding:1px}
+.salmos-design-card{position:relative;display:grid;gap:5px;padding:6px;border:1px solid var(--line);border-radius:11px;background:var(--surface);cursor:pointer;transition:.15s ease;min-width:0}
+.salmos-design-card input{position:absolute;top:6px;right:6px;width:17px;height:17px;accent-color:var(--gold)}
+.salmos-design-card.selected{border-color:var(--gold);box-shadow:0 0 0 2px rgba(217,167,45,.09);background:color-mix(in srgb,var(--gold) 6%,var(--surface))}
+.salmos-design-thumb{aspect-ratio:1/1;display:grid;place-items:center;border-radius:8px;overflow:hidden;background:#0b0b0c;color:var(--gold-2);font-size:9px;font-weight:900}
+.salmos-design-thumb img{width:100%;height:100%;object-fit:cover}
+.salmos-design-name{font-size:9.5px;line-height:1.2;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:520px){
+  .salmos-design-grid{grid-template-columns:repeat(3,minmax(0,1fr));max-height:260px}
+  .salmos-design-picker-head{display:block}.salmos-design-picker-head small{display:block;margin-top:2px}
 }

@@ -96,7 +96,7 @@
         <img src="banner-salmos-header.png" alt="SALMOS · creer · amar · crear">
       </section>
 
-      <section class="section products-section" id="productos">
+      <section class="section products-section hidden" id="productos">
         <div class="products-meta-hidden" aria-hidden="true">
           <h2 id="productsTitle">Productos</h2>
           <p id="productsSubtitle"></p>
@@ -169,7 +169,7 @@
   <script src="config.js"></script>
   <script src="app.js" defer></script>
   <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=7',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
 </body>
 </html>
