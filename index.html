@@ -28,6 +28,8 @@
 
   <title>SALMOS — Tienda</title>
   <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -60,6 +62,9 @@
           <button class="icon-btn" id="themeBtn" aria-label="Cambiar modo claro u oscuro" title="Modo claro / oscuro">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
           </button>
+          <button class="icon-btn hidden" id="pwaInstallBtn" aria-label="Instalar SALMOS" title="Instalar SALMOS">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          </button>
         </div>
       </div>
 
@@ -76,6 +81,18 @@
     </div>
   </header>
 
+  <div class="salmos-info-bar" aria-label="Información rápida de SALMOS">
+    <div class="shell salmos-info-shell">
+      <span class="salmos-info-dot" aria-hidden="true">◆</span>
+      <div class="salmos-info-rotator" id="salmosInfoRotator">
+        <span class="salmos-info-message active">Envíos a todo el país · Motomensajería en zonas seleccionadas</span>
+        <span class="salmos-info-message">Pagá de forma segura con Mercado Pago</span>
+        <span class="salmos-info-message">Ropa y DTF por pedido · Producción estimada de 24 a 72 hs</span>
+        <span class="salmos-info-message">Personalizados con archivos originales, sin perder calidad</span>
+      </div>
+    </div>
+  </div>
+
   <main>
     <div class="shell">
       <section class="hero hero-compact" aria-label="SALMOS">
@@ -89,6 +106,29 @@
           <button id="clearFiltersBtn" class="hidden" type="button">Limpiar</button>
         </div>
         <div class="product-grid" id="productGrid"></div>
+      </section>
+
+      <section class="section made-order-section" id="porPedido">
+        <div class="made-order-divider"><span></span><h2>Por Pedido</h2><span></span></div>
+        <p class="made-order-note">Ropa y DTF preparados especialmente para vos. Tiempo estimado: 24 a 72 hs, sujeto a cantidad y disponibilidad. La seña es del 50% una vez confirmado el total.</p>
+        <div class="product-grid order-product-grid" id="orderProductGrid"></div>
+        <div class="made-order-services">
+          <button class="made-order-service" type="button" data-custom-kind="clothing">
+            <strong>Ropa por pedido</strong>
+            <span>Remera clásica · Oversize · Crop over · Chomba clásica</span>
+            <small>Lisa o estampada · Diseño SALMOS o personalizado</small>
+          </button>
+          <button class="made-order-service" type="button" data-custom-kind="dtf">
+            <strong>DTF</strong>
+            <span>Por plancha o por unidad</span>
+            <small>Listo para imprimir o a configurar</small>
+          </button>
+          <button class="made-order-service custom-highlight" type="button" data-custom-kind="choose">
+            <strong>Solicitar personalizado</strong>
+            <span>Subí tus archivos directamente desde la web</span>
+            <small>Guardamos el original sin recomprimirlo</small>
+          </button>
+        </div>
       </section>
 
       <section class="section hidden" id="featuredSection" aria-hidden="true"><div id="featuredGrid"></div></section>
@@ -131,11 +171,21 @@
     </div>
   </section>
 
+  <section class="modal custom-order-modal" id="customOrderModal" aria-label="Pedido personalizado">
+    <div class="custom-order-shell">
+      <button class="icon-btn custom-order-close" id="closeCustomOrderBtn" aria-label="Cerrar">×</button>
+      <div id="customOrderContent"></div>
+    </div>
+  </section>
+
   <button id="footerCartBtn" class="hidden" type="button" aria-hidden="true"></button>
   <span id="year" class="hidden" aria-hidden="true"></span>
   <div class="toast-stack" id="toastStack"></div>
 
   <script src="config.js"></script>
   <script src="app.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
+  </script>
 </body>
 </html>

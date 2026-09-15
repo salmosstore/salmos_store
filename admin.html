@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#0b0b0c">
   <title>SALMOS — Administración</title>
   <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="admin.css">
   <link rel="stylesheet" href="admin-v4.css">
@@ -18,10 +20,11 @@
         <button class="admin-nav-btn active" data-view="dashboard">⌂ <span>Dashboard</span></button>
         <button class="admin-nav-btn" data-view="products">◫ <span>Productos</span></button>
         <button class="admin-nav-btn" data-view="orders">▤ <span>Pedidos</span></button>
+        <button class="admin-nav-btn" data-view="customOrders">✦ <span>Por Pedido</span></button>
         <button class="admin-nav-btn" data-view="stock">◈ <span>Stock</span></button>
         <button class="admin-nav-btn" data-view="coupons">🎟 <span>Cupones</span></button>
         <button class="admin-nav-btn" data-view="categories">▦ <span>Categorías</span></button>
-        <button class="admin-nav-btn" data-view="expenses">− <span>Gastos</span></button>
+        <button class="admin-nav-btn" data-view="expenses">↕ <span>Caja</span></button>
         <button class="admin-nav-btn" data-view="flyers">▣ <span>Flyers</span></button>
         <button class="admin-nav-btn" data-view="settings">⚙ <span>Configuración</span></button>
       </nav>
@@ -48,12 +51,13 @@
 
   <dialog class="admin-dialog small" id="movementDialog">
     <form method="dialog" class="dialog-shell" id="movementForm">
-      <div class="dialog-head"><div><div class="admin-eyebrow">Caja</div><h2 id="movementDialogTitle">Nuevo gasto / ingreso</h2></div><button class="icon-btn" value="cancel" formnovalidate>×</button></div>
+      <div class="dialog-head"><div><div class="admin-eyebrow">Caja</div><h2 id="movementDialogTitle">Nuevo ingreso / egreso</h2></div><button class="icon-btn" value="cancel" formnovalidate>×</button></div>
       <div class="dialog-body">
         <div class="form-grid">
-          <div class="field"><label>Tipo</label><select class="select" name="type"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></div>
+          <div class="field"><label>Tipo</label><select class="select" name="type"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
-          <div class="field full"><label>Motivo</label><input class="input" name="description" placeholder="Ej.: publicidad, compra de bolsas, ingreso extra..." required></div>
+          <div class="field"><label>Motivo / etiqueta</label><input class="input" name="category" list="financeReasonTags" placeholder="Ej.: Venta, Compra, Aporte, Gasto" required><datalist id="financeReasonTags"><option value="Venta"><option value="Compra"><option value="Aporte"><option value="Gasto"></datalist></div>
+          <div class="field full"><label>Detalle</label><input class="input" name="description" placeholder="Ej.: 8 remeras para..., compra de bolsas..." required></div>
           <div class="field"><label>Origen</label><input class="input" name="origin" placeholder="Ej.: Caja SALMOS, Mercado Pago"></div>
           <div class="field"><label>Destino</label><input class="input" name="destination" placeholder="Ej.: Proveedor, imprenta"></div>
           <div class="field"><label>Importe</label><input class="input" name="amount" type="number" min="0" step="1" required></div>
@@ -67,5 +71,6 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="admin.js" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));</script>
 </body>
 </html>

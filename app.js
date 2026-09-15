@@ -578,7 +578,7 @@
       ? `<img loading="lazy" src="${escapeHtml(p.primary_image_url)}" alt="${escapeHtml(p.name)}">`
       : `<div class="product-placeholder">SALMOS</div>`;
     const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : ''].join('');
-    return `<article class="product-card" data-product-id="${p.id}">
+    return `<article class="product-card ${p.sale_mode==='order'?'order-mode':''}" data-product-id="${p.id}" data-sale-mode="${escapeHtml(p.sale_mode||'stock')}">
       <div class="product-media">${image}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
@@ -589,13 +589,16 @@
 
   function renderProducts() {
     const items = filteredProducts();
+    const stockItems=items.filter(p=>p.sale_mode!=='order');
+    const orderItems=items.filter(p=>p.sale_mode==='order');
     const title = state.activeCategory === 'all' ? 'Productos' : (state.categories.find(c => c.slug === state.activeCategory)?.name || 'Productos');
     const t=qs('#productsTitle'),sub=qs('#productsSubtitle'),clear=qs('#clearFiltersBtn');
     if(t)t.textContent = state.query ? `Resultados para “${state.query}”` : title;
     if(sub)sub.textContent = items.length ? `${items.length} ${items.length === 1 ? 'producto' : 'productos'}` : 'No encontramos productos con ese filtro.';
     if(clear)clear.classList.toggle('hidden', state.activeCategory === 'all' && !state.query);
-    const grid=qs('#productGrid');if(!grid)return;
-    grid.innerHTML = items.length ? items.map(productCard).join('') : `<div class="empty-state" style="grid-column:1/-1"><strong>No hay productos para mostrar.</strong>Probá otra búsqueda.</div>`;
+    const grid=qs('#productGrid'),orderGrid=qs('#orderProductGrid');
+    if(grid)grid.innerHTML = stockItems.length ? stockItems.map(productCard).join('') : (orderItems.length?'':`<div class="empty-state" style="grid-column:1/-1"><strong>No hay productos para mostrar.</strong>Probá otra búsqueda.</div>`);
+    if(orderGrid)orderGrid.innerHTML=orderItems.map(productCard).join('');
   }
 
   function renderFeatured() {
@@ -1369,7 +1372,7 @@
     qs('#accountBackdrop')?.addEventListener('click',closeAccount);
     qs('#cartBtn')?.addEventListener('click', openCart); qs('#footerCartBtn')?.addEventListener('click', openCart);
     qs('#closeCartBtn').addEventListener('click', closeCart); qs('#drawerBackdrop').addEventListener('click', closeCart);
-    qs('#modalBackdrop').addEventListener('click', () => { closeModal('#productModal'); closeModal('#checkoutModal'); });
+    qs('#modalBackdrop').addEventListener('click', () => { closeModal('#productModal'); closeModal('#checkoutModal'); closeModal('#customOrderModal'); });
     qs('#closeCheckoutBtn').addEventListener('click', () => closeModal('#checkoutModal'));
     qs('#checkoutBtn').addEventListener('click', startCheckout);
     qs('#footerShippingQuoteBtn')?.addEventListener('click', startShippingQuote);
@@ -1405,7 +1408,7 @@
       if(e.target.closest('[data-close-image-viewer]') || (e.target.id==='productImageViewer' && e.target.classList.contains('open'))){closeProductImageViewer();return;}
       const detailImage=e.target.closest('.detail-main-image');if(detailImage){openProductImageViewer(detailImage.currentSrc||detailImage.src,detailImage.alt||state.selectedProduct?.name||'SALMOS');return;}
       if(e.target.closest('[data-share-product]')){await shareSelectedProduct();return;}
-      const card=e.target.closest('.product-card'); if(card){ openProduct(Number(card.dataset.productId)); return; }
+      const card=e.target.closest('.product-card'); if(card){ if(card.dataset.saleMode==='order'){const p=state.products.find(x=>Number(x.id)===Number(card.dataset.productId));openCustomOrder('clothing',p||null);return;} openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }
       const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=v?.id||null; renderProductModal(); return; }
@@ -1434,8 +1437,94 @@
     });
   }
 
+
+  let deferredInstallPrompt=null;
+  function initInfoRotator(){
+    const msgs=qsa('.salmos-info-message');if(msgs.length<2)return;let i=0;
+    setInterval(()=>{msgs[i]?.classList.remove('active');i=(i+1)%msgs.length;msgs[i]?.classList.add('active')},4200);
+  }
+  function initPwaInstall(){
+    window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;qs('#pwaInstallBtn')?.classList.remove('hidden')});
+    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;qs('#pwaInstallBtn')?.classList.add('hidden');toast('SALMOS quedó instalada','success')});
+    qs('#pwaInstallBtn')?.addEventListener('click',async()=>{if(!deferredInstallPrompt){toast('Usá la opción “Instalar aplicación” de tu navegador.');return;}deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;qs('#pwaInstallBtn')?.classList.add('hidden')});
+  }
+  function customFileModeHint(kind,subtype,mode){
+    if(kind!=='dtf')return 'Podés adjuntar imágenes o archivos de referencia. El original se guarda sin recomprimir.';
+    if(subtype==='sheet'&&mode==='ready')return 'Listo para imprimir: únicamente PNG a 300 DPI, máximo 58 cm de ancho × 100 cm de largo por archivo. Podés cargar varios.';
+    if(subtype==='sheet'&&mode==='configure')return 'A configurar: subí el diseño como lo tengas. Preparación: +$3.000 por cada plancha de 58 × 100 cm.';
+    if(subtype==='individual'&&mode==='ready')return 'Diseño individual listo para imprimir: $3.000 por unidad. PNG a 300 DPI.';
+    if(subtype==='individual'&&mode==='configure')return 'Diseño individual a configurar: $4.000 por unidad.';
+    return 'Elegí las opciones para ver las condiciones.';
+  }
+  async function readPngInfo(file){
+    const buf=await file.arrayBuffer(),v=new DataView(buf);
+    const sig=[137,80,78,71,13,10,26,10];for(let i=0;i<8;i++)if(v.getUint8(i)!==sig[i])throw new Error('No es un PNG válido.');
+    const width=v.getUint32(16),height=v.getUint32(20);let dpi=null,off=8;
+    while(off+12<=buf.byteLength){const len=v.getUint32(off),type=String.fromCharCode(v.getUint8(off+4),v.getUint8(off+5),v.getUint8(off+6),v.getUint8(off+7));if(type==='pHYs'&&len>=9){const x=v.getUint32(off+8),unit=v.getUint8(off+16);if(unit===1)dpi=x*0.0254;break;}off+=12+len;}
+    return {width,height,dpi};
+  }
+  async function validateReadyDtfFiles(files,subtype){
+    const results=[];for(const f of files){
+      try{
+        if(f.type!=='image/png'&&!/\.png$/i.test(f.name))throw new Error('Debe ser PNG');
+        const inf=await readPngInfo(f);
+        if(!inf.dpi||Math.abs(inf.dpi-300)>6)throw new Error(inf.dpi?`DPI detectados: ${Math.round(inf.dpi)} (se requieren 300)`:'El PNG no informa 300 DPI');
+        if(subtype==='sheet'&&(inf.width>6851||inf.height>11811))throw new Error(`Supera 58 × 100 cm a 300 DPI (${inf.width}×${inf.height}px)`);
+        results.push({file:f,ok:true,text:`${f.name}: ${inf.width}×${inf.height}px · ${Math.round(inf.dpi)} DPI`});
+      }catch(e){results.push({file:f,ok:false,text:`${f.name}: ${e.message}`});}
+    }return results;
+  }
+  function closeCustomOrder(){closeModal('#customOrderModal');}
+  function openCustomOrder(kind='choose',product=null){
+    const host=qs('#customOrderContent');if(!host)return;openModal('#customOrderModal');
+    if(kind==='choose'){host.innerHTML=`<div class="custom-order-head"><div class="eyebrow">SALMOS · Por Pedido</div><h2>¿Qué querés solicitar?</h2><p>Elegí una opción. El pedido queda registrado y te enviamos el resumen por WhatsApp.</p></div><div class="custom-kind-grid"><button class="custom-kind-card" data-custom-kind="clothing"><strong>Ropa</strong><span>Clásica, oversize, crop over o chomba.</span></button><button class="custom-kind-card" data-custom-kind="dtf"><strong>DTF</strong><span>Por plancha o diseño individual.</span></button></div>`;return;}
+    const isDtf=kind==='dtf';const productName=product?.name||'';
+    host.innerHTML=`<div class="custom-order-head"><div class="eyebrow">SALMOS · ${isDtf?'DTF':'Ropa por pedido'}</div><h2>${productName?escapeHtml(productName):isDtf?'Solicitar DTF':'Solicitar ropa'}</h2><p>Producción estimada: 24 a 72 hs, sujeta a cantidad y disponibilidad. La seña es del 50% cuando queda confirmado el total.</p></div>
+      <form class="custom-order-form" id="customOrderForm">
+        <input type="hidden" name="kind" value="${isDtf?'dtf':'clothing'}"><input type="hidden" name="productId" value="${product?.id||''}"><input type="hidden" name="productName" value="${escapeHtml(productName)}">
+        <div class="form-grid">
+          <div class="field"><label>Nombre y apellido</label><input class="input" name="customerName" required value="${escapeHtml(state.customer?.name||'')}"></div>
+          <div class="field"><label>WhatsApp</label><input class="input" name="customerPhone" required value="${escapeHtml(state.customer?.phone||'')}"></div>
+          <div class="field full"><label>Email (opcional)</label><input class="input" type="email" name="customerEmail" value="${escapeHtml(state.auth.user?.email||state.customer?.email||'')}"></div>
+          ${isDtf?`<div class="field"><label>Modalidad</label><select class="select" name="subtype"><option value="sheet">Plancha 58 × 100 cm</option><option value="individual">Diseño individual</option></select></div>
+          <div class="field"><label>Archivo</label><select class="select" name="fileMode"><option value="ready">Listo para imprimir</option><option value="configure">A configurar</option></select></div>
+          <div class="field"><label>Cantidad de diseños / unidades</label><input class="input" type="number" name="quantity" min="1" value="1"></div><div class="field"><label>Planchas (si corresponde)</label><input class="input" type="number" name="sheets" min="1" value="1"></div>`:
+          `<div class="field"><label>Prenda</label><select class="select" name="subtype"><option value="clasica">Remera corte clásico</option><option value="oversize">Remera oversize</option><option value="crop-over">Remera crop over</option><option value="chomba">Chomba clásica</option></select></div>
+          <div class="field"><label>Terminación</label><select class="select" name="finish"><option value="estampada">Estampada</option><option value="lisa">Lisa</option></select></div>
+          <div class="field"><label>Diseño</label><select class="select" name="designSource"><option value="salmos">Diseño SALMOS</option><option value="personalizado">Diseño personalizado</option></select></div>
+          <div class="field"><label>Cantidad</label><input class="input" type="number" name="quantity" min="1" value="1"></div>`}
+          ${isDtf?`<div class="field full"><label>Diseño</label><select class="select" name="designSource"><option value="salmos">Diseño SALMOS</option><option value="personalizado">Diseño personalizado</option></select></div>`:''}
+          <div class="field full"><label>Archivos</label><input class="input" id="customOrderFiles" name="files" type="file" ${isDtf?'multiple':''} accept="${isDtf?'image/png,image/*,application/pdf,.psd,.ai,.eps,.svg,.tif,.tiff':'image/*,application/pdf,.psd,.ai,.eps,.svg'}"><div class="custom-file-hint" id="customFileHint"></div><div class="custom-file-checks" id="customFileChecks"></div></div>
+          <div class="field full"><label>Aclaraciones</label><textarea class="textarea" name="notes" rows="4" placeholder="Talles, colores, ubicación de estampa, medidas, observaciones..."></textarea></div>
+        </div>
+        <div class="order-conditions"><strong>Condiciones:</strong> el pedido se prepara entre 24 y 72 hs según cantidad y disponibilidad. Una vez confirmado el total, la seña para iniciar es del 50%. Los archivos originales se conservan sin recomprimir.</div>
+        <button class="btn btn-primary full" type="submit" id="submitCustomOrderBtn">Enviar solicitud</button>
+      </form>`;
+    const form=qs('#customOrderForm',host);const updateHint=()=>{const fd=new FormData(form),hint=qs('#customFileHint',form);if(hint)hint.textContent=customFileModeHint(kind,fd.get('subtype'),fd.get('fileMode'));};
+    form.addEventListener('change',async e=>{updateHint();if(e.target.id==='customOrderFiles'&&kind==='dtf'&&form.elements.fileMode.value==='ready'){const checks=qs('#customFileChecks',form),res=await validateReadyDtfFiles([...e.target.files],form.elements.subtype.value);checks.innerHTML=res.map(x=>`<div class="custom-file-check ${x.ok?'ok':'bad'}">${escapeHtml(x.ok?'✓ '+x.text:'✕ '+x.text)}</div>`).join('');}});
+    form.addEventListener('submit',submitCustomOrder);updateHint();
+  }
+  async function submitCustomOrder(e){
+    e.preventDefault();const form=e.currentTarget,btn=qs('#submitCustomOrderBtn',form),fd=new FormData(form),kind=fd.get('kind'),subtype=fd.get('subtype'),fileMode=fd.get('fileMode')||'',files=[...(form.elements.files?.files||[])];
+    try{
+      btn.disabled=true;btn.textContent='Preparando pedido...';
+      if(kind==='dtf'&&fileMode==='ready'&&files.length){const res=await validateReadyDtfFiles(files,subtype);const bad=res.find(x=>!x.ok);if(bad)throw new Error(`Revisá el archivo: ${bad.text}`);}
+      const notes=[fd.get('finish')?`Terminación: ${fd.get('finish')}`:'',fd.get('notes')||''].filter(Boolean).join('\n');
+      const payload={customerName:fd.get('customerName'),customerPhone:fd.get('customerPhone'),customerEmail:fd.get('customerEmail'),kind,subtype,productId:fd.get('productId'),productName:fd.get('productName'),designSource:fd.get('designSource'),fileMode,quantity:Number(fd.get('quantity'))||1,sheets:Number(fd.get('sheets'))||0,notes};
+      const created=await api('/api/custom-orders',{method:'POST',body:JSON.stringify(payload)});const order=created.item;
+      if(files.length){btn.textContent='Subiendo archivos originales...';const up=new FormData();up.append('uploadToken',order.uploadToken);files.forEach(f=>up.append('files',f));await api(`/api/custom-orders/${order.id}/files`,{method:'POST',body:up});}
+      const known=Number(order.knownExtraCents)||0,total=Number(order.quotedTotalCents)||0,deposit=Number(order.depositCents)||0,whatsapp=state.config?.whatsapp||'5491162691341';
+      const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,kind==='dtf'?`DTF: ${subtype==='sheet'?'plancha 58x100':'individual'} · ${fileMode==='ready'?'listo para imprimir':'a configurar'}`:`Ropa: ${subtype}`,fd.get('productName')?`Diseño: ${fd.get('productName')}`:'',`Cantidad: ${Number(fd.get('quantity'))||1}`,total?`Total: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total de impresión.`:`La seña será del 50% del total confirmado.`)].filter(Boolean).join('\n');
+      qs('#customOrderContent').innerHTML=`<div class="custom-order-result"><div class="eyebrow">Solicitud recibida</div><h2>Tu pedido quedó registrado</h2><div class="code">${escapeHtml(order.code)}</div><p>Guardamos los archivos originales. ${deposit?`Seña a abonar para confirmar: <strong>${money(deposit)}</strong>.`:''} Ahora podés enviarnos el resumen por WhatsApp para continuar.</p><a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${encodeURIComponent(whatsapp)}?text=${encodeURIComponent(summary)}">Continuar por WhatsApp</a><button class="btn btn-ghost" type="button" id="finishCustomOrderBtn">Cerrar</button></div>`;
+    }catch(err){toast(err.message,'error');btn.disabled=false;btn.textContent='Enviar solicitud';}
+  }
+  document.addEventListener('click',e=>{
+    const custom=e.target.closest('[data-custom-kind]');if(custom){openCustomOrder(custom.dataset.customKind);return;}
+    if(e.target.id==='closeCustomOrderBtn'||e.target.id==='finishCustomOrderBtn'){closeCustomOrder();return;}
+  });
+
   async function boot() {
-    initTheme();
+    initTheme();initInfoRotator();initPwaInstall();
     restoreLastShipping({activateMoto:false,allowQuote:true,restoreCarry:true});
     ensureAccountUi(); bindEvents(); await handlePaymentReturn();
     await Promise.all([loadStore(), initFirebaseAuth()]);

@@ -42,3 +42,22 @@
 .stock-filter-footer .btn{min-height:40px}
 @media(max-width:1050px){.stock-filter-grid{grid-template-columns:repeat(3,minmax(140px,1fr))}}
 @media(max-width:680px){.stock-filter-grid{grid-template-columns:1fr 1fr}.stock-filter-grid label:last-child{grid-column:1/-1}.stock-filter-footer{align-items:stretch;flex-direction:column}.stock-filter-footer .btn{width:100%}.stock-size-summary{display:grid;grid-template-columns:repeat(3,1fr)}.stock-count-chip{min-width:0}}
+
+
+/* ===== SALMOS v5 · admin táctil / por pedido ===== */
+.drag-handle{width:36px;height:36px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--gold-2);cursor:grab;touch-action:none;font-size:18px}
+tr.sorting{opacity:.55;outline:1px dashed var(--gold)}
+.bulk-price-card{margin-bottom:14px}
+.custom-orders-admin{display:grid;gap:14px}
+.custom-admin-card{display:grid;gap:12px}
+.custom-admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.custom-admin-grid>div{padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);font-size:.86rem}
+@media(max-width:760px){
+  .custom-admin-grid{grid-template-columns:1fr 1fr}
+  .bulk-price-card .form-grid{grid-template-columns:1fr}
+  #sortableProducts tr{touch-action:auto}
+  .admin-table-wrap{overflow-x:auto}
+}
+@media(max-width:480px){
+  .custom-admin-grid{grid-template-columns:1fr}
+}
