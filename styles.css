@@ -1220,3 +1220,6 @@ img { display: block; max-width: 100%; }
   .salmos-design-grid{grid-template-columns:repeat(3,minmax(0,1fr));max-height:260px}
   .salmos-design-picker-head{display:block}.salmos-design-picker-head small{display:block;margin-top:2px}
 }
+
+/* SALMOS v7.1: nunca mostrar etiquetas de modalidad sobre las fotos públicas. */
+.product-card.order-mode .product-media::before,.product-card.order-mode .product-media::after,.product-card[data-sale-mode="order"] .product-media::before,.product-card[data-sale-mode="order"] .product-media::after{content:none!important;display:none!important}
