@@ -1223,3 +1223,17 @@ img { display: block; max-width: 100%; }
 
 /* SALMOS v7.1: nunca mostrar etiquetas de modalidad sobre las fotos públicas. */
 .product-card.order-mode .product-media::before,.product-card.order-mode .product-media::after,.product-card[data-sale-mode="order"] .product-media::before,.product-card[data-sale-mode="order"] .product-media::after{content:none!important;display:none!important}
+
+/* Correo Argentino · checkout */
+.correo-panel{display:grid;gap:12px}
+.correo-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.correo-delivery-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.correo-delivery-tabs .option{flex:1;min-width:130px}
+.correo-agency-list{display:grid;gap:8px;max-height:320px;overflow:auto;padding-right:2px}
+.correo-agency-card{display:grid;gap:3px;text-align:left;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.correo-agency-card:hover,.correo-agency-card.active{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.correo-agency-card small{color:var(--muted);line-height:1.35}
+.correo-empty{padding:10px 2px}
+.correo-test-notice{font-size:.88rem}
+.correo-quote{margin-top:4px}
+@media(max-width:600px){.correo-delivery-tabs{display:grid;grid-template-columns:1fr 1fr}.correo-delivery-tabs .option{min-width:0}.correo-agency-list{max-height:280px}}

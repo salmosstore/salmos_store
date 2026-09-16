@@ -56,7 +56,7 @@
     selectedVariantId: null,
     checkoutStep: 1,
     customer: loadJSON('salmos_customer', { name: '', phone: '', email: '' }),
-    shipping: { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null },
+    shipping: { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null, correo: null },
     checkoutQuoteOnly: false,
     shippingQuoteCarry: false,
     googleLoaded: false,
@@ -73,7 +73,9 @@
     designCatalog: [],
     designCatalogLoaded: false,
     designCatalogPromise: null,
-    shippingQueriesRemaining: null
+    shippingQueriesRemaining: null,
+    correoAgencies: [],
+    correoAgenciesLoading: false
   };
 
   function loadJSON(key, fallback) {
@@ -798,6 +800,11 @@
     if(viewer)viewer.classList.remove('open');
   }
 
+  function productUsesSizes(product){
+    const key=String(`${product?.category_slug||''} ${product?.category_name||''}`).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    return /(remera|camiseta|chomba|buzo|prenda)/.test(key);
+  }
+
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
@@ -811,7 +818,12 @@
       state.selectedVariantId = fallback?.id || null;
     }
     const selected = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
-    const sizes = [...new Set(availableVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => v.size || 'Única'))];
+    const usesSizes=productUsesSizes(p);
+    const sizes = usesSizes?[...new Set(availableVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))]:[];
+    const attributeCells=[];
+    if(usesSizes)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
+    if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
+    if(colors.length)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
     const modal = qs('#productModal');
     modal.innerHTML = `
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
@@ -824,11 +836,7 @@
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
-          <div class="product-attribute-line" aria-label="Opciones del producto">
-            <div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && (v.size||'Única')===size) || availableVariants.find(v => !state.selectedColor && (v.size||'Única')===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>
-            <div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit||'—')}</span></div>
-            <div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.length?colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c || 'Único')}</button>`).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>
-          </div>
+          ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
@@ -858,6 +866,8 @@
     if (openCheckoutNow) startCheckout(); else openCart();
   }
 
+  function cartVariantLabel(item){return [item?.color,item?.size].map(v=>String(v||'').trim()).filter(Boolean).join(' · ')}
+
   function renderCart() {
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
     const badge = qs('#cartBadge');
@@ -869,7 +879,7 @@
     } else {
       items.innerHTML = state.cart.map((x,i) => `<div class="cart-item">
         ${x.image ? `<img class="cart-thumb" src="${escapeHtml(x.image)}" alt="">` : '<div class="cart-thumb product-placeholder">S</div>'}
-        <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml([x.color,x.size].filter(Boolean).join(' · ') || 'Única')}</small><div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
+        <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
         <button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
       </div>`).join('');
     }
@@ -911,7 +921,7 @@
     state.checkoutQuoteOnly = true;
     state.checkoutStep = 2;
     const restored=restoreLastShipping({activateMoto:true,allowQuote:true});
-    if(!restored) state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null };
+    if(!restored) state.shipping = { method: null, costCents: 0, distanceKm: null, address: null, lat: null, lng: null, quoteId: null, correo: null };
     state.coupon = null;
     renderCheckout();
     openModal('#checkoutModal');
@@ -946,11 +956,11 @@
       ${state.checkoutQuoteOnly?'<div class="notice quote-only-notice"><strong>Simulación sin producto</strong><br>La cotización es solo para conocer el costo de entrega; no genera ningún pedido.</div>':''}
       <div class="shipping-options">
         <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm || 50} km · Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${pc.shipping?.moto?.minHours || 1} y ${pc.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad</small></span><span class="shipping-price">${state.shipping.method==='moto' && state.shipping.costCents ? money(state.shipping.costCents) : 'Calcular'}</span></button>
-        <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?'Domicilio o sucursal':'Integración pendiente de habilitación'}</small></span><span class="shipping-price">${correoEnabled?'Calcular':'Próximamente'}</span></button>
+        <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?`Domicilio o sucursal${pc.shipping?.correo?.testMode?' · entorno de prueba':''}`:'Integración pendiente de habilitación'}</small></span><span class="shipping-price">${state.shipping.method==='correo'&&state.shipping.costCents?money(state.shipping.costCents):(correoEnabled?'Calcular':'Próximamente')}</span></button>
         <button class="shipping-card ${state.shipping.method==='pickup'?'active':''} ${pickupEnabled?'':'disabled'}" data-shipping="pickup" ${pickupEnabled?'':'disabled'}><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${pickupEnabled?escapeHtml(pc.shipping.pickup.address || 'Coordinar retiro'):'Se habilitará desde administración'}</small></span><span class="shipping-price">Gratis</span></button>
       </div>
       <div id="shippingDetail"></div>
-      ${state.checkoutQuoteOnly?'<div class="checkout-actions quote-only-actions"><button class="btn btn-ghost" id="closeQuoteCheckoutBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button></div>':`<div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method && (state.shipping.method!=='moto' || state.shipping.costCents>0) ? '' : 'disabled'}>Continuar</button></div>`}`;
+      ${state.checkoutQuoteOnly?'<div class="checkout-actions quote-only-actions"><button class="btn btn-ghost" id="closeQuoteCheckoutBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button></div>':`<div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method && (state.shipping.method==='pickup' || state.shipping.costCents>0) ? '' : 'disabled'}>Continuar</button></div>`}`;
     renderShippingDetail();
   }
 
@@ -963,7 +973,26 @@
       return;
     }
     if (state.shipping.method === 'correo') {
-      host.innerHTML = `<div class="address-panel"><strong>Correo Argentino</strong><p class="detail-description">La cotización se habilitará automáticamente cuando Correo Argentino entregue las credenciales de PAQ.AR.</p></div>`;
+      const conf=state.config?.shipping?.correo||{};
+      const ca=state.shipping.correo||{deliveryType:'homeDelivery',state:''};
+      state.shipping.correo=ca;
+      const provinces=Array.isArray(conf.provinces)?conf.provinces:[];
+      const provinceOptions=['<option value="">Elegí provincia</option>',...provinces.map(p=>`<option value="${escapeHtml(p.code)}" ${String(ca.state||'')===String(p.code)?'selected':''}>${escapeHtml(p.name)}</option>`)].join('');
+      const testNote=conf.testMode?'<div class="notice correo-test-notice"><strong>Modo de prueba</strong><br>La tarifa que ves es provisoria para probar el flujo. No es una tarifa comercial de Correo Argentino.</div>':'';
+      let body='';
+      if(ca.deliveryType==='agency'){
+        body=`<div class="field"><label>Provincia</label><select class="select" id="correoProvinceSelect">${provinceOptions}</select></div>
+          <button class="btn btn-secondary full" id="loadCorreoAgenciesBtn" ${ca.state?'':'disabled'}>${state.correoAgenciesLoading?'Buscando...':'Buscar sucursales'}</button>
+          <div class="correo-agency-list">${state.correoAgenciesLoading?'<div class="notice">Consultando sucursales habilitadas...</div>':state.correoAgencies.length?state.correoAgencies.map(a=>`<button type="button" class="correo-agency-card ${String(ca.agencyId||'')===String(a.agencyId)?'active':''}" data-correo-agency="${escapeHtml(a.agencyId)}"><strong>${escapeHtml(a.agencyName)}</strong><small>${escapeHtml([a.location?.streetName,a.location?.streetNumber,a.location?.cityName].filter(Boolean).join(' '))}</small>${a.schedule?`<small>${escapeHtml(a.schedule)}</small>`:''}</button>`).join(''):'<div class="muted correo-empty">Elegí una provincia y buscá las sucursales habilitadas.</div>'}</div>
+          ${ca.agencyId?`<div class="address-confirm"><strong>Sucursal elegida:</strong><br>${escapeHtml(ca.agencyName||ca.agencyId)}</div>`:''}`;
+      }else{
+        body=`<div class="field"><label>Dirección completa</label><input class="input" id="correoAddressInput" autocomplete="street-address" placeholder="Calle, altura, localidad, provincia y código postal" value="${escapeHtml(ca.inputAddress||state.shipping.address||'')}"><small class="field-help">Incluí calle y altura. La validamos antes de continuar.</small></div>
+          <button class="btn btn-secondary full" id="validateCorreoAddressBtn">Validar dirección</button>
+          ${ca.address?`<div class="address-confirm"><strong>Dirección validada:</strong><br>${escapeHtml(state.shipping.address||'')}</div>`:''}`;
+      }
+      host.innerHTML=`<div class="address-panel correo-panel"><div class="correo-head"><div><strong>Correo Argentino</strong><p class="detail-description">Elegí entrega a domicilio o retiro en una sucursal habilitada.</p></div>${conf.testMode?'<span class="mini-pill">TEST</span>':''}</div>${testNote}
+        <div class="correo-delivery-tabs"><button type="button" class="option ${ca.deliveryType!=='agency'?'active':''}" data-correo-delivery="homeDelivery">A domicilio</button><button type="button" class="option ${ca.deliveryType==='agency'?'active':''}" data-correo-delivery="agency">Sucursal</button></div>${body}<div id="correoQuoteHost"></div></div>`;
+      renderCorreoQuote();
       return;
     }
     if (state.shipping.method !== 'moto') { host.innerHTML = ''; return; }
@@ -986,6 +1015,35 @@
     if (state.shipping.lat && state.shipping.lng) {
       showMap(state.shipping.lat, state.shipping.lng, state.shipping.address).catch(err => toast(err.message,'error'));
     }
+  }
+
+
+  function renderCorreoQuote(){
+    const host=qs('#correoQuoteHost');if(!host)return;
+    const conf=state.config?.shipping?.correo||{},ca=state.shipping.correo||{};
+    const ready=ca.deliveryType==='agency'?Boolean(ca.agencyId):Boolean(ca.address);
+    host.innerHTML=ready?(state.shipping.costCents?`<div class="quote-box correo-quote"><div><strong>${ca.deliveryType==='agency'?'Retiro en sucursal':'Entrega a domicilio'}</strong><div class="delivery-note">${conf.testMode?'Tarifa provisoria de prueba':'Tarifa configurada'}</div></div><strong class="price">${money(state.shipping.costCents)}</strong></div>`:`<button class="btn btn-primary full" id="quoteCorreoBtn">Calcular envío</button>`):'';
+    const toSummary=qs('#toSummaryBtn');if(toSummary)toSummary.disabled=!(state.shipping.method==='pickup'||Number(state.shipping.costCents)>0);
+  }
+  async function quoteCorreoShipping(){
+    const ca=state.shipping.correo||{};const data=await api('/api/shipping/correo/quote',{method:'POST',body:JSON.stringify({deliveryType:ca.deliveryType||'homeDelivery'})});state.shipping.costCents=Number(data.costCents)||0;state.shipping.quoteId=data.quoteId||null;renderCorreoQuote();renderCheckoutShippingPriceOnly();return data;
+  }
+  function renderCheckoutShippingPriceOnly(){
+    const card=qs('[data-shipping="correo"] .shipping-price');if(card&&state.shipping.method==='correo')card.textContent=state.shipping.costCents?money(state.shipping.costCents):'Calcular';
+  }
+  async function validateCorreoAddress(){
+    const raw=String(qs('#correoAddressInput')?.value||'').trim();if(raw.length<8)throw new Error('Ingresá una dirección completa con calle y altura.');
+    const data=await api('/api/geo/validate-address',{method:'POST',body:JSON.stringify({address:raw})});const a=data.correoAddress||{};
+    if(!a.streetName||!a.streetNumber||!a.cityName||!a.state||!a.zipCode)throw new Error('No pudimos obtener calle, altura, localidad, provincia y código postal. Probá escribiendo la dirección más completa.');
+    state.shipping.address=data.formattedAddress||raw;state.shipping.lat=Number(data.geocode?.location?.latitude);state.shipping.lng=Number(data.geocode?.location?.longitude);state.shipping.costCents=0;state.shipping.quoteId=null;state.shipping.correo={...(state.shipping.correo||{}),deliveryType:'homeDelivery',inputAddress:raw,address:{streetName:a.streetName,streetNumber:a.streetNumber,cityName:a.cityName,state:a.state,zipCode:a.zipCode,floor:'',department:''}};
+    await quoteCorreoShipping();renderShippingDetail();
+  }
+  async function loadCorreoAgencies(){
+    const ca=state.shipping.correo||{},stateCode=String(qs('#correoProvinceSelect')?.value||ca.state||'');if(!stateCode)throw new Error('Elegí una provincia.');ca.state=stateCode;ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.costCents=0;state.correoAgencies=[];state.correoAgenciesLoading=true;renderShippingDetail();
+    try{const d=await api(`/api/shipping/correo/agencies?stateId=${encodeURIComponent(stateCode)}`);state.correoAgencies=d.items||[];}finally{state.correoAgenciesLoading=false;renderShippingDetail();}
+  }
+  async function selectCorreoAgency(id){
+    const a=state.correoAgencies.find(x=>String(x.agencyId)===String(id));if(!a)return;const ca=state.shipping.correo||{};state.shipping.correo={...ca,deliveryType:'agency',agencyId:a.agencyId,agencyName:a.agencyName,state:ca.state||'',address:null};state.shipping.address=[a.agencyName,a.location?.streetName,a.location?.streetNumber,a.location?.cityName].filter(Boolean).join(' · ');state.shipping.lat=Number.isFinite(Number(a.location?.latitude))?Number(a.location.latitude):null;state.shipping.lng=Number.isFinite(Number(a.location?.longitude))?Number(a.location.longitude):null;state.shipping.costCents=0;state.shipping.quoteId=null;await quoteCorreoShipping();renderShippingDetail();
   }
 
   async function resolveAreaChoice(item) {
@@ -1304,7 +1362,7 @@
     const total=state.coupon?.totalCents ?? (subtotal+shippingBase);
     qs('#checkoutContent').innerHTML = `
       <h2>Revisá tu compra</h2><div class="checkout-sub">Antes de pagar, confirmá que esté todo correcto.</div>
-      <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${escapeHtml([x.color,x.size].filter(Boolean).join(' · '))} · x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
+      <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${cartVariantLabel(x)?`${escapeHtml(cartVariantLabel(x))} · `:''}x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
 
       <div class="coupon-box">
         <div class="coupon-title"><strong>¿Tenés un cupón de descuento?</strong><small>Ingresalo antes de pagar.</small></div>
@@ -1321,7 +1379,7 @@
         ${discount?`<div class="total-row discount-row"><span>Descuento · ${escapeHtml(state.coupon.code)}</span><strong>− ${money(discount)}</strong></div>`:''}
         <div class="total-row grand"><span>Total</span><strong>${money(total)}</strong></div>
       </div>
-      <div class="notice" style="margin-top:14px"><strong>${shippingMethodLabel()}</strong><br>${state.shipping.method==='moto' ? `${escapeHtml(state.shipping.address || '')}<br>${state.shipping.distanceKm} km<br>Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad` : ''}</div>
+      <div class="notice" style="margin-top:14px"><strong>${shippingMethodLabel()}</strong><br>${state.shipping.method==='moto' ? `${escapeHtml(state.shipping.address || '')}<br>${state.shipping.distanceKm} km<br>Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad` : state.shipping.method==='correo' ? `${escapeHtml(state.shipping.correo?.deliveryType==='agency'?`Sucursal: ${state.shipping.correo?.agencyName||state.shipping.correo?.agencyId||''}`:(state.shipping.address||''))}${state.config?.shipping?.correo?.testMode?'<br><small>Integración PAQ.AR en entorno TEST · tarifa provisoria de prueba.</small>':''}` : ''}</div>
       ${state.shipping.method==='moto' ? `<a class="btn btn-ghost full" style="margin-top:10px" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a>` : ''}
       ${state.auth.user && state.shipping.method==='moto' ? `<label class="account-check save-address-check"><input type="checkbox" id="saveCheckoutAddress"> Guardar esta dirección en Mi cuenta</label>` : ''}
       <div class="checkout-actions"><button class="btn btn-ghost" id="backShippingBtn">Atrás</button><button class="btn btn-primary" id="payBtn">${state.config?.mercadopago?.enabled ? 'Pagar con Mercado Pago' : 'Crear pedido'}</button></div>
@@ -1437,16 +1495,23 @@
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
       if(e.target.id==='closeQuoteCheckoutBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');return;}
       if(e.target.id==='quoteAddProductBtn'){state.shippingQuoteCarry=Boolean(state.shipping.method==='moto'&&state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng))&&Number(state.shipping.costCents)>0);if(state.shippingQuoteCarry){saveLastShipping({withQuote:true,carry:true});updateSavedShippingCarry(true);}state.checkoutQuoteOnly=false;closeModal('#checkoutModal');renderCart();qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
-      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ const method=ship.dataset.shipping;if(method===state.shipping.method&&method==='moto'&&state.shipping.address){renderCheckout();return;}if(method==='moto'){const currentAddress=state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng));if(currentAddress){state.shipping.method='moto';}else if(!restoreLastShipping({activateMoto:true,allowQuote:true})){state.shipping={method:'moto',costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null};}}else{state.shipping={method,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null};state.shippingQuoteCarry=false;updateSavedShippingCarry(false);} state.coupon=null; renderCheckout(); return; }
+      const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ const method=ship.dataset.shipping;if(method===state.shipping.method&&method==='moto'&&state.shipping.address){renderCheckout();return;}if(method==='moto'){const currentAddress=state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng));if(currentAddress){state.shipping.method='moto';state.shipping.correo=null;}else if(!restoreLastShipping({activateMoto:true,allowQuote:true})){state.shipping={method:'moto',costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null,correo:null};}}else if(method==='correo'){state.shipping={method:'correo',costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null,correo:{deliveryType:'homeDelivery',state:'',agencyId:'',agencyName:'',address:null}};state.correoAgencies=[];state.shippingQuoteCarry=false;updateSavedShippingCarry(false);}else{state.shipping={method,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null,correo:null};state.shippingQuoteCarry=false;updateSavedShippingCarry(false);} state.coupon=null; renderCheckout(); return; }
+      const correoDelivery=e.target.closest('[data-correo-delivery]');if(correoDelivery){const type=correoDelivery.dataset.correoDelivery;state.shipping.correo={deliveryType:type,state:state.shipping.correo?.state||'',agencyId:'',agencyName:'',address:null};state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.shipping.quoteId=null;state.correoAgencies=[];renderShippingDetail();return;}
+      if(e.target.id==='correoProvinceSelect')return;
+      if(e.target.id==='loadCorreoAgenciesBtn'){try{e.target.disabled=true;await loadCorreoAgencies()}catch(err){toast(err.message,'error');state.correoAgenciesLoading=false;renderShippingDetail()}return;}
+      if(e.target.id==='validateCorreoAddressBtn'){try{e.target.disabled=true;e.target.textContent='Validando...';await validateCorreoAddress();toast('Dirección validada','success')}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Validar dirección'}return;}
+      if(e.target.id==='quoteCorreoBtn'){try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteCorreoShipping()}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular envío'}return;}
+      const correoAgency=e.target.closest('[data-correo-agency]');if(correoAgency){try{await selectCorreoAgency(correoAgency.dataset.correoAgency);toast('Sucursal seleccionada','success')}catch(err){toast(err.message,'error')}return;}
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
       if(e.target.id==='quoteMotoBtn'){ try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteMoto();}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular motomensajería';} return; }
-      if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(state.shipping.method==='moto'&&!state.shipping.costCents){toast('Primero calculá la motomensajería.','error');return;} state.checkoutStep=3;renderCheckout();return; }
+      if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(['moto','correo'].includes(state.shipping.method)&&!state.shipping.costCents){toast(state.shipping.method==='moto'?'Primero calculá la motomensajería.':'Primero completá y calculá el envío por Correo Argentino.','error');return;} state.checkoutStep=3;renderCheckout();return; }
       if(e.target.id==='backShippingBtn'){state.checkoutStep=2;renderCheckout();return;}
       if(e.target.id==='applyCouponBtn'){await applyCouponCode();return;}
       if(e.target.id==='removeCouponBtn'){removeCouponCode();return;}
       if(e.target.id==='payBtn'){await createOrderAndPay();return;}
       if(e.target.id==='finishNoPayBtn'){closeModal('#checkoutModal');return;}
     });
+    document.addEventListener('change',e=>{if(e.target.id==='correoProvinceSelect'){const ca=state.shipping.correo||{deliveryType:'agency'};ca.state=e.target.value;ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.costCents=0;state.correoAgencies=[];const b=qs('#loadCorreoAgenciesBtn');if(b)b.disabled=!ca.state;renderCorreoQuote();}});
   }
 
 

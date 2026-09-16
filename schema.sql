@@ -111,6 +111,21 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS correo_shipments (
+  order_id INTEGER PRIMARY KEY,
+  delivery_type TEXT NOT NULL DEFAULT '',
+  agency_id TEXT NOT NULL DEFAULT '',
+  agency_name TEXT NOT NULL DEFAULT '',
+  tracking_number TEXT NOT NULL DEFAULT '',
+  service_type TEXT NOT NULL DEFAULT '',
+  label_format TEXT NOT NULL DEFAULT '10x15',
+  last_status TEXT NOT NULL DEFAULT '',
+  last_tracking_json TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS order_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   order_id INTEGER NOT NULL,
@@ -173,6 +188,7 @@ CREATE INDEX IF NOT EXISTS idx_images_product ON product_images(product_id);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_payment ON orders(payment_status);
 CREATE INDEX IF NOT EXISTS idx_orders_fulfillment ON orders(fulfillment_status);
+CREATE INDEX IF NOT EXISTS idx_correo_tracking ON correo_shipments(tracking_number);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_finance_date ON finance_movements(occurred_at);
 

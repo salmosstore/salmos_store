@@ -73,3 +73,25 @@ tr.sorting{opacity:.55;outline:1px dashed var(--gold)}
   .bulk-price-card{padding:12px}
   .internal-prep-box .toggle-row{display:grid;gap:7px}
 }
+
+
+/* Producto por categoría: remeras con talle; otros productos sin talle. */
+.variant-section-help{margin:0 0 12px}
+.variant-empty-note{padding:14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);text-align:center}
+.variant-row.variant-row-sized{grid-template-columns:minmax(120px,1fr) minmax(90px,.7fr) minmax(170px,.9fr) auto}
+.variant-row.variant-row-simple{grid-template-columns:minmax(150px,1fr) minmax(170px,.9fr) auto}
+.variant-stock-control{display:grid;grid-template-columns:42px minmax(72px,1fr) 42px;align-items:stretch;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.variant-stock-control .variant-stock-number{border:0!important;border-left:1px solid var(--line)!important;border-right:1px solid var(--line)!important;border-radius:0!important;text-align:center;font-weight:900;min-width:0;padding-left:6px;padding-right:6px;-moz-appearance:textfield}
+.variant-stock-control .variant-stock-number::-webkit-outer-spin-button,.variant-stock-control .variant-stock-number::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.variant-stock-btn{border:0;background:var(--surface-2);color:var(--gold-2);font-size:1.25rem;font-weight:900;cursor:pointer;min-height:42px}
+.variant-stock-btn:active{transform:scale(.96)}
+@media(max-width:680px){.variant-row.variant-row-sized,.variant-row.variant-row-simple{grid-template-columns:1fr}.variant-row.variant-row-sized .remove-variant,.variant-row.variant-row-simple .remove-variant{grid-column:auto}.variant-stock-control{width:100%}}
+
+/* Correo Argentino · administración */
+.correo-order-admin{display:grid;gap:8px;min-width:220px}
+.correo-order-admin small{display:block;color:var(--muted);margin-top:3px}
+.correo-actions{justify-content:flex-start}
+.correo-actions .btn{white-space:nowrap}
+.correo-settings-card{grid-column:1/-1}
+.correo-settings-card details{border:1px solid var(--line);border-radius:12px;padding:10px}
+.correo-settings-card summary{cursor:pointer;font-weight:800}
