@@ -557,11 +557,11 @@
     const row = qs('#categoryRow');
     const bar = qs('#categoryBar') || row?.closest('.category-bar');
     if(!row) return;
-    const visibleCategorySlugs = new Set(state.products.map(p => p.category_slug).filter(Boolean));
-    const visibleCategories = state.categories.filter(c => visibleCategorySlugs.has(c.slug));
+    const visibleCategories = state.categories;
+    const activeSlugs = new Set(visibleCategories.map(c => c.slug));
     const showBar = visibleCategories.length > 1;
     if(bar) bar.classList.toggle('hidden', !showBar);
-    if (!showBar || (state.activeCategory !== 'all' && !visibleCategorySlugs.has(state.activeCategory))) state.activeCategory = 'all';
+    if (!showBar || (state.activeCategory !== 'all' && !activeSlugs.has(state.activeCategory))) state.activeCategory = 'all';
     row.innerHTML = showBar ? (`<button class="chip ${state.activeCategory==='all'?'active':''}" data-category="all">Todo</button>` + visibleCategories.map(c => `<button class="chip ${state.activeCategory===c.slug?'active':''}" data-category="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</button>`).join('')) : '';
     if(row.dataset.bound!=='1'){
       row.dataset.bound='1';
@@ -589,7 +589,7 @@
     const image = p.primary_image_url
       ? `<img loading="lazy" src="${escapeHtml(p.primary_image_url)}" alt="${escapeHtml(p.name)}">`
       : `<div class="product-placeholder">SALMOS</div>`;
-    const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : ''].join('');
+    const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : '', Number(p.available_stock)<=0 ? '<span class="tag">AGOTADO</span>' : ''].join('');
     return `<article class="product-card" data-product-id="${p.id}" data-sale-mode="${escapeHtml(p.sale_mode||'stock')}">
       <div class="product-media">${image}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
       <div class="product-body">
@@ -840,6 +840,7 @@
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
+          ${!selected?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
           <div class="detail-actions">
             <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>Agregar al carrito</span></button>
@@ -1517,8 +1518,6 @@
 
   let deferredInstallPrompt=null;
   function initInfoRotator(){
-    const msgs=qsa('.salmos-info-message');if(msgs.length<2)return;let i=0;
-    setInterval(()=>{msgs[i]?.classList.remove('active');i=(i+1)%msgs.length;msgs[i]?.classList.add('active')},4200);
   }
   function initPwaInstall(){
     window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;qs('#pwaInstallBtn')?.classList.remove('hidden')});

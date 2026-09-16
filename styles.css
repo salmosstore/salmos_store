@@ -1100,9 +1100,12 @@ img { display: block; max-width: 100%; }
   border-bottom:1px solid rgba(217,167,45,.28);color:#efc247;min-height:31px;display:flex;align-items:center
 }
 .salmos-info-shell{display:flex;align-items:center;justify-content:center;min-height:31px;padding-block:4px}
-.salmos-info-rotator{position:relative;min-height:18px;width:min(920px,100%);text-align:center;overflow:hidden}
-.salmos-info-message{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transform:translateY(5px);transition:.3s ease;font-size:12px;font-weight:800;letter-spacing:.015em}
-.salmos-info-message.active{opacity:1;transform:none}
+.salmos-info-marquee{width:min(1120px,100%);overflow:hidden;white-space:nowrap;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.salmos-info-track{display:inline-flex;align-items:center;gap:26px;width:max-content;will-change:transform;animation:salmosInfoSlide 24s linear infinite}
+.salmos-info-message{position:static;display:inline-flex;align-items:center;justify-content:center;opacity:1;transform:none;font-size:12px;font-weight:800;letter-spacing:.015em;flex:0 0 auto}
+.salmos-info-sep{color:var(--gold-2);opacity:.8;font-size:9px;flex:0 0 auto}
+@keyframes salmosInfoSlide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.salmos-info-track{animation:none;white-space:normal;flex-wrap:wrap;justify-content:center}}
 .made-order-section{padding-top:9px;margin-top:8px;border-top:1px solid color-mix(in srgb,var(--gold) 25%,transparent)}
 .made-order-compact-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;justify-content:flex-start}
 .made-order-compact-head h2{margin:0;color:var(--gold,#d9a72d);font-size:14px;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
@@ -1146,7 +1149,7 @@ img { display: block; max-width: 100%; }
 }
 @media (max-width:430px){
   .salmos-info-bar{min-height:31px}.salmos-info-shell{min-height:31px}
-  .salmos-info-rotator{min-height:18px}
+  .salmos-info-marquee{min-height:18px}
   .made-order-divider{gap:8px}.made-order-divider h2{font-size:18px}
   .made-order-note{font-size:12px}
 }

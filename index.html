@@ -30,7 +30,7 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=8.0">
+  <link rel="stylesheet" href="styles.css?v=9.0">
 </head>
 <body class="store-pending">
   <header class="site-header">
@@ -83,9 +83,21 @@
 
   <div class="salmos-info-bar" aria-label="Información rápida de SALMOS">
     <div class="shell salmos-info-shell">
-      <div class="salmos-info-rotator" id="salmosInfoRotator">
-        <span class="salmos-info-message active">Envíos a todo el país · Motomensajería en zonas seleccionadas</span>
-        <span class="salmos-info-message">Pagá de forma segura con Mercado Pago</span>
+      <div class="salmos-info-marquee" id="salmosInfoRotator">
+        <div class="salmos-info-track" aria-label="Información de pagos y envíos">
+          <span class="salmos-info-message">Pagá de forma segura con Mercado Pago</span>
+          <span class="salmos-info-sep" aria-hidden="true">✦</span>
+          <span class="salmos-info-message">Envíos a todo el país por Correo Argentino</span>
+          <span class="salmos-info-sep" aria-hidden="true">✦</span>
+          <span class="salmos-info-message">Envíos en zonas seleccionadas por motomensajería</span>
+          <span class="salmos-info-sep" aria-hidden="true">✦</span>
+          <span class="salmos-info-message" aria-hidden="true">Pagá de forma segura con Mercado Pago</span>
+          <span class="salmos-info-sep" aria-hidden="true">✦</span>
+          <span class="salmos-info-message" aria-hidden="true">Envíos a todo el país por Correo Argentino</span>
+          <span class="salmos-info-sep" aria-hidden="true">✦</span>
+          <span class="salmos-info-message" aria-hidden="true">Envíos en zonas seleccionadas por motomensajería</span>
+          <span class="salmos-info-sep" aria-hidden="true">✦</span>
+        </div>
       </div>
     </div>
   </div>
@@ -167,7 +179,7 @@
   <div class="toast-stack" id="toastStack"></div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=8.0" defer></script>
+  <script src="app.js?v=9.0" defer></script>
   <script>
     if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=7.1',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
