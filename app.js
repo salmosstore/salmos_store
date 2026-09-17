@@ -998,8 +998,11 @@
       const filters=`<div class="correo-location-filter"><div class="field"><label>Provincia</label><select class="select" id="correoProvinceSelect" autocomplete="off">${provinceOptions}</select><small class="field-help">Podés usar provincia, código postal o ambos.</small></div><div class="field"><label>Código postal</label><input class="input" id="correoPostalCode" autocomplete="one-time-code" data-form-type="other" inputmode="text" placeholder="Ej.: 1806 o B1806" value="${escapeHtml(ca.postalCode||'')}"><small class="field-help">Si lo completás, se usa como código postal real, nunca como nombre de calle.</small></div></div>`;
       let body='';
       if(ca.deliveryType==='agency'){
-        body=`${filters}<div class="field correo-search-wrap"><label>Dirección o localidad de referencia <span class="muted">(opcional)</span></label><input class="input" id="correoAgencyReferenceInput" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore="true" spellcheck="false" placeholder="Ej.: localidad o calle y altura" value="${escapeHtml(ca.agencyReference||'')}" ${filterReady?'':'disabled'}><small class="field-help">Si escribís una referencia, las sucursales se ordenan desde ese punto. Si no, usamos provincia/código postal.</small></div>${filterReady?`<button class="btn btn-secondary full" id="loadCorreoAgenciesBtn">${state.correoAgenciesLoading?'Buscando...':'Buscar sucursales y puntos PAQ.AR cercanos'}</button>`:'<div class="notice correo-filter-note">Elegí una provincia o escribí un código postal para ubicar la zona.</div>'}
-          <div class="correo-agency-list">${state.correoAgenciesLoading?'<div class="notice">Consultando sucursales y puntos habilitados...</div>':state.correoAgencies.length?state.correoAgencies.map(a=>`<button type="button" class="correo-agency-card ${String(ca.agencyId||'')===String(a.agencyId)?'active':''}" data-correo-agency="${escapeHtml(a.agencyId)}"><strong>${escapeHtml(a.agencyName)}</strong><small>${escapeHtml([a.location?.streetName,a.location?.streetNumber,a.location?.cityName,a.location?.zipCode].filter(Boolean).join(' '))}</small>${Number.isFinite(Number(a.distanceKm))?`<small class="agency-distance">A ${Number(a.distanceKm).toFixed(1)} km aprox.</small>`:''}${a.schedule?`<small>${escapeHtml(a.schedule)}</small>`:''}</button>`).join(''):(filterReady?'<div class="muted correo-empty">Tocá “Buscar sucursales y puntos PAQ.AR cercanos”.</div>':'')}</div>
+        const home=correoHomeReference(ca);
+        const homeNote=home?`<div class="notice correo-home-reference"><strong>Buscando cerca del domicilio que ya elegiste</strong><br>${escapeHtml(home.label||home.formattedAddress||'')}</div>`:'';
+        const refName=`correo_ref_${Date.now()}`;
+        body=`${filters}${homeNote}<div class="field correo-search-wrap"><label>Otra referencia <span class="muted">(opcional)</span></label><input class="input" id="correoAgencyReferenceInput" name="${refName}" autocomplete="new-password" data-form-type="other" data-lpignore="true" data-1p-ignore="true" spellcheck="false" placeholder="Localidad o calle y altura" value="${escapeHtml(ca.agencyReference||'')}" ${filterReady?'':'disabled'}><small class="field-help">${home?'Si lo dejás vacío usamos tu domicilio. Si escribís otra referencia, buscamos desde allí.':'Si escribís una referencia, las sucursales se ordenan desde ese punto. Si no, usamos provincia/código postal.'}</small></div>${filterReady?`<button class="btn btn-secondary full" id="loadCorreoAgenciesBtn">${state.correoAgenciesLoading?'Buscando...':home?'Actualizar sucursales cercanas':'Buscar sucursales y puntos PAQ.AR cercanos'}</button>`:'<div class="notice correo-filter-note">Elegí una provincia o escribí un código postal para ubicar la zona.</div>'}
+          <div class="correo-agency-list">${state.correoAgenciesLoading?'<div class="notice">Consultando sucursales y puntos habilitados...</div>':state.correoAgencies.length?state.correoAgencies.map(a=>`<button type="button" class="correo-agency-card ${String(ca.agencyId||'')===String(a.agencyId)?'active':''}" data-correo-agency="${escapeHtml(a.agencyId)}"><strong>${escapeHtml(a.agencyName)}</strong><small>${escapeHtml([a.location?.streetName,a.location?.streetNumber,a.location?.cityName,a.location?.zipCode].filter(Boolean).join(' '))}</small>${Number.isFinite(Number(a.distanceKm))?`<small class="agency-distance">A ${Number(a.distanceKm).toFixed(1)} km aprox.</small>`:''}${a.schedule?`<small>${escapeHtml(a.schedule)}</small>`:''}</button>`).join(''):(filterReady?'<div class="muted correo-empty">'+(home?'Buscamos automáticamente desde tu domicilio al entrar en esta opción. Si no cargó, tocá “Actualizar sucursales cercanas”.':'Tocá “Buscar sucursales y puntos PAQ.AR cercanos”.')+'</div>':'')}</div>
           ${ca.agencyId?`<div class="address-confirm"><strong>Punto elegido:</strong><br>${escapeHtml(ca.agencyName||ca.agencyId)}</div>`:''}`;
       }else{
         body=`${filters}<div class="field correo-search-wrap"><label>Calle y altura</label><input class="input" id="correoAddressInput" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="words" spellcheck="false" placeholder="Ej.: calle y altura" value="${escapeHtml(ca.inputAddress||'')}" ${filterReady?'':'disabled'}><small class="field-help">${filterReady?'Escribí parte del nombre. Buscamos coincidencias dentro de la zona elegida y el mapa acompaña la búsqueda.':'Primero elegí una provincia o escribí un código postal.'}</small><div class="correo-suggestions" id="correoAddressSuggestions">${state.correoAddressSuggestions.map((x,i)=>`<button type="button" class="correo-suggestion" data-correo-address-suggestion="${i}"><strong>${escapeHtml(x.mainText||x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')}</div></div>
@@ -1076,29 +1079,25 @@
   function googleAddressPart(components=[],type=''){
     const c=(components||[]).find(x=>(x.types||[]).includes(type));return c?.long_name||c?.longText||'';
   }
-  async function geocodeCorreoClient(query,{all=false}={}){
-    await ensurePlacesLibrary();
-    if(!window.google?.maps?.Geocoder)throw new Error('El mapa todavía no está listo. Volvé a intentar.');
-    const geocoder=new google.maps.Geocoder();
-    const request=typeof query==='string'?{address:String(query||'').trim(),region:'AR'}:{...(query||{}),region:'AR'};
-    const result=await geocoder.geocode(request);
-    const rows=result?.results||[];if(!rows.length)throw new Error('No pudimos ubicar esa zona en el mapa.');
-    return all?rows:rows[0];
+  function correoAreaKey(ca={}){
+    return `${ca.state||''}|${String(ca.postalCode||'').trim().toUpperCase()}`;
   }
-  function correoAreaFromGoogleResult(r,key,postal='',fallbackState=''){
-    const comps=r?.address_components||[];
-    const provinceName=googleAddressPart(comps,'administrative_area_level_1');
-    const stateCode=correoProvinceCodeFromName(provinceName)||fallbackState||'';
-    return {key,formattedAddress:r?.formatted_address||'',lat:Number(r?.geometry?.location?.lat?.()??r?.geometry?.location?.lat),lng:Number(r?.geometry?.location?.lng?.()??r?.geometry?.location?.lng),locality:googleAddressPart(comps,'locality')||googleAddressPart(comps,'administrative_area_level_2'),postalCode:googleAddressPart(comps,'postal_code')||postal,provinceName,state:stateCode,viewport:viewportLiteral(r?.geometry?.viewport)};
+  function correoHomeReference(ca={}){
+    const h=ca.homeSelection||null;
+    return h&&hasCorreoCoords(h.lat,h.lng)?h:null;
+  }
+  function setCorreoPreviewFromReference(ref){
+    if(ref&&hasCorreoCoords(ref.lat,ref.lng)) state.correoMapPreview={lat:Number(ref.lat),lng:Number(ref.lng),label:ref.label||ref.formattedAddress||'Domicilio ingresado'};
+    else state.correoMapPreview=null;
   }
   async function resolveCorreoFilterArea(force=false){
     const ca=state.shipping.correo||{},postal=String(ca.postalCode||'').trim().toUpperCase(),province=correoProvinceQueryName(ca.state);
     if(!ca.state&&!postal)throw new Error('Elegí una provincia o escribí un código postal.');
     if(postal&&!validCorreoPostal(postal))throw new Error('Escribí un código postal argentino válido.');
-    const key=`${ca.state||''}|${postal}`;
+    const key=correoAreaKey(ca);
     if(!force&&state.correoFilterArea?.key===key&&hasCorreoCoords(state.correoFilterArea?.lat,state.correoFilterArea?.lng))return state.correoFilterArea;
 
-    // La provincia sola mueve el mapa inmediatamente, sin depender de una consulta externa.
+    // Provincia sola: movimiento inmediato del mapa, sin pedir geocodificación al navegador.
     if(ca.state&&!postal){
       const fixed=CORREO_PROVINCE_MAP[String(ca.state)]||null;
       if(fixed){
@@ -1107,45 +1106,29 @@
       }
     }
 
-    try{
-      const numeric=postal.match(/\d{4}/)?.[0]||postal;
-      let rows=[];
-      if(postal){
-        try{rows=await geocodeCorreoClient({componentRestrictions:{country:'AR',postalCode:numeric}},{all:true});}catch{}
-      }
-      if(!rows.length)rows=await geocodeCorreoClient([postal,province,'Argentina'].filter(Boolean).join(', '),{all:true});
-      let r=rows[0];
-      if(ca.state){
-        const matched=rows.find(x=>correoProvinceCodeFromName(googleAddressPart(x.address_components||[],'administrative_area_level_1'))===String(ca.state));
-        if(matched)r=matched;
-      }
-      const area=correoAreaFromGoogleResult(r,key,postal,ca.state||'');
-      if(ca.state&&area.state&&String(area.state)!==String(ca.state))throw new Error('Ese código postal corresponde a otra provincia.');
-      if(!ca.state&&area.state)ca.state=area.state;
-      state.shipping.correo=ca;state.correoFilterArea=area;return area;
-    }catch(clientErr){
-      try{
-        const data=await api('/api/geo/resolve-area',{method:'POST',body:JSON.stringify({query:postal||province,provinceCode:ca.state||'',provinceName:province,postalCode:postal||''})});
-        if(!ca.state&&data.state)ca.state=data.state;
-        state.shipping.correo=ca;state.correoFilterArea={...data,key,query:postal||province,postalCode:postal,state:ca.state||data.state||'',provinceName:province||data.provinceName||''};
-        return state.correoFilterArea;
-      }catch{
-        const fixed=ca.state?CORREO_PROVINCE_MAP[String(ca.state)]:null;
-        if(fixed&&!postal){state.correoFilterArea={key,formattedAddress:correoProvinceName(ca.state),lat:fixed.lat,lng:fixed.lng,locality:'',postalCode:'',provinceName:correoProvinceName(ca.state),state:ca.state,viewport:null,zoom:fixed.zoom,scope:'province'};return state.correoFilterArea;}
-        throw clientErr;
-      }
-    }
+    // Todo lo demás se resuelve en el Worker con la clave backend. Esto evita depender de
+    // Geocoding en la clave pública del navegador.
+    const data=await api('/api/geo/resolve-area',{method:'POST',body:JSON.stringify({
+      query:postal||province,provinceCode:ca.state||'',provinceName:province,postalCode:postal||''
+    })});
+    if(!ca.state&&data.state)ca.state=data.state;
+    state.shipping.correo=ca;
+    state.correoFilterArea={...data,key,query:postal||province,postalCode:postal||data.postalCode||'',state:ca.state||data.state||'',provinceName:province||data.provinceName||''};
+    return state.correoFilterArea;
   }
   async function previewCorreoAddress(text){
-    const q=String(text||'').trim();if(q.length<2){state.correoMapPreview=null;await renderCorreoMap();return null;}
-    const ca=state.shipping.correo||{},area=await resolveCorreoFilterArea();
-    const query=[q,ca.postalCode||area.postalCode,correoProvinceQueryName(ca.state)||area.provinceName,'Argentina'].filter(Boolean).join(', ');
+    const q=String(text||'').trim();
+    const ca=state.shipping.correo||{};
+    if(q.length<2){
+      const home=correoHomeReference(ca);
+      if(ca.deliveryType==='agency'&&home)setCorreoPreviewFromReference(home);else state.correoMapPreview=null;
+      await renderCorreoMap();return null;
+    }
+    const area=await resolveCorreoFilterArea();
     try{
-      const rows=await geocodeCorreoClient(query,{all:true});
-      let r=rows[0];
-      if(ca.state){const hit=rows.find(x=>correoProvinceCodeFromName(googleAddressPart(x.address_components||[],'administrative_area_level_1'))===String(ca.state));if(hit)r=hit;}
-      const loc=r?.geometry?.location;const lat=Number(loc?.lat?.()??loc?.lat),lng=Number(loc?.lng?.()??loc?.lng);
-      if(hasCorreoCoords(lat,lng)){state.correoMapPreview={lat,lng,label:r.formatted_address||q};await renderCorreoMap();return state.correoMapPreview;}
+      const data=await api('/api/geo/autocomplete',{method:'POST',body:JSON.stringify({input:q,area,provinceCode:ca.state||'',provinceName:correoProvinceName(ca.state),postalCode:ca.postalCode||''})});
+      const first=(data.items||[]).find(x=>x?.location&&hasCorreoCoords(x.location.lat,x.location.lng));
+      if(first){state.correoMapPreview={lat:Number(first.location.lat),lng:Number(first.location.lng),label:first.text||first.mainText||q};await renderCorreoMap();return state.correoMapPreview;}
     }catch{}
     return null;
   }
@@ -1156,6 +1139,8 @@
     const ca=state.shipping.correo||{};
     const data=await api('/api/geo/autocomplete',{method:'POST',body:JSON.stringify({input:q,area,provinceCode:ca.state||'',provinceName:correoProvinceName(ca.state),postalCode:ca.postalCode||''})});
     state.correoAddressSuggestions=(data.items||[]).slice(0,20);
+    const first=state.correoAddressSuggestions.find(x=>x?.location&&hasCorreoCoords(x.location.lat,x.location.lng));
+    state.correoMapPreview=first?{lat:Number(first.location.lat),lng:Number(first.location.lng),label:first.text||first.mainText||q}:null;
     renderShippingDetail();
     const inputEl=qs('#correoAddressInput');if(inputEl){inputEl.focus();try{inputEl.setSelectionRange(q.length,q.length)}catch{}}
   }
@@ -1169,23 +1154,33 @@
     if(wanted&&selectedZip&&!selectedZip.includes(wanted.replace(/^[A-Z]/,''))&&!wanted.includes(selectedZip.replace(/^[A-Z]/,'')))throw new Error('Esa dirección no corresponde al código postal indicado.');
     const finalZip=a.zipCode||postal;if(!finalZip)throw new Error('Falta el código postal de esa dirección. Completalo para continuar.');
     const lat=Number(data.geocode?.location?.latitude??data.geocode?.location?.lat),lng=Number(data.geocode?.location?.longitude??data.geocode?.location?.lng);
-    state.shipping.address=data.formattedAddress||item.text;state.shipping.lat=lat;state.shipping.lng=lng;state.shipping.costCents=0;state.shipping.quoteId=null;state.correoLastParcel=null;state.correoAddressSuggestions=[];state.correoMapPreview=null;state.shipping.correo={...ca,state:ca.state||a.state,postalCode:postal||finalZip,deliveryType:'homeDelivery',inputAddress:item.text||item.mainText||'',address:{streetName:a.streetName,streetNumber:a.streetNumber,cityName:a.cityName,state:a.state,zipCode:finalZip,floor:'',department:''}};
+    const displayAddress=data.formattedAddress||item.text;
+    const correoAddress={streetName:a.streetName,streetNumber:a.streetNumber,cityName:a.cityName,state:a.state,zipCode:finalZip,floor:'',department:''};
+    const homeSelection={label:displayAddress,formattedAddress:displayAddress,lat,lng,address:correoAddress};
+    state.shipping.address=displayAddress;state.shipping.lat=lat;state.shipping.lng=lng;state.shipping.costCents=0;state.shipping.quoteId=null;state.correoLastParcel=null;state.correoAddressSuggestions=[];state.correoMapPreview=null;state.shipping.correo={...ca,state:ca.state||a.state,postalCode:postal||finalZip,deliveryType:'homeDelivery',inputAddress:item.text||item.mainText||'',address:correoAddress,homeSelection};
     await quoteCorreoShipping();renderShippingDetail();
   }
   async function loadCorreoAgencies(){
     const ca=state.shipping.correo||{};let area=await resolveCorreoFilterArea();
-    if(String(ca.agencyReference||'').trim()){
+    const home=correoHomeReference(ca);
+    if(home){
+      area={...area,lat:Number(home.lat),lng:Number(home.lng),formattedAddress:home.label||home.formattedAddress||area.formattedAddress};
+      setCorreoPreviewFromReference(home);
+    }
+    const typedRef=String(ca.agencyReference||'').trim();
+    if(typedRef){
       try{
-        const d=await api('/api/geo/autocomplete',{method:'POST',body:JSON.stringify({input:String(ca.agencyReference||'').trim(),area,provinceCode:ca.state||'',provinceName:correoProvinceName(ca.state),postalCode:ca.postalCode||''})});
-        const first=(d.items||[])[0];
-        if(first?.location&&hasCorreoCoords(first.location.lat,first.location.lng))area={...area,lat:Number(first.location.lat),lng:Number(first.location.lng),formattedAddress:first.text||area.formattedAddress};
+        const d=await api('/api/geo/autocomplete',{method:'POST',body:JSON.stringify({input:typedRef,area,provinceCode:ca.state||'',provinceName:correoProvinceName(ca.state),postalCode:ca.postalCode||''})});
+        const first=(d.items||[]).find(x=>x?.location&&hasCorreoCoords(x.location.lat,x.location.lng));
+        if(first){area={...area,lat:Number(first.location.lat),lng:Number(first.location.lng),formattedAddress:first.text||area.formattedAddress};state.correoMapPreview={lat:Number(first.location.lat),lng:Number(first.location.lng),label:first.text||typedRef};}
       }catch{}
     }
-    ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.costCents=0;state.correoAgencies=[];state.correoAgenciesLoading=true;renderShippingDetail();
+    ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.correoAgencies=[];state.correoAgenciesLoading=true;renderShippingDetail();
     try{
       const stateId=ca.state||area.state||'';
       if(!stateId)throw new Error('No pudimos identificar la provincia de esa zona. Elegila en el selector.');
-      const d=await api(`/api/shipping/correo/agencies?stateId=${encodeURIComponent(stateId)}&postalCode=${encodeURIComponent(ca.postalCode||area.postalCode||'')}&lat=${encodeURIComponent(area.lat)}&lng=${encodeURIComponent(area.lng)}`);state.correoAgencies=d.items||[];
+      const d=await api(`/api/shipping/correo/agencies?stateId=${encodeURIComponent(stateId)}&postalCode=${encodeURIComponent(ca.postalCode||area.postalCode||'')}&lat=${encodeURIComponent(area.lat)}&lng=${encodeURIComponent(area.lng)}`);
+      state.correoAgencies=d.items||[];
     }finally{state.correoAgenciesLoading=false;renderShippingDetail();}
   }
   async function selectCorreoAgency(id){
@@ -1208,7 +1203,9 @@
       else if(hasCorreoCoords(state.correoMapPreview?.lat,state.correoMapPreview?.lng))addMarker({lat:Number(state.correoMapPreview.lat),lng:Number(state.correoMapPreview.lng)},{title:state.correoMapPreview.label||'Vista preliminar'});
     }
     if(ca.deliveryType==='agency'){
-      if(hasCorreoCoords(state.correoMapPreview?.lat,state.correoMapPreview?.lng))addMarker({lat:Number(state.correoMapPreview.lat),lng:Number(state.correoMapPreview.lng)},{title:'Punto de referencia'});
+      const home=correoHomeReference(ca);
+      const ref=hasCorreoCoords(state.correoMapPreview?.lat,state.correoMapPreview?.lng)?state.correoMapPreview:home;
+      if(ref&&hasCorreoCoords(ref.lat,ref.lng))addMarker({lat:Number(ref.lat),lng:Number(ref.lng)},{title:ref.label||ref.formattedAddress||'Punto de referencia',label:'•'});
       for(const a of state.correoAgencies){const lat=Number(a.location?.latitude),lng=Number(a.location?.longitude);if(!hasCorreoCoords(lat,lng))continue;const pos={lat,lng};const paq=/paq/i.test(String(a.agencyName||''));addMarker(pos,{title:`${paq?'Punto PAQ.AR':'Sucursal Correo Argentino'} · ${a.agencyName||''}`,label:paq?'P':'C',onClick:()=>selectCorreoAgency(a.agencyId).catch(err=>toast(err.message,'error'))});}
     }
     if(points>1)map.fitBounds(bounds,70);else if(points===1)map.setZoom(ca.deliveryType==='agency'?14:16);
@@ -1665,7 +1662,17 @@
       if(e.target.id==='closeQuoteCheckoutBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');return;}
       if(e.target.id==='quoteAddProductBtn'){state.shippingQuoteCarry=Boolean(state.shipping.method==='moto'&&state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng))&&Number(state.shipping.costCents)>0);if(state.shippingQuoteCarry){saveLastShipping({withQuote:true,carry:true});updateSavedShippingCarry(true);}state.checkoutQuoteOnly=false;closeModal('#checkoutModal');renderCart();qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
       const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){ const method=ship.dataset.shipping;if(method===state.shipping.method&&method==='moto'&&state.shipping.address){renderCheckout();return;}if(method==='moto'){const currentAddress=state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng));if(currentAddress){state.shipping.method='moto';state.shipping.correo=null;}else if(!restoreLastShipping({activateMoto:true,allowQuote:true})){state.shipping={method:'moto',costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null,correo:null};}}else if(method==='correo'){state.shipping={method:'correo',costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null,correo:{deliveryType:'homeDelivery',state:'',postalCode:'',inputAddress:'',agencyReference:'',agencyId:'',agencyName:'',address:null}};state.correoAgencies=[];state.correoAddressSuggestions=[];state.correoAgencySuggestions=[];state.correoAgencyArea=null;state.correoLastParcel=null;state.shippingQuoteCarry=false;updateSavedShippingCarry(false);}else{state.shipping={method,costCents:0,distanceKm:null,address:null,lat:null,lng:null,quoteId:null,correo:null};state.shippingQuoteCarry=false;updateSavedShippingCarry(false);} state.coupon=null; renderCheckout(); return; }
-      const correoDelivery=e.target.closest('[data-correo-delivery]');if(correoDelivery){const type=correoDelivery.dataset.correoDelivery;state.shipping.correo={deliveryType:type,state:state.shipping.correo?.state||'',postalCode:state.shipping.correo?.postalCode||'',inputAddress:'',agencyReference:'',agencyId:'',agencyName:'',address:null};state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.shipping.quoteId=null;state.correoAgencies=[];state.correoAddressSuggestions=[];state.correoAgencySuggestions=[];state.correoAgencyArea=null;state.correoMapPreview=null;state.correoLastParcel=null;renderShippingDetail();return;}
+      const correoDelivery=e.target.closest('[data-correo-delivery]');if(correoDelivery){
+        const type=correoDelivery.dataset.correoDelivery;const prev=state.shipping.correo||{};
+        if(type===prev.deliveryType)return;
+        let home=correoHomeReference(prev);
+        if(prev.deliveryType!=='agency'&&prev.address&&hasCorreoCoords(state.shipping.lat,state.shipping.lng)){home={label:state.shipping.address||'',formattedAddress:state.shipping.address||'',lat:Number(state.shipping.lat),lng:Number(state.shipping.lng),address:prev.address};}
+        const next={...prev,deliveryType:type,state:prev.state||'',postalCode:prev.postalCode||'',agencyReference:'',agencyId:'',agencyName:'',homeSelection:home||prev.homeSelection||null};
+        state.shipping.correo=next;state.shipping.costCents=0;state.shipping.quoteId=null;state.correoAgencies=[];state.correoAddressSuggestions=[];state.correoAgencySuggestions=[];state.correoAgencyArea=null;state.correoLastParcel=null;
+        if(type==='agency'){state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;setCorreoPreviewFromReference(next.homeSelection);renderShippingDetail();if((next.state||validCorreoPostal(next.postalCode||''))&&next.homeSelection){setTimeout(()=>loadCorreoAgencies().catch(err=>toast(err.message,'error')),0);}return;}
+        if(next.homeSelection){next.address=next.homeSelection.address||next.address||null;state.shipping.address=next.homeSelection.label||next.homeSelection.formattedAddress||'';state.shipping.lat=Number(next.homeSelection.lat);state.shipping.lng=Number(next.homeSelection.lng);state.correoMapPreview=null;}else{next.address=null;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;}
+        renderShippingDetail();return;
+      }
       if(e.target.id==='loadCorreoAgenciesBtn'){try{e.target.disabled=true;await loadCorreoAgencies()}catch(err){toast(err.message,'error');state.correoAgenciesLoading=false;renderShippingDetail()}return;}
       const correoHomeSuggestion=e.target.closest('[data-correo-address-suggestion]');if(correoHomeSuggestion){try{await chooseCorreoHomeSuggestion(correoHomeSuggestion.dataset.correoAddressSuggestion);toast('Dirección seleccionada','success')}catch(err){toast(err.message,'error')}return;}
       if(e.target.id==='quoteCorreoBtn'){try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteCorreoShipping()}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular envío'}return;}
@@ -1681,7 +1688,7 @@
     });
     document.addEventListener('change',async e=>{
       if(e.target.id==='correoProvinceSelect'){
-        const ca=state.shipping.correo||{};ca.state=e.target.value;ca.address=null;ca.agencyId='';ca.agencyName='';ca.inputAddress='';ca.agencyReference='';state.shipping.correo=ca;
+        const ca=state.shipping.correo||{};ca.state=e.target.value;ca.address=null;ca.homeSelection=null;ca.agencyId='';ca.agencyName='';ca.inputAddress='';ca.agencyReference='';state.shipping.correo=ca;
         state.correoFilterArea=null;state.correoMapPreview=null;state.correoAgencies=[];state.correoAddressSuggestions=[];state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;
         renderShippingDetail();
         if(ca.state||validCorreoPostal(ca.postalCode||'')){try{await resolveCorreoFilterArea(true);renderShippingDetail();}catch(err){toast(err.message,'error')}}
@@ -1690,7 +1697,7 @@
     });
     document.addEventListener('input',e=>{
       if(e.target.id==='correoPostalCode'){
-        const input=e.target,ca=state.shipping.correo||{};ca.postalCode=input.value.replace(/\s+/g,'').toUpperCase();ca.address=null;ca.agencyId='';ca.agencyName='';ca.inputAddress='';ca.agencyReference='';state.shipping.correo=ca;
+        const input=e.target,ca=state.shipping.correo||{};ca.postalCode=input.value.replace(/\s+/g,'').toUpperCase();ca.address=null;ca.homeSelection=null;ca.agencyId='';ca.agencyName='';ca.inputAddress='';ca.agencyReference='';state.shipping.correo=ca;
         state.correoFilterArea=null;state.correoMapPreview=null;state.correoAgencies=[];state.correoAddressSuggestions=[];state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;
         clearTimeout(state.correoSuggestTimer);state.correoSuggestTimer=setTimeout(async()=>{
           if(ca.postalCode&&!validCorreoPostal(ca.postalCode)){await renderCorreoMap().catch(()=>{});return;}
@@ -1699,11 +1706,11 @@
         },420);return;
       }
       if(e.target.id==='correoAgencyReferenceInput'){
-        const value=e.target.value,ca=state.shipping.correo||{};ca.agencyReference=value;ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.correoMapPreview=null;state.correoAgencies=[];
-        clearTimeout(state.correoSuggestTimer);state.correoSuggestTimer=setTimeout(()=>renderCorreoMap().catch(()=>{}),180);return;
+        const value=e.target.value,ca=state.shipping.correo||{};ca.agencyReference=value;ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.correoAgencies=[];
+        clearTimeout(state.correoSuggestTimer);state.correoSuggestTimer=setTimeout(()=>previewCorreoAddress(value).catch(()=>{}),260);return;
       }
       if(e.target.id!=='correoAddressInput')return;
-      const value=e.target.value;const ca=state.shipping.correo||{};ca.inputAddress=value;ca.address=null;state.shipping.correo=ca;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.correoLastParcel=null;state.correoMapPreview=null;
+      const value=e.target.value;const ca=state.shipping.correo||{};ca.inputAddress=value;ca.address=null;ca.homeSelection=null;state.shipping.correo=ca;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.correoLastParcel=null;state.correoMapPreview=null;
       clearTimeout(state.correoSuggestTimer);state.correoSuggestTimer=setTimeout(async()=>{
         await fetchCorreoSuggestions('home',value).catch(err=>toast(err.message,'error'));
       },280);
