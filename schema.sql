@@ -253,3 +253,113 @@ CREATE INDEX IF NOT EXISTS idx_customer_cart_uid ON customer_cart_items(uid);
 CREATE INDEX IF NOT EXISTS idx_customer_addresses_uid ON customer_addresses(uid);
 CREATE INDEX IF NOT EXISTS idx_customer_orders_uid ON customer_orders(uid);
 
+
+-- ===== SALMOS v16 · Compras, materia prima, recetas y producción =====
+CREATE TABLE IF NOT EXISTS materials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  material_type TEXT NOT NULL DEFAULT 'other',
+  name TEXT NOT NULL,
+  unit TEXT NOT NULL DEFAULT 'unit',
+  color TEXT NOT NULL DEFAULT '',
+  size TEXT NOT NULL DEFAULT '',
+  fit TEXT NOT NULL DEFAULT '',
+  width_cm REAL NOT NULL DEFAULT 0,
+  stock_qty REAL NOT NULL DEFAULT 0,
+  average_cost_cents REAL NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_material_identity ON materials(material_type,name,unit,color,size,fit,width_cm);
+
+CREATE TABLE IF NOT EXISTS purchases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  supplier TEXT NOT NULL DEFAULT '',
+  reference TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  total_cents INTEGER NOT NULL DEFAULT 0,
+  finance_movement_id INTEGER,
+  occurred_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(occurred_at);
+
+CREATE TABLE IF NOT EXISTS purchase_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id INTEGER NOT NULL,
+  material_id INTEGER NOT NULL,
+  material_type TEXT NOT NULL,
+  material_name TEXT NOT NULL,
+  quantity REAL NOT NULL,
+  unit TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '',
+  size TEXT NOT NULL DEFAULT '',
+  fit TEXT NOT NULL DEFAULT '',
+  width_cm REAL NOT NULL DEFAULT 0,
+  unit_price_cents INTEGER NOT NULL DEFAULT 0,
+  line_total_cents INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_material ON purchase_items(material_id);
+
+CREATE TABLE IF NOT EXISTS product_recipes (
+  product_id INTEGER PRIMARY KEY,
+  base_material_type TEXT NOT NULL DEFAULT '',
+  base_material_name TEXT NOT NULL DEFAULT '',
+  waste_percent REAL NOT NULL DEFAULT 10,
+  extra_cost_cents INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS product_recipe_designs (
+  product_id INTEGER NOT NULL,
+  design_asset_id INTEGER NOT NULL,
+  quantity REAL NOT NULL DEFAULT 1,
+  PRIMARY KEY(product_id,design_asset_id)
+);
+
+CREATE TABLE IF NOT EXISTS product_recipe_materials (
+  product_id INTEGER NOT NULL,
+  material_id INTEGER NOT NULL,
+  quantity REAL NOT NULL DEFAULT 1,
+  PRIMARY KEY(product_id,material_id)
+);
+
+CREATE TABLE IF NOT EXISTS production_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  product_id INTEGER NOT NULL,
+  variant_id INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'in_progress',
+  unit_cost_cents INTEGER NOT NULL DEFAULT 0,
+  base_cost_cents INTEGER NOT NULL DEFAULT 0,
+  print_cost_cents INTEGER NOT NULL DEFAULT 0,
+  extra_cost_cents INTEGER NOT NULL DEFAULT 0,
+  notes TEXT NOT NULL DEFAULT '',
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_production_status ON production_jobs(status,started_at);
+
+CREATE TABLE IF NOT EXISTS production_job_materials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL,
+  material_id INTEGER NOT NULL,
+  material_name TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  quantity_used REAL NOT NULL,
+  unit TEXT NOT NULL DEFAULT 'unit',
+  unit_cost_cents REAL NOT NULL DEFAULT 0,
+  line_cost_cents INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_production_materials_job ON production_job_materials(job_id);
+
+CREATE TABLE IF NOT EXISTS variant_costs (
+  variant_id INTEGER PRIMARY KEY,
+  average_cost_cents REAL NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

@@ -8,9 +8,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=15.0">
+  <link rel="stylesheet" href="styles.css?v=16.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=15.0">
+  <link rel="stylesheet" href="admin-v4.css?v=16.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -21,6 +21,8 @@
         <button class="admin-nav-btn" data-view="products">◫ <span>Productos</span></button>
         <button class="admin-nav-btn" data-view="orders">▤ <span>Órdenes</span></button>
         <button class="admin-nav-btn" data-view="customOrders">✦ <span>Pedidos</span></button>
+        <button class="admin-nav-btn" data-view="purchases">🛒 <span>Compras</span></button>
+        <button class="admin-nav-btn" data-view="production">⚒ <span>Producción</span></button>
         <button class="admin-nav-btn" data-view="stock">◈ <span>Stock</span></button>
         <button class="admin-nav-btn" data-view="designs">◩ <span>Diseños</span></button>
         <button class="admin-nav-btn" data-view="coupons">🎟 <span>Cupones</span></button>
@@ -50,16 +52,45 @@
     </form>
   </dialog>
 
+  <dialog class="admin-dialog" id="purchaseDialog">
+    <form class="dialog-shell" id="purchaseForm" method="dialog">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Compras</div><h2>Nueva compra</h2></div><button class="icon-btn" type="button" id="closePurchaseDialogBtn">×</button></div>
+      <div class="dialog-body">
+        <div class="form-grid purchase-header-grid">
+          <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
+          <div class="field"><label>Proveedor</label><input class="input" name="supplier" placeholder="Opcional"></div>
+          <div class="field"><label>Comprobante / referencia</label><input class="input" name="reference" placeholder="Factura, transferencia, etc."></div>
+          <div class="field"><label>Pagado desde</label><input class="input" name="origin" value="Caja SALMOS" placeholder="Caja SALMOS, Mercado Pago..."></div>
+        </div>
+        <div class="purchase-items-head"><div><h3>Materia prima comprada</h3><p class="muted">Cada renglón actualiza el stock y el costo promedio automáticamente.</p></div><button class="btn btn-ghost" type="button" id="addPurchaseItemBtn">+ Agregar renglón</button></div>
+        <div id="purchaseItems"></div>
+        <div class="purchase-total-card"><span>Total de la compra</span><strong id="purchaseTotal">$ 0</strong></div>
+        <div class="form-grid" style="margin-top:14px"><div class="field full"><label>Notas</label><textarea class="textarea" name="notes" rows="2" placeholder="Opcional"></textarea></div><div class="field full"><label>Comprobantes / imágenes</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Se guardan vinculados al egreso automático en Caja.</small></div></div>
+      </div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelPurchaseBtn">Cancelar</button><button class="btn btn-primary" type="button" id="savePurchaseBtn">Guardar compra</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="admin-dialog small" id="productionDialog">
+    <div class="dialog-shell">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Producción</div><h2>Enviar producto a producción</h2></div><button class="icon-btn" type="button" id="closeProductionDialogBtn">×</button></div>
+      <div class="dialog-body">
+        <div class="form-grid"><div class="field full"><label>Producto terminado</label><select class="select" id="productionProductSelect"><option value="">Elegir producto...</option></select></div><div class="field full"><label>Variante</label><select class="select" id="productionVariantSelect" disabled><option value="">Elegir variante...</option></select></div><div class="field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div><div class="field full"><label>Nota</label><textarea class="textarea" id="productionNotes" rows="2" placeholder="Opcional"></textarea></div></div>
+        <div class="production-preview" id="productionPreview"><div class="notice">Elegí producto y variante para calcular los materiales y el costo.</div></div>
+      </div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionBtn">Cancelar</button><button class="btn btn-primary" type="button" id="saveProductionBtn" disabled>Iniciar producción</button></div>
+    </div>
+  </dialog>
+
   <dialog class="admin-dialog small" id="movementDialog">
     <form method="dialog" class="dialog-shell" id="movementForm">
       <div class="dialog-head"><div><div class="admin-eyebrow">Caja</div><h2 id="movementDialogTitle">Nuevo ingreso / egreso</h2></div><button class="icon-btn" value="cancel" formnovalidate>×</button></div>
       <div class="dialog-body">
         <div class="form-grid">
-          <div class="field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="investment">Inversión / mercadería</option><option value="income">Ingreso</option></select></div>
+          <div class="field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
-          <div class="field"><label>Motivo / etiqueta</label><input class="input" name="category" list="financeReasonTags" placeholder="Ej.: Venta, Compra, Aporte, Gasto" required><datalist id="financeReasonTags"><option value="Venta"><option value="Compra"><option value="Inversión"><option value="Aporte"><option value="Gasto"></datalist><datalist id="investmentProductTypes"><option value="Remeras"><option value="Gorras"><option value="Tazas"><option value="Vasos"><option value="Chombas"><option value="Buzos"><option value="Bolsos"><option value="DTF"><option value="Otros"></datalist></div>
+          <div class="field"><label>Motivo / etiqueta</label><input class="input" name="category" list="financeReasonTags" placeholder="Ej.: Venta, Compra, Aporte, Gasto" required><datalist id="financeReasonTags"><option value="Venta"><option value="Aporte"><option value="Publicidad"><option value="Servicio"><option value="Gasto"></datalist></div>
           <div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
-          <div class="field full hidden" id="investmentItemsField"><div class="investment-head"><div><label>Productos que entran en producción</label><small class="field-help">Cargá tipo, cantidad, color y talle/variante. Se crean como productos borrador con estado En producción para completar después con fotos, precio y detalles.</small></div><button type="button" class="btn btn-ghost" id="addInvestmentItemBtn">+ Agregar producto</button></div><div id="investmentItems"></div></div>
           <div class="field"><label>Origen</label><input class="input" name="origin" placeholder="Ej.: Caja SALMOS, Mercado Pago"></div>
           <div class="field"><label>Destino</label><input class="input" name="destination" placeholder="Ej.: Proveedor, imprenta"></div>
           <div class="field"><label>Importe</label><input class="input" name="amount" type="number" min="0" step="1" required></div>
@@ -92,7 +123,7 @@
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Subir diseño</h2></div><button class="icon-btn" type="button" id="closeDesignUploadBtn">×</button></div>
       <div class="dialog-body">
-        <div class="form-grid"><div class="field"><label>Sección</label><select class="select" id="designUploadScope"><option value="clients">Clientes</option><option value="salmos">SALMOS</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field"><label>Nombre (opcional)</label><input class="input" id="designUploadName" placeholder="Si subís varios usa el nombre del archivo"></div><div class="field"><label>Medidas</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field full"><label>Nota</label><textarea class="textarea" id="designUploadNote" rows="2"></textarea></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple><small class="field-help">Se sube el archivo binario tal cual. Para DTF, preferí PNG/TIFF original.</small></div></div>
+        <div class="form-grid"><div class="field"><label>Sección</label><select class="select" id="designUploadScope"><option value="clients">Clientes</option><option value="salmos">SALMOS</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field"><label>Nombre (opcional)</label><input class="input" id="designUploadName" placeholder="Si subís varios usa el nombre del archivo"></div><div class="field"><label>Medidas</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field"><label>Impresión / costo</label><select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></div><div class="field full"><label>Nota</label><textarea class="textarea" id="designUploadNote" rows="2"></textarea></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple><small class="field-help">Se sube el archivo binario tal cual. Para DTF, preferí PNG/TIFF original.</small></div></div>
       </div>
       <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelDesignUploadBtn">Cancelar</button><button class="btn btn-primary" type="button" id="uploadDesignBtn">Subir sin modificar</button></div>
     </div>
@@ -115,7 +146,7 @@
 
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=15.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=15.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=16.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=16.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 </body>
 </html>
