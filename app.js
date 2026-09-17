@@ -998,11 +998,11 @@
       const filters=`<div class="correo-location-filter"><div class="field"><label>Provincia</label><select class="select" id="correoProvinceSelect" autocomplete="off">${provinceOptions}</select><small class="field-help">Podés usar provincia, código postal o ambos.</small></div><div class="field"><label>Código postal</label><input class="input" id="correoPostalCode" autocomplete="one-time-code" data-form-type="other" inputmode="text" placeholder="Ej.: 1806 o B1806" value="${escapeHtml(ca.postalCode||'')}"><small class="field-help">Si lo completás, se usa como código postal real, nunca como nombre de calle.</small></div></div>`;
       let body='';
       if(ca.deliveryType==='agency'){
-        body=`${filters}<div class="field correo-search-wrap"><label>Dirección o localidad de referencia <span class="muted">(opcional)</span></label><input class="input" id="correoAgencyReferenceInput" autocomplete="one-time-code" data-form-type="other" spellcheck="false" placeholder="Ej.: Tristán Suárez o Roca 123" value="${escapeHtml(ca.agencyReference||'')}" ${filterReady?'':'disabled'}><small class="field-help">Si escribís una referencia, las sucursales se ordenan desde ese punto. Si no, usamos provincia/código postal.</small></div>${filterReady?`<button class="btn btn-secondary full" id="loadCorreoAgenciesBtn">${state.correoAgenciesLoading?'Buscando...':'Buscar sucursales y puntos PAQ.AR cercanos'}</button>`:'<div class="notice correo-filter-note">Elegí una provincia o escribí un código postal para ubicar la zona.</div>'}
+        body=`${filters}<div class="field correo-search-wrap"><label>Dirección o localidad de referencia <span class="muted">(opcional)</span></label><input class="input" id="correoAgencyReferenceInput" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore="true" spellcheck="false" placeholder="Ej.: localidad o calle y altura" value="${escapeHtml(ca.agencyReference||'')}" ${filterReady?'':'disabled'}><small class="field-help">Si escribís una referencia, las sucursales se ordenan desde ese punto. Si no, usamos provincia/código postal.</small></div>${filterReady?`<button class="btn btn-secondary full" id="loadCorreoAgenciesBtn">${state.correoAgenciesLoading?'Buscando...':'Buscar sucursales y puntos PAQ.AR cercanos'}</button>`:'<div class="notice correo-filter-note">Elegí una provincia o escribí un código postal para ubicar la zona.</div>'}
           <div class="correo-agency-list">${state.correoAgenciesLoading?'<div class="notice">Consultando sucursales y puntos habilitados...</div>':state.correoAgencies.length?state.correoAgencies.map(a=>`<button type="button" class="correo-agency-card ${String(ca.agencyId||'')===String(a.agencyId)?'active':''}" data-correo-agency="${escapeHtml(a.agencyId)}"><strong>${escapeHtml(a.agencyName)}</strong><small>${escapeHtml([a.location?.streetName,a.location?.streetNumber,a.location?.cityName,a.location?.zipCode].filter(Boolean).join(' '))}</small>${Number.isFinite(Number(a.distanceKm))?`<small class="agency-distance">A ${Number(a.distanceKm).toFixed(1)} km aprox.</small>`:''}${a.schedule?`<small>${escapeHtml(a.schedule)}</small>`:''}</button>`).join(''):(filterReady?'<div class="muted correo-empty">Tocá “Buscar sucursales y puntos PAQ.AR cercanos”.</div>':'')}</div>
           ${ca.agencyId?`<div class="address-confirm"><strong>Punto elegido:</strong><br>${escapeHtml(ca.agencyName||ca.agencyId)}</div>`:''}`;
       }else{
-        body=`${filters}<div class="field correo-search-wrap"><label>Calle y altura</label><input class="input" id="correoAddressInput" autocomplete="one-time-code" data-form-type="other" autocapitalize="words" spellcheck="false" placeholder="Ej.: Carrizo 123" value="${escapeHtml(ca.inputAddress||'')}" ${filterReady?'':'disabled'}><small class="field-help">${filterReady?'Escribí parte del nombre. Buscamos coincidencias dentro de la zona elegida y el mapa acompaña la búsqueda.':'Primero elegí una provincia o escribí un código postal.'}</small><div class="correo-suggestions" id="correoAddressSuggestions">${state.correoAddressSuggestions.map((x,i)=>`<button type="button" class="correo-suggestion" data-correo-address-suggestion="${i}"><strong>${escapeHtml(x.mainText||x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')}</div></div>
+        body=`${filters}<div class="field correo-search-wrap"><label>Calle y altura</label><input class="input" id="correoAddressInput" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="words" spellcheck="false" placeholder="Ej.: calle y altura" value="${escapeHtml(ca.inputAddress||'')}" ${filterReady?'':'disabled'}><small class="field-help">${filterReady?'Escribí parte del nombre. Buscamos coincidencias dentro de la zona elegida y el mapa acompaña la búsqueda.':'Primero elegí una provincia o escribí un código postal.'}</small><div class="correo-suggestions" id="correoAddressSuggestions">${state.correoAddressSuggestions.map((x,i)=>`<button type="button" class="correo-suggestion" data-correo-address-suggestion="${i}"><strong>${escapeHtml(x.mainText||x.text)}</strong>${x.secondaryText?`<small>${escapeHtml(x.secondaryText)}</small>`:''}</button>`).join('')}</div></div>
           ${ca.address?`<div class="address-confirm"><strong>Dirección elegida:</strong><br>${escapeHtml(state.shipping.address||'')}</div>`:''}`;
       }
       const mapStatus=state.shipping.address?`Ubicación seleccionada: ${escapeHtml(state.shipping.address)}`:state.correoFilterArea?.formattedAddress?`Zona de búsqueda: ${escapeHtml(state.correoFilterArea.formattedAddress)}`:'Elegí provincia o código postal para ubicar el mapa.';
@@ -1175,7 +1175,11 @@
   async function loadCorreoAgencies(){
     const ca=state.shipping.correo||{};let area=await resolveCorreoFilterArea();
     if(String(ca.agencyReference||'').trim()){
-      const preview=await previewCorreoAddress(ca.agencyReference);if(preview)area={...area,lat:preview.lat,lng:preview.lng,formattedAddress:preview.label||area.formattedAddress};
+      try{
+        const d=await api('/api/geo/autocomplete',{method:'POST',body:JSON.stringify({input:String(ca.agencyReference||'').trim(),area,provinceCode:ca.state||'',provinceName:correoProvinceName(ca.state),postalCode:ca.postalCode||''})});
+        const first=(d.items||[])[0];
+        if(first?.location&&hasCorreoCoords(first.location.lat,first.location.lng))area={...area,lat:Number(first.location.lat),lng:Number(first.location.lng),formattedAddress:first.text||area.formattedAddress};
+      }catch{}
     }
     ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.costCents=0;state.correoAgencies=[];state.correoAgenciesLoading=true;renderShippingDetail();
     try{
@@ -1696,14 +1700,13 @@
       }
       if(e.target.id==='correoAgencyReferenceInput'){
         const value=e.target.value,ca=state.shipping.correo||{};ca.agencyReference=value;ca.agencyId='';ca.agencyName='';state.shipping.correo=ca;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.correoMapPreview=null;state.correoAgencies=[];
-        clearTimeout(state.correoSuggestTimer);state.correoSuggestTimer=setTimeout(()=>previewCorreoAddress(value).catch(()=>{}),320);return;
+        clearTimeout(state.correoSuggestTimer);state.correoSuggestTimer=setTimeout(()=>renderCorreoMap().catch(()=>{}),180);return;
       }
       if(e.target.id!=='correoAddressInput')return;
       const value=e.target.value;const ca=state.shipping.correo||{};ca.inputAddress=value;ca.address=null;state.shipping.correo=ca;state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;state.shipping.costCents=0;state.correoLastParcel=null;state.correoMapPreview=null;
       clearTimeout(state.correoSuggestTimer);state.correoSuggestTimer=setTimeout(async()=>{
-        await previewCorreoAddress(value).catch(()=>{});
         await fetchCorreoSuggestions('home',value).catch(err=>toast(err.message,'error'));
-      },320);
+      },280);
     });
   }
 

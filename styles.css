@@ -1289,3 +1289,7 @@ img { display: block; max-width: 100%; }
   .correo-map{height:340px}
 }
 @media(max-width:520px){.correo-map{height:300px}.correo-workspace{gap:12px}}
+
+/* v13 · CTA por pedido */
+.made-order-request{appearance:none!important;text-decoration:none!important;border:1px solid var(--gold-dark)!important;background:linear-gradient(135deg,var(--gold-2),var(--gold))!important;color:#17120a!important;border-radius:999px!important;padding:9px 16px!important;min-height:36px;display:inline-flex;align-items:center;justify-content:center;font-size:12px!important;box-shadow:0 5px 16px color-mix(in srgb,var(--gold) 22%,transparent);transition:transform .15s ease,filter .15s ease}.made-order-request:hover,.made-order-request:focus-visible{color:#17120a!important;filter:brightness(1.04);transform:translateY(-1px)}
+@media(max-width:620px){.made-order-request{padding:8px 13px!important;font-size:11px!important}}

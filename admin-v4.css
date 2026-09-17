@@ -167,3 +167,9 @@ tr.sorting{opacity:.55;outline:1px dashed var(--gold)}
   .design-detail-summary{display:grid}.design-detail-summary .admin-actions{justify-content:flex-start}
   .flyer-gallery-card{flex-basis:170px;width:170px;height:220px}
 }
+
+/* v13 · filtros/galerías e inversiones */
+.stock-count-chip{appearance:none;cursor:pointer}.stock-count-chip.active{border-color:var(--gold);box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 45%,transparent);background:color-mix(in srgb,var(--gold) 9%,var(--surface-2))}
+.horizontal-gallery-shell{position:relative}.gallery-arrow{position:absolute;z-index:4;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:999px;border:1px solid var(--gold-dark);background:color-mix(in srgb,var(--surface) 92%,transparent);color:var(--gold-2);font-size:28px;line-height:1;display:grid;place-items:center;cursor:pointer;box-shadow:0 5px 16px rgba(0,0,0,.25)}.gallery-arrow-left{left:7px}.gallery-arrow-right{right:7px}.dashboard-stock-products{padding-inline:34px}.dashboard-stock-product.hidden{display:none!important}
+.investment-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}.investment-item{display:grid;grid-template-columns:minmax(150px,1.5fr) 95px minmax(120px,1fr) minmax(130px,1fr) 38px;gap:9px;align-items:end;padding:12px 0;border-top:1px solid var(--line)}.investment-item:first-child{border-top:0}.investment-remove{margin-bottom:1px}
+@media(max-width:760px){.investment-item{grid-template-columns:1fr 90px}.investment-item .field:nth-of-type(3),.investment-item .field:nth-of-type(4){grid-column:span 1}.investment-remove{grid-column:2;justify-self:end}.gallery-arrow{width:34px;height:34px}.dashboard-stock-products{padding-inline:26px}}

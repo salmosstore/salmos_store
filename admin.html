@@ -8,9 +8,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=12.0">
+  <link rel="stylesheet" href="styles.css?v=13.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=12.0">
+  <link rel="stylesheet" href="admin-v4.css?v=13.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -55,10 +55,11 @@
       <div class="dialog-head"><div><div class="admin-eyebrow">Caja</div><h2 id="movementDialogTitle">Nuevo ingreso / egreso</h2></div><button class="icon-btn" value="cancel" formnovalidate>×</button></div>
       <div class="dialog-body">
         <div class="form-grid">
-          <div class="field"><label>Tipo</label><select class="select" name="type"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
+          <div class="field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="investment">Inversión / mercadería</option><option value="income">Ingreso</option></select></div>
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
-          <div class="field"><label>Motivo / etiqueta</label><input class="input" name="category" list="financeReasonTags" placeholder="Ej.: Venta, Compra, Aporte, Gasto" required><datalist id="financeReasonTags"><option value="Venta"><option value="Compra"><option value="Aporte"><option value="Gasto"></datalist></div>
-          <div class="field full"><label>Detalle</label><input class="input" name="description" placeholder="Ej.: 8 remeras para..., compra de bolsas..." required></div>
+          <div class="field"><label>Motivo / etiqueta</label><input class="input" name="category" list="financeReasonTags" placeholder="Ej.: Venta, Compra, Aporte, Gasto" required><datalist id="financeReasonTags"><option value="Venta"><option value="Compra"><option value="Inversión"><option value="Aporte"><option value="Gasto"></datalist><datalist id="investmentProductTypes"><option value="Remeras"><option value="Gorras"><option value="Tazas"><option value="Vasos"><option value="Chombas"><option value="Buzos"><option value="Bolsos"><option value="DTF"><option value="Otros"></datalist></div>
+          <div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
+          <div class="field full hidden" id="investmentItemsField"><div class="investment-head"><div><label>Productos que entran en producción</label><small class="field-help">Cargá tipo, cantidad, color y talle/variante. Se crean como productos borrador con estado En producción para completar después con fotos, precio y detalles.</small></div><button type="button" class="btn btn-ghost" id="addInvestmentItemBtn">+ Agregar producto</button></div><div id="investmentItems"></div></div>
           <div class="field"><label>Origen</label><input class="input" name="origin" placeholder="Ej.: Caja SALMOS, Mercado Pago"></div>
           <div class="field"><label>Destino</label><input class="input" name="destination" placeholder="Ej.: Proveedor, imprenta"></div>
           <div class="field"><label>Importe</label><input class="input" name="amount" type="number" min="0" step="1" required></div>
@@ -114,7 +115,7 @@
 
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=12.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=12.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=13.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=13.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 </body>
 </html>
