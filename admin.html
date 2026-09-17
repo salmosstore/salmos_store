@@ -8,9 +8,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=9.0">
+  <link rel="stylesheet" href="styles.css?v=9.1">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=9.0">
+  <link rel="stylesheet" href="admin-v4.css?v=9.1">
 </head>
 <body>
   <div class="admin-layout">
@@ -36,7 +36,7 @@
       <header class="admin-topbar">
         <button class="icon-btn admin-menu-btn" id="adminMenuBtn" type="button">☰</button>
         <div><div class="admin-eyebrow">Panel SALMOS</div><h1 id="viewTitle">Dashboard</h1></div>
-        <button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button>
+        <div class="admin-topbar-actions"><button class="btn btn-ghost admin-list-toggle" id="collapseAdminListsBtn" type="button" title="Comprimir listados largos">Comprimir listas</button><button class="btn btn-ghost admin-list-toggle hidden" id="expandAdminListsBtn" type="button" title="Descomprimir listados">Descomprimir listas</button><button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button></div>
       </header>
       <section class="admin-content" id="adminContent"><div class="empty-state"><strong>Cargando panel...</strong></div></section>
     </main>
@@ -78,7 +78,7 @@
 
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=9.0" defer></script>
+  <script src="admin.js?v=9.1" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));</script>
 </body>
 </html>
