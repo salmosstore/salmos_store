@@ -8,9 +8,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=11.0">
+  <link rel="stylesheet" href="styles.css?v=12.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=11.0">
+  <link rel="stylesheet" href="admin-v4.css?v=12.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -70,6 +70,23 @@
   </dialog>
 
 
+
+  <dialog class="admin-dialog" id="flyerUploadDialog">
+    <form class="dialog-shell" id="flyerUploadForm" method="dialog">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Flyers</div><h2>Subir flyer</h2></div><button class="icon-btn" type="button" id="closeFlyerUploadBtn">×</button></div>
+      <div class="dialog-body"><p class="muted">Subí imágenes, videos o PDF. La galería queda limpia y la configuración se hace acá.</p><div class="form-grid"><div class="field"><label>Título (opcional)</label><input class="input" name="title" autocomplete="off"></div><div class="field"><label class="toggle-label"><input type="checkbox" name="public"> Publicar ahora</label></div><div class="field full"><label>Archivos</label><input class="input" name="files" type="file" accept="image/*,video/*,application/pdf" multiple required></div></div></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelFlyerUploadBtn">Cancelar</button><button type="button" class="btn btn-primary" id="uploadFlyersBtn">Subir archivos</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="admin-dialog" id="flyerDetailDialog">
+    <div class="dialog-shell">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Flyer</div><h2 id="flyerDetailHeading">Detalles</h2></div><button class="icon-btn" type="button" id="closeFlyerDetailBtn">×</button></div>
+      <div class="dialog-body"><div class="flyer-detail-preview" id="flyerDetailPreview"></div><div class="form-grid flyer-detail-fields"><div class="field"><label>Título</label><input class="input" id="flyerDetailTitle" autocomplete="off"></div><div class="field"><label>Orden</label><input class="input" id="flyerDetailSort" type="number" step="1"></div><div class="field full"><label class="toggle-label"><input type="checkbox" id="flyerDetailPublic"> Público en la tienda</label></div></div></div>
+      <div class="dialog-foot"><button class="btn btn-danger" type="button" id="deleteFlyerDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelFlyerDetailBtn">Cerrar</button><button class="btn btn-primary" type="button" id="saveFlyerDetailBtn">Guardar cambios</button></div>
+    </div>
+  </dialog>
+
   <dialog class="admin-dialog" id="designUploadDialog">
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Subir diseño</h2></div><button class="icon-btn" type="button" id="closeDesignUploadBtn">×</button></div>
@@ -97,7 +114,7 @@
 
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=11.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));</script>
+  <script src="admin.js?v=12.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=12.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 </body>
 </html>

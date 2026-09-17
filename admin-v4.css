@@ -131,3 +131,39 @@ tr.sorting{opacity:.55;outline:1px dashed var(--gold)}
 .design-library-section>.design-grid>.design-asset-card{flex:0 0 min(330px,86vw);scroll-snap-align:start}
 .design-library-section.list-collapsed>.design-grid{display:none!important}
 @media(max-width:680px){.design-library-section>.design-grid>.design-asset-card{flex-basis:86vw}}
+
+/* ===== SALMOS v12 · galerías limpias de administración ===== */
+.dashboard-stock-products{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 10px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.dashboard-stock-product{flex:0 0 178px;scroll-snap-align:start;border:1px solid var(--line);border-radius:15px;overflow:hidden;background:var(--surface-2);min-width:0}
+.dashboard-stock-product-media{height:150px;display:grid;place-items:center;background:#0b0b0c;overflow:hidden}
+.dashboard-stock-product-media img{width:100%;height:100%;object-fit:contain}
+.dashboard-stock-product-media span{font-weight:950;color:var(--gold-2);letter-spacing:.08em}
+.dashboard-stock-product-copy{padding:10px;display:grid;gap:3px;min-width:0}
+.dashboard-stock-product-copy strong{font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dashboard-stock-product-copy small{font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dashboard-stock-product-copy div{font-size:.75rem;color:var(--gold-2);font-weight:850;line-height:1.4;margin-top:3px}
+
+.design-library-section>.design-grid{display:flex!important;gap:11px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 11px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.design-gallery-card{position:relative;flex:0 0 190px;scroll-snap-align:start;min-width:0}
+.design-gallery-thumb{appearance:none;width:190px;height:190px;padding:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;place-items:center;cursor:pointer;background:var(--surface);box-shadow:0 7px 22px rgba(0,0,0,.08);transition:transform .16s ease,border-color .16s ease}
+.design-gallery-thumb:hover{transform:translateY(-2px);border-color:var(--gold)}
+.design-gallery-thumb img{width:100%;height:100%;object-fit:contain}
+.design-sheet-check{position:absolute;z-index:3;top:8px;right:8px;width:30px;height:30px;border-radius:9px;background:rgba(8,8,9,.86);border:1px solid rgba(255,255,255,.18);display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.design-sheet-check input{position:absolute;opacity:0;pointer-events:none}.design-sheet-check span{color:#fff;font-weight:950;opacity:.28}.design-sheet-check:has(input:checked){background:var(--gold);border-color:var(--gold)}.design-sheet-check:has(input:checked) span{color:#17120a;opacity:1}
+.design-detail-summary{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:12px 2px 2px;color:var(--text)}
+.design-detail-summary>div:first-child{display:grid;gap:5px;min-width:0}.design-detail-summary small{display:block;color:var(--muted);font-size:.78rem;overflow-wrap:anywhere}.design-detail-summary p{margin:4px 0;white-space:pre-wrap;line-height:1.45}.design-detail-summary .status{width:max-content;margin-top:4px}
+.design-detail-summary.editing{opacity:.72}.design-detail-editor{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
+.dialog-spacer{flex:1}
+
+.flyer-gallery-horizontal{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 12px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.flyer-gallery-card{position:relative;appearance:none;flex:0 0 205px;width:205px;height:255px;border:1px solid var(--line);border-radius:16px;padding:0;overflow:hidden;background:var(--surface);cursor:pointer;scroll-snap-align:start;box-shadow:0 7px 22px rgba(0,0,0,.08);transition:transform .16s ease,border-color .16s ease}
+.flyer-gallery-card:hover{transform:translateY(-2px);border-color:var(--gold)}
+.flyer-gallery-media{width:100%;height:100%;display:grid;place-items:center;background:#09090a}.flyer-gallery-media img,.flyer-gallery-media video{width:100%;height:100%;object-fit:contain}.flyer-public-dot{position:absolute;top:9px;right:9px;width:10px;height:10px;border-radius:50%;background:#46cf79;box-shadow:0 0 0 4px rgba(0,0,0,.42)}
+.flyer-detail-preview{height:min(62vh,620px);display:grid;place-items:center;overflow:auto;border:1px solid var(--line);border-radius:14px;background:#09090a}.flyer-detail-preview img,.flyer-detail-preview video{max-width:100%;max-height:100%;object-fit:contain}.flyer-detail-fields{margin-top:14px}
+
+@media(max-width:680px){
+  .dashboard-stock-product{flex-basis:154px}.dashboard-stock-product-media{height:132px}
+  .design-gallery-card,.design-gallery-thumb{width:158px;flex-basis:158px}.design-gallery-thumb{height:158px}
+  .design-detail-summary{display:grid}.design-detail-summary .admin-actions{justify-content:flex-start}
+  .flyer-gallery-card{flex-basis:170px;width:170px;height:220px}
+}

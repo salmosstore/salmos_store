@@ -1265,3 +1265,27 @@ img { display: block; max-width: 100%; }
 @media(max-width:900px){.desktop-category-nav{display:none!important}}
 @media(min-width:901px){#categoryBar{display:none!important}.header-row{grid-template-columns:auto minmax(0,1fr) auto}.desktop-category-nav:not(.hidden){display:block}}
 @media(max-width:680px){.correo-location-filter{grid-template-columns:1fr}.correo-map{height:280px}}
+
+/* ===== SALMOS v12 · cabecera centrada + Correo profesional ===== */
+@media(min-width:901px){
+  .header-main-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px}
+  .header-main-row .brand-icon-only{margin-right:0}
+  .desktop-category-nav:not(.hidden){display:flex!important;align-items:center;justify-content:center;min-width:0;width:100%;overflow:hidden}
+  .desktop-category-row{width:100%;justify-content:center;padding:3px 16px;scroll-padding-inline:16px}
+  .header-main-actions{justify-self:end}
+}
+.correo-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.95fr);gap:18px;align-items:start;margin-top:14px}
+.correo-data-column{min-width:0;display:grid;gap:12px}
+.correo-map-column{min-width:0;position:sticky;top:92px}
+.correo-map-card{padding:10px;border:1px solid var(--line);border-radius:18px;background:var(--surface-2);box-shadow:0 12px 30px rgba(0,0,0,.08)}
+.correo-map{height:500px;margin:0;border-radius:14px}
+.correo-map-status{padding:9px 4px 2px;font-size:.78rem;font-weight:750;color:var(--text);line-height:1.4}
+.correo-map-card>.field-help{display:block;padding:2px 4px 3px}
+.correo-location-filter{margin:0}
+.correo-search-wrap{margin-top:2px}
+@media(max-width:900px){
+  .correo-workspace{grid-template-columns:1fr}
+  .correo-map-column{position:static}
+  .correo-map{height:340px}
+}
+@media(max-width:520px){.correo-map{height:300px}.correo-workspace{gap:12px}}

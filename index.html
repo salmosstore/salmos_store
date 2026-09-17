@@ -30,7 +30,7 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=11.0">
+  <link rel="stylesheet" href="styles.css?v=12.0">
 </head>
 <body class="store-pending">
   <header class="site-header">
@@ -183,9 +183,9 @@
   <div class="toast-stack" id="toastStack"></div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=11.0" defer></script>
+  <script src="app.js?v=12.0" defer></script>
   <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=11.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=12.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
 </body>
 </html>
