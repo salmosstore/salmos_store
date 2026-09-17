@@ -8,9 +8,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=9.1">
+  <link rel="stylesheet" href="styles.css?v=11.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=9.1">
+  <link rel="stylesheet" href="admin-v4.css?v=11.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -69,6 +69,25 @@
     </form>
   </dialog>
 
+
+  <dialog class="admin-dialog" id="designUploadDialog">
+    <div class="dialog-shell">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Subir diseño</h2></div><button class="icon-btn" type="button" id="closeDesignUploadBtn">×</button></div>
+      <div class="dialog-body">
+        <div class="form-grid"><div class="field"><label>Sección</label><select class="select" id="designUploadScope"><option value="clients">Clientes</option><option value="salmos">SALMOS</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field"><label>Nombre (opcional)</label><input class="input" id="designUploadName" placeholder="Si subís varios usa el nombre del archivo"></div><div class="field"><label>Medidas</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field full"><label>Nota</label><textarea class="textarea" id="designUploadNote" rows="2"></textarea></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple><small class="field-help">Se sube el archivo binario tal cual. Para DTF, preferí PNG/TIFF original.</small></div></div>
+      </div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelDesignUploadBtn">Cancelar</button><button class="btn btn-primary" type="button" id="uploadDesignBtn">Subir sin modificar</button></div>
+    </div>
+  </dialog>
+
+  <dialog class="admin-dialog small" id="designEmailDialog">
+    <div class="dialog-shell">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Enviar planchas por mail</h2></div><button class="icon-btn" type="button" id="closeDesignEmailBtn">×</button></div>
+      <div class="dialog-body"><p class="muted">Primero marcá las planchas en las galerías. Se envían enlaces al archivo original, sin recomprimir.</p><div class="form-grid"><div class="field full"><label>Email destinatario</label><input class="input" id="designEmailTo" type="email" placeholder="impresion@..."></div><div class="field full"><label>Mensaje (opcional)</label><textarea class="textarea" id="designEmailMessage" rows="3"></textarea></div></div></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelDesignEmailBtn">Cancelar</button><button class="btn btn-primary" type="button" id="emailDesignSheetsBtn">Enviar planchas seleccionadas</button></div>
+    </div>
+  </dialog>
+
   <dialog class="admin-dialog design-preview-dialog" id="designPreviewDialog">
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseño original</div><h2 id="designPreviewTitle">Vista previa</h2></div><button class="icon-btn" type="button" id="closeDesignPreviewBtn">×</button></div>
@@ -78,7 +97,7 @@
 
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=9.1" defer></script>
+  <script src="admin.js?v=11.0" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));</script>
 </body>
 </html>
