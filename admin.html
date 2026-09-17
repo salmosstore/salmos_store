@@ -8,9 +8,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=16.0">
+  <link rel="stylesheet" href="styles.css?v=17.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=16.0">
+  <link rel="stylesheet" href="admin-v4.css?v=17.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -52,33 +52,73 @@
     </form>
   </dialog>
 
-  <dialog class="admin-dialog" id="purchaseDialog">
+  <dialog class="admin-dialog purchase-dialog" id="purchaseDialog">
     <form class="dialog-shell" id="purchaseForm" method="dialog">
       <div class="dialog-head"><div><div class="admin-eyebrow">Compras</div><h2>Nueva compra</h2></div><button class="icon-btn" type="button" id="closePurchaseDialogBtn">×</button></div>
       <div class="dialog-body">
         <div class="form-grid purchase-header-grid">
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
           <div class="field"><label>Proveedor</label><input class="input" name="supplier" placeholder="Opcional"></div>
-          <div class="field"><label>Comprobante / referencia</label><input class="input" name="reference" placeholder="Factura, transferencia, etc."></div>
-          <div class="field"><label>Pagado desde</label><input class="input" name="origin" value="Caja SALMOS" placeholder="Caja SALMOS, Mercado Pago..."></div>
+          <div class="field"><label>Comprobante / referencia</label><input class="input" name="reference" placeholder="Factura, ticket, número de operación..."></div>
         </div>
-        <div class="purchase-items-head"><div><h3>Materia prima comprada</h3><p class="muted">Cada renglón actualiza el stock y el costo promedio automáticamente.</p></div><button class="btn btn-ghost" type="button" id="addPurchaseItemBtn">+ Agregar renglón</button></div>
+        <div class="purchase-items-head"><div><h3>Materia prima comprada</h3><p class="muted">Cargá cada variante una sola vez. Lo que escribas queda disponible como opción en próximas compras.</p></div><button class="btn btn-ghost" type="button" id="addPurchaseItemBtn">+ Agregar renglón</button></div>
         <div id="purchaseItems"></div>
-        <div class="purchase-total-card"><span>Total de la compra</span><strong id="purchaseTotal">$ 0</strong></div>
-        <div class="form-grid" style="margin-top:14px"><div class="field full"><label>Notas</label><textarea class="textarea" name="notes" rows="2" placeholder="Opcional"></textarea></div><div class="field full"><label>Comprobantes / imágenes</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Se guardan vinculados al egreso automático en Caja.</small></div></div>
+        <section class="purchase-payment-card">
+          <div class="purchase-money-summary"><div><span>Subtotal</span><strong id="purchaseSubtotal">$ 0</strong></div><div class="field compact"><label>Recargo / comisión ($)</label><input class="input" name="surcharge" id="purchaseSurcharge" type="number" min="0" step="1" value=""></div><div class="purchase-grand-total"><span>Total a pagar</span><strong id="purchaseTotal">$ 0</strong></div></div>
+          <div class="form-grid purchase-payment-grid">
+            <div class="field"><label>Forma de pago</label><select class="select" name="payment_method" id="purchasePaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option></select></div>
+            <div class="field payment-cash-field"><label>Importe en efectivo ($)</label><input class="input" name="cash_amount" id="purchaseCashAmount" type="number" min="0" step="1"></div>
+            <div class="field payment-transfer-field hidden"><label>Importe transferido ($)</label><input class="input" name="transfer_amount" id="purchaseTransferAmount" type="number" min="0" step="1"></div>
+            <div class="field payment-transfer-field hidden"><label>Cuenta de origen</label><input class="input" name="transfer_origin" list="purchaseAccountOptions" placeholder="Ej.: Mercado Pago, banco, alias..."></div>
+            <div class="field payment-transfer-field hidden"><label>Cuenta de destino (opcional)</label><input class="input" name="transfer_destination" placeholder="Cuenta / alias del proveedor"></div>
+          </div>
+          <div class="purchase-payment-help" id="purchasePaymentHelp">El total se registrará en Caja automáticamente como compra.</div>
+        </section>
+        <div class="form-grid purchase-notes-grid"><div class="field full"><label>Notas</label><textarea class="textarea" name="notes" rows="2" placeholder="Opcional"></textarea></div><div class="field full"><label>Comprobantes / imágenes</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Quedan vinculados a la compra y al egreso generado en Caja.</small></div></div>
       </div>
       <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelPurchaseBtn">Cancelar</button><button class="btn btn-primary" type="button" id="savePurchaseBtn">Guardar compra</button></div>
     </form>
   </dialog>
 
-  <dialog class="admin-dialog small" id="productionDialog">
+  <dialog class="admin-dialog production-builder-dialog" id="productionDialog">
     <div class="dialog-shell">
-      <div class="dialog-head"><div><div class="admin-eyebrow">Producción</div><h2>Enviar producto a producción</h2></div><button class="icon-btn" type="button" id="closeProductionDialogBtn">×</button></div>
-      <div class="dialog-body">
-        <div class="form-grid"><div class="field full"><label>Producto terminado</label><select class="select" id="productionProductSelect"><option value="">Elegir producto...</option></select></div><div class="field full"><label>Variante</label><select class="select" id="productionVariantSelect" disabled><option value="">Elegir variante...</option></select></div><div class="field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div><div class="field full"><label>Nota</label><textarea class="textarea" id="productionNotes" rows="2" placeholder="Opcional"></textarea></div></div>
-        <div class="production-preview" id="productionPreview"><div class="notice">Elegí producto y variante para calcular los materiales y el costo.</div></div>
+      <div class="dialog-head"><div><div class="admin-eyebrow">Producción</div><h2>Armar producto terminado</h2></div><button class="icon-btn" type="button" id="closeProductionDialogBtn">×</button></div>
+      <div class="production-tabs"><button class="production-tab active" type="button" data-production-tab="1"><span>1</span> Producción y costos</button><button class="production-tab" type="button" data-production-tab="2"><span>2</span> Publicación</button></div>
+      <div class="dialog-body production-builder-body">
+        <section class="production-tab-panel" data-production-panel="1">
+          <div class="production-top-grid">
+            <div class="field"><label>Tipo de producto</label><select class="select" id="productionMaterialType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="tumbler">Vaso / termo</option><option value="bag">Bolso</option><option value="other">Otro</option></select></div>
+            <div class="field"><label>Cantidad a producir</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
+            <div class="field"><label>Precio de venta ($)</label><input class="input" id="productionSalePrice" type="number" min="0" step="1" placeholder="Sugerencia automática"></div>
+            <div class="field"><label>Desperdicio DTF (%)</label><input class="input" id="productionWaste" type="number" min="0" max="100" step="1" value="10"></div>
+          </div>
+          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
+          <div class="production-selected" id="productionSelectedMaterials"></div>
+          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
+          <div class="production-selected" id="productionSelectedDesigns"></div>
+          <div class="production-cost-summary" id="productionBuilderCost"></div>
+          <div class="field"><label>Nota interna de producción</label><textarea class="textarea" id="productionNotes" rows="2" placeholder="Opcional"></textarea></div>
+          <div class="production-next-row"><button class="btn btn-primary" type="button" id="productionNextBtn">Continuar a publicación →</button></div>
+        </section>
+        <section class="production-tab-panel hidden" data-production-panel="2">
+          <div class="form-section production-publication-section"><div class="admin-section-head"><div><h3>Datos para publicar</h3><p class="muted">La receta y el costo ya vienen de la pestaña anterior.</p></div></div><div class="form-grid production-publication-grid">
+            <div class="field full"><label>Nombre del producto</label><input class="input" id="productionProductName" required placeholder="Ej.: YESHUA"></div>
+            <div class="field"><label>Categoría</label><select class="select" id="productionCategory"><option value="">Elegir...</option></select></div>
+            <div class="field"><label>Estado de publicación</label><select class="select" id="productionStatus"><option value="draft">Borrador</option><option value="published">Publicado</option><option value="hidden">Oculto</option></select></div>
+            <div class="field"><label>Corte</label><input class="input" id="productionFit" placeholder="Se completa desde la materia prima"></div>
+            <div class="field"><label>Género</label><input class="input" id="productionAudience" placeholder="Se completa desde la materia prima"></div>
+            <div class="field"><label>Precio anterior ($)</label><input class="input" id="productionComparePrice" type="number" min="0" step="1"></div>
+            <div class="field full"><label>Descripción</label><textarea class="textarea" id="productionDescription" rows="3"></textarea></div>
+            <div class="field full"><label>Notas / significado del diseño</label><textarea class="textarea" id="productionMeaning" rows="3"></textarea></div>
+            <div class="field full"><label>Versículo</label><textarea class="textarea" id="productionVerse" rows="3"></textarea></div>
+            <div class="field full"><label>Cita</label><input class="input" id="productionVerseReference" placeholder="Ej.: Salmos 121:2"></div>
+          </div></div>
+          <div class="form-section"><h3>Fotos y videos</h3><input class="input" id="productionImagesInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime,video/x-m4v" multiple><div class="salmos-media-list" id="productionMediaOrderList"></div></div>
+          <div class="form-section"><h3>Datos para envío</h3><div class="form-grid"><div class="field"><label>Peso (g)</label><input class="input" id="productionWeight" type="number" min="0"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionHeight" type="number" min="0" step=".1"></div><div class="field"><label>Ancho (cm)</label><input class="input" id="productionWidth" type="number" min="0" step=".1"></div><div class="field"><label>Largo (cm)</label><input class="input" id="productionDepth" type="number" min="0" step=".1"></div></div></div>
+          <div class="toggle-row"><label class="toggle-label"><input type="checkbox" id="productionIsNew"> Novedad</label><label class="toggle-label"><input type="checkbox" id="productionFeatured"> Destacado</label><label class="toggle-label"><input type="checkbox" id="productionBestseller"> Más vendido</label></div>
+        </section>
       </div>
-      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionBtn">Cancelar</button><button class="btn btn-primary" type="button" id="saveProductionBtn" disabled>Iniciar producción</button></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionBtn">Cancelar</button><button class="btn btn-ghost hidden" type="button" id="productionBackBtn">← Volver a producción</button><button class="btn btn-primary hidden" type="button" id="saveProductionBtn">Guardar e iniciar producción</button></div>
     </div>
   </dialog>
 
@@ -140,13 +180,13 @@
   <dialog class="admin-dialog design-preview-dialog" id="designPreviewDialog">
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseño original</div><h2 id="designPreviewTitle">Vista previa</h2></div><button class="icon-btn" type="button" id="closeDesignPreviewBtn">×</button></div>
-      <div class="dialog-body"><div class="design-preview-stage" id="designPreviewStage"></div><div class="design-preview-meta" id="designPreviewMeta"></div></div>
+      <div class="dialog-body design-preview-layout"><div class="design-preview-stage" id="designPreviewStage"></div><aside class="design-preview-meta" id="designPreviewMeta"></aside></div>
     </div>
   </dialog>
 
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=16.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=16.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=17.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=17.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 </body>
 </html>

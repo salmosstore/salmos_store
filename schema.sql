@@ -254,7 +254,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_addresses_uid ON customer_addresses(uid)
 CREATE INDEX IF NOT EXISTS idx_customer_orders_uid ON customer_orders(uid);
 
 
--- ===== SALMOS v16 · Compras, materia prima, recetas y producción =====
+-- ===== SALMOS v17 · Compras, materia prima, recetas y producción =====
 CREATE TABLE IF NOT EXISTS materials (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   material_type TEXT NOT NULL DEFAULT 'other',
@@ -263,6 +263,8 @@ CREATE TABLE IF NOT EXISTS materials (
   color TEXT NOT NULL DEFAULT '',
   size TEXT NOT NULL DEFAULT '',
   fit TEXT NOT NULL DEFAULT '',
+  material_class TEXT NOT NULL DEFAULT '',
+  gender TEXT NOT NULL DEFAULT '',
   width_cm REAL NOT NULL DEFAULT 0,
   stock_qty REAL NOT NULL DEFAULT 0,
   average_cost_cents REAL NOT NULL DEFAULT 0,
@@ -270,7 +272,7 @@ CREATE TABLE IF NOT EXISTS materials (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_material_identity ON materials(material_type,name,unit,color,size,fit,width_cm);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_material_identity ON materials(material_type,name,unit,color,size,fit,material_class,gender,width_cm);
 
 CREATE TABLE IF NOT EXISTS purchases (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -278,7 +280,10 @@ CREATE TABLE IF NOT EXISTS purchases (
   supplier TEXT NOT NULL DEFAULT '',
   reference TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
+  subtotal_cents INTEGER NOT NULL DEFAULT 0,
+  surcharge_cents INTEGER NOT NULL DEFAULT 0,
   total_cents INTEGER NOT NULL DEFAULT 0,
+  payment_json TEXT NOT NULL DEFAULT '[]',
   finance_movement_id INTEGER,
   occurred_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -296,6 +301,8 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   color TEXT NOT NULL DEFAULT '',
   size TEXT NOT NULL DEFAULT '',
   fit TEXT NOT NULL DEFAULT '',
+  material_class TEXT NOT NULL DEFAULT '',
+  gender TEXT NOT NULL DEFAULT '',
   width_cm REAL NOT NULL DEFAULT 0,
   unit_price_cents INTEGER NOT NULL DEFAULT 0,
   line_total_cents INTEGER NOT NULL DEFAULT 0,
@@ -303,6 +310,18 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 );
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_material ON purchase_items(material_id);
+
+CREATE TABLE IF NOT EXISTS purchase_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id INTEGER NOT NULL,
+  method TEXT NOT NULL DEFAULT 'cash',
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  origin TEXT NOT NULL DEFAULT '',
+  destination TEXT NOT NULL DEFAULT '',
+  finance_movement_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_purchase_payments_purchase ON purchase_payments(purchase_id);
 
 CREATE TABLE IF NOT EXISTS product_recipes (
   product_id INTEGER PRIMARY KEY,
