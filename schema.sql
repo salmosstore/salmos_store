@@ -265,6 +265,7 @@ CREATE TABLE IF NOT EXISTS materials (
   fit TEXT NOT NULL DEFAULT '',
   material_class TEXT NOT NULL DEFAULT '',
   gender TEXT NOT NULL DEFAULT '',
+  capacity_ml REAL NOT NULL DEFAULT 0,
   width_cm REAL NOT NULL DEFAULT 0,
   stock_qty REAL NOT NULL DEFAULT 0,
   average_cost_cents REAL NOT NULL DEFAULT 0,
@@ -272,7 +273,7 @@ CREATE TABLE IF NOT EXISTS materials (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_material_identity ON materials(material_type,name,unit,color,size,fit,material_class,gender,width_cm);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_material_identity ON materials(material_type,name,unit,color,size,fit,material_class,gender,capacity_ml,width_cm);
 
 CREATE TABLE IF NOT EXISTS purchases (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -303,6 +304,7 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   fit TEXT NOT NULL DEFAULT '',
   material_class TEXT NOT NULL DEFAULT '',
   gender TEXT NOT NULL DEFAULT '',
+  capacity_ml REAL NOT NULL DEFAULT 0,
   width_cm REAL NOT NULL DEFAULT 0,
   unit_price_cents INTEGER NOT NULL DEFAULT 0,
   line_total_cents INTEGER NOT NULL DEFAULT 0,
@@ -322,6 +324,12 @@ CREATE TABLE IF NOT EXISTS purchase_payments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_purchase_payments_purchase ON purchase_payments(purchase_id);
+
+CREATE TABLE IF NOT EXISTS variant_supply_meta (
+  variant_id INTEGER PRIMARY KEY,
+  stock_kind TEXT NOT NULL DEFAULT 'physical',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 CREATE TABLE IF NOT EXISTS product_recipes (
   product_id INTEGER PRIMARY KEY,

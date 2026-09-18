@@ -1293,3 +1293,17 @@ img { display: block; max-width: 100%; }
 /* v13 · CTA por pedido */
 .made-order-request{appearance:none!important;text-decoration:none!important;border:1px solid var(--gold-dark)!important;background:linear-gradient(135deg,var(--gold-2),var(--gold))!important;color:#17120a!important;border-radius:999px!important;padding:9px 16px!important;min-height:36px;display:inline-flex;align-items:center;justify-content:center;font-size:12px!important;box-shadow:0 5px 16px color-mix(in srgb,var(--gold) 22%,transparent);transition:transform .15s ease,filter .15s ease}.made-order-request:hover,.made-order-request:focus-visible{color:#17120a!important;filter:brightness(1.04);transform:translateY(-1px)}
 @media(max-width:620px){.made-order-request{padding:8px 13px!important;font-size:11px!important}}
+
+/* ===== Checkout V19 · domicilio único para comparar envíos ===== */
+.shared-delivery-panel{margin:14px 0 16px;border:1px solid rgba(231,186,74,.24);border-radius:18px;background:rgba(20,20,22,.82);overflow:hidden}
+.shared-delivery-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+.shared-delivery-head>div{display:grid;gap:3px}.shared-delivery-head strong{font-size:1rem}.shared-delivery-head small{color:var(--muted);line-height:1.4}
+.shared-delivery-workspace{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,.95fr);gap:14px;padding:14px}
+.shared-delivery-fields{min-width:0}.delivery-field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.delivery-field-grid .full{grid-column:1/-1}
+.delivery-address-action{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.delivery-address-action .btn{white-space:nowrap}
+.shared-delivery-map-card{min-width:0;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;background:rgba(255,255,255,.02);padding:9px;align-self:stretch}
+.shared-delivery-map-card .correo-map{height:300px;min-height:260px;border-radius:10px;overflow:hidden}
+.shared-delivery-map-card .correo-map-status{padding:8px 2px 4px;font-size:.75rem;font-weight:800;line-height:1.4}
+.shared-delivery-panel .correo-suggestions{position:relative;z-index:7;max-height:225px;overflow:auto;margin-top:5px}.shared-delivery-panel .correo-suggestion{text-align:left}
+.unified-shipping-detail{margin-top:12px}.unified-correo{margin-top:12px}.mini-pill.success{border-color:rgba(91,205,143,.4);color:#70dca0}
+@media(max-width:800px){.shared-delivery-workspace{grid-template-columns:1fr}.shared-delivery-map-card .correo-map{height:260px}.delivery-field-grid{grid-template-columns:1fr}.delivery-field-grid .full{grid-column:auto}.delivery-address-action{grid-template-columns:1fr}.shared-delivery-head{align-items:flex-start;flex-direction:column}}
