@@ -14,3 +14,12 @@ Variables del Worker:
 Después de cargar los secretos, ir a **Administración > Configuración > Correo Argentino · PAQ.AR 2.0**, probar credenciales, completar el remitente y cargar tarifas provisorias de prueba para domicilio/sucursal. La API PAQ.AR documentada no cotiza el valor del envío; las tarifas reales se reemplazan cuando Correo entregue la matriz comercial.
 
 Funciones incluidas: validación de credenciales, sucursales habilitadas, entrega a domicilio/sucursal, alta de preimposición, Tracking Number, rótulo PDF 10×15, seguimiento y cancelación.
+
+
+## V20 · cierre profesional
+- Domicilio único con Provincia / Localidad / Dirección / Código postal, mapa y cotización automática.
+- Compras editables y pagos ordenados; opciones “Otro” en modal flotante.
+- Producción compacta con materias primas, medidas por uso de diseños, costos y publicación.
+- Administración mobile-first, PWA propia SALMOS Admin y estética rosa/floral.
+- Tienda pública con textura negra/dorada sutil.
+- Correo Argentino: no se simulan sucursales; /agencies depende del permiso del Agreement TEST.

@@ -390,3 +390,4 @@ CREATE TABLE IF NOT EXISTS variant_costs (
   average_cost_cents REAL NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
