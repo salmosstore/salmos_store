@@ -521,3 +521,74 @@ body::after{width:auto!important;height:auto!important;left:214px!important;righ
 .gallery-arrow{border-color:rgba(239,143,183,.45)!important;color:#ffc4da!important;background:linear-gradient(145deg,rgba(86,32,55,.96),rgba(51,22,37,.96))!important}.production-tab.active{background:linear-gradient(135deg,rgba(239,143,183,.22),rgba(205,104,146,.12))!important;border-color:rgba(239,143,183,.55)!important}.production-tab.active span{background:linear-gradient(135deg,#f29aba,#d9759e)!important;color:#4b1d30!important}
 :root[data-theme="light"] body::after{opacity:.08!important}:root[data-theme="light"] .admin-main::before{opacity:.18}
 @media(max-width:760px){body::after{left:0!important;top:64px!important;background-size:min(105vw,700px) auto!important;opacity:.075!important}.admin-main::before{left:0;top:64px}.admin-dialog .dialog-shell::before{font-size:17px;letter-spacing:6px;right:12px;top:12px}}
+
+/* ===== SALMOS V20.1 · corrección de cierre: modales alineados, selectores flotantes ===== */
+.purchase-color-trigger{
+  width:100%;height:44px;border:1px solid rgba(244,157,191,.28);border-radius:12px;
+  background:rgba(52,27,40,.86);color:var(--text);display:flex;align-items:center;gap:9px;
+  padding:0 11px;cursor:pointer;text-align:left
+}
+.purchase-color-trigger>span:nth-child(2){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.purchase-color-trigger>b{color:#f2a9c6;font-size:.82rem}
+.purchase-color-dialog .dialog-shell{width:min(520px,calc(100vw - 24px))!important}
+.purchase-color-dialog-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.purchase-color-dialog-option{appearance:none;min-height:46px;border:1px solid rgba(244,157,191,.22);border-radius:12px;background:rgba(255,193,216,.055);color:var(--text);padding:8px 10px;display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left}
+.purchase-color-dialog-option:hover,.purchase-color-dialog-option.active{border-color:#ef8fb7;background:rgba(239,143,183,.14)}
+.purchase-color-dialog-option.color-other{grid-column:1/-1}
+
+/* Pago: una grilla pareja, sin huecos artificiales. */
+.purchase-payment-card{display:grid!important;grid-template-columns:1fr!important;gap:12px!important}
+.purchase-payment-title{align-items:center!important}
+.purchase-payment-main{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important;align-items:stretch!important}
+.purchase-payment-main>.field,.purchase-payment-main>.money-chip{min-height:82px;height:82px;margin:0!important;align-self:stretch}
+.purchase-payment-main>.field{display:grid;grid-template-rows:auto 44px;gap:6px;align-content:start}
+.purchase-payment-main>.field .input,.purchase-payment-main>.field .select{height:44px;min-height:44px}
+.purchase-payment-main>.money-chip{align-content:center}
+.purchase-paid-breakdown{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important;margin:0!important}
+.purchase-paid-breakdown[data-method="cash"],.purchase-paid-breakdown[data-method="transfer"]{grid-template-columns:1fr!important}
+.purchase-paid-breakdown>.field{margin:0!important;max-width:none!important}
+.purchase-paid-breakdown>.field .input{height:44px}
+.purchase-payment-details{display:block;margin:0!important;border:1px solid rgba(239,143,183,.22);border-radius:13px;padding:12px;background:rgba(255,192,216,.035)}
+.purchase-payment-details.hidden{display:none!important}
+.purchase-transfer-title{font-weight:900;color:#f7b4cf;margin-bottom:10px}
+.purchase-payment-details .purchase-payment-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important;margin:0!important}
+.purchase-payment-help{margin-top:0!important;padding:9px 11px!important;text-align:left}
+
+/* Producción: una sola línea lógica en desktop y alturas iguales. */
+.production-top-grid{display:grid!important;grid-template-columns:minmax(150px,1fr) minmax(210px,1.25fr) minmax(120px,.65fr) minmax(165px,.9fr) minmax(130px,.7fr)!important;gap:10px!important;align-items:start!important;margin:0!important}
+.production-top-grid>.field{display:grid!important;grid-template-rows:auto 44px!important;gap:6px!important;align-content:start!important;margin:0!important;min-height:70px!important}
+.production-top-grid>.field .input,.production-top-grid>.field .select,.production-top-grid>.field .purchase-stepper{height:44px!important;min-height:44px!important;margin:0!important}
+.production-top-grid>.production-price-field,.production-top-grid>.production-waste-field{grid-column:auto!important;grid-row:auto!important}
+.production-stock-note{margin:8px 0 0;padding:8px 10px;border:1px solid rgba(239,143,183,.16);border-radius:10px;background:rgba(239,143,183,.045);color:var(--muted);font-size:.75rem;line-height:1.4}
+.production-picker-section{margin-top:12px!important}
+
+/* Caja: el detalle largo queda plegado por defecto, con acceso explícito. */
+.finance-row-detail{min-width:150px;max-width:340px}
+.finance-row-detail>summary{cursor:pointer;color:#f5b4cf;font-weight:850;white-space:nowrap;list-style:none}
+.finance-row-detail>summary::-webkit-details-marker{display:none}
+.finance-row-detail>summary::after{content:' ▾';opacity:.75}
+.finance-row-detail[open]>summary::after{content:' ▴'}
+.finance-row-detail>div{margin-top:7px;white-space:normal;line-height:1.45;overflow-wrap:anywhere;color:var(--text)}
+
+/* El modal "Otro" siempre flota por encima y no altera la grilla que se está editando. */
+#otherValueDialog{z-index:9999}
+#otherValueDialog .dialog-shell{width:min(480px,calc(100vw - 24px))!important}
+
+:root[data-theme="light"] .purchase-color-trigger{background:#f8e6ed!important;color:#542d3d!important;border-color:rgba(123,53,82,.24)!important}
+:root[data-theme="light"] .purchase-color-dialog-option{background:#f8e2eb!important;color:#542d3d!important;border-color:rgba(123,53,82,.2)!important}
+:root[data-theme="light"] .purchase-payment-details{background:#f4d5e2!important}
+:root[data-theme="light"] .production-stock-note{background:#f1cadb!important;color:#71495a!important}
+
+@media(max-width:980px){
+  .purchase-payment-main{grid-template-columns:1fr 1fr!important}
+  .production-top-grid{grid-template-columns:1fr 1fr!important}
+  .production-top-grid>.field{grid-column:auto!important}
+}
+@media(max-width:620px){
+  .purchase-payment-main,.purchase-paid-breakdown,.purchase-payment-details .purchase-payment-grid,.production-top-grid{grid-template-columns:1fr!important}
+  .purchase-payment-main>.field,.purchase-payment-main>.money-chip{height:auto;min-height:72px}
+  .purchase-color-dialog-grid{grid-template-columns:1fr}
+  .purchase-color-dialog-option.color-other{grid-column:1}
+  .production-top-grid>.field{grid-column:1!important}
+  .finance-row-detail{max-width:240px}
+}

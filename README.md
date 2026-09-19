@@ -23,3 +23,12 @@ Funciones incluidas: validación de credenciales, sucursales habilitadas, entreg
 - Administración mobile-first, PWA propia SALMOS Admin y estética rosa/floral.
 - Tienda pública con textura negra/dorada sutil.
 - Correo Argentino: no se simulan sucursales; /agencies depende del permiso del Agreement TEST.
+
+## V20.1 · corrección de cierre
+- Compras: grilla de pago alineada, transferencia abierta, aviso de Caja una sola vez al final.
+- Selectores “Otro…”: editor modal flotante para tipo, corte, clase, talle, material, color y motivo de Caja.
+- Colores: selector modal con un único swatch coherente por color, sin recortes dentro del modal de Compras.
+- Producción: cabecera de campos alineada y sin huecos; explicación de disponibilidad separada.
+- Caja: detalles largos plegados por defecto con “Ver detalle”.
+- Tienda: cabecera y franja informativa vuelven a quedar unidas al hacer scroll.
+- Envíos: motomensajería y Correo muestran la cotización automática; se quitó el botón redundante de recalcular motomensajería.

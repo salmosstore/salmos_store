@@ -1314,3 +1314,11 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;ba
 /* V20 customer storefront: textura negra/dorada sutil */
 body{background:radial-gradient(circle at 12% 5%,rgba(212,160,59,.10),transparent 28rem),radial-gradient(circle at 88% 18%,rgba(179,126,38,.07),transparent 26rem),repeating-linear-gradient(132deg,rgba(214,169,76,.018) 0 1px,transparent 1px 8px),linear-gradient(145deg,#070706 0%,#0b0907 48%,#050505 100%)!important}
 body::before{z-index:0!important;opacity:.65}.site-header,.info-ticker,main,.site-footer{position:relative;z-index:1}.modal{z-index:101}.toast-stack{z-index:120}
+
+/* ===== SALMOS V20.1 · cabecera unida + cotizaciones automáticas ===== */
+.site-header{position:sticky!important;top:0!important;z-index:70!important}
+.salmos-info-bar{position:sticky!important;top:var(--header)!important;z-index:69!important}
+.site-header,.salmos-info-bar{isolation:isolate}
+/* El fondo decorativo nunca debe convertir la cabecera fija en contenido normal. */
+body::before{pointer-events:none}
+@media(max-width:780px){.salmos-info-bar{top:var(--header)!important}}

@@ -8,9 +8,9 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=20.0">
+  <link rel="stylesheet" href="styles.css?v=20.1">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=20.0">
+  <link rel="stylesheet" href="admin-v4.css?v=20.1">
 </head>
 <body>
   <div class="admin-layout">
@@ -64,19 +64,22 @@
         <div class="purchase-items-head"><div><h3>Materia prima comprada</h3><p class="muted">Cargá cada variante una sola vez. Lo que escribas queda disponible como opción en próximas compras.</p></div><button class="btn btn-ghost" type="button" id="addPurchaseItemBtn">+ Agregar</button></div>
         <div id="purchaseItems"></div>
         <section class="purchase-payment-card">
-          <div class="purchase-payment-title"><div><div class="admin-eyebrow">Pago</div><h3>Cómo se pagó esta compra</h3></div><small>Se registra automáticamente en Caja.</small></div>
+          <div class="purchase-payment-title"><div><div class="admin-eyebrow">Pago</div><h3>Cómo se pagó esta compra</h3></div></div>
           <div class="purchase-payment-grid purchase-payment-main">
             <div class="field payment-method-field"><label>1 · Forma de pago</label><select class="select" name="payment_method" id="purchasePaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option></select></div>
             <div class="money-chip"><span>2 · Importe de la compra</span><strong id="purchaseSubtotal">$ 0</strong></div>
             <div class="field compact surcharge-field"><label>3 · Recargo / comisión ($)</label><input class="input" name="surcharge" id="purchaseSurcharge" type="number" min="0" step="1" value="" placeholder="0"></div>
             <div class="purchase-grand-total money-chip"><span>4 · Total a pagar</span><strong id="purchaseTotal">$ 0</strong></div>
           </div>
-          <div class="purchase-paid-breakdown">
+          <div class="purchase-paid-breakdown" id="purchasePaidBreakdown" data-method="cash">
             <div class="field payment-cash-field"><label>Importe abonado en efectivo ($)</label><input class="input" name="cash_amount" id="purchaseCashAmount" type="number" min="0" step="1"></div>
             <div class="field payment-transfer-field hidden"><label>Importe abonado por transferencia ($)</label><input class="input" name="transfer_amount" id="purchaseTransferAmount" type="number" min="0" step="1"></div>
           </div>
-          <details class="purchase-payment-details payment-transfer-field hidden"><summary>Detalles de la transferencia / alias</summary><div class="purchase-payment-grid"><div class="field"><label>Cuenta / alias de origen</label><input class="input" id="purchaseTransferOrigin" name="transfer_origin" list="purchaseAccountOptions" placeholder="Mercado Pago, banco, alias..."></div><div class="field"><label>Cuenta / alias de destino <span class="muted">(opcional)</span></label><input class="input" id="purchaseTransferDestination" name="transfer_destination" placeholder="Cuenta / alias del proveedor"></div></div></details>
-          <div class="purchase-payment-help" id="purchasePaymentHelp">El pago se registra como efectivo en Caja.</div>
+          <div class="purchase-payment-details payment-transfer-field hidden">
+            <div class="purchase-transfer-title">Detalles de la transferencia / alias</div>
+            <div class="purchase-payment-grid"><div class="field"><label>Cuenta / alias de origen</label><input class="input" id="purchaseTransferOrigin" name="transfer_origin" list="purchaseAccountOptions" placeholder="Mercado Pago, banco, alias..."></div><div class="field"><label>Cuenta / alias de destino <span class="muted">(opcional)</span></label><input class="input" id="purchaseTransferDestination" name="transfer_destination" placeholder="Cuenta / alias del proveedor"></div></div>
+          </div>
+          <div class="purchase-payment-help" id="purchasePaymentHelp">Al guardar la compra, el pago se registra automáticamente en Caja.</div>
         </section>
         <div class="form-grid purchase-notes-grid"><div class="field full"><label>Notas</label><textarea class="textarea" name="notes" rows="2" placeholder="Opcional"></textarea></div><div class="field full"><label>Comprobantes / imágenes</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Quedan vinculados a la compra y al egreso generado en Caja.</small></div></div>
       </div>
@@ -92,11 +95,12 @@
         <section class="production-tab-panel" data-production-panel="1">
           <div class="production-top-grid">
             <div class="field production-type-field"><label>Tipo de producto</label><select class="select" id="productionMaterialType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="glass">Vaso</option><option value="thermos">Termo</option><option value="bag">Bolso</option><option value="other">Otro</option></select></div>
-            <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock físico</option><option value="to_stock">A stockear / preparar al vender</option></select><small class="field-help">Físico descuenta materia prima al iniciar producción. A stockear guarda la receta sin consumirla todavía.</small></div>
+            <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock físico</option><option value="to_stock">A stockear / preparar al vender</option></select></div>
             <div class="field production-qty-field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
             <div class="field production-price-field"><label>Precio de venta ($)</label><input class="input" id="productionSalePrice" type="number" min="0" step="1" placeholder="Sugerencia automática"></div>
             <div class="field production-waste-field"><label>Desperdicio DTF (%)</label><input class="input" id="productionWaste" type="number" min="0" max="100" step="1" value="10"></div>
           </div>
+          <div class="production-stock-note" id="productionStockNote">Stock físico descuenta la materia prima al iniciar producción. “A stockear” guarda la receta sin consumirla todavía.</div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedMaterials"></div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
@@ -188,11 +192,19 @@
   </dialog>
 
 
+  <dialog class="admin-dialog tiny-dialog purchase-color-dialog" id="purchaseColorDialog">
+    <div class="dialog-shell">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Compras</div><h2>Elegir color</h2></div><button class="icon-btn" type="button" id="closePurchaseColorBtn">×</button></div>
+      <div class="dialog-body"><div class="purchase-color-dialog-grid" id="purchaseColorDialogGrid"></div></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelPurchaseColorBtn">Cancelar</button></div>
+    </div>
+  </dialog>
+
   <dialog class="admin-dialog tiny-dialog" id="otherValueDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">SALMOS</div><h2 id="otherValueTitle">Agregar opción</h2></div><button class="icon-btn" type="button" id="closeOtherValueBtn">×</button></div><div class="dialog-body"><div class="field"><label>Nuevo valor</label><input class="input" id="otherValueInput" autocomplete="off"></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelOtherValueBtn">Cancelar</button><button class="btn btn-primary" type="button" id="saveOtherValueBtn">OK · Guardar</button></div></div></dialog>
   <dialog class="admin-dialog tiny-dialog" id="productionDesignMeasureDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Estampa en este producto</div><h2 id="productionDesignMeasureTitle">Medidas</h2></div><button class="icon-btn" type="button" id="closeProductionDesignMeasure">×</button></div><div class="dialog-body"><p class="muted">Estas medidas se aplican a este producto. Podés usar el mismo diseño a otro tamaño en otra receta.</p><div class="form-grid"><div class="field"><label>Ancho (cm)</label><input class="input" id="productionDesignWidth" type="number" min="0.1" step="0.1"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionDesignHeight" type="number" min="0.1" step="0.1"></div></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionDesignMeasure">Cancelar</button><button class="btn btn-primary" type="button" id="confirmProductionDesignMeasure">Usar estas medidas</button></div></div></dialog>
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=20.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=20.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=20.1" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=20.1',{updateViaCache:'none'}).catch(()=>{}));</script>
 </body>
 </html>

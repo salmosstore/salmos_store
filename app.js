@@ -988,7 +988,35 @@
   function deliveryAreaKey(d={}){return `${d.provinceCode||''}|${d.locality||''}|${d.postalCode||''}`.toLowerCase()}
   function paintDeliveryLocalitySuggestions(){const h=qs('#deliveryLocalitySuggestions');if(!h)return;h.innerHTML=(state.deliveryLocalitySuggestions||[]).map((x,i)=>`<button type="button" class="correo-suggestion" data-delivery-locality="${i}"><strong>${escapeHtml(x.name)}</strong>${x.department?`<small>${escapeHtml(x.department)}</small>`:''}</button>`).join('');}
   async function fetchDeliveryLocalities(value){const q=String(value||'').trim(),d=state.deliveryAddress||{};if(q.length<2||!d.provinceCode){state.deliveryLocalitySuggestions=[];paintDeliveryLocalitySuggestions();return}const seq=++state.deliveryLocalitySeq;const data=await api('/api/geo/localities',{method:'POST',body:JSON.stringify({input:q,provinceCode:d.provinceCode,provinceName:correoProvinceQueryName(d.provinceCode)})});if(seq!==state.deliveryLocalitySeq)return;state.deliveryLocalitySuggestions=data.items||[];paintDeliveryLocalitySuggestions();}
-  async function autoQuoteDeliveryOptions(){if(!deliveryReady())return;syncDeliveryToShipping();const tasks=[];if(state.config?.shipping?.moto?.enabled!==false)tasks.push((async()=>{try{const saved=readLastShipping();if(saved&&sameSavedShippingAddress(saved)&&saved.quotedDay===localDayKey()&&Number(saved.costCents)>0){state.shippingQuotes.moto={distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null};return}const data=await api('/api/shipping/moto/quote',{method:'POST',body:JSON.stringify({destination:{lat:Number(state.deliveryAddress.lat),lng:Number(state.deliveryAddress.lng),address:state.deliveryAddress.formattedAddress}})});state.shippingQuotes.moto={distanceKm:data.distanceKm,costCents:Number(data.costCents)||0,quoteId:data.quoteId||null};}catch(e){state.shippingQuotes.moto={error:e.message||'No disponible'}}})());if(state.config?.shipping?.correo?.enabled)tasks.push((async()=>{try{const items=state.cart.map(i=>({productId:i.productId,variantId:i.variantId,quantity:i.qty||1})),subtotalCents=state.cart.reduce((s,i)=>s+(Number(i.priceCents)||0)*(Number(i.qty)||1),0);const data=await api('/api/shipping/correo/quote',{method:'POST',body:JSON.stringify({deliveryType:'homeDelivery',items,subtotalCents})});state.shippingQuotes.correoHome={costCents:Number(data.costCents)||0,quoteId:data.quoteId||null,parcel:data.parcel||null};}catch(e){state.shippingQuotes.correoHome={error:e.message||'No disponible'}}})());await Promise.allSettled(tasks);renderCheckoutShipping();}
+  async function autoQuoteDeliveryOptions(){
+    if(!deliveryReady())return;
+    syncDeliveryToShipping();
+    const tasks=[];
+    if(state.config?.shipping?.moto?.enabled!==false)tasks.push((async()=>{
+      try{
+        const saved=readLastShipping();
+        if(saved&&sameSavedShippingAddress(saved)&&saved.quotedDay===localDayKey()&&Number(saved.costCents)>0){
+          state.shippingQuotes.moto={distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null};return;
+        }
+        const data=await api('/api/shipping/moto/quote',{method:'POST',body:JSON.stringify({destination:{lat:Number(state.deliveryAddress.lat),lng:Number(state.deliveryAddress.lng),address:state.deliveryAddress.formattedAddress}})});
+        state.shippingQuotes.moto={distanceKm:data.distanceKm,costCents:Number(data.costCents)||0,quoteId:data.quoteId||null};
+      }catch(e){state.shippingQuotes.moto={error:e.message||'No disponible'}}
+    })());
+    if(state.config?.shipping?.correo?.enabled)tasks.push((async()=>{
+      try{
+        const items=state.cart.map(i=>({productId:i.productId,variantId:i.variantId,quantity:i.qty||1})),subtotalCents=state.cart.reduce((s,i)=>s+(Number(i.priceCents)||0)*(Number(i.qty)||1),0);
+        const data=await api('/api/shipping/correo/quote',{method:'POST',body:JSON.stringify({deliveryType:'homeDelivery',items,subtotalCents})});
+        state.shippingQuotes.correoHome={costCents:Number(data.costCents)||0,quoteId:data.quoteId||null,parcel:data.parcel||null};
+      }catch(e){state.shippingQuotes.correoHome={error:e.message||'No disponible'}}
+    })());
+    await Promise.allSettled(tasks);
+    if(state.shipping.method==='moto'&&state.shippingQuotes.moto?.costCents){
+      state.shipping.costCents=Number(state.shippingQuotes.moto.costCents)||0;state.shipping.distanceKm=state.shippingQuotes.moto.distanceKm;state.shipping.quoteId=state.shippingQuotes.moto.quoteId||null;
+    }else if(state.shipping.method==='correo'&&(state.shipping.correo?.deliveryType||'homeDelivery')==='homeDelivery'&&state.shippingQuotes.correoHome?.costCents){
+      state.shipping.costCents=Number(state.shippingQuotes.correoHome.costCents)||0;state.shipping.quoteId=state.shippingQuotes.correoHome.quoteId||null;
+    }
+    renderCheckoutShipping();
+  }
 
   async function resolveDeliveryArea(force=false){
     const d=state.deliveryAddress||{},provinceCode=String(d.provinceCode||''),provinceName=deliveryProvinceName(provinceCode);
@@ -1118,6 +1146,20 @@
     }
   }
 
+  function renderCorreoQuote(){
+    const host=qs('#correoQuoteHost');if(!host)return;
+    const ca=state.shipping.correo||{deliveryType:'homeDelivery'},key=(ca.deliveryType||'homeDelivery')==='agency'?'correoAgency':'correoHome',q=state.shippingQuotes?.[key];
+    if((ca.deliveryType||'homeDelivery')==='agency'&&!ca.agencyId){
+      host.innerHTML='<div class="notice correo-quote">Elegí una sucursal o punto PAQ.AR para ver su tarifa.</div>';return;
+    }
+    if(q?.costCents){
+      const parcel=q.parcel;
+      host.innerHTML=`<div class="quote-box correo-quote"><div><strong>${ca.deliveryType==='agency'?'Retiro en sucursal / PAQ.AR':'Entrega a domicilio'}</strong>${parcel?`<div class="delivery-note">Paquete: ${Number(parcel.weightGrams)||0} g · ${Number(parcel.heightCm)||0} × ${Number(parcel.widthCm)||0} × ${Number(parcel.depthCm)||0} cm</div>`:''}</div><strong class="price">${money(q.costCents)}</strong></div>`;return;
+    }
+    if(q?.error){host.innerHTML=`<div class="notice correo-quote"><strong>Correo Argentino</strong><br>${escapeHtml(q.error)}</div>`;return}
+    host.innerHTML=deliveryReady()?'<div class="notice correo-quote">La tarifa se calcula automáticamente al confirmar el domicilio.</div>':'';
+  }
+
   async function quoteCorreoShipping(){
     const ca=state.shipping.correo||{};if(!deliveryReady())throw new Error('Primero confirmá el domicilio.');
     if(ca.deliveryType==='agency'&&!ca.agencyId)throw new Error('Elegí una sucursal o punto PAQ.AR.');
@@ -1126,8 +1168,8 @@
   function renderCheckoutShippingPriceOnly(){
     const correo=qs('[data-shipping="correo"] .shipping-price'),moto=qs('[data-shipping="moto"] .shipping-price'),ca=state.shipping.correo||{};
     const cq=ca.deliveryType==='agency'?state.shippingQuotes?.correoAgency:state.shippingQuotes?.correoHome;
-    if(correo)correo.textContent=cq?.costCents?money(cq.costCents):'Calcular';
-    if(moto)moto.textContent=state.shippingQuotes?.moto?.costCents?money(state.shippingQuotes.moto.costCents):'Calcular';
+    if(correo)correo.textContent=cq?.costCents?money(cq.costCents):(cq?.error?'No disponible':'—');
+    if(moto)moto.textContent=state.shippingQuotes?.moto?.costCents?money(state.shippingQuotes.moto.costCents):(state.shippingQuotes?.moto?.error?'No disponible':'—');
   }
   function correoProvinceName(code=''){
     const list=state.config?.shipping?.correo?.provinces||[];return list.find(p=>String(p.code)===String(code))?.name||'';
@@ -1523,13 +1565,18 @@
   }
 
   function renderMotoQuoteButton() {
-    const host = qs('#quoteHost');
-    if (!host) return;
-    if (!state.shipping.lat || !state.shipping.lng) { host.innerHTML=''; return; }
-    host.innerHTML = state.shipping.costCents
-      ? `<div class="quote-box"><div><strong>${state.shipping.distanceKm} km</strong><div class="delivery-note">Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad</div></div><strong class="price">${money(state.shipping.costCents)}</strong></div><div style="margin-top:9px"><a class="btn btn-ghost full" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a></div>`
-      : `<button class="btn btn-primary full" id="quoteMotoBtn">Calcular motomensajería</button>`;
-    const toSummary = qs('#toSummaryBtn'); if (toSummary) toSummary.disabled = !state.shipping.costCents;
+    const host=qs('#quoteHost');if(!host)return;
+    if(!deliveryReady()){host.innerHTML='';return}
+    const q=state.shippingQuotes?.moto;
+    if(q?.costCents){
+      state.shipping.distanceKm=q.distanceKm;state.shipping.costCents=Number(q.costCents)||0;state.shipping.quoteId=q.quoteId||null;
+      host.innerHTML=`<div class="quote-box"><div><strong>${Number(q.distanceKm||0).toLocaleString('es-AR',{maximumFractionDigits:1})} km</strong><div class="delivery-note">Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad</div></div><strong class="price">${money(q.costCents)}</strong></div><div style="margin-top:9px"><a class="btn btn-ghost full" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a></div>`;
+    }else if(q?.error){
+      host.innerHTML=`<div class="notice">Motomensajería no disponible para este domicilio: ${escapeHtml(q.error)}</div>`;
+    }else{
+      host.innerHTML='<div class="notice">La motomensajería se calcula automáticamente al confirmar el domicilio.</div>';
+    }
+    const toSummary=qs('#toSummaryBtn');if(toSummary)toSummary.disabled=!(state.shipping.method==='pickup'||Number(state.shipping.costCents)>0);
   }
 
   async function quoteMoto() {
@@ -1794,7 +1841,6 @@
       if(e.target.id==='quoteCorreoBtn'){try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteCorreoShipping()}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular envío'}return;}
       const correoAgency=e.target.closest('[data-correo-agency]');if(correoAgency){try{await selectCorreoAgency(correoAgency.dataset.correoAgency);toast('Sucursal seleccionada','success')}catch(err){toast(err.message,'error')}return;}
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
-      if(e.target.id==='quoteMotoBtn'){ try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteMoto();}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular motomensajería';} return; }
       if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(['moto','correo'].includes(state.shipping.method)&&!state.shipping.costCents){toast(state.shipping.method==='moto'?'Primero calculá la motomensajería.':'Primero completá y calculá el envío por Correo Argentino.','error');return;} state.checkoutStep=3;renderCheckout();return; }
       if(e.target.id==='backShippingBtn'){state.checkoutStep=2;renderCheckout();return;}
       if(e.target.id==='applyCouponBtn'){await applyCouponCode();return;}

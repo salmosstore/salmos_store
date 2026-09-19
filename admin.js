@@ -12,7 +12,7 @@
   const centsToPesos=v=>((Number(v)||0)/100).toFixed(0);
   const today=()=>new Date().toISOString().slice(0,10);
 
-  const state={editingPurchaseId:null,otherEditor:null,view:'dashboard',categories:[],products:[],orders:[],customOrders:[],coupons:[],flyers:[],settings:{},correoStatus:null,editingProduct:null,editingCouponId:null,editingMovementId:null,newFiles:[],mediaItems:[],mediaDragKey:null,mediaHostId:'mediaOrderList',reportRange:'month',customFrom:'',customTo:'',stockItems:[],stockFilters:{category:'',stage:'',size:'',color:'',fit:'',audience:'',sort:'product'},designAssets:[],activeDesignId:null,activeFlyerId:null,purchases:[],materials:[],productionJobs:[],purchaseItems:[],productRecipeDesigns:[],productRecipeMaterials:[],costingLoaded:false,productionProduct:null,productionMaterialsSelected:[],productionDesignsSelected:[],productionWizardTab:1,productionPriceDirty:false,productionShippingDirty:false,purchaseOptionsLoaded:false,purchaseOptions:{types:[],fits:[],classes:[],sizes:{},materials:{},colors:[],financeReasons:[]},recentFinanceReasons:[]};
+  const state={editingPurchaseId:null,otherEditor:null,colorEditorRow:null,view:'dashboard',categories:[],products:[],orders:[],customOrders:[],coupons:[],flyers:[],settings:{},correoStatus:null,editingProduct:null,editingCouponId:null,editingMovementId:null,newFiles:[],mediaItems:[],mediaDragKey:null,mediaHostId:'mediaOrderList',reportRange:'month',customFrom:'',customTo:'',stockItems:[],stockFilters:{category:'',stage:'',size:'',color:'',fit:'',audience:'',sort:'product'},designAssets:[],activeDesignId:null,activeFlyerId:null,purchases:[],materials:[],productionJobs:[],purchaseItems:[],productRecipeDesigns:[],productRecipeMaterials:[],costingLoaded:false,productionProduct:null,productionMaterialsSelected:[],productionDesignsSelected:[],productionWizardTab:1,productionPriceDirty:false,productionShippingDirty:false,purchaseOptionsLoaded:false,purchaseOptions:{types:[],fits:[],classes:[],sizes:{},materials:{},colors:[],financeReasons:[]},recentFinanceReasons:[]};
 
   async function api(path, options={}){
     const headers=new Headers(options.headers||{});
@@ -561,8 +561,8 @@
     return `hsl(${h} 58% 58%)`;
   }
   function purchaseColorField(item,i){
-    const options=purchaseColorOptions(),value=normalizeOption(item.color),label=value||'Elegí un color';
-    return `<div class="field purchase-color-field"><label>Color</label><details class="purchase-color-picker"><summary><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(value||'Rosa'))}"></span><span>${escapeHtml(label)}</span><b>⌄</b></summary><div class="purchase-color-menu">${options.map(v=>`<button type="button" data-purchase-color="${escapeHtml(v)}" data-row="${i}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(v))}"></span><span>${escapeHtml(v)}</span></button>`).join('')}<button type="button" class="color-other" data-purchase-color="__other__" data-row="${i}"><span class="color-dot custom-color-dot"></span><span>Otro color...</span></button></div></details></div>`;
+    const value=normalizeOption(item.color),label=value||'Elegí un color';
+    return `<div class="field purchase-color-field"><label>Color</label><button class="purchase-color-trigger" type="button" data-open-purchase-color="${i}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(value||'Rosa'))}"></span><span>${escapeHtml(label)}</span><b>⌄</b></button></div>`;
   }
   function purchaseTypeField(item,i){
     const type=item.materialType||'shirt',opts=currentPurchaseTypes(),isKnown=opts.some(([v])=>v===type);
@@ -589,7 +589,19 @@
     </div>`;
   }
   function purchaseSubtotalCents(){return Math.round(state.purchaseItems.reduce((sum,x)=>sum+(Number(x.quantity)||0)*(Number(x.unitPricePesos)||0)*100,0));}
-  function updatePurchasePaymentVisibility(){const method=qs('#purchasePaymentMethod')?.value||'cash';qsa('.payment-cash-field').forEach(x=>x.classList.toggle('hidden',method==='transfer'));qsa('.payment-transfer-field').forEach(x=>x.classList.toggle('hidden',method==='cash'));const subtotal=purchaseSubtotalCents(),surcharge=pesosToCents(qs('#purchaseSurcharge')?.value||0),grand=subtotal+surcharge,cash=qs('#purchaseCashAmount'),transfer=qs('#purchaseTransferAmount');if(method==='cash'&&cash)cash.value=(grand/100).toFixed(0);if(method==='transfer'&&transfer)transfer.value=(grand/100).toFixed(0);const help=qs('#purchasePaymentHelp');if(help)help.textContent=method==='mixed'?'Completá cuánto pagaste en efectivo y cuánto transferiste. La suma debe coincidir con el total.':method==='transfer'?'La cuenta de origen identifica desde dónde salió la transferencia. La cuenta de destino es opcional.':'El pago se registra como efectivo en Caja.';}
+  function updatePurchasePaymentVisibility(){
+    const method=qs('#purchasePaymentMethod')?.value||'cash';
+    qsa('.payment-cash-field').forEach(x=>x.classList.toggle('hidden',method==='transfer'));
+    qsa('.payment-transfer-field').forEach(x=>x.classList.toggle('hidden',method==='cash'));
+    const breakdown=qs('#purchasePaidBreakdown');if(breakdown)breakdown.dataset.method=method;
+    const subtotal=purchaseSubtotalCents(),surcharge=pesosToCents(qs('#purchaseSurcharge')?.value||0),grand=subtotal+surcharge,cash=qs('#purchaseCashAmount'),transfer=qs('#purchaseTransferAmount');
+    if(method==='cash'&&cash)cash.value=(grand/100).toFixed(0);
+    if(method==='transfer'&&transfer)transfer.value=(grand/100).toFixed(0);
+    const help=qs('#purchasePaymentHelp');
+    if(help)help.textContent=method==='mixed'
+      ?'Efectivo + transferencia debe coincidir con el total. Al guardar la compra, el pago se registra automáticamente en Caja.'
+      :'Al guardar la compra, el pago se registra automáticamente en Caja.';
+  }
   function updatePurchaseTotal(){const subtotal=purchaseSubtotalCents(),surcharge=pesosToCents(qs('#purchaseSurcharge')?.value||0),grand=subtotal+surcharge;const a=qs('#purchaseSubtotal'),b=qs('#purchaseTotal');if(a)a.textContent=money(subtotal);if(b)b.textContent=money(grand);updatePurchasePaymentVisibility();}
   function renderPurchaseItems(){const host=qs('#purchaseItems');if(!host)return;host.innerHTML=`<datalist id="purchaseAccountOptions"><option value="Mercado Pago"><option value="Banco"><option value="Caja SALMOS"></datalist>${state.purchaseItems.map(purchaseItemRow).join('')}`;updatePurchaseTotal();}
   function syncPurchaseRowFromDom(row){const i=Number(row.dataset.purchaseRow),x=state.purchaseItems[i];if(!x)return;qsa('[data-purchase-field]',row).forEach(el=>{const k=el.dataset.purchaseField;x[k]=['quantity','capacityMl','widthCm','unitPricePesos'].includes(k)?Number(el.value)||0:el.value});}
@@ -680,6 +692,14 @@
     if(stockKind==='physical'){const pd=await api(`/api/admin/products/${productId}`),variantId=Number(pd.item?.variants?.[0]?.id);if(!variantId)throw new Error('No se pudo crear la variante del producto.');await api('/api/admin/production',{method:'POST',body:JSON.stringify({productId,variantId,quantity:qty,notes:qs('#productionNotes')?.value||''})});}
     state.costingLoaded=false;return {productId,stockKind};
   }
+  function openPurchaseColorDialog(row){
+    state.colorEditorRow=Number(row);
+    const d=qs('#purchaseColorDialog'),host=qs('#purchaseColorDialogGrid');if(!d||!host)return;
+    const current=normalizeOption(state.purchaseItems[state.colorEditorRow]?.color||'');
+    host.innerHTML=purchaseColorOptions().map(v=>`<button type="button" class="purchase-color-dialog-option ${current===v?'active':''}" data-purchase-color-dialog="${escapeHtml(v)}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(v))}"></span><span>${escapeHtml(v)}</span></button>`).join('')+`<button type="button" class="purchase-color-dialog-option color-other" data-purchase-color-dialog="__other__"><span class="color-dot custom-color-dot"></span><span>Otro color…</span></button>`;
+    d.showModal();
+  }
+  function closePurchaseColorDialog(){qs('#purchaseColorDialog')?.close();state.colorEditorRow=null;}
   function openOtherEditor({row,field,label,kind='value'}){state.otherEditor={row:Number(row),field,label,kind};const d=qs('#otherValueDialog');if(!d)return;qs('#otherValueTitle').textContent=`Agregar ${label}`;qs('#otherValueInput').value='';d.showModal();setTimeout(()=>qs('#otherValueInput')?.focus(),30);}
   function saveOtherEditor(){const o=state.otherEditor,v=normalizeOption(qs('#otherValueInput')?.value||'');if(!o||!v)return;if(o.kind==='finance'){qs('#movementCategoryOther').value=v;rememberFinanceReason(v);renderFinanceReasonSelector(v);}else{const x=state.purchaseItems[o.row];if(!x)return;if(o.field==='customTypeLabel'){const code=safeCustomTypeCode(v);x.materialType=code;if(!customTypeEntries().some(t=>t.code===code))state.purchaseOptions.types.push({code,label:v});}else{x[o.field]=v;if(o.field==='fit')addPurchaseOption('fits',v);else if(o.field==='materialClass')addPurchaseOption('classes',v);else if(o.field==='size')addPurchaseOption('sizes',v,normalizePurchaseClass(x.materialClass)||'OTROS');else if(o.field==='color')addPurchaseOption('colors',v);else if(o.field==='name')addPurchaseOption('materials',v,x.materialType);}renderPurchaseItems();persistAdminOptionSettings().catch(()=>{});}qs('#otherValueDialog')?.close();state.otherEditor=null;}
 
@@ -688,7 +708,8 @@
     const select=qs('#movementCategorySelect'),input=qs('#movementCategoryOther');if(!select||!input)return;
     const options=financeReasonOptions(current),known=options.some(v=>v.toLocaleLowerCase('es')===String(current||'').toLocaleLowerCase('es'));
     select.innerHTML='<option value="">Elegir motivo...</option>'+options.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')+'<option value="__other__">＋ Otro...</option>';
-    if(current&&known){select.value=current;input.value=current;input.classList.add('hidden')}else if(current){select.value='__other__';input.value=current;input.classList.remove('hidden')}else{select.value='';input.value='';input.classList.add('hidden')}
+    if(current){select.value=known?current:'';input.value=current;}else{select.value='';input.value='';}
+    input.classList.add('hidden');
   }
   async function rememberFinanceReason(value){value=normalizeOption(value);if(!value||FINANCE_BASIC_REASONS.includes(value))return;addPurchaseOption('financeReasons',value);try{await persistAdminOptionSettings()}catch{}}
 
@@ -697,7 +718,7 @@
     qs('#adminContent').innerHTML=`
       <div class="admin-section-head expenses-head"><div>${reportFiltersHtml()}</div><button class="btn btn-primary" id="newMovementBtn">+ Movimiento manual</button></div>
       <div class="kpi-grid"><div class="kpi"><small>Egresos</small><strong>− ${money(s.expensesCents)}</strong></div><div class="kpi"><small>Otros ingresos</small><strong>${money(s.extraIncomeCents)}</strong></div><div class="kpi"><small>Ventas</small><strong>${money(s.productSalesCents)}</strong></div><div class="kpi"><small>Balance</small><strong>${money(s.balanceCents)}</strong></div></div>
-      <section class="admin-section"><div class="admin-section-head"><h2>Movimientos cargados</h2></div><div class="admin-card admin-table-wrap"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Detalle</th><th>Origen</th><th>Destino</th><th>Importe</th><th>Adjuntos</th><th></th></tr></thead><tbody>${(d.movements||[]).length?(d.movements||[]).map(m=>`<tr><td>${new Date(m.occurred_at).toLocaleDateString('es-AR')}</td><td><span class="status ${m.type==='income'?'success':'warning'}">${m.type==='income'?'Ingreso':m.type==='investment'?'Inversión':'Egreso'}</span></td><td>${escapeHtml(m.category||'—')}</td><td>${escapeHtml(m.description||'')}</td><td>${escapeHtml(m.origin||'—')}</td><td>${escapeHtml(m.destination||'—')}</td><td class="${m.type==='expense'||m.type==='investment'?'money-negative':''}">${m.type==='expense'||m.type==='investment'?'− ':''}${money(m.amount_cents)}</td><td><div class="finance-attachments">${(m.attachments||[]).map(a=>`<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt="Comprobante"></a>`).join('')||'—'}</div></td><td>${m.source_kind==='purchase'?`<span class="status success">Desde Compras</span>`:`<div class="admin-actions"><button class="btn btn-ghost" data-edit-movement="${m.id}">Editar</button><button class="btn btn-danger" data-delete-movement="${m.id}">Eliminar</button></div>`}</td></tr>`).join(''):'<tr><td colspan="9">Todavía no cargaste movimientos.</td></tr>'}</tbody></table></div></section>`;
+      <section class="admin-section"><div class="admin-section-head"><h2>Movimientos cargados</h2></div><div class="admin-card admin-table-wrap"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Detalle</th><th>Origen</th><th>Destino</th><th>Importe</th><th>Adjuntos</th><th></th></tr></thead><tbody>${(d.movements||[]).length?(d.movements||[]).map(m=>`<tr><td>${new Date(m.occurred_at).toLocaleDateString('es-AR')}</td><td><span class="status ${m.type==='income'?'success':'warning'}">${m.type==='income'?'Ingreso':m.type==='investment'?'Inversión':'Egreso'}</span></td><td>${escapeHtml(m.category||'—')}</td><td>${m.description?`<details class="finance-row-detail"><summary>Ver detalle</summary><div>${escapeHtml(m.description)}</div></details>`:'—'}</td><td>${escapeHtml(m.origin||'—')}</td><td>${escapeHtml(m.destination||'—')}</td><td class="${m.type==='expense'||m.type==='investment'?'money-negative':''}">${m.type==='expense'||m.type==='investment'?'− ':''}${money(m.amount_cents)}</td><td><div class="finance-attachments">${(m.attachments||[]).map(a=>`<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt="Comprobante"></a>`).join('')||'—'}</div></td><td>${m.source_kind==='purchase'?`<span class="status success">Desde Compras</span>`:`<div class="admin-actions"><button class="btn btn-ghost" data-edit-movement="${m.id}">Editar</button><button class="btn btn-danger" data-delete-movement="${m.id}">Eliminar</button></div>`}</td></tr>`).join(''):'<tr><td colspan="9">Todavía no cargaste movimientos.</td></tr>'}</tbody></table></div></section>`;
   }
 
 
@@ -797,6 +818,8 @@
     if(productCancelBtn){productCancelBtn.type='button';productCancelBtn.setAttribute('formnovalidate','');productCancelBtn.addEventListener('click',e=>{e.preventDefault();closeProductDialog();});}
     productDialog?.addEventListener('cancel',e=>{e.preventDefault();closeProductDialog();});
     productDialog?.addEventListener('close',resetProductDialogState);
+    qs('#otherValueInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveOtherEditor();}});
+    qs('#purchaseColorDialog')?.addEventListener('cancel',e=>{e.preventDefault();closePurchaseColorDialog();});
     qs('#purchaseForm')?.addEventListener('input',e=>{const row=e.target.closest('[data-purchase-row]');if(row)syncPurchaseRowFromDom(row);if(row||['purchaseSurcharge','purchaseCashAmount','purchaseTransferAmount'].includes(e.target.id))updatePurchaseTotal();});
     qs('#purchaseForm')?.addEventListener('focusout',async e=>{
       const input=e.target.closest?.('.purchase-other-input,[data-purchase-field="color"]');if(!input)return;
@@ -813,21 +836,31 @@
         const i=Number(row.dataset.purchaseRow),x=state.purchaseItems[i];syncPurchaseRowFromDom(row);
         if(e.target.matches('[data-purchase-type-select]')){
           const type=e.target.value;
-          if(type==='__other__')state.purchaseItems[i]={...purchaseDefaultItem('__other__'),materialType:'__other__',customTypeLabel:'',_custom:{}};
-          else {const d=purchaseDefaultItem(type);state.purchaseItems[i]={...state.purchaseItems[i],...d,materialType:type,_custom:{}};}
+          if(type==='__other__'){openOtherEditor({row:i,field:'customTypeLabel',label:'tipo de producto'});e.target.value=x.materialType||'shirt';return;}
+          const d=purchaseDefaultItem(type);state.purchaseItems[i]={...state.purchaseItems[i],...d,materialType:type,_custom:{}};
           renderPurchaseItems();return;
         }
         const choice=e.target.dataset.purchaseChoice;
         if(choice){
           x._custom??={};
-          if(e.target.value==='__other__'){x[choice]='';x._custom[choice]=true;}
-          else {x[choice]=e.target.value;x._custom[choice]=false;if(choice==='materialClass'){const allowed=purchaseSizeOptions(x);if(x.size&&!allowed.includes(x.size))x.size='';}}
+          if(e.target.value==='__other__'){
+            const labels={fit:'corte',materialClass:'clase',size:'talle',name:'material'};
+            openOtherEditor({row:i,field:choice,label:labels[choice]||choice});
+            e.target.value=x[choice]||'';
+            return;
+          }
+          x[choice]=e.target.value;x._custom[choice]=false;
+          if(choice==='materialClass'){const allowed=purchaseSizeOptions(x);if(x.size&&!allowed.includes(x.size))x.size='';}
           renderPurchaseItems();return;
         }
         updatePurchaseTotal();
       }
       if(e.target.id==='purchasePaymentMethod')updatePurchasePaymentVisibility();
-      if(e.target.id==='movementCategorySelect'){const other=qs('#movementCategoryOther');if(e.target.value==='__other__'){other.value='';other.classList.remove('hidden');other.focus()}else{other.value=e.target.value;other.classList.add('hidden')}}
+      if(e.target.id==='movementCategorySelect'){
+        const other=qs('#movementCategoryOther');
+        if(e.target.value==='__other__'){openOtherEditor({row:-1,field:'category',label:'motivo / etiqueta',kind:'finance'});e.target.value=other?.value||'';}
+        else if(other){other.value=e.target.value;other.classList.add('hidden');}
+      }
     });
     qs('#movementDialog')?.addEventListener('close',()=>{state.editingMovementId=null;qs('#movementDialogTitle').textContent='Nuevo gasto / ingreso';});
     qs('#productImagesInput')?.addEventListener?.('change',()=>{});
@@ -876,8 +909,15 @@
       const zd=e.target.closest('[data-toggle-design-zoom]');if(zd){zd.classList.toggle('fit');return}
       if(e.target.id==='uploadDesignBtn'){const files=[...(qs('#designUploadFiles')?.files||[])];if(!files.length){toast('Elegí al menos un archivo.','error');return}const scope=qs('#designUploadScope')?.value||'clients';const kind=scope==='mixed'?'sheet':(qs('#designUploadKind')?.value||'individual');try{e.target.disabled=true;for(const file of files){const fd=new FormData();fd.append('file',file);fd.append('scope',scope);fd.append('kind',kind);fd.append('name',(qs('#designUploadName')?.value||'').trim()||(files.length===1?file.name.replace(/\.[^.]+$/,''):'') );fd.append('note',qs('#designUploadNote')?.value||'');fd.append('widthCm',qs('#designUploadWidth')?.value||'');fd.append('heightCm',qs('#designUploadHeight')?.value||'');fd.append('printMaterialType',qs('#designUploadPrintType')?.value||'dtf_textile');await api('/api/admin/design-assets',{method:'POST',body:fd})}toast('Diseño/s guardado/s sin modificar','success');qs('#designUploadDialog')?.close();await renderDesigns()}catch(err){toast(err.message,'error')}finally{e.target.disabled=false}return}
       if(e.target.id==='emailDesignSheetsBtn'){const ids=qsa('[data-design-sheet]:checked').map(x=>Number(x.dataset.designSheet));const to=qs('#designEmailTo')?.value.trim();if(!ids.length){toast('Marcá al menos una plancha.','error');return}if(!to){toast('Ingresá el email destinatario.','error');return}try{e.target.disabled=true;e.target.textContent='Enviando...';await api('/api/admin/design-assets/email',{method:'POST',body:JSON.stringify({ids,to,message:qs('#designEmailMessage')?.value||''})});toast('Mail enviado con enlaces a los originales','success');qs('#designEmailDialog')?.close()}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;e.target.textContent='Enviar planchas seleccionadas'}return}
-      const colorPick=e.target.closest('[data-purchase-color]');if(colorPick){const i=Number(colorPick.dataset.row),x=state.purchaseItems[i];if(x){x._custom??={};if(colorPick.dataset.purchaseColor==='__other__'){x.color='';x._custom.color=true}else{x.color=colorPick.dataset.purchaseColor;x._custom.color=false}renderPurchaseItems();}return}
-      if(e.target.id==='newPurchaseBtn'){openPurchaseDialog();return}const ep=e.target.closest('[data-edit-purchase]');if(ep){const p=state.purchases.find(x=>Number(x.id)===Number(ep.dataset.editPurchase));if(p)openPurchaseDialog(p);return}if(e.target.id==='saveOtherValueBtn'){saveOtherEditor();return}if(e.target.id==='cancelOtherValueBtn'||e.target.id==='closeOtherValueBtn'){qs('#otherValueDialog')?.close();state.otherEditor=null;return}
+      const openColor=e.target.closest('[data-open-purchase-color]');if(openColor){openPurchaseColorDialog(Number(openColor.dataset.openPurchaseColor));return}
+      const colorPick=e.target.closest('[data-purchase-color-dialog]');if(colorPick){
+        const i=Number(state.colorEditorRow),x=state.purchaseItems[i];if(!x)return;
+        const value=colorPick.dataset.purchaseColorDialog;
+        if(value==='__other__'){closePurchaseColorDialog();openOtherEditor({row:i,field:'color',label:'color'});return}
+        x.color=value;x._custom??={};x._custom.color=false;closePurchaseColorDialog();renderPurchaseItems();return;
+      }
+      if(e.target.id==='closePurchaseColorBtn'||e.target.id==='cancelPurchaseColorBtn'){closePurchaseColorDialog();return}
+      if(e.target.id==='newPurchaseBtn'){openPurchaseDialog();return}const ep=e.target.closest('[data-edit-purchase]');if(ep){const p=state.purchases.find(x=>Number(x.id)===Number(ep.dataset.editPurchase));if(p)openPurchaseDialog(p);return}if(e.target.id==='saveOtherValueBtn'){saveOtherEditor();return}if(e.target.id==='cancelOtherValueBtn'||e.target.id==='closeOtherValueBtn'){qs('#otherValueDialog')?.close();state.otherEditor=null;if(qs('#purchaseDialog')?.open)renderPurchaseItems();return}
       if(e.target.id==='closePurchaseDialogBtn'||e.target.id==='cancelPurchaseBtn'){qs('#purchaseDialog')?.close();return}
       if(e.target.id==='addPurchaseItemBtn'){state.purchaseItems.push(purchaseDefaultItem('shirt'));renderPurchaseItems();return}
       const pstep=e.target.closest('[data-purchase-step]');if(pstep){const i=Number(pstep.dataset.row),x=state.purchaseItems[i];if(x){x.quantity=Math.max(materialIsDtf(x.materialType)?.01:1,(Number(x.quantity)||0)+(Number(pstep.dataset.purchaseStep)||0));renderPurchaseItems();}return}
