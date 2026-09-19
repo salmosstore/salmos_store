@@ -1,0 +1,58 @@
+SALMOS V21 — Actualización
+
+Hay que actualizar los dos componentes: tienda/admin y Worker.
+
+1. En Cloudflare Workers, reemplazar el código del Worker actual por el contenido
+   de SALMOS_WORKER_V21.txt (también incluido como backend/worker.mjs).
+   Conservar los bindings y las variables/secretos que ya están configurados.
+   Publicar esa actualización del Worker antes de actualizar la tienda.
+
+2. Extraer el ZIP y copiar el contenido de salmos_v21 a la raíz del repositorio
+   actual de la tienda en GitHub, reemplazando los archivos existentes.
+   index.html debe quedar en la misma ubicación que antes. La carpeta backend
+   contiene el código del Worker; por sí sola no actualiza Cloudflare.
+
+3. Recargar la tienda y Administración después de publicar ambos componentes.
+   La versión de caché cambia a V21. Si una pestaña mantiene la versión anterior,
+   cerrarla y volver a abrirla o hacer una recarga forzada.
+
+No ejecutar schema.sql ni seed.sql sobre la base existente. El Worker agrega
+los campos nuevos automáticamente; esta actualización no requiere reiniciar
+la base de datos ni borrar compras, stock o movimientos.
+
+CAMBIOS
+- Cabecera y franja informativa juntas, sin el hueco anterior.
+- Modo claro uniforme con banner blanco/dorado, letras negras/doradas y precios
+  legibles. El fondo oscuro reutiliza la textura del banner SALMOS original.
+- Se elimina el bloque inferior duplicado de datos de motomensajería.
+- Correo: botones A domicilio / A sucursal; cotización automática a domicilio.
+  Elegir sucursal completa la dirección; volver a domicilio recupera los datos
+  ingresados. Mapa/listado quedan conectados al endpoint de sucursales existente.
+- Compras: detalles plegables, comisión en porcentaje o pesos, y datos de la
+  transferencia editables.
+- Producción: agregar diseños desde el mismo modal de diseños sin perder la
+  producción que se está cargando.
+- Diseños: al editar se puede cambiar la plancha a mixta.
+- Caja: Otro motivo abre el flotante; forma de pago, comisiones y detalles de
+  transferencias al crear o editar un movimiento.
+
+CÁLCULOS
+El recargo porcentual se aplica al importe base completo; el recargo en pesos
+se suma como importe fijo. Total = base + recargo, redondeado a centavos.
+En pagos mixtos, efectivo + transferencia deben sumar ese total.
+Los egresos originados en una compra se corrigen desde Compras para conservar
+la consistencia con el stock y sus pagos.
+
+CORREO ARGENTINO
+El listado real de sucursales sigue dependiendo del acceso de Correo Argentino.
+No se agregaron sucursales ficticias. Se mantienen las tarifas y la configuración
+existentes: esta entrega no habilita permisos externos ni fija tarifas reales.
+Cuando el servicio devuelva sucursales habilitadas se mostrarán en el mapa y
+podrán seleccionarse sin volver a desarrollar ese recorrido.
+
+VERIFICACIÓN
+13 comprobaciones del servidor y 9 comprobaciones funcionales del frontend
+aprobadas: recargos, pagos, transacciones, edición, stock, motivos de Caja y
+conservación del domicilio al seleccionar sucursal. Pruebas con datos aislados.
+La revisión visual en navegador no pudo completarse en este entorno.
+No se modificó ni publicó el sitio ni la base de producción.

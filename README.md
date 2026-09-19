@@ -1,3 +1,13 @@
+# SALMOS V21
+
+Actualización de tienda, Administración y Worker. Ver **ACTUALIZAR_V21.txt**
+para instalar ambos componentes y conocer los cambios y las comprobaciones.
+
+Correo Argentino: el listado real de sucursales depende del acceso habilitado
+por el proveedor; no se incluyen sucursales de muestra ni nuevas tarifas.
+
+---
+
 # salmos_store
 Tienda online oficial de SALMOS
 

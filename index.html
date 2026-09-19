@@ -30,9 +30,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=20.1">
+  <link rel="stylesheet" href="styles.css?v=21.0">
 </head>
-<body class="store-pending">
+<body class="storefront store-pending">
   <header class="site-header">
     <div class="shell header-stack">
       <div class="header-main-row">
@@ -83,7 +83,6 @@
         <div class="category-row" id="categoryRow"></div>
       </nav>
     </div>
-  </header>
 
   <div class="salmos-info-bar" aria-label="Información rápida de SALMOS">
     <div class="shell salmos-info-shell">
@@ -106,10 +105,12 @@
     </div>
   </div>
 
+  </header>
+
   <main>
     <div class="shell">
       <section class="hero hero-compact" aria-label="SALMOS">
-        <img src="banner-salmos-header.png" alt="SALMOS · creer · amar · crear">
+        <img class="hero-banner-dark" src="banner-salmos-header.png" alt="SALMOS · creer · amar · crear"><img class="hero-banner-light" src="banner-salmos-light.png" alt="SALMOS · creer · amar · crear">
       </section>
 
       <section class="section products-section hidden" id="productos">
@@ -183,9 +184,9 @@
   <div class="toast-stack" id="toastStack"></div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=20.1" defer></script>
+  <script src="app.js?v=21.0" defer></script>
   <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=20.1',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=21.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
 </body>
 </html>

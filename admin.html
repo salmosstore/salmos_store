@@ -8,9 +8,9 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=20.1">
+  <link rel="stylesheet" href="styles.css?v=21.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=20.1">
+  <link rel="stylesheet" href="admin-v4.css?v=21.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -68,16 +68,16 @@
           <div class="purchase-payment-grid purchase-payment-main">
             <div class="field payment-method-field"><label>1 · Forma de pago</label><select class="select" name="payment_method" id="purchasePaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option></select></div>
             <div class="money-chip"><span>2 · Importe de la compra</span><strong id="purchaseSubtotal">$ 0</strong></div>
-            <div class="field compact surcharge-field"><label>3 · Recargo / comisión ($)</label><input class="input" name="surcharge" id="purchaseSurcharge" type="number" min="0" step="1" value="" placeholder="0"></div>
+            <div class="field compact surcharge-field"><label for="purchaseSurcharge">3 · Recargo / comisión</label><div class="surcharge-controls"><select class="select" id="purchaseSurchargeType" name="surcharge_type" aria-label="Tipo de recargo"><option value="fixed">Pesos ($)</option><option value="percent">Porcentaje (%)</option></select><input class="input" name="surcharge" id="purchaseSurcharge" type="number" min="0" step="0.01" value="" placeholder="0" aria-label="Valor del recargo"></div><small id="purchaseSurchargeHelp">Importe fijo en pesos.</small></div>
             <div class="purchase-grand-total money-chip"><span>4 · Total a pagar</span><strong id="purchaseTotal">$ 0</strong></div>
           </div>
           <div class="purchase-paid-breakdown" id="purchasePaidBreakdown" data-method="cash">
-            <div class="field payment-cash-field"><label>Importe abonado en efectivo ($)</label><input class="input" name="cash_amount" id="purchaseCashAmount" type="number" min="0" step="1"></div>
-            <div class="field payment-transfer-field hidden"><label>Importe abonado por transferencia ($)</label><input class="input" name="transfer_amount" id="purchaseTransferAmount" type="number" min="0" step="1"></div>
+            <div class="field payment-cash-field"><label>Importe abonado en efectivo ($)</label><input class="input" name="cash_amount" id="purchaseCashAmount" type="number" min="0" step="0.01"></div>
+            <div class="field payment-transfer-field hidden"><label>Importe abonado por transferencia ($)</label><input class="input" name="transfer_amount" id="purchaseTransferAmount" type="number" min="0" step="0.01"></div>
           </div>
           <div class="purchase-payment-details payment-transfer-field hidden">
             <div class="purchase-transfer-title">Detalles de la transferencia / alias</div>
-            <div class="purchase-payment-grid"><div class="field"><label>Cuenta / alias de origen</label><input class="input" id="purchaseTransferOrigin" name="transfer_origin" list="purchaseAccountOptions" placeholder="Mercado Pago, banco, alias..."></div><div class="field"><label>Cuenta / alias de destino <span class="muted">(opcional)</span></label><input class="input" id="purchaseTransferDestination" name="transfer_destination" placeholder="Cuenta / alias del proveedor"></div></div>
+            <div class="purchase-payment-grid"><div class="field"><label>Cuenta / alias de origen</label><input class="input" id="purchaseTransferOrigin" name="transfer_origin" list="purchaseAccountOptions" placeholder="Mercado Pago, banco, alias..."></div><div class="field"><label>Cuenta / alias de destino <span class="muted">(opcional)</span></label><input class="input" id="purchaseTransferDestination" name="transfer_destination" placeholder="Cuenta / alias del proveedor"></div><div class="field"><label>N.º de operación / referencia</label><input class="input" id="purchaseTransferReference" name="transfer_reference" placeholder="Opcional"></div><div class="field"><label>Detalle de la transferencia</label><input class="input" id="purchaseTransferDetails" name="transfer_details" placeholder="Banco, titular u observaciones"></div></div>
           </div>
           <div class="purchase-payment-help" id="purchasePaymentHelp">Al guardar la compra, el pago se registra automáticamente en Caja.</div>
         </section>
@@ -103,7 +103,7 @@
           <div class="production-stock-note" id="productionStockNote">Stock físico descuenta la materia prima al iniciar producción. “A stockear” guarda la receta sin consumirla todavía.</div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedMaterials"></div>
-          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
+          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div><button class="btn btn-primary" type="button" id="productionUploadDesignBtn">+ Agregar diseño</button></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedDesigns"></div>
           <div class="production-cost-summary" id="productionBuilderCost"></div>
           <div class="field"><label>Nota interna de producción</label><textarea class="textarea" id="productionNotes" rows="2" placeholder="Opcional"></textarea></div>
@@ -138,13 +138,20 @@
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
           <div class="field"><label>Motivo / etiqueta</label><select class="select" id="movementCategorySelect"><option value="">Elegir motivo...</option></select><input class="input hidden movement-category-other" name="category" id="movementCategoryOther" placeholder="Escribí el nuevo motivo" required></div>
           <div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
-          <div class="field"><label>Origen</label><input class="input" name="origin" placeholder="Ej.: Caja SALMOS, Mercado Pago"></div>
-          <div class="field"><label>Destino</label><input class="input" name="destination" placeholder="Ej.: Proveedor, imprenta"></div>
-          <div class="field"><label>Importe</label><input class="input" name="amount" type="number" min="0" step="1" required></div>
+          <div class="field"><label for="movementPaymentMethod">Forma del ingreso / egreso</label><select class="select" name="payment_method" id="movementPaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option></select></div>
+          <div class="field"><label for="movementAmount">Importe base ($)</label><input class="input" name="amount" id="movementAmount" type="number" min="0.01" step="0.01" required></div>
+          <div class="field full"><label for="movementSurcharge">Recargo / comisión</label><div class="surcharge-controls"><select class="select" id="movementSurchargeType" name="surcharge_type" aria-label="Tipo de recargo"><option value="fixed">Pesos ($)</option><option value="percent">Porcentaje (%)</option></select><input class="input" id="movementSurcharge" name="surcharge" type="number" min="0" step="0.01" placeholder="0" aria-label="Valor del recargo"></div><small id="movementSurchargeHelp">Importe fijo en pesos.</small></div>
+          <div class="money-chip full"><span id="movementTotalLabel">Total del egreso</span><strong id="movementTotal">$ 0</strong></div>
+          <div class="field movement-cash-field"><label>Efectivo ($)</label><input class="input" name="cash_amount" id="movementCashAmount" type="number" min="0" step="0.01"></div>
+          <div class="field movement-transfer-field hidden"><label>Transferencia ($)</label><input class="input" name="transfer_amount" id="movementTransferAmount" type="number" min="0" step="0.01"></div>
+          <div class="field"><label>Origen</label><input class="input" name="origin" placeholder="Ej.: Caja SALMOS, cliente"></div>
+          <div class="field"><label>Destino</label><input class="input" name="destination" placeholder="Ej.: Proveedor, Caja SALMOS"></div>
+          <section class="full movement-transfer-field hidden"><h3>Detalles de la transferencia</h3><div class="form-grid"><div class="field"><label>Cuenta / alias de origen *</label><input class="input" name="transfer_origin" id="movementTransferOrigin" placeholder="Banco, alias o titular"></div><div class="field"><label>Cuenta / alias de destino</label><input class="input" name="transfer_destination" id="movementTransferDestination" placeholder="Banco, alias o titular"></div><div class="field"><label>N.º de operación / referencia</label><input class="input" name="transfer_reference" id="movementTransferReference" placeholder="Opcional"></div><div class="field"><label>Detalle de la transferencia</label><input class="input" name="transfer_details" id="movementTransferDetails" placeholder="Observaciones"></div></div></section>
+          <small class="full" id="movementPaymentHelp"></small>
           <div class="field full"><label>Comprobantes / imágenes (opcional)</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Podés adjuntar fotos de tickets, comprobantes o capturas.</small></div>
         </div>
       </div>
-      <div class="dialog-foot"><button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button><button class="btn btn-primary" id="saveMovementBtn" value="default">Guardar</button></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button><button class="btn btn-primary" id="saveMovementBtn" type="button">Guardar</button></div>
     </form>
   </dialog>
 
@@ -204,7 +211,7 @@
   <dialog class="admin-dialog tiny-dialog" id="productionDesignMeasureDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Estampa en este producto</div><h2 id="productionDesignMeasureTitle">Medidas</h2></div><button class="icon-btn" type="button" id="closeProductionDesignMeasure">×</button></div><div class="dialog-body"><p class="muted">Estas medidas se aplican a este producto. Podés usar el mismo diseño a otro tamaño en otra receta.</p><div class="form-grid"><div class="field"><label>Ancho (cm)</label><input class="input" id="productionDesignWidth" type="number" min="0.1" step="0.1"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionDesignHeight" type="number" min="0.1" step="0.1"></div></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionDesignMeasure">Cancelar</button><button class="btn btn-primary" type="button" id="confirmProductionDesignMeasure">Usar estas medidas</button></div></div></dialog>
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=20.1" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=20.1',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=21.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=21.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 </body>
 </html>

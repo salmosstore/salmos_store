@@ -592,3 +592,23 @@ body::after{width:auto!important;height:auto!important;left:214px!important;righ
   .production-top-grid>.field{grid-column:1!important}
   .finance-row-detail{max-width:240px}
 }
+
+/* V21: detalles plegables y pagos */
+.surcharge-controls{display:grid;grid-template-columns:minmax(125px,1fr) minmax(75px,1fr);gap:8px;align-items:center}
+.surcharge-controls .input,.surcharge-controls .select{min-width:0;width:100%}
+.purchase-row-detail{min-width:160px;max-width:440px}
+.purchase-row-detail summary{cursor:pointer;color:var(--text);font-size:.82rem;font-weight:800}
+.purchase-row-detail>div{padding-top:10px;line-height:1.55}
+.purchase-row-detail .detail-open{display:none}
+.purchase-row-detail[open] .detail-closed{display:none}
+.purchase-row-detail[open] .detail-open{display:inline}
+#movementDialog{width:min(790px,calc(100vw - 24px));max-width:790px}
+#movementForm .full{grid-column:1/-1}
+#movementForm .movement-transfer-field h3{margin:12px 0}
+.production-picker-head{flex-wrap:wrap;gap:12px}
+.production-picker-head>.btn{flex:0 0 auto}
+#purchaseSurchargeHelp,#movementSurchargeHelp{font-size:.75rem;color:var(--muted);line-height:1.4}
+@media(max-width:620px){#movementForm .form-grid{grid-template-columns:1fr}.production-picker-head>.btn{width:100%}.surcharge-controls{grid-template-columns:minmax(125px,1.2fr) minmax(70px,1fr)}}
+
+.purchase-payment-main>.field,.purchase-payment-main>.money-chip{height:auto;min-height:92px}
+.purchase-payment-main>.surcharge-field{grid-template-rows:auto auto auto}

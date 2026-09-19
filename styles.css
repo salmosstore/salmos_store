@@ -1322,3 +1322,33 @@ body::before{z-index:0!important;opacity:.65}.site-header,.info-ticker,main,.sit
 /* El fondo decorativo nunca debe convertir la cabecera fija en contenido normal. */
 body::before{pointer-events:none}
 @media(max-width:780px){.salmos-info-bar{top:var(--header)!important}}
+
+
+/* V21 · Una cabecera, texturas de marca y contraste por tema. */
+.storefront{--store-art:url('banner-salmos-header.png');background:#080705!important}
+.storefront::before{z-index:0!important;opacity:1;background-image:linear-gradient(rgba(5,4,2,.40),rgba(5,4,2,.60)),var(--store-art);background-size:100% 100%,1200% auto;background-position:center,left top;background-repeat:no-repeat}
+.storefront .site-header{background:color-mix(in srgb,var(--bg) 96%,transparent);border-bottom:0}
+.storefront .site-header .salmos-info-bar{position:relative!important;top:auto!important;z-index:auto!important;margin:0;isolation:auto}
+.storefront .hero.hero-compact{aspect-ratio:2048/460!important;position:relative;background:transparent;height:auto!important}
+.storefront .hero.hero-compact>img{position:absolute;inset:0;width:100%;height:100%!important;object-fit:cover!important}
+.storefront .hero-banner-light{display:none!important}
+:root[data-theme="light"] .storefront{--store-art:url('banner-salmos-light.png');--gold-2:#80560e;--gold:#855a10;--muted:#5f584c;--bg:#fffdf8;--bg-soft:#fffcf5;--surface:#fffdfa;--surface-2:#f7f0e3;background:#fffdf8!important}
+:root[data-theme="light"] .storefront::before{background-image:linear-gradient(rgba(255,253,248,.83),rgba(255,253,248,.90)),var(--store-art)}
+:root[data-theme="light"] .storefront .hero-banner-dark{display:none!important}
+:root[data-theme="light"] .storefront .hero-banner-light{display:block!important}
+:root[data-theme="light"] .storefront .salmos-info-bar{background:#fff7e5;color:#33250d;border-color:#dfc58a}
+:root[data-theme="light"] .storefront .product-price,:root[data-theme="light"] .storefront .price,:root[data-theme="light"] .storefront .shipping-price,:root[data-theme="light"] .storefront .delivery-promo-kicker{color:#80560e}
+:root[data-theme="light"] .storefront .btn-primary,:root[data-theme="light"] .storefront .made-order-request{background:linear-gradient(135deg,#f4cf63,#dbab32)!important;color:#191307!important}
+:root[data-theme="light"] .storefront .shared-delivery-panel{background:#fffdfa;border-color:#dfc58a}
+:root[data-theme="light"] .storefront .shared-delivery-head,:root[data-theme="light"] .storefront .shared-delivery-map-card{border-color:#e4d8c1}
+:root[data-theme="light"] .storefront .shared-delivery-map-card{background:#f8f2e7}
+:root[data-theme="light"] .storefront .mini-pill.success{color:#22633a;border-color:#91ba9b}
+.correo-delivery-options{margin-top:14px}
+.correo-delivery-tabs{display:flex;gap:10px;flex-wrap:wrap}
+.correo-delivery-tabs>.btn{flex:1 1 150px;min-height:46px;border-radius:999px;font-weight:800}
+.correo-agency-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.correo-agency-tools p{margin:8px 0;font-size:.85rem}
+.correo-delivery-options .correo-agency-list{margin-top:10px}
+@media(max-width:600px){.correo-agency-tools{align-items:stretch;flex-direction:column;gap:4px}}
+
+:root[data-theme="light"] .storefront :is(.option.active,.favorite-btn.active,.account-tabs button.active,#searchBtn.active,.category-chip.active,.category-btn.active,.category-pill.active,.chip.active,.chip:hover){background:linear-gradient(135deg,#f4cf63,#dbab32);color:#191307}
