@@ -612,3 +612,46 @@ body::after{width:auto!important;height:auto!important;left:214px!important;righ
 
 .purchase-payment-main>.field,.purchase-payment-main>.money-chip{height:auto;min-height:92px}
 .purchase-payment-main>.surcharge-field{grid-template-rows:auto auto auto}
+
+/* V22 · Bibliotecas horizontales y opciones de destino/medida. */
+.admin-content .design-library-group{margin-top:24px;min-width:0}
+.design-group-head{display:flex;align-items:center;gap:12px;cursor:pointer;padding:12px 0;border-bottom:1px solid var(--line);list-style:none}
+.design-group-head h2{margin:0}
+.design-library-section>summary.admin-section-head{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none}
+.design-library-section>summary.admin-section-head h3{margin:0}
+.design-library-section>summary.admin-section-head::after{content:none}
+.design-library-group>summary::-webkit-details-marker,.design-library-section>summary::-webkit-details-marker{display:none}
+.design-fold-label{margin-left:auto;color:var(--muted);font-size:.75rem;font-weight:700}
+details[data-design-list][open]>summary .when-closed,details[data-design-list]:not([open])>summary .when-open{display:none}
+details.design-library-group:not([open])>.design-group-body,details.design-library-section:not([open])>.horizontal-gallery-shell{display:none!important}
+.admin-content .design-library-section .design-grid{display:flex!important;flex-direction:row;flex-wrap:nowrap;justify-content:flex-start;gap:8px;overflow-x:auto;overflow-y:hidden;min-width:0;max-width:100%;padding:2px 0 12px;scroll-snap-type:x proximity;scrollbar-width:thin;overscroll-behavior-x:contain}
+.admin-content .design-library-section .design-grid>.design-gallery-card{flex:0 0 190px;width:190px;min-width:190px;margin:0}
+.admin-content .design-library-section .design-gallery-thumb{width:100%;height:190px}
+.design-measure-editor{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.design-measure-editor>.admin-section-head{align-items:flex-start;gap:10px}
+.design-measure-editor p{font-size:.8rem;margin:5px 0 0}
+.design-measure-option-row{display:grid;grid-template-columns:minmax(130px,1.5fr) minmax(85px,.8fr) repeat(2,minmax(90px,1fr)) 38px;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);align-items:end}
+.design-measure-option-row .field{min-width:0;font-size:.8rem}
+.design-measure-option-row .measure-detail-field{grid-column:1/5}
+.design-measure-option-row .measure-remove{grid-column:5;grid-row:1/3;align-self:center}
+.design-measure-summary{padding-left:20px;font-size:.85rem;line-height:1.7}
+.production-measure-choice{display:flex;align-items:center;gap:10px;padding:13px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;cursor:pointer;font-size:.9rem}
+.production-measure-choice:has(input:checked){background:var(--surface-2);border-color:var(--gold)}
+.production-measure-choice input{accent-color:var(--gold);flex-shrink:0}
+.production-change-measure{margin-top:6px;min-height:32px!important;font-size:.75rem}
+#productionCustomMeasure{margin-top:12px}
+#productionMeasureDialog .dialog-shell{width:min(660px,94vw)}
+#productionMeasureDialog .dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+@media(max-width:680px){
+  .admin-content .design-library-section .design-grid>.design-gallery-card{flex-basis:158px;min-width:158px;width:158px}
+  .admin-content .design-library-section .design-gallery-thumb{height:158px}
+  .design-measure-option-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px}
+  .design-measure-option-row .field{grid-column:auto}
+  .design-measure-option-row .field:nth-child(3){grid-column:1}
+  .design-measure-option-row .measure-detail-field{grid-column:1/3}
+  .design-measure-option-row .measure-remove{grid-column:3;grid-row:1/4}
+  .design-measure-editor>.admin-section-head{flex-wrap:wrap}
+  .design-library-section>summary.admin-section-head{flex-wrap:wrap}
+}
+
+.recipe-design-row>.recipe-measure-note{grid-column:1/-1;color:var(--muted);font-size:.8rem}

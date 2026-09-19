@@ -1,0 +1,75 @@
+SALMOS V22 — Direcciones, diseños y medidas
+
+ACTUALIZACIÓN
+1. Reemplazar el código del Worker actual de Cloudflare por SALMOS_WORKER_V22.txt
+   o por backend/worker.mjs incluido en este paquete. Conservar las variables,
+   secretos y bindings actuales. Publicar el Worker.
+2. Extraer el ZIP y subir el contenido de salmos_v22 a la raíz del repositorio
+   actual de la tienda. Reemplazar los archivos existentes. index.html y
+   admin.html deben quedar en la misma ubicación que antes.
+3. Abrir nuevamente tienda y administración. Se actualizó la caché a V22.
+   Si una pestaña conserva archivos anteriores, hacer una recarga forzada.
+
+NO ejecutar schema.sql ni seed.sql sobre la base que ya está en uso.
+Los campos de opciones de medidas y recetas se agregan automáticamente.
+
+QUÉ CAMBIÓ
+- Al cambiar la calle se descartan el código postal obtenido anteriormente y
+  las cotizaciones anteriores. Al confirmar se usa el CP de la nueva dirección
+  y se vuelven a calcular los importes con sus nuevas coordenadas.
+  El CP escrito manualmente puede servir como filtro de búsqueda, pero la
+  dirección validada actualiza ese dato. Una respuesta vieja no pisa cambios
+  posteriores. La provincia sigue validándose.
+- Diseños: SALMOS primero, Clientes debajo y Planchas mixtas al final.
+  SALMOS y Clientes tienen cada uno una galería de individuales y otra de
+  planchas. Todas tienen una única fila horizontal y separación de 8 px.
+  Se pueden plegar desde sus títulos o con los botones globales.
+- Carga y edición: Destinos y medidas muestra únicamente los renglones que
+  agregás. Cada opción tiene destino, talle opcional, ancho/largo, alto y
+  detalle opcional. El botón + Agregar opción añade otro renglón.
+- Ejemplo: Remeras / L / 25 × 35 cm / Espalda; luego Remeras / XL / 30 × 40 cm;
+  luego Mate / sin talle / 8 × 8 cm. Se conserva un solo archivo de diseño.
+- En Producción, tocar el diseño abre sus opciones. Elegir una y tocar
+  Usar esta medida. El detalle queda visible y alimenta el costo de impresión.
+  Cambiar medida conserva la cantidad y no duplica el diseño.
+- Las medidas también se conservan en la receta al editar el producto.
+- Las medidas antiguas por uso siguen disponibles. Los archivos originales
+  se conservan sin modificar.
+- Administración mantiene su nombre e ícono rosa propios al instalarla.
+  Se separaron explícitamente las identidades de la app tienda y la app admin.
+
+INSTALAR EL ADMINISTRADOR EN EL CELULAR
+Primero publicar esta actualización. No hace falta descargar el ZIP al celular.
+Abrir https://salmos.com.ar/admin.html e iniciar sesión cuando corresponda.
+
+Android / Chrome:
+Menú de tres puntos > Instalar y crear acceso directo > Instalar.
+Según la versión del navegador puede figurar Agregar a la pantalla principal.
+Confirmar que el nombre sea SALMOS Admin y el ícono sea el logo rosa.
+Fuente: https://support.google.com/chrome/answer/9658361?hl=es&co=GENIE.Platform%3DAndroid
+
+iPhone / Safari:
+Compartir > Agregar a Inicio > activar Abrir como app web si aparece > Agregar.
+Fuente: https://support.apple.com/es-lamr/guide/iphone/iphea86e5236/ios
+
+El navegador toma el ícono y el nombre de la configuración del administrador;
+no tenés que elegir una imagen. Se instala desde admin.html. Desde la portada
+se instala el acceso a la tienda. Si ya existe un acceso viejo con otro ícono,
+quitar ese acceso e instalar nuevamente desde admin.html.
+El administrador necesita conexión para consultar y guardar los datos.
+
+COPIA PARA OTRA CASA DE ROPA
+Se puede preparar una versión independiente después de estabilizar SALMOS:
+misma funcionalidad de catálogo, stock, compras, producción, Caja y pedidos,
+con otro nombre, logos, colores, fondos, textos, dominio e íconos.
+La copia tendrá una base de datos vacía y sus propias cuentas/configuraciones
+para pagos, envíos y acceso. No debe trasladar clientes, ventas, diseños,
+credenciales ni información comercial de SALMOS.
+Esta entrega sigue siendo la versión SALMOS; la copia comercial es posterior.
+
+VERIFICACIÓN
+20 comprobaciones de servidor y 19 del frontend aprobadas con datos aislados:
+recargos, stock, pagos, opciones de medidas, persistencia, recetas, dirección,
+CP, cotización y plegado de galerías. No se usaron datos de producción.
+La revisión visual en navegador no pudo completarse en este entorno.
+El listado real de sucursales sigue dependiendo del acceso de Correo Argentino.

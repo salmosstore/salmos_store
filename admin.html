@@ -3,14 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SALMOS Admin">
   <meta name="theme-color" content="#e98bb0">
   <title>SALMOS — Administración</title>
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=21.0">
+  <link rel="stylesheet" href="styles.css?v=22.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=21.0">
+  <link rel="stylesheet" href="admin-v4.css?v=22.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -177,7 +179,8 @@
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Subir diseño</h2></div><button class="icon-btn" type="button" id="closeDesignUploadBtn">×</button></div>
       <div class="dialog-body">
-        <div class="form-grid"><div class="field"><label>Sección</label><select class="select" id="designUploadScope"><option value="clients">Clientes</option><option value="salmos">SALMOS</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field"><label>Nombre (opcional)</label><input class="input" id="designUploadName" placeholder="Si subís varios usa el nombre del archivo"></div><div class="field"><label>Medidas</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field"><label>Impresión / costo</label><select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></div><div class="field full"><label>Nota</label><textarea class="textarea" id="designUploadNote" rows="2"></textarea></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple><small class="field-help">Se sube el archivo binario tal cual. Para DTF, preferí PNG/TIFF original.</small></div></div>
+        <div class="form-grid"><div class="field"><label>Sección</label><select class="select" id="designUploadScope"><option value="salmos">SALMOS</option><option value="clients">Clientes</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field"><label>Nombre (opcional)</label><input class="input" id="designUploadName" placeholder="Si subís varios usa el nombre del archivo"></div><div class="field"><label>Medida general (opcional)</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field"><label>Impresión / costo</label><select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></div><div class="field full"><label>Nota</label><textarea class="textarea" id="designUploadNote" rows="2"></textarea></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple><small class="field-help">Se sube el archivo binario tal cual. Para DTF, preferí PNG/TIFF original.</small></div></div>
+        <div id="designUploadMeasures"></div>
       </div>
       <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelDesignUploadBtn">Cancelar</button><button class="btn btn-primary" type="button" id="uploadDesignBtn">Subir sin modificar</button></div>
     </div>
@@ -211,7 +214,18 @@
   <dialog class="admin-dialog tiny-dialog" id="productionDesignMeasureDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Estampa en este producto</div><h2 id="productionDesignMeasureTitle">Medidas</h2></div><button class="icon-btn" type="button" id="closeProductionDesignMeasure">×</button></div><div class="dialog-body"><p class="muted">Estas medidas se aplican a este producto. Podés usar el mismo diseño a otro tamaño en otra receta.</p><div class="form-grid"><div class="field"><label>Ancho (cm)</label><input class="input" id="productionDesignWidth" type="number" min="0.1" step="0.1"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionDesignHeight" type="number" min="0.1" step="0.1"></div></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionDesignMeasure">Cancelar</button><button class="btn btn-primary" type="button" id="confirmProductionDesignMeasure">Usar estas medidas</button></div></div></dialog>
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=21.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=21.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=22.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=22.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+
+  <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
+  <dialog class="admin-dialog" id="productionMeasureDialog">
+    <div class="dialog-shell"><div class="dialog-head"><h2 id="productionMeasureTitle">Elegir medidas</h2><button class="icon-btn" type="button" id="closeProductionMeasureBtn" aria-label="Cerrar">×</button></div>
+      <div class="dialog-body"><p class="muted">Elegí el destino, talle y medida para esta producción.</p><div id="productionMeasureOptions"></div>
+        <div class="form-grid hidden" id="productionCustomMeasure"><label class="field">Ancho / largo (cm)<input class="input" id="productionMeasureWidth" type="number" min=".01" step=".01"></label><label class="field">Alto (cm)<input class="input" id="productionMeasureHeight" type="number" min=".01" step=".01"></label><label class="field full">Destino / detalle<input class="input" id="productionMeasureDetail" placeholder="Ej.: Remera XL · espalda"></label></div>
+        <div class="dialog-actions"><button class="btn btn-ghost" type="button" id="cancelProductionMeasureBtn">Cancelar</button><button class="btn btn-primary" type="button" id="applyProductionMeasureBtn">Usar esta medida</button></div>
+      </div>
+    </div>
+  </dialog>
+
 </body>
 </html>

@@ -12,7 +12,8 @@
       "src": "/admin-salmos-rosa-ui.png",
       "sizes": "620x620",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
-  ]
+  ],
+  "id": "/admin.html"
 }
