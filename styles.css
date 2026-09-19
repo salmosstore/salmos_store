@@ -1352,3 +1352,9 @@ body::before{pointer-events:none}
 @media(max-width:600px){.correo-agency-tools{align-items:stretch;flex-direction:column;gap:4px}}
 
 :root[data-theme="light"] .storefront :is(.option.active,.favorite-btn.active,.account-tabs button.active,#searchBtn.active,.category-chip.active,.category-btn.active,.category-pill.active,.chip.active,.chip:hover){background:linear-gradient(135deg,#f4cf63,#dbab32);color:#191307}
+
+/* V22.1 · Lectura del modo claro y estado de las cotizaciones. */
+:root[data-theme="light"] .storefront{--text:#201a12;--muted:#3d352b}
+:root[data-theme="light"] .storefront :is(.muted,.field-help,.notice,.shipping-auto-note,.shared-delivery-head small,.shipping-copy small){color:#3d352b}
+:root[data-theme="light"] .storefront :is(.input,.textarea)::placeholder{color:#51483d;opacity:1}
+.delivery-quote-error{margin-top:10px;line-height:1.5}

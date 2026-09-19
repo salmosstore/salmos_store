@@ -655,3 +655,16 @@ details.design-library-group:not([open])>.design-group-body,details.design-libra
 }
 
 .recipe-design-row>.recipe-measure-note{grid-column:1/-1;color:var(--muted);font-size:.8rem}
+
+/* V22.1 · Texto oscuro legible sobre los fondos claros existentes. */
+:root[data-theme="light"]{--text:#22131b;--muted:#3e2531;--gold-2:#542139!important;--admin-champagne:#542139!important}
+:root[data-theme="light"] :is(body,.admin-card,.settings-card,.kpi,.form-section,.production-picker-section,.purchase-payment-card,.admin-dialog,.admin-dialog .dialog-shell,.input,.select,.textarea,.purchase-color-picker>summary,.field>label,.admin-section-head h2,.settings-card h3,.form-section h3,.dialog-head h2,.admin-topbar h1,.admin-brand strong,.admin-table th,.admin-table td){color:#22131b!important}
+:root[data-theme="light"] :is(.muted,.field-help,.notice,.admin-nav-btn,.admin-brand small,.table-sub,.design-fold-label,.production-stock-note,.recipe-subtitle,.design-file-meta,.design-detail-summary small,.design-detail-summary p,.purchase-code-technical){color:#3e2531!important}
+:root[data-theme="light"] :is(.admin-eyebrow,.kpi strong,.purchase-money-summary strong,.purchase-grand-total strong,.production-cost-summary strong,.production-picker-card b,.material-stock-table .material-qty,.purchase-stepper button,.btn-ghost,.icon-btn,.btn-primary,.finance-filters button.active,.admin-nav-btn.active){color:#321325!important}
+:root[data-theme="light"] :is(.btn-ghost:hover,.icon-btn:hover,.admin-nav-btn:hover){color:#22131b!important}
+:root[data-theme="light"] :is(.input,.textarea)::placeholder{color:#523b47!important;opacity:1}
+:root[data-theme="light"] :is(.field-help,.notice,.table-sub){font-weight:500}
+:root[data-theme="light"] .purchase-code-technical{opacity:1}
+:root[data-theme="light"] .profit-positive{color:#155c32!important}
+:root[data-theme="light"] :is(.profit-negative,.production-material-line.missing){color:#9a1530!important}
+:root[data-theme="light"] .status.warning{color:#542139!important}

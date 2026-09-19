@@ -1,5 +1,5 @@
-const CACHE='salmos-pwa-v22-0';
-const CORE=['/','/index.html','/styles.css?v=22.0','/app.js?v=22.0','/config.js','/icon-192.png','/icon-512.png','/logo-mark.png','/banner-salmos-header.png','/banner-salmos-light.png','/manifest.webmanifest','/admin.html','/admin.css','/admin-v4.css?v=22.0','/admin.js?v=22.0','/admin-manifest.webmanifest','/admin-salmos-rosa-ui.png'];
+const CACHE='salmos-pwa-v22-1';
+const CORE=['/','/index.html','/styles.css?v=22.1','/app.js?v=22.1','/config.js','/icon-192.png','/icon-512.png','/logo-mark.png','/banner-salmos-header.png','/banner-salmos-light.png','/manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).catch(()=>{}).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{

@@ -1,0 +1,37 @@
+SALMOS V22.1 — Corrección puntual de direcciones y contraste
+
+INSTALACIÓN SOBRE V22
+Extraer el ZIP y copiar el contenido de salmos_v22_1 a la raíz del repositorio
+actual, reemplazando los archivos. No subir la carpeta contenedora como una
+subcarpeta del sitio. Recargar las pestañas abiertas después de publicar.
+
+El Worker V22 y la base de datos no cambian. No hace falta reemplazar el
+Worker ni ejecutar SQL. Se mantienen diseños, compras, producción y Caja.
+
+CAMBIOS
+- Se unifica la confirmación de dirección: primero se acepta el cambio de
+  localidad y CP, después se solicita la cotización una sola vez.
+- Al editar, se limpia el estado confirmado y se descartan tarifas anteriores.
+  Las respuestas que llegan tarde no pisan los datos que se están editando.
+- Se reutilizan las cotizaciones válidas del día para la misma dirección,
+  incluso al volver a ella, evitando consumir consultas duplicadas.
+- Si una cotización falla, se muestra el motivo concreto junto a las opciones
+  de envío. El error de la captura era el límite de consultas, no una dirección
+  rechazada después de aceptar la localidad.
+- Se oscurecen los textos del modo claro: menú, títulos, tablas, importes,
+  avisos, ayudas y campos. Se conservan los fondos y la disposición existentes.
+- La caché pública deja de precargar la página protegida de Administración;
+  eso evita la consulta de fondo que redirigía al login de Cloudflare.
+
+LÍMITE DIARIO
+El Worker conserva el límite existente de tres cotizaciones por día y
+por dispositivo. Esta actualización evita consultas duplicadas, pero no
+reinicia el cupo ya consumido. Si ya se agotó hoy, una dirección nueva sigue
+requiriendo esperar al próximo día o coordinar el costo con SALMOS.
+
+VERIFICACIÓN
+Pruebas funcionales anteriores: 19 aprobadas. Se agregaron 6 comprobaciones
+específicas del recorrido reportado: cambio de localidad, confirmación única,
+reutilización de tarifa, respuesta atrasada y mensaje del límite diario.
+Contraste calculado de los textos principales y secundarios sobre los fondos
+claros existentes. No se completó revisión visual en navegador.

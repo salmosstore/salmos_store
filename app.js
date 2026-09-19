@@ -187,7 +187,7 @@
     const text = await res.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = { message: text }; }
-    if (!res.ok) throw new Error(data?.error || data?.message || `Error ${res.status}`);
+    if (!res.ok) {const error=new Error(data?.error || data?.message || `Error ${res.status}`);error.status=res.status;throw error;}
     return data;
   }
 
@@ -980,6 +980,7 @@
   function deliveryReady(){const d=state.deliveryAddress||{};return Boolean(d.selected&&d.provinceCode&&d.formattedAddress&&Number.isFinite(Number(d.lat))&&Number.isFinite(Number(d.lng)));}
   function saveDeliveryAddress(){try{localStorage.setItem('salmos_delivery_address',JSON.stringify(state.deliveryAddress||{}))}catch{}}
   function resetDeliveryQuotes(){
+    state.deliveryQuoteRequest=null;state.deliveryQuotesPending=false;
     state.shippingQuotes={moto:null,correoHome:null,correoAgency:null};
     state.shipping.costCents=0;state.shipping.distanceKm=null;state.shipping.quoteId=null;state.correoLastParcel=null;
     state.correoAgencies=[];state.correoAgencyArea=null;
@@ -988,37 +989,75 @@
   function deliveryAreaKey(d={}){return `${d.provinceCode||''}|${d.locality||''}|${d.postalCode||''}`.toLowerCase()}
   function paintDeliveryLocalitySuggestions(){const h=qs('#deliveryLocalitySuggestions');if(!h)return;h.innerHTML=(state.deliveryLocalitySuggestions||[]).map((x,i)=>`<button type="button" class="correo-suggestion" data-delivery-locality="${i}"><strong>${escapeHtml(x.name)}</strong>${x.department?`<small>${escapeHtml(x.department)}</small>`:''}</button>`).join('');}
   async function fetchDeliveryLocalities(value){const q=String(value||'').trim(),d=state.deliveryAddress||{};if(q.length<2||!d.provinceCode){state.deliveryLocalitySuggestions=[];paintDeliveryLocalitySuggestions();return}const seq=++state.deliveryLocalitySeq;const data=await api('/api/geo/localities',{method:'POST',body:JSON.stringify({input:q,provinceCode:d.provinceCode,provinceName:correoProvinceQueryName(d.provinceCode)})});if(seq!==state.deliveryLocalitySeq)return;state.deliveryLocalitySuggestions=data.items||[];paintDeliveryLocalitySuggestions();}
+  function deliveryQuoteKey(d=state.deliveryAddress||{}){
+    return `${localDayKey()}|${Number(d.lat).toFixed(5)}|${Number(d.lng).toFixed(5)}|${normalizeSearch(d.formattedAddress||'')}`;
+  }
+  const deliveryMotoRequests=new Map();
+  async function deliveryMotoQuote(d){
+    const day=localDayKey(),key=deliveryQuoteKey(d),cache=loadJSON('salmos_moto_quotes_v1',{});
+    if(cache.day===day&&cache.quotes?.[key])return cache.quotes[key];
+    if(deliveryMotoRequests.has(key))return deliveryMotoRequests.get(key);
+    const run=(async()=>{
+      const saved=readLastShipping();
+      const same=saved&&saved.quotedDay===day&&Number(saved.costCents)>0&&normalizeSearch(saved.address)===normalizeSearch(d.formattedAddress)&&Math.abs(Number(saved.lat)-Number(d.lat))<.00001&&Math.abs(Number(saved.lng)-Number(d.lng))<.00001;
+      const quote=same?{distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null}:await api('/api/shipping/moto/quote',{method:'POST',body:JSON.stringify({destination:{lat:Number(d.lat),lng:Number(d.lng),address:d.formattedAddress}})});
+      const latest=loadJSON('salmos_moto_quotes_v1',{}),quotes=latest.day===day?latest.quotes||{}:{};
+      quotes[key]=quote;
+      try{localStorage.setItem('salmos_moto_quotes_v1',JSON.stringify({day,quotes:Object.fromEntries(Object.entries(quotes).slice(-20))}))}catch{}
+      return quote;
+    })();
+    deliveryMotoRequests.set(key,run);
+    try{return await run}finally{if(deliveryMotoRequests.get(key)===run)deliveryMotoRequests.delete(key)}
+  }
   async function autoQuoteDeliveryOptions(){
-    if(!deliveryReady()||state.deliveryQuotesPending)return;
-    state.deliveryQuotesPending=true;const quoteAddressKey=JSON.stringify(state.deliveryAddress);
-    syncDeliveryToShipping();
-    const tasks=[];
-    if(state.config?.shipping?.moto?.enabled!==false)tasks.push((async()=>{
-      try{
-        const saved=readLastShipping();
-        if(saved&&sameSavedShippingAddress(saved)&&saved.quotedDay===localDayKey()&&Number(saved.costCents)>0){
-          state.shippingQuotes.moto={distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null};return;
-        }
-        const data=await api('/api/shipping/moto/quote',{method:'POST',body:JSON.stringify({destination:{lat:Number(state.deliveryAddress.lat),lng:Number(state.deliveryAddress.lng),address:state.deliveryAddress.formattedAddress}})});
-        state.shippingQuotes.moto={distanceKm:data.distanceKm,costCents:Number(data.costCents)||0,quoteId:data.quoteId||null};
-      }catch(e){state.shippingQuotes.moto={error:e.message||'No disponible'}}
+    if(!deliveryReady()||state.pendingDeliveryCorrection||state.deliveryQuoteRequest)return;
+    const d={...state.deliveryAddress},key=deliveryQuoteKey(d),motoEnabled=state.config?.shipping?.moto?.enabled!==false,correoEnabled=Boolean(state.config?.shipping?.correo?.enabled);
+    const needMoto=motoEnabled&&!state.shippingQuotes?.moto,needCorreo=correoEnabled&&!state.shippingQuotes?.correoHome;
+    if(!needMoto&&!needCorreo)return;
+    const run={key};state.deliveryQuoteRequest=run;state.deliveryQuotesPending=true;syncDeliveryToShipping();renderCheckoutShippingPriceOnly();
+    const results={},tasks=[];
+    if(needMoto)tasks.push((async()=>{
+      try{results.moto=await deliveryMotoQuote(d)}catch(err){results.moto={error:err.message||'No pudimos calcular el envío.',status:err.status||0}}
     })());
-    if(state.config?.shipping?.correo?.enabled)tasks.push((async()=>{
+    if(needCorreo)tasks.push((async()=>{
       try{
-        const items=state.cart.map(i=>({productId:i.productId,variantId:i.variantId,quantity:i.qty||1})),subtotalCents=state.cart.reduce((s,i)=>s+(Number(i.priceCents)||0)*(Number(i.qty)||1),0);
+        const items=state.cart.map(i=>({productId:i.productId,variantId:i.variantId,quantity:i.qty||1})),subtotalCents=state.cart.reduce((sum,i)=>sum+(Number(i.priceCents)||0)*(Number(i.qty)||1),0);
         const data=await api('/api/shipping/correo/quote',{method:'POST',body:JSON.stringify({deliveryType:'homeDelivery',items,subtotalCents})});
-        state.shippingQuotes.correoHome={costCents:Number(data.costCents)||0,quoteId:data.quoteId||null,parcel:data.parcel||null};
-      }catch(e){state.shippingQuotes.correoHome={error:e.message||'No disponible'}}
+        results.correoHome={costCents:Number(data.costCents)||0,quoteId:data.quoteId||null,parcel:data.parcel||null};
+      }catch(err){results.correoHome={error:err.message||'No pudimos calcular el envío.',status:err.status||0}}
     })());
     await Promise.allSettled(tasks);
-    state.deliveryQuotesPending=false;
-    if(quoteAddressKey!==JSON.stringify(state.deliveryAddress)){resetDeliveryQuotes();renderCheckoutShipping();return;}
-    if(state.shipping.method==='moto'&&state.shippingQuotes.moto?.costCents){
-      state.shipping.costCents=Number(state.shippingQuotes.moto.costCents)||0;state.shipping.distanceKm=state.shippingQuotes.moto.distanceKm;state.shipping.quoteId=state.shippingQuotes.moto.quoteId||null;
-    }else if(state.shipping.method==='correo'&&(state.shipping.correo?.deliveryType||'homeDelivery')==='homeDelivery'&&state.shippingQuotes.correoHome?.costCents){
-      state.shipping.costCents=Number(state.shippingQuotes.correoHome.costCents)||0;state.shipping.quoteId=state.shippingQuotes.correoHome.quoteId||null;
-    }
+    if(state.deliveryQuoteRequest!==run)return;
+    state.deliveryQuoteRequest=null;state.deliveryQuotesPending=false;
+    if(!deliveryReady()||state.pendingDeliveryCorrection||key!==deliveryQuoteKey())return;
+    Object.assign(state.shippingQuotes,results);
+    if(Number.isFinite(Number(results.moto?.queriesRemaining)))state.shippingQueriesRemaining=Number(results.moto.queriesRemaining);
+    const q=state.shipping.method==='moto'?state.shippingQuotes.moto:state.shipping.method==='correo'&&(state.shipping.correo?.deliveryType||'homeDelivery')==='homeDelivery'?state.shippingQuotes.correoHome:null;
+    if(q){state.shipping.costCents=Number(q.costCents)||0;state.shipping.quoteId=q.quoteId||null;if(state.shipping.method==='moto')state.shipping.distanceKm=q.distanceKm;}
     renderCheckoutShipping();
+  }
+  function commitDeliveryAddress(proposed){
+    clearTimeout(state.deliverySuggestTimer);state.deliverySuggestSeq++;state.deliveryLocalitySeq++;state.deliveryValidationSeq=(state.deliveryValidationSeq||0)+1;
+    state.deliveryAddress=proposed;state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;state.deliveryArea=null;
+    state.deliverySuggestions=[];state.deliveryLocalitySuggestions=[];
+    resetDeliveryQuotes();syncDeliveryToShipping();saveDeliveryAddress();saveLastShipping({withQuote:false,carry:false});renderCheckoutShipping();
+  }
+  function deliveryQuoteLabel(q,enabled=true){
+    if(Number(q?.costCents)>0)return money(q.costCents);
+    if(q?.error)return q.status===429?'Límite diario':'No disponible';
+    return enabled&&state.deliveryQuotesPending?'Calculando…':'—';
+  }
+  function renderDeliveryQuoteStatus(){
+    const host=qs('#deliveryQuoteStatus');if(!host)return;
+    host.innerHTML=deliveryReady()&&!state.pendingDeliveryCorrection&&state.shippingQuotes?.moto?.error?`<div class="notice delivery-quote-error" role="status"><strong>Motomensajería:</strong> ${escapeHtml(state.shippingQuotes.moto.error)}</div>`:'';
+  }
+  function refreshDeliveryAddressStatus(){
+    const host=qs('#deliveryAddressStatus');if(host)host.innerHTML='<small class="field-help">Confirmá la dirección editada para actualizar localidad, código postal y costo de envío.</small>';
+    qs('#deliveryConfirmedBadge')?.remove();
+    if(state.deliveryMapMarkers)state.deliveryMapMarkers.forEach(marker=>marker.setMap?.(null));
+    state.deliveryMapMarkers=[];
+    const mapStatus=qs('#deliveryMapStatus');if(mapStatus)mapStatus.textContent='Dirección editada. Confirmala para actualizar el punto del mapa.';
+    renderDeliveryQuoteStatus();
   }
 
   async function resolveDeliveryArea(force=false){
@@ -1063,7 +1102,7 @@
   function activeCorreoAgency(){const ca=state.shipping.correo;return state.shipping.method==='correo'&&ca?.deliveryType==='agency'&&ca.agencyId?ca.selectedAgency||null:null;}
 
   async function confirmDeliveryAddress(candidate=null){
-    const d={...(state.deliveryAddress||{})},addressKey=JSON.stringify(state.deliveryAddress);if(!d.provinceCode)throw new Error('Elegí la provincia.');
+    const d={...(state.deliveryAddress||{})},addressKey=JSON.stringify(state.deliveryAddress),validationSeq=state.deliveryValidationSeq=(state.deliveryValidationSeq||0)+1;if(!d.provinceCode)throw new Error('Elegí la provincia.');
     let raw=String(candidate?.text||d.addressInput||'').trim();
     if(raw.length<3)throw new Error('Escribí la dirección.');
     if(candidate?.kind==='street'&&!/\b\d{1,6}[A-Za-z]?\b/.test(raw)){
@@ -1073,15 +1112,13 @@
     const provinceName=deliveryProvinceName(d.provinceCode),locality=String(d.locality||'').trim();
     const full=[raw,locality,provinceName,'Argentina'].filter(Boolean).join(', ');
     const data=await api('/api/geo/validate-address',{method:'POST',body:JSON.stringify({address:full,placeId:candidate?.placeId||'',provinceCode:d.provinceCode,postalCode:''})});
-    if(addressKey!==JSON.stringify(state.deliveryAddress))return false;
+    if(validationSeq!==state.deliveryValidationSeq||addressKey!==JSON.stringify(state.deliveryAddress))return false;
     const loc=data.geocode?.location||{},lat=Number(loc.latitude??loc.lat),lng=Number(loc.longitude??loc.lng);
     if(!Number.isFinite(lat)||!Number.isFinite(lng))throw new Error('No pudimos ubicar esa dirección.');
     const ca=data.correoAddress||{},actualLocality=ca.cityName||locality,actualPostal=String(ca.zipCode||(d.postalCodeSource==='manual'?d.postalCode:'')||'').trim().toUpperCase();
     const proposed={...d,provinceName:provinceName,locality:actualLocality,addressInput:[ca.streetName,ca.streetNumber].filter(Boolean).join(' ')||data.formattedAddress||raw,postalCode:actualPostal,postalCodeSource:'resolved',formattedAddress:data.formattedAddress||raw,lat,lng,selected:true,correoAddress:ca};
     if(locality&&actualLocality&&normalizeSearch(locality)!==normalizeSearch(actualLocality)){state.pendingDeliveryCorrection=proposed;state.deliveryMapPreview={lat,lng,formattedAddress:proposed.formattedAddress};renderCheckoutShipping();return false;}
-    state.deliveryAddress=proposed;state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;
-    state.deliverySuggestions=[];resetDeliveryQuotes();syncDeliveryToShipping();saveDeliveryAddress();saveLastShipping({withQuote:false,carry:false});
-    renderCheckoutShipping();setTimeout(()=>autoQuoteDeliveryOptions().catch(()=>{}),0);return true;
+    commitDeliveryAddress(proposed);return true;
   }
   async function chooseDeliverySuggestion(index){
     const item=state.deliverySuggestions[Number(index)];if(!item)return false;
@@ -1108,12 +1145,12 @@
   function sharedDeliveryPanel(){
     const home=state.deliveryAddress||{},agency=activeCorreoAgency(),loc=agency?.location||{},d=agency?{...home,locality:loc.cityName||'',addressInput:[loc.streetName,loc.streetNumber].filter(Boolean).join(' '),postalCode:loc.zipCode||'',formattedAddress:correoAgencyAddress(agency)}:{...home,addressInput:home.selected&&home.correoAddress?.streetName?[home.correoAddress.streetName,home.correoAddress.streetNumber].filter(Boolean).join(' '):home.addressInput},conf=state.config?.shipping?.correo||{},provinces=Array.isArray(conf.provinces)?conf.provinces:[];
     const options=['<option value="">Provincia *</option>',...provinces.map(x=>`<option value="${escapeHtml(x.code)}" ${String(d.provinceCode||'')===String(x.code)?'selected':''}>${escapeHtml(x.name)}</option>`)].join('');
-    return `<section class="shared-delivery-panel"><div class="shared-delivery-head"><div><strong>${agency?'Sucursal elegida':'Tu domicilio de entrega'}</strong><small>${agency?'La dirección se completó con la sucursal. Al volver a domicilio recuperás tus datos.':'Lo ingresás una sola vez y lo usamos para comparar Motomensajería y Correo Argentino.'}</small></div>${deliveryReady()?'<span class="mini-pill success">CONFIRMADO</span>':''}</div><div class="shared-delivery-workspace"><div class="shared-delivery-fields"><div class="delivery-field-grid">
+    return `<section class="shared-delivery-panel"><div class="shared-delivery-head"><div><strong>${agency?'Sucursal elegida':'Tu domicilio de entrega'}</strong><small>${agency?'La dirección se completó con la sucursal. Al volver a domicilio recuperás tus datos.':'Lo ingresás una sola vez y lo usamos para comparar Motomensajería y Correo Argentino.'}</small></div>${deliveryReady()?'<span class="mini-pill success" id="deliveryConfirmedBadge">CONFIRMADO</span>':''}</div><div class="shared-delivery-workspace"><div class="shared-delivery-fields"><div class="delivery-field-grid">
       <div class="field"><label>Provincia *</label><select class="select" id="deliveryProvinceSelect" ${agency?'disabled':''}>${options}</select></div>
       <div class="field"><label>Localidad</label><input class="input" id="deliveryLocalityInput" ${agency?'readonly':''} autocomplete="off" value="${escapeHtml(d.locality||'')}" placeholder="Escribí la localidad"><div class="correo-suggestions locality-suggestions" id="deliveryLocalitySuggestions"></div></div>
       <div class="field full delivery-address-field"><label>Dirección *</label><div class="delivery-address-action"><input class="input" id="deliveryAddressInput" ${agency?'readonly':''} autocomplete="off" value="${escapeHtml(d.addressInput||'')}" placeholder="Calle y altura"><button class="btn btn-secondary" id="confirmDeliveryAddressBtn" type="button" ${agency?'disabled':''}>Confirmar</button></div><div class="correo-suggestions" id="deliveryAddressSuggestions"></div></div>
       <div class="field"><label>Código postal</label><input class="input" id="deliveryPostalInput" ${agency?'readonly':''} autocomplete="postal-code" value="${escapeHtml(d.postalCode||'')}" placeholder="Opcional"></div>
-    </div>${state.pendingDeliveryCorrection?`<div class="notice delivery-correction-notice"><strong>La dirección encontrada pertenece a otra localidad.</strong><br>${escapeHtml(state.pendingDeliveryCorrection.formattedAddress)}<br><small>Revisá el punto en el mapa. Si es correcto, actualizamos automáticamente localidad y código postal.</small><div class="delivery-correction-actions"><button class="btn btn-ghost" type="button" id="cancelDeliveryCorrectionBtn">Corregir datos</button><button class="btn btn-primary" type="button" id="acceptDeliveryCorrectionBtn">Sí, usar esta dirección</button></div></div>`:deliveryReady()?`<div class="address-confirm"><strong>${agency?'Dirección de la sucursal':'Dirección confirmada'}</strong><br>${escapeHtml(d.formattedAddress)}</div>`:'<small class="field-help">Provincia y dirección son obligatorias. Localidad y código postal ayudan a afinar las sugerencias.</small>'}</div><aside class="shared-delivery-map-card"><div class="correo-map" id="deliveryMap"></div><div class="correo-map-status" id="deliveryMapStatus"></div><small class="field-help">Corroborá visualmente que el punto sea correcto antes de elegir el envío.</small></aside></div></section>`;
+    </div><div id="deliveryAddressStatus">${state.pendingDeliveryCorrection?`<div class="notice delivery-correction-notice"><strong>La dirección encontrada pertenece a otra localidad.</strong><br>${escapeHtml(state.pendingDeliveryCorrection.formattedAddress)}<br><small>Revisá el punto en el mapa. Si es correcto, actualizamos automáticamente localidad y código postal.</small><div class="delivery-correction-actions"><button class="btn btn-ghost" type="button" id="cancelDeliveryCorrectionBtn">Corregir datos</button><button class="btn btn-primary" type="button" id="acceptDeliveryCorrectionBtn">Sí, usar esta dirección</button></div></div>`:deliveryReady()?`<div class="address-confirm"><strong>${agency?'Dirección de la sucursal':'Dirección confirmada'}</strong><br>${escapeHtml(d.formattedAddress)}</div>`:'<small class="field-help">Provincia y dirección son obligatorias. Localidad y código postal ayudan a afinar las sugerencias.</small>'}</div></div><aside class="shared-delivery-map-card"><div class="correo-map" id="deliveryMap"></div><div class="correo-map-status" id="deliveryMapStatus"></div><small class="field-help">Corroborá visualmente que el punto sea correcto antes de elegir el envío.</small></aside></div></section>`;
   }
 
   function renderCheckoutShipping() {
@@ -1124,14 +1161,14 @@
       ${state.checkoutQuoteOnly?'<div class="notice quote-only-notice"><strong>Simulación sin producto</strong><br>La cotización es solo para conocer el costo de entrega; no genera ningún pedido.</div>':''}
       ${sharedDeliveryPanel()}
       <div class="shipping-options">
-        <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm||50} km · entrega coordinada</small></span><span class="shipping-price">${mq?.costCents?money(mq.costCents):(mq?.error?'No disponible':'—')}</span></button>
+        <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm||50} km · entrega coordinada</small></span><span class="shipping-price">${deliveryQuoteLabel(mq,motoEnabled)}</span></button>
         <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?`Domicilio o sucursal${pc.shipping?.correo?.testMode?' · entorno de prueba':''}`:'Integración pendiente'}</small></span><span class="shipping-price">${cq?.costCents?money(cq.costCents):(cq?.error?'No disponible':(correoEnabled?'—':'Próximamente'))}</span></button>
         <button class="shipping-card ${state.shipping.method==='pickup'?'active':''} ${pickupEnabled?'':'disabled'}" data-shipping="pickup" ${pickupEnabled?'':'disabled'}><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${pickupEnabled?escapeHtml(pc.shipping.pickup.address||'Coordinar retiro'):'Se habilitará desde administración'}</small></span><span class="shipping-price">Gratis</span></button>
-      </div><div class="shipping-auto-note">Los importes se calculan automáticamente al confirmar el domicilio. ${state.checkoutQuoteOnly?'Simulación sobre un paquete simple de referencia.':'Para la compra usamos peso y medidas reales cargadas en cada producto.'}${state.shippingQuotes?.correoHome?.parcel?`<br><strong>Paquete:</strong> ${state.shippingQuotes.correoHome.parcel.weightGrams} g · ${state.shippingQuotes.correoHome.parcel.heightCm} × ${state.shippingQuotes.correoHome.parcel.widthCm} × ${state.shippingQuotes.correoHome.parcel.depthCm} cm`:''}</div>
+      </div><div id="deliveryQuoteStatus"></div><div class="shipping-auto-note">Los importes se calculan automáticamente al confirmar el domicilio. ${state.checkoutQuoteOnly?'Simulación sobre un paquete simple de referencia.':'Para la compra usamos peso y medidas reales cargadas en cada producto.'}${state.shippingQuotes?.correoHome?.parcel?`<br><strong>Paquete:</strong> ${state.shippingQuotes.correoHome.parcel.weightGrams} g · ${state.shippingQuotes.correoHome.parcel.heightCm} × ${state.shippingQuotes.correoHome.parcel.widthCm} × ${state.shippingQuotes.correoHome.parcel.depthCm} cm`:''}</div>
       <div id="shippingDetail"></div>
       ${state.checkoutQuoteOnly?'<div class="checkout-actions quote-only-actions"><button class="btn btn-ghost" id="closeQuoteCheckoutBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button></div>':`<div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method&&(state.shipping.method==='pickup'||state.shipping.costCents>0)?'':'disabled'}>Continuar</button></div>`}`;
-    renderShippingDetail();paintDeliverySuggestions();paintDeliveryLocalitySuggestions();setTimeout(()=>{resolveDeliveryArea().catch(()=>{}).finally(()=>renderDeliveryMap().catch(()=>{}))},0);
-    if(deliveryReady()&&!state.deliveryQuotesPending&&((correoEnabled&&!state.shippingQuotes?.correoHome)||(motoEnabled&&!state.shippingQuotes?.moto)))setTimeout(()=>autoQuoteDeliveryOptions().catch(()=>{state.deliveryQuotesPending=false;}),0);
+    renderShippingDetail();renderDeliveryQuoteStatus();paintDeliverySuggestions();paintDeliveryLocalitySuggestions();setTimeout(()=>{resolveDeliveryArea().catch(()=>{}).finally(()=>renderDeliveryMap().catch(()=>{}))},0);
+    if(deliveryReady()&&!state.pendingDeliveryCorrection&&!state.deliveryQuotesPending&&((correoEnabled&&!state.shippingQuotes?.correoHome)||(motoEnabled&&!state.shippingQuotes?.moto)))setTimeout(()=>autoQuoteDeliveryOptions().catch(()=>{state.deliveryQuotesPending=false;}),0);
   }
 
   function renderShippingDetail() {
@@ -1171,7 +1208,7 @@
     const correo=qs('[data-shipping="correo"] .shipping-price'),moto=qs('[data-shipping="moto"] .shipping-price'),ca=state.shipping.correo||{};
     const cq=ca.deliveryType==='agency'?state.shippingQuotes?.correoAgency:state.shippingQuotes?.correoHome;
     if(correo)correo.textContent=cq?.costCents?money(cq.costCents):(cq?.error?'No disponible':'—');
-    if(moto)moto.textContent=state.shippingQuotes?.moto?.costCents?money(state.shippingQuotes.moto.costCents):(state.shippingQuotes?.moto?.error?'No disponible':'—');
+    if(moto)moto.textContent=deliveryQuoteLabel(state.shippingQuotes?.moto,state.config?.shipping?.moto?.enabled!==false);renderDeliveryQuoteStatus();
     const next=qs('#toSummaryBtn');if(next)next.disabled=!(state.shipping.method&&(state.shipping.method==='pickup'||state.shipping.costCents>0)&&(state.shipping.method!=='correo'||ca.deliveryType!=='agency'||ca.agencyId));
   }
   function correoProvinceName(code=''){
@@ -1591,7 +1628,7 @@
       toast('Usamos la cotización guardada de hoy para no gastar otra consulta.','success');
       return;
     }
-    const data = await api('/api/shipping/moto/quote', { method:'POST', body:JSON.stringify({ destination:{ lat:state.shipping.lat, lng:state.shipping.lng, address:state.shipping.address } }) });
+    const data = await deliveryMotoQuote({...state.deliveryAddress});
     state.shipping.distanceKm = data.distanceKm; state.shipping.costCents = data.costCents; state.shipping.quoteId = data.quoteId; state.shippingQuotes.moto={distanceKm:data.distanceKm,costCents:data.costCents,quoteId:data.quoteId};
     if(Number.isFinite(Number(data.queriesRemaining))) state.shippingQueriesRemaining=Number(data.queriesRemaining);
     saveLastShipping({withQuote:true,carry:state.shippingQuoteCarry});
@@ -1813,7 +1850,7 @@
       if(e.target.id==='backCustomerBtn'){state.checkoutStep=1;renderCheckout();return;}
       if(e.target.id==='closeQuoteCheckoutBtn'){state.checkoutQuoteOnly=false;closeModal('#checkoutModal');return;}
       if(e.target.id==='quoteAddProductBtn'){state.shippingQuoteCarry=Boolean(state.shipping.method==='moto'&&state.shipping.address&&Number.isFinite(Number(state.shipping.lat))&&Number.isFinite(Number(state.shipping.lng))&&Number(state.shipping.costCents)>0);if(state.shippingQuoteCarry){saveLastShipping({withQuote:true,carry:true});updateSavedShippingCarry(true);}state.checkoutQuoteOnly=false;closeModal('#checkoutModal');renderCart();qs('#productos')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
-      if(e.target.id==='acceptDeliveryCorrectionBtn'){const proposed=state.pendingDeliveryCorrection;if(proposed){state.deliveryAddress=proposed;state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;state.deliverySuggestions=[];resetDeliveryQuotes();syncDeliveryToShipping();saveDeliveryAddress();saveLastShipping({withQuote:false,carry:false});renderCheckoutShipping();setTimeout(()=>autoQuoteDeliveryOptions().catch(()=>{}),0);toast('Dirección confirmada y datos corregidos','success');}return;}if(e.target.id==='cancelDeliveryCorrectionBtn'){state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;renderCheckoutShipping();return;}if(e.target.id==='confirmDeliveryAddressBtn'){try{e.target.disabled=true;if(await confirmDeliveryAddress())toast('Dirección confirmada','success')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false}return;}
+      if(e.target.id==='acceptDeliveryCorrectionBtn'){const proposed=state.pendingDeliveryCorrection;if(proposed){commitDeliveryAddress(proposed);toast('Dirección confirmada y datos corregidos','success');}return;}if(e.target.id==='cancelDeliveryCorrectionBtn'){state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;renderCheckoutShipping();return;}if(e.target.id==='confirmDeliveryAddressBtn'){try{e.target.disabled=true;if(await confirmDeliveryAddress())toast('Dirección confirmada','success')}catch(err){toast(err.message,'error')}finally{e.target.disabled=false}return;}
       const localitySuggestion=e.target.closest('[data-delivery-locality]');if(localitySuggestion){const item=(state.deliveryLocalitySuggestions||[])[Number(localitySuggestion.dataset.deliveryLocality)];if(item){const d=state.deliveryAddress||{};d.locality=item.name||'';d.postalCode=item.postalCode||'';d.postalCodeSource='area';state.deliveryArea=null;resetDeliveryQuotes();d.addressInput='';d.selected=false;d.formattedAddress='';d.lat=null;d.lng=null;d.correoAddress=null;state.deliveryAddress=d;state.deliveryLocalitySuggestions=[];state.deliverySuggestions=[];saveDeliveryAddress();renderCheckoutShipping();}return;}
       const deliverySuggestion=e.target.closest('[data-delivery-suggestion]');if(deliverySuggestion){try{const done=await chooseDeliverySuggestion(deliverySuggestion.dataset.deliverySuggestion);if(done)toast('Dirección confirmada','success')}catch(err){toast(err.message,'error')}return;}
       const ship=e.target.closest('[data-shipping]'); if(ship && !ship.disabled){
@@ -1848,7 +1885,7 @@
     });
     document.addEventListener('change',async e=>{
       if(e.target.id==='deliveryProvinceSelect'){
-        const d=state.deliveryAddress||{};d.provinceCode=e.target.value;d.provinceName=deliveryProvinceName(e.target.value);d.locality='';d.postalCode='';d.postalCodeSource='';d.addressInput='';d.formattedAddress='';d.lat=null;d.lng=null;d.selected=false;d.correoAddress=null;state.deliveryAddress=d;state.deliveryArea=null;state.deliverySuggestSeq++;state.deliveryLocalitySeq++;state.deliveryLocalitySuggestions=[];state.deliverySuggestions=[];state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;resetDeliveryQuotes();renderCheckoutShippingPriceOnly();saveDeliveryAddress();
+        const d=state.deliveryAddress||{};d.provinceCode=e.target.value;d.provinceName=deliveryProvinceName(e.target.value);d.locality='';d.postalCode='';d.postalCodeSource='';d.addressInput='';d.formattedAddress='';d.lat=null;d.lng=null;d.selected=false;d.correoAddress=null;state.deliveryAddress=d;state.deliveryArea=null;state.deliverySuggestSeq++;state.deliveryLocalitySeq++;state.deliveryLocalitySuggestions=[];state.deliverySuggestions=[];state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;resetDeliveryQuotes();state.deliveryValidationSeq=(state.deliveryValidationSeq||0)+1;refreshDeliveryAddressStatus();renderCheckoutShippingPriceOnly();saveDeliveryAddress();
         const loc=qs('#deliveryLocalityInput'),addr=qs('#deliveryAddressInput'),cp=qs('#deliveryPostalInput');if(loc)loc.value='';if(addr)addr.value='';if(cp)cp.value='';paintDeliverySuggestions();
         try{await resolveDeliveryArea(true)}catch{}await renderDeliveryMap().catch(()=>{});renderShippingDetail();return;
       }
@@ -1866,7 +1903,7 @@
         if(e.target.id==='deliveryLocalityInput'){d.locality=e.target.value;d.addressInput='';d.postalCode='';d.postalCodeSource='';d.selected=false;d.formattedAddress='';d.lat=null;d.lng=null;d.correoAddress=null;const addr=qs('#deliveryAddressInput'),cp=qs('#deliveryPostalInput');if(addr)addr.value='';if(cp)cp.value='';}
         if(e.target.id==='deliveryPostalInput'){d.postalCode=e.target.value.replace(/\s+/g,'').toUpperCase();d.postalCodeSource='manual';d.selected=false;d.formattedAddress='';d.lat=null;d.lng=null;d.correoAddress=null;}
         if(e.target.id==='deliveryAddressInput'){if(d.postalCodeSource!=='manual'||d.selected){d.postalCode='';d.postalCodeSource='';const cp=qs('#deliveryPostalInput');if(cp)cp.value='';}d.addressInput=e.target.value;d.selected=false;d.formattedAddress='';d.lat=null;d.lng=null;d.correoAddress=null;}
-        state.deliveryAddress=d;state.deliveryArea=null;state.deliverySuggestSeq++;state.deliveryLocalitySeq++;state.deliverySuggestions=[];paintDeliverySuggestions();state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;resetDeliveryQuotes();state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;if(state.shipping.correo){state.shipping.correo.address=null;state.shipping.correo.homeSelection=null;state.shipping.correo.postalCode=d.postalCode||'';}renderCheckoutShippingPriceOnly();saveDeliveryAddress();clearTimeout(state.deliverySuggestTimer);
+        state.deliveryAddress=d;state.deliveryArea=null;state.deliverySuggestSeq++;state.deliveryLocalitySeq++;state.deliverySuggestions=[];paintDeliverySuggestions();state.pendingDeliveryCorrection=null;state.deliveryMapPreview=null;resetDeliveryQuotes();state.shipping.address=null;state.shipping.lat=null;state.shipping.lng=null;if(state.shipping.correo){state.shipping.correo.address=null;state.shipping.correo.homeSelection=null;state.shipping.correo.postalCode=d.postalCode||'';}state.deliveryValidationSeq=(state.deliveryValidationSeq||0)+1;refreshDeliveryAddressStatus();renderCheckoutShippingPriceOnly();saveDeliveryAddress();clearTimeout(state.deliverySuggestTimer);
         if(e.target.id==='deliveryAddressInput'){const value=e.target.value;state.deliverySuggestTimer=setTimeout(()=>fetchDeliverySuggestions(value).catch(err=>{if(err?.status!==422)toast(err.message,'error')}),260);}else if(e.target.id==='deliveryLocalityInput'){const value=e.target.value;state.deliverySuggestTimer=setTimeout(()=>fetchDeliveryLocalities(value).catch(()=>{}),220);}else{
           state.deliverySuggestTimer=setTimeout(async()=>{try{await resolveDeliveryArea(true);await renderDeliveryMap()}catch{}},420);
         }
