@@ -1358,3 +1358,5 @@ body::before{pointer-events:none}
 :root[data-theme="light"] .storefront :is(.muted,.field-help,.notice,.shipping-auto-note,.shared-delivery-head small,.shipping-copy small){color:#3d352b}
 :root[data-theme="light"] .storefront :is(.input,.textarea)::placeholder{color:#51483d;opacity:1}
 .delivery-quote-error{margin-top:10px;line-height:1.5}
+
+.via-cargo-detail{padding:18px;border:1px solid var(--line);border-radius:18px;margin:14px 0;background:var(--surface)}.via-cargo-detail .form-grid{display:grid;gap:12px}.via-cargo-detail .admin-actions{margin:12px 0}.via-cargo-accept{display:flex;align-items:flex-start;gap:10px;line-height:1.5;font-weight:650}.via-cargo-accept input{flex:0 0 20px;width:20px;height:20px;margin-top:3px}

@@ -1,0 +1,29 @@
+SALMOS V23 — ACTUALIZACIÓN
+
+1. En Cloudflare, reemplazá el código del Worker por SALMOS_WORKER_V23.txt
+   (también está en backend/worker.mjs) y desplegalo.
+   Conservá los enlaces a D1/R2, las variables y los secretos que ya tenés.
+   No hace falta volver a configurar Resend.
+
+2. Descomprimí el ZIP y subí el CONTENIDO de salmos_v23 a la raíz del mismo
+   repositorio de la tienda. Reemplazá los archivos existentes.
+
+3. Cuando termine de publicarse, recargá con Ctrl+F5. En el celular, cerrá
+   completamente la aplicación y abrila de nuevo.
+
+4. Para mostrar Vía Cargo: Administración → Configuración → Vía Cargo →
+   Habilitar envío a coordinar → Guardar configuración.
+   El flete se coordina y paga aparte: no se presenta como gratis ni se cobra
+   una tarifa inventada. La cotización automática y las guías requieren la
+   integración oficial del transportista.
+
+NO ejecutes schema.sql ni seed.sql sobre tu base existente. Los campos nuevos
+se incorporan automáticamente, sin vaciar compras, stock ni diseños.
+
+Planchas: editá las que ya tenés para indicar superficie, diseños incluidos,
+medida y cantidad. Las anteriores se conservan; el cálculo aparece cuando
+completás su composición. En Producción podés elegir una plancha para aplicar
+su proporción de desperdicio al costo de las estampas.
+
+No hay ningún envío real de correo ni cambio en el sitio publicado realizado
+por este paquete antes de que lo instales.

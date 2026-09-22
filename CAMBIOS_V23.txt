@@ -1,0 +1,53 @@
+CAMBIOS V23
+
+COMPRAS
+- Barra de agregar pegada al encabezado al desplazarse, sin el hueco superior.
+- Total informativo por renglón = cantidad × precio unitario, actualizado al escribir.
+- Redondeo por renglón igual en formulario y servidor; validación de renglones incompletos.
+- Cuentas de transferencia opcionales en Compras y Caja.
+- Errores visibles sobre el modal sin perder el formulario ni dejar Guardar bloqueado.
+
+DISEÑOS Y PLANCHAS
+- Una sola fila horizontal, separación de 8 px y orden guardado por galería.
+- Arrastrar para ordenar; flechas para hacerlo también desde el celular o teclado.
+- Subir diseño y Enviar planchas por mail permanecen visibles al desplazarse.
+- Selector de archivo con estilo SALMOS.
+- Destinos múltiples por medida, opción Todos y entrada de otros destinos.
+- Sin medida general duplicada en los individuales; cada carga limpia nombre y nota.
+- Planchas formadas por individuales de las galerías SALMOS y Clientes.
+- Elección de la medida y cantidad por componente; destino/talle/detalle heredados.
+- Combinaciones SALMOS + Clientes se clasifican como mixtas.
+- Superficie de la plancha, superficie usada y desperdicio en cm² y porcentaje.
+- Se valida que las cantidades no excedan la superficie y cada medida pueda entrar.
+- Se conserva una copia de las medidas de la composición guardada para que un
+  cambio posterior del individual no altere el registro de una plancha existente.
+- El cálculo usa rectángulos de las medidas cargadas. No analiza transparencias
+  ni valida automáticamente el acomodo o las superposiciones del archivo.
+
+PRODUCCIÓN
+- Selector de medidas centrado, visible sobre Producción y con desplazamiento interno.
+- Opción de tomar el desperdicio de una plancha para el costo DTF.
+- La proporción de costo usa superficie total/superficie útil; por ejemplo,
+  20% de plancha sin usar requiere 25% extra sobre el área útil.
+
+CAJA Y MODO CLARO
+- Origen y destino juntos al final del formulario.
+- Editar antes de Fecha; año de dos cifras; Eliminar al final.
+- Abrir muestra el modal en solo lectura, con Editar dentro.
+- Los movimientos provenientes de Compras se editan en su compra original.
+- Ver detalle oscuro y legible; fondo de La niña de sus ojos más visible.
+
+VÍA CARGO
+- Envío a coordinar, habilitable desde Configuración.
+- Destino, agencia/dirección opcional y tipo de entrega conservados en el pedido.
+- El cliente debe aceptar que el flete se cotiza y paga por separado.
+- Compatible con la base existente mediante una columna de método de entrega,
+  sin reconstruir ni vaciar la tabla de órdenes.
+
+VALIDACIÓN
+- Pruebas locales de guardado, edición, cálculos, composición, orden y checkout.
+- Conservadas las pruebas de cambio de dirección/código postal y consultas duplicadas.
+- Transporte de correo simulado: no se envió ningún mail real.
+- No se probó contra tu base de producción ni se realizó revisión visual en navegador.
+- El HTTP 400 comunicado no incluía el mensaje del servidor: se corrigieron las
+  validaciones identificadas y ahora cualquier causa restante aparece en el modal.

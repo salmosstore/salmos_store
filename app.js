@@ -1154,7 +1154,7 @@
   }
 
   function renderCheckoutShipping() {
-    const pc=state.config||{},pickupEnabled=Boolean(pc.shipping?.pickup?.enabled),motoEnabled=pc.shipping?.moto?.enabled!==false,correoEnabled=Boolean(pc.shipping?.correo?.enabled);
+    const pc=state.config||{},viaCargoEnabled=Boolean(pc.shipping?.viaCargo?.enabled),pickupEnabled=Boolean(pc.shipping?.pickup?.enabled),motoEnabled=pc.shipping?.moto?.enabled!==false,correoEnabled=Boolean(pc.shipping?.correo?.enabled);
     const mq=state.shippingQuotes?.moto,cq=(state.shipping.correo?.deliveryType||'homeDelivery')==='agency'?state.shippingQuotes?.correoAgency:state.shippingQuotes?.correoHome;
     qs('#checkoutContent').innerHTML=`
       <h2>${state.checkoutQuoteOnly?'Consultá el costo de envío':'Entrega'}</h2><div class="checkout-sub">${state.checkoutQuoteOnly?'Simulá el envío sin producto. Cuando termines, podés agregar un producto y hacer la compra normalmente.':'Ingresá tu domicilio una sola vez y compará las opciones disponibles.'}</div>
@@ -1163,17 +1163,29 @@
       <div class="shipping-options">
         <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm||50} km · entrega coordinada</small></span><span class="shipping-price">${deliveryQuoteLabel(mq,motoEnabled)}</span></button>
         <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?`Domicilio o sucursal${pc.shipping?.correo?.testMode?' · entorno de prueba':''}`:'Integración pendiente'}</small></span><span class="shipping-price">${cq?.costCents?money(cq.costCents):(cq?.error?'No disponible':(correoEnabled?'—':'Próximamente'))}</span></button>
+        ${viaCargoEnabled?`<button class="shipping-card ${state.shipping.method==='via_cargo'?'active':''}" data-shipping="via_cargo"><span class="shipping-icon">🚚</span><span class="shipping-copy"><strong>Vía Cargo</strong><small>Envío a coordinar · se abona aparte</small></span><span class="shipping-price">A cotizar</span></button>`:''}
         <button class="shipping-card ${state.shipping.method==='pickup'?'active':''} ${pickupEnabled?'':'disabled'}" data-shipping="pickup" ${pickupEnabled?'':'disabled'}><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${pickupEnabled?escapeHtml(pc.shipping.pickup.address||'Coordinar retiro'):'Se habilitará desde administración'}</small></span><span class="shipping-price">Gratis</span></button>
       </div><div id="deliveryQuoteStatus"></div><div class="shipping-auto-note">Los importes se calculan automáticamente al confirmar el domicilio. ${state.checkoutQuoteOnly?'Simulación sobre un paquete simple de referencia.':'Para la compra usamos peso y medidas reales cargadas en cada producto.'}${state.shippingQuotes?.correoHome?.parcel?`<br><strong>Paquete:</strong> ${state.shippingQuotes.correoHome.parcel.weightGrams} g · ${state.shippingQuotes.correoHome.parcel.heightCm} × ${state.shippingQuotes.correoHome.parcel.widthCm} × ${state.shippingQuotes.correoHome.parcel.depthCm} cm`:''}</div>
       <div id="shippingDetail"></div>
-      ${state.checkoutQuoteOnly?'<div class="checkout-actions quote-only-actions"><button class="btn btn-ghost" id="closeQuoteCheckoutBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button></div>':`<div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${state.shipping.method&&(state.shipping.method==='pickup'||state.shipping.costCents>0)?'':'disabled'}>Continuar</button></div>`}`;
+      ${state.checkoutQuoteOnly?'<div class="checkout-actions quote-only-actions"><button class="btn btn-ghost" id="closeQuoteCheckoutBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button></div>':`<div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${canContinueShipping()?'':'disabled'}>Continuar</button></div>`}`;
     renderShippingDetail();renderDeliveryQuoteStatus();paintDeliverySuggestions();paintDeliveryLocalitySuggestions();setTimeout(()=>{resolveDeliveryArea().catch(()=>{}).finally(()=>renderDeliveryMap().catch(()=>{}))},0);
     if(deliveryReady()&&!state.pendingDeliveryCorrection&&!state.deliveryQuotesPending&&((correoEnabled&&!state.shippingQuotes?.correoHome)||(motoEnabled&&!state.shippingQuotes?.moto)))setTimeout(()=>autoQuoteDeliveryOptions().catch(()=>{state.deliveryQuotesPending=false;}),0);
   }
 
+  function canContinueShipping(){
+    if(state.shipping.method==='pickup')return true;
+    if(state.shipping.method==='via_cargo'){const v=state.shipping.viaCargo;return Boolean(state.config?.shipping?.viaCargo?.enabled&&v?.destination?.trim().length>=3&&v.acceptSeparatePayment);}
+    return Boolean(state.shipping.method&&Number(state.shipping.costCents)>0&&(state.shipping.method!=='correo'||state.shipping.correo?.deliveryType!=='agency'||state.shipping.correo?.agencyId));
+  }
+  function renderViaCargoDetail(host){
+    const v=state.shipping.viaCargo||{};host.innerHTML=`<section class="via-cargo-detail"><h3>Vía Cargo</h3><p>${escapeHtml(state.config?.shipping?.viaCargo?.instructions||'Coordinamos el despacho por WhatsApp.')}</p><div class="form-grid"><label class="field">Localidad y provincia de destino<input class="input" id="viaCargoDestination" value="${escapeHtml(v.destination||'')}" placeholder="Ej.: Córdoba, Córdoba"></label><label class="field">Entrega<select class="select" id="viaCargoDeliveryType"><option value="agency" ${v.deliveryType!=='home'?'selected':''}>A agencia</option><option value="home" ${v.deliveryType==='home'?'selected':''}>A domicilio</option></select></label><label class="field">Agencia preferida / dirección (opcional)<input class="input" id="viaCargoAgency" value="${escapeHtml(v.agency||'')}" placeholder="Lo podemos coordinar por WhatsApp"></label></div><div class="admin-actions"><a class="btn btn-ghost" href="https://viacargo.com.ar/" target="_blank" rel="noopener">Cotizador y agencias de Vía Cargo</a></div><label class="via-cargo-accept"><input type="checkbox" id="viaCargoAccept" ${v.acceptSeparatePayment?'checked':''}>Entiendo que el envío se cotiza y abona por separado; no está incluido en el pago de los productos.</label></section>`;
+  }
+  function syncViaCargoFields(){const v=state.shipping.viaCargo??={};v.destination=qs('#viaCargoDestination')?.value?.trim()||'';v.agency=qs('#viaCargoAgency')?.value?.trim()||'';v.deliveryType=qs('#viaCargoDeliveryType')?.value||'agency';v.acceptSeparatePayment=Boolean(qs('#viaCargoAccept')?.checked);state.shipping.address=v.destination;const next=qs('#toSummaryBtn');if(next)next.disabled=!canContinueShipping();}
+
   function renderShippingDetail() {
     const host=qs('#shippingDetail');if(!host)return;
     host.innerHTML='';
+    if(state.shipping.method==='via_cargo'){renderViaCargoDetail(host);return;}
     if(state.shipping.method!=='correo')return;
     syncDeliveryToShipping();
     const ca=state.shipping.correo||{deliveryType:'homeDelivery'},agency=ca.deliveryType==='agency';
@@ -1209,7 +1221,7 @@
     const cq=ca.deliveryType==='agency'?state.shippingQuotes?.correoAgency:state.shippingQuotes?.correoHome;
     if(correo)correo.textContent=cq?.costCents?money(cq.costCents):(cq?.error?'No disponible':'—');
     if(moto)moto.textContent=deliveryQuoteLabel(state.shippingQuotes?.moto,state.config?.shipping?.moto?.enabled!==false);renderDeliveryQuoteStatus();
-    const next=qs('#toSummaryBtn');if(next)next.disabled=!(state.shipping.method&&(state.shipping.method==='pickup'||state.shipping.costCents>0)&&(state.shipping.method!=='correo'||ca.deliveryType!=='agency'||ca.agencyId));
+    const next=qs('#toSummaryBtn');if(next)next.disabled=!canContinueShipping();
   }
   function correoProvinceName(code=''){
     const list=state.config?.shipping?.correo?.provinces||[];return list.find(p=>String(p.code)===String(code))?.name||'';
@@ -1611,7 +1623,7 @@
     }else{
       host.innerHTML='<div class="notice">La motomensajería se calcula automáticamente al confirmar el domicilio.</div>';
     }
-    const toSummary=qs('#toSummaryBtn');if(toSummary)toSummary.disabled=!(state.shipping.method==='pickup'||Number(state.shipping.costCents)>0);
+    const toSummary=qs('#toSummaryBtn');if(toSummary)toSummary.disabled=!canContinueShipping();
   }
 
   async function quoteMoto() {
@@ -1730,18 +1742,19 @@
 
       <div style="margin-top:16px">
         <div class="total-row"><span>Subtotal</span><strong>${money(subtotal)}</strong></div>
-        <div class="total-row"><span>Envío</span><strong>${shippingBase ? money(shippingBase) : 'Gratis'}</strong></div>
+        <div class="total-row"><span>Envío</span><strong>${state.shipping.method==='via_cargo'?'A cotizar · pago separado':shippingBase ? money(shippingBase) : 'Gratis'}</strong></div>
         ${discount?`<div class="total-row discount-row"><span>Descuento · ${escapeHtml(state.coupon.code)}</span><strong>− ${money(discount)}</strong></div>`:''}
-        <div class="total-row grand"><span>Total</span><strong>${money(total)}</strong></div>
+        <div class="total-row grand"><span>${state.shipping.method==='via_cargo'?'Total de productos':'Total'}</span><strong>${money(total)}</strong></div>
       </div>
       <div class="notice" style="margin-top:14px"><strong>${shippingMethodLabel()}</strong><br>${state.shipping.method==='moto' ? `${escapeHtml(state.shipping.address || '')}<br>${state.shipping.distanceKm} km<br>Horarios de envíos entre las 8 am y las 23 hs con una demora de entre ${state.config?.shipping?.moto?.minHours || 1} y ${state.config?.shipping?.moto?.maxHours || 4} horas sujeto a disponibilidad` : state.shipping.method==='correo' ? `${escapeHtml(state.shipping.correo?.deliveryType==='agency'?`Sucursal: ${state.shipping.correo?.agencyName||state.shipping.correo?.agencyId||''}`:(state.shipping.address||''))}${state.config?.shipping?.correo?.testMode?'<br><small>Integración PAQ.AR en entorno TEST · tarifa provisoria de prueba.</small>':''}` : ''}</div>
+      ${state.shipping.method==='via_cargo'?`<div class="notice">${escapeHtml(state.shipping.viaCargo?.destination||'')} · ${state.shipping.viaCargo?.deliveryType==='home'?'A domicilio':'A agencia'}${state.shipping.viaCargo?.agency?` · ${escapeHtml(state.shipping.viaCargo.agency)}`:''}<br>El costo del envío no está incluido en este pago. Lo coordinamos por WhatsApp.</div>`:''}
       ${state.shipping.method==='moto' ? `<a class="btn btn-ghost full" style="margin-top:10px" target="_blank" rel="noopener" href="${motoWhatsappUrl()}">Consultar demora por WhatsApp</a>` : ''}
       ${state.auth.user && state.shipping.method==='moto' ? `<label class="account-check save-address-check"><input type="checkbox" id="saveCheckoutAddress"> Guardar esta dirección en Mi cuenta</label>` : ''}
       <div class="checkout-actions"><button class="btn btn-ghost" id="backShippingBtn">Atrás</button><button class="btn btn-primary" id="payBtn">${state.config?.mercadopago?.enabled ? 'Pagar con Mercado Pago' : 'Crear pedido'}</button></div>
       ${!state.config?.mercadopago?.enabled ? '<div class="stock-note" style="text-align:right">Mercado Pago quedará activo apenas soporte habilite la visualización de las credenciales.</div>' : ''}`;
   }
 
-  function shippingMethodLabel() { return state.shipping.method === 'moto' ? '🏍️ Motomensajería' : state.shipping.method === 'correo' ? '📦 Correo Argentino' : '📍 Retiro en SALMOS'; }
+  function shippingMethodLabel() { return state.shipping.method === 'moto' ? '🏍️ Motomensajería' : state.shipping.method === 'correo' ? '📦 Correo Argentino' : state.shipping.method==='via_cargo'?'🚚 Vía Cargo · costo de envío separado':'📍 Retiro en SALMOS'; }
 
   async function releaseOwnPendingReservation() {
     try { await api('/api/orders/release-reservation', { method:'POST' }); } catch (err) { console.error(err); }
@@ -1857,6 +1870,7 @@
         const method=ship.dataset.shipping;state.shipping.method=method;state.shipping.costCents=0;state.shipping.quoteId=null;state.coupon=null;
         if(method==='moto'){syncDeliveryToShipping();const q=state.shippingQuotes?.moto;if(q){state.shipping.costCents=Number(q.costCents)||0;state.shipping.distanceKm=q.distanceKm;state.shipping.quoteId=q.quoteId||null;}}
         else if(method==='correo'){state.shipping.correo=state.shipping.correo||{deliveryType:'homeDelivery',agencyId:'',agencyName:''};syncDeliveryToShipping();const q=(state.shipping.correo.deliveryType||'homeDelivery')==='agency'?state.shippingQuotes?.correoAgency:state.shippingQuotes?.correoHome;if(q){state.shipping.costCents=Number(q.costCents)||0;state.shipping.quoteId=q.quoteId||null;}}
+        else if(method==='via_cargo'){const d=state.deliveryAddress||{};state.shipping.viaCargo??={destination:[d.locality,d.provinceName].filter(Boolean).join(', '),agency:'',deliveryType:'agency',acceptSeparatePayment:false};state.shipping.address=state.shipping.viaCargo.destination;state.shipping.lat=null;state.shipping.lng=null;state.shipping.distanceKm=null;}
         else if(method==='pickup'){state.shipping.costCents=0;state.shipping.address=state.config?.shipping?.pickup?.address||'Retiro en SALMOS';state.shipping.lat=null;state.shipping.lng=null;}
         renderCheckout();return;
       }
@@ -1876,7 +1890,7 @@
       if(e.target.id==='quoteCorreoBtn'){try{e.target.disabled=true;e.target.textContent='Calculando...';await quoteCorreoShipping()}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Calcular envío'}return;}
       const correoAgency=e.target.closest('[data-correo-agency]');if(correoAgency){try{await selectCorreoAgency(correoAgency.dataset.correoAgency);toast('Sucursal seleccionada','success')}catch(err){toast(err.message,'error')}return;}
       if(e.target.id==='useLocationBtn'){ try{e.target.disabled=true;await useCurrentLocation();}catch(err){toast(err.message,'error')}finally{e.target.disabled=false;} return; }
-      if(e.target.id==='toSummaryBtn'){ if(!state.shipping.method) return; if(['moto','correo'].includes(state.shipping.method)&&!state.shipping.costCents){toast(state.shipping.method==='moto'?'Primero calculá la motomensajería.':'Primero completá y calculá el envío por Correo Argentino.','error');return;} state.checkoutStep=3;renderCheckout();return; }
+      if(e.target.id==='toSummaryBtn'){if(!canContinueShipping()){toast('Completá y confirmá los datos del envío.','error');return;} if(!state.shipping.method) return; if(['moto','correo'].includes(state.shipping.method)&&!state.shipping.costCents){toast(state.shipping.method==='moto'?'Primero calculá la motomensajería.':'Primero completá y calculá el envío por Correo Argentino.','error');return;} state.checkoutStep=3;renderCheckout();return; }
       if(e.target.id==='backShippingBtn'){state.checkoutStep=2;renderCheckout();return;}
       if(e.target.id==='applyCouponBtn'){await applyCouponCode();return;}
       if(e.target.id==='removeCouponBtn'){removeCouponCode();return;}
@@ -2229,5 +2243,7 @@
     ensureAccountUi(); bindEvents(); await handlePaymentReturn();
     await Promise.all([loadStore(), initFirebaseAuth()]);
   }
+  document.addEventListener('input',e=>{if(e.target.matches?.('#viaCargoDestination,#viaCargoAgency'))syncViaCargoFields();});
+  document.addEventListener('change',e=>{if(e.target.matches?.('#viaCargoDeliveryType,#viaCargoAccept'))syncViaCargoFields();});
   boot();
 })();
