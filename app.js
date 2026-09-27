@@ -895,6 +895,32 @@
 
   function cartVariantLabel(item){return [item?.color,item?.size].map(v=>String(v||'').trim()).filter(Boolean).join(' · ')}
 
+function normalizePromotions(value){
+  if(typeof value==='string'){try{value=JSON.parse(value)}catch{throw new Error('Revisá las promociones guardadas.')}}
+  if(!Array.isArray(value)||value.length>50)throw new Error('Podés guardar hasta 50 promociones.');
+  return value.map((r,i)=>{
+    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:r.active!==false,trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,target:r.target,targetProductId:Number(r.targetProductId)||0,benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
+    if(!p.name||!['amount','quantity'].includes(p.trigger)||!['products','shipping','order'].includes(p.target)||!['percent','fixed','unit_price'].includes(p.benefit)||!Number.isSafeInteger(p.threshold)||p.threshold<(p.trigger==='quantity'?1:0)||!Number.isFinite(p.value)||p.value<0||!Number.isSafeInteger(p.triggerProductId)||p.triggerProductId<0||!Number.isSafeInteger(p.targetProductId)||p.targetProductId<0)throw new Error(`Revisá los campos de la promoción ${i+1}.`);
+    if(p.benefit==='percent'&&p.value>100)throw new Error('El porcentaje no puede superar 100.');
+    if(p.benefit!=='percent'&&!Number.isSafeInteger(p.value))throw new Error('Revisá el importe de la promoción.');
+    if(p.benefit==='unit_price'&&p.target!=='products')throw new Error('El precio por unidad solo se aplica a productos.');
+    return p;
+  });
+}
+function calculatePromotions(rules,items,shippingCostCents=0){
+  const lines=items.map(x=>({productId:Number(x.productId??x.product_id),quantity:Number(x.quantity??x.qty)||0,price:Number(x.priceCents??x.price_cents)||0})),subtotal=lines.reduce((s,x)=>s+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0));
+  let best={id:null,label:'',productDiscountCents:0,shippingDiscountCents:0,totalDiscountCents:0,subtotalCents:subtotal,finalSubtotalCents:subtotal,finalShippingCostCents:shipping,totalCents:subtotal+shipping};
+  for(const rule of rules||[]){if(!rule.active)continue;
+    const condition=lines.filter(x=>!rule.triggerProductId||x.productId===rule.triggerProductId),threshold=condition.reduce((s,x)=>s+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0);
+    if(!condition.length||threshold<rule.threshold)continue;
+    const targets=lines.filter(x=>!rule.targetProductId||x.productId===rule.targetProductId),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
+    const base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:productBase;
+    let discount=rule.benefit==='unit_price'?targets.reduce((s,x)=>s+Math.max(0,x.price-rule.value)*x.quantity,0):rule.benefit==='percent'?Math.round(base*rule.value/100):rule.value*(rule.target==='products'&&rule.basis==='unit'?quantity:1);
+    discount=Math.max(0,Math.min(base,Math.round(discount)));if(discount<=best.totalDiscountCents)continue;
+    const pd=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?productBase:subtotal),sd=discount-pd;
+    best={id:rule.id,label:rule.name,productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:discount,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-discount};
+  }return best;
+}
   function renderCart() {
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
     const badge = qs('#cartBadge');
@@ -910,22 +936,29 @@
         <button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
       </div>`).join('');
     }
-    qs('#cartSubtotal').textContent = money(cartSubtotal());
     renderCartShippingCarry();
     qs('#checkoutBtn').disabled = !state.cart.length;
   }
+  function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart,shipping)}
+  function cartShippingAmount(){
+    const method=state.shipping.method,cents=Math.max(0,Math.round(Number(state.shipping.costCents)||0));
+    if(!state.cart.length||!cents||['pickup','via_cargo'].includes(method))return 0;
+    const quoteBelongsToMethod=(method==='moto'&&Boolean(state.shipping.address))||(method==='correo'&&Boolean(state.deliveryAddress?.selected));
+    const carriedQuote=state.shippingQuoteCarry&&(!method||method==='moto'||method==='correo');
+    return quoteBelongsToMethod||carriedQuote?cents:0;
+  }
   function renderCartShippingCarry() {
-    const subtotalEl=qs('#cartSubtotal');
-    const foot=subtotalEl?.closest('.drawer-foot');
-    if(!foot)return;
-    let box=qs('#cartShippingCarry',foot);
-    const show=Boolean(state.cart.length && state.shippingQuoteCarry && state.shipping.method==='moto' && state.shipping.address && Number(state.shipping.costCents)>0);
-    if(!show){box?.remove();return;}
-    if(!box){box=document.createElement('div');box.id='cartShippingCarry';box.className='cart-shipping-carry';foot.insertBefore(box,foot.firstChild);}
-    box.innerHTML=`<div class="total-row"><span>Envío cotizado</span><strong>${money(state.shipping.costCents)}</strong></div><small>${escapeHtml(state.shipping.address)}</small>`;
+    const shipping=cartShippingAmount(),p=cartPromotion(shipping),via=state.shipping.method==='via_cargo',pickup=state.shipping.method==='pickup';
+    const subtotal=cartSubtotal(),discountCents=Math.min(subtotal+shipping,Math.max(0,Math.round(Number(p.totalDiscountCents)||0))),totalCents=Math.max(0,subtotal+shipping-discountCents);
+    qs('#cartSubtotal').textContent=money(subtotal);
+    const cost=qs('#cartShippingCost');if(cost)cost.textContent=via?'A cotizar · pago separado':shipping?money(shipping):pickup?'Gratis':'A calcular';
+    const total=qs('#cartTotal');if(total)total.textContent=money(totalCents);
+    const label=qs('#cartTotalLabel');if(label)label.textContent=via?'Total de productos':shipping||pickup?'Total de la compra':'Total sin envío';
+    const discountRow=qs('#cartPromotion');if(discountRow){discountRow.hidden=!p.totalDiscountCents;discountRow.innerHTML=p.totalDiscountCents?`<span>${escapeHtml(p.label)}</span><strong>− ${money(p.totalDiscountCents)}</strong>`:'';}
+    const address=qs('#cartShippingAddress');if(address)address.textContent=shipping?state.shipping.address||'':'';
   }
   function cartSubtotal() { return state.cart.reduce((sum, x) => sum + x.priceCents * x.qty, 0); }
-  function openCart() { qs('#cartDrawer').classList.add('open'); qs('#drawerBackdrop').classList.add('open'); document.body.classList.add('no-scroll'); }
+  function openCart() { renderCart(); qs('#cartDrawer').classList.add('open'); qs('#drawerBackdrop').classList.add('open'); document.body.classList.add('no-scroll'); }
   function closeCart() { qs('#cartDrawer').classList.remove('open'); qs('#drawerBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); }
 
   function openModal(sel) { qs(sel).classList.add('open'); qs('#modalBackdrop').classList.add('open'); document.body.classList.add('no-scroll'); }
@@ -1708,8 +1741,8 @@
     try{
       const data=await api('/api/coupons/preview',{method:'POST',body:JSON.stringify({
         code,
-        subtotalCents:cartSubtotal(),
-        shippingCostCents:state.shipping.costCents
+        subtotalCents:cartPromotion(state.shipping.costCents).finalSubtotalCents,
+        shippingCostCents:cartPromotion(state.shipping.costCents).finalShippingCostCents
       })});
       state.coupon=data;
       toast(`Cupón ${data.code} aplicado`,'success');
@@ -1725,8 +1758,9 @@
   function renderCheckoutSummary() {
     const subtotal=cartSubtotal();
     const shippingBase=state.shipping.costCents;
+    const promotion=cartPromotion(shippingBase);
     const discount=state.coupon?.totalDiscountCents||0;
-    const total=state.coupon?.totalCents ?? (subtotal+shippingBase);
+    const total=state.coupon?.totalCents ?? promotion.totalCents;
     qs('#checkoutContent').innerHTML = `
       <h2>Revisá tu compra</h2><div class="checkout-sub">Antes de pagar, confirmá que esté todo correcto.</div>
       <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${cartVariantLabel(x)?`${escapeHtml(cartVariantLabel(x))} · `:''}x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
@@ -1743,6 +1777,7 @@
       <div style="margin-top:16px">
         <div class="total-row"><span>Subtotal</span><strong>${money(subtotal)}</strong></div>
         <div class="total-row"><span>Envío</span><strong>${state.shipping.method==='via_cargo'?'A cotizar · pago separado':shippingBase ? money(shippingBase) : 'Gratis'}</strong></div>
+        ${promotion.totalDiscountCents?`<div class="total-row discount-row"><span>${escapeHtml(promotion.label)}</span><strong>− ${money(promotion.totalDiscountCents)}</strong></div>`:''}
         ${discount?`<div class="total-row discount-row"><span>Descuento · ${escapeHtml(state.coupon.code)}</span><strong>− ${money(discount)}</strong></div>`:''}
         <div class="total-row grand"><span>${state.shipping.method==='via_cargo'?'Total de productos':'Total'}</span><strong>${money(total)}</strong></div>
       </div>
@@ -1771,7 +1806,10 @@
       state.pendingCheckout = { id:order.order.id, code:order.order.code, at:Date.now() };
       localStorage.setItem('salmos_pending_checkout', JSON.stringify(state.pendingCheckout));
       await saveCheckoutAddressIfRequested().catch(err=>console.error(err));
-      if (state.config?.mercadopago?.enabled) {
+      if(order.order.payment_status==='paid'&&Number(order.order.total_cents)===0){
+        state.cart=[];state.shippingQuoteCarry=false;updateSavedShippingCarry(false);saveCart(false);state.pendingCheckout=null;localStorage.removeItem('salmos_pending_checkout');if(state.auth.user)await syncCartNow([]);
+        qs('#checkoutContent').innerHTML=`<div class="empty-state"><strong>Pedido ${escapeHtml(order.order.code)} confirmado.</strong>El total quedó cubierto por los descuentos. No necesitás realizar un pago.</div><button class="btn btn-primary full" id="finishNoPayBtn">Volver a la tienda</button>`;
+      }else if (state.config?.mercadopago?.enabled) {
         const pref = await api('/api/payments/mercadopago/preference', { method:'POST', body:JSON.stringify({ orderId:order.order.id }) });
         window.location.href = pref.initPoint;
       } else {
