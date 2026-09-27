@@ -30,7 +30,7 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=23.0">
+  <link rel="stylesheet" href="styles.css?v=24.0">
 </head>
 <body class="storefront store-pending">
   <header class="site-header">
@@ -159,7 +159,7 @@
   <aside class="drawer" id="cartDrawer" aria-label="Carrito">
     <div class="drawer-head"><h3>Carrito</h3><button class="icon-btn" id="closeCartBtn" aria-label="Cerrar">×</button></div>
     <div class="drawer-body" id="cartItems"></div>
-    <div class="drawer-foot"><div class="total-row grand"><span>Subtotal</span><strong id="cartSubtotal">$ 0</strong></div><button class="btn btn-primary full" id="checkoutBtn">Continuar compra</button></div>
+    <div class="drawer-foot"><div class="total-row"><span>Subtotal</span><strong id="cartSubtotal">$ 0</strong></div><div class="total-row"><span>Envío</span><strong id="cartShippingCost">A calcular</strong></div><small id="cartShippingAddress"></small><div class="total-row discount-row" id="cartPromotion" hidden></div><div class="total-row grand"><span id="cartTotalLabel">Total de la compra</span><strong id="cartTotal">$ 0</strong></div><button class="btn btn-primary full" id="checkoutBtn">Continuar compra</button></div>
   </aside>
 
   <div class="modal-backdrop" id="modalBackdrop"></div>
@@ -184,9 +184,9 @@
   <div class="toast-stack" id="toastStack"></div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=23.0" defer></script>
+  <script src="app.js?v=24.0" defer></script>
   <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=23.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=24.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
 </body>
 </html>

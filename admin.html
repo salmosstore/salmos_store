@@ -10,9 +10,9 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=23.0">
+  <link rel="stylesheet" href="styles.css?v=24.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=23.0">
+  <link rel="stylesheet" href="admin-v4.css?v=24.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -139,7 +139,7 @@
           <div class="field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
           <div class="field"><label>Motivo / etiqueta</label><select class="select" id="movementCategorySelect"><option value="">Elegir motivo...</option></select><input class="input hidden movement-category-other" name="category" id="movementCategoryOther" placeholder="Escribí el nuevo motivo" required></div>
-          <div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
+          <section class="full movement-sale-section" id="movementSaleSection"><label class="toggle-label"><input type="checkbox" id="movementSaleEnabled"> Vincular productos vendidos a este ingreso</label><div id="movementSaleDetails" class="hidden"><div id="movementSaleRows"></div><button type="button" class="btn btn-ghost" id="addMovementSaleBtn">+ Agregar producto vendido</button><p class="field-help">Descuenta el stock físico. Si falta, queda pendiente de preparar. La publicación de la tienda se conserva.</p></div></section><div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
           <div class="field"><label for="movementPaymentMethod">Forma del ingreso / egreso</label><select class="select" name="payment_method" id="movementPaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option></select></div>
           <div class="field"><label for="movementAmount">Importe base ($)</label><input class="input" name="amount" id="movementAmount" type="number" min="0.01" step="0.01" required></div>
           <div class="field full"><label for="movementSurcharge">Recargo / comisión</label><div class="surcharge-controls"><select class="select" id="movementSurchargeType" name="surcharge_type" aria-label="Tipo de recargo"><option value="fixed">Pesos ($)</option><option value="percent">Porcentaje (%)</option></select><input class="input" id="movementSurcharge" name="surcharge" type="number" min="0" step="0.01" placeholder="0" aria-label="Valor del recargo"></div><small id="movementSurchargeHelp">Importe fijo en pesos.</small></div>
@@ -212,8 +212,8 @@
   <dialog class="admin-dialog tiny-dialog" id="productionDesignMeasureDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Estampa en este producto</div><h2 id="productionDesignMeasureTitle">Medidas</h2></div><button class="icon-btn" type="button" id="closeProductionDesignMeasure">×</button></div><div class="dialog-body"><p class="muted">Estas medidas se aplican a este producto. Podés usar el mismo diseño a otro tamaño en otra receta.</p><div class="form-grid"><div class="field"><label>Ancho (cm)</label><input class="input" id="productionDesignWidth" type="number" min="0.1" step="0.1"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionDesignHeight" type="number" min="0.1" step="0.1"></div></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionDesignMeasure">Cancelar</button><button class="btn btn-primary" type="button" id="confirmProductionDesignMeasure">Usar estas medidas</button></div></div></dialog>
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=23.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=23.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=24.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=24.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
