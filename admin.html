@@ -10,9 +10,9 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=24.1">
+  <link rel="stylesheet" href="styles.css?v=25.0">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=24.1">
+  <link rel="stylesheet" href="admin-v4.css?v=25.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -106,7 +106,13 @@
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedMaterials"></div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div><button class="btn btn-primary" type="button" id="productionUploadDesignBtn">+ Agregar diseño</button></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
-          <div class="production-selected" id="productionSelectedDesigns"></div><label class="field production-sheet-waste">Calcular desperdicio desde una plancha<select class="select" id="productionWasteSheet"><option value="">Usar porcentaje manual</option></select><small class="field-help" id="productionWasteSheetHelp">Podés aplicar la proporción de superficie sin usar de una plancha.</small></label>
+          <div class="production-selected" id="productionSelectedDesigns"></div>
+          <section class="production-mockup-card" id="productionMockupStudio">
+            <div class="production-mockup-head"><div><h3>Vista previa del producto</h3><p class="muted">Componé una imagen con tus fotos base y estampas elegidas. No usa generación con IA.</p></div><button class="btn btn-ghost" type="button" id="manageMockupAssetsBtn">Administrar imágenes</button></div>
+            <div class="production-mockup-controls"><label class="field">Vista<select class="select" id="mockupSideSelect"><option value="front">Frente</option><option value="back">Espalda</option></select></label><label class="field">Modelo<select class="select" id="mockupGenderSelect"><option value="">Todos</option><option value="Mujer">Mujer</option><option value="Varón">Varón</option><option value="Producto">Producto</option></select></label><label class="field">Color de prenda<select class="select" id="mockupColorSelect"><option value="">Todos</option></select></label><label class="field">Modelo / producto base<select class="select" id="mockupBaseSelect"><option value="">Cargar una imagen base</option></select></label><label class="field">Fondo<select class="select" id="mockupBackgroundSelect"><option value="">Conservar el fondo del modelo</option></select></label></div>
+            <div class="production-mockup-workspace"><div class="production-mockup-preview"><canvas id="productionMockupCanvas" width="720" height="900" aria-label="Vista previa compuesta"></canvas><div id="productionMockupEmpty" class="mockup-empty">Elegí una foto base y al menos un diseño para previsualizar.</div></div><div class="production-mockup-actions"><small id="mockupAssetHint">Las fotos base pueden ser modelos con la prenda lisa o productos sin estampa. Para cambiar el fondo, subí la foto base en PNG transparente.</small><button class="btn btn-ghost" type="button" id="refreshMockupBtn">Actualizar vista</button><button class="btn btn-primary" type="button" id="addMockupToProductBtn" disabled>Agregar vista a fotos del producto</button></div></div>
+          </section>
+          <label class="field production-sheet-waste">Calcular desperdicio desde una plancha<select class="select" id="productionWasteSheet"><option value="">Usar porcentaje manual</option></select><small class="field-help" id="productionWasteSheetHelp">Podés aplicar la proporción de superficie sin usar de una plancha.</small></label>
           <div class="production-cost-summary" id="productionBuilderCost"></div>
           <div class="field"><label>Nota interna de producción</label><textarea class="textarea" id="productionNotes" rows="2" placeholder="Opcional"></textarea></div>
           <div class="production-next-row"><button class="btn btn-primary" type="button" id="productionNextBtn">Continuar a publicación →</button></div>
@@ -128,6 +134,26 @@
         </section>
       </div>
       <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionBtn">Cancelar</button><button class="btn btn-ghost hidden" type="button" id="productionBackBtn">← Volver a producción</button><button class="btn btn-primary hidden" type="button" id="saveProductionBtn">Guardar e iniciar producción</button></div>
+    </div>
+  </dialog>
+
+  <dialog class="admin-dialog mockup-assets-dialog" id="mockupAssetDialog">
+    <div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Producción</div><h2>Imágenes reutilizables</h2></div><button class="icon-btn" type="button" id="closeMockupAssetsBtn">×</button></div>
+      <div class="dialog-body"><p class="muted">Cargá un PNG transparente de un modelo con la prenda lisa o del producto sin estampa. Para tazas, gorras y termos, usá una foto base con la zona de impresión despejada. También podés cargar fondos por separado.</p>
+        <form id="mockupAssetForm"><div class="form-grid">
+          <label class="field">Tipo de imagen<select class="select" name="assetType" id="mockupAssetType"><option value="base">Modelo / producto base</option><option value="background">Fondo</option></select></label>
+          <label class="field">Tipo de producto<select class="select" name="productType" id="mockupAssetProductType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="glass">Vaso</option><option value="thermos">Termo</option><option value="bag">Bolso</option><option value="other">Otro</option></select></label>
+          <label class="field">Nombre / modelo<input class="input" name="name" maxlength="120" placeholder="Ej.: Modelo 1 · clásica negra" required></label>
+          <label class="field">Modelo<input class="input" name="modelName" maxlength="80" placeholder="Ej.: Modelo 1"></label>
+          <label class="field">Género / tipo<select class="select" name="gender"><option value="">Producto</option><option value="Mujer">Mujer</option><option value="Varón">Varón</option><option value="Producto">Producto</option></select></label>
+          <label class="field">Pose<select class="select" name="pose"><option value="front">Frente</option><option value="back">Espalda</option><option value="side">Perfil / producto</option></select></label>
+          <label class="field">Color<input class="input" name="color" maxlength="50" placeholder="Ej.: Negro"></label>
+          <label class="field">Materia prima asociada<select class="select" name="materialId" id="mockupAssetMaterial"><option value="">Sin asociar</option></select><small class="field-help">La miniatura aparecerá en la tarjeta de esa materia prima.</small></label>
+          <div class="field full mockup-zone-fields"><label>Zona de estampa (%) sobre la foto base</label><div class="mockup-zone-grid"><label>X<input class="input" name="zoneX" type="number" min="0" max="100" step=".1" value="32"></label><label>Y<input class="input" name="zoneY" type="number" min="0" max="100" step=".1" value="28"></label><label>Ancho<input class="input" name="zoneW" type="number" min="1" max="100" step=".1" value="36"></label><label>Alto<input class="input" name="zoneH" type="number" min="1" max="100" step=".1" value="36"></label></div><small class="field-help">Son porcentajes del ancho y alto de la imagen; se pueden afinar al probar la vista previa.</small></div>
+          <label class="field full">Archivo<input class="input" name="file" id="mockupAssetFile" type="file" accept="image/png,image/jpeg,image/webp" required><small class="field-help">PNG sin fondo para colocar un fondo nuevo. JPG/WEBP también sirven, pero conservan el fondo original.</small></label>
+        </div><div class="dialog-foot"><button type="button" class="btn btn-ghost" id="cancelMockupAssetBtn">Cerrar</button><button type="submit" class="btn btn-primary" id="saveMockupAssetBtn">Guardar imagen</button></div></form>
+        <div class="mockup-assets-list" id="mockupAssetsList"></div>
+      </div>
     </div>
   </dialog>
 
@@ -212,8 +238,8 @@
   <dialog class="admin-dialog tiny-dialog" id="productionDesignMeasureDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Estampa en este producto</div><h2 id="productionDesignMeasureTitle">Medidas</h2></div><button class="icon-btn" type="button" id="closeProductionDesignMeasure">×</button></div><div class="dialog-body"><p class="muted">Estas medidas se aplican a este producto. Podés usar el mismo diseño a otro tamaño en otra receta.</p><div class="form-grid"><div class="field"><label>Ancho (cm)</label><input class="input" id="productionDesignWidth" type="number" min="0.1" step="0.1"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionDesignHeight" type="number" min="0.1" step="0.1"></div></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionDesignMeasure">Cancelar</button><button class="btn btn-primary" type="button" id="confirmProductionDesignMeasure">Usar estas medidas</button></div></div></dialog>
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=24.1" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=24.1',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=25.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">

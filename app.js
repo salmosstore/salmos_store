@@ -120,7 +120,7 @@
     const sameAddress=Boolean(previous && String(previous.address).trim().toLowerCase()===String(state.shipping.address).trim().toLowerCase()
       && Math.abs(Number(previous.lat)-Number(state.shipping.lat))<0.00001
       && Math.abs(Number(previous.lng)-Number(state.shipping.lng))<0.00001);
-    const keepPreviousQuote=Boolean(!withQuote && sameAddress && previous.quotedDay===localDayKey() && Number(previous.costCents)>0);
+    const keepPreviousQuote=Boolean(!withQuote && sameAddress && previous.quotedDay===localDayKey() && previous.pricingVersion===2 && Number(previous.costCents)>0);
     const payload={
       address:state.shipping.address,
       lat:Number(state.shipping.lat),
@@ -129,6 +129,8 @@
       costCents:withQuote ? Number(state.shipping.costCents)||0 : keepPreviousQuote ? Number(previous.costCents)||0 : 0,
       distanceKm:withQuote ? state.shipping.distanceKm : keepPreviousQuote ? previous.distanceKm : null,
       quoteId:withQuote ? state.shipping.quoteId : keepPreviousQuote ? previous.quoteId : null,
+      bandDiscount:withQuote ? state.shippingQuotes?.moto?.bandDiscount||null : keepPreviousQuote ? previous.bandDiscount||null : null,
+      pricingVersion:2,
       quotedDay:withQuote && Number(state.shipping.costCents)>0 ? localDayKey() : keepPreviousQuote ? previous.quotedDay : null,
       carryToCart:withQuote ? Boolean(carry && Number(state.shipping.costCents)>0) : keepPreviousQuote ? Boolean(previous.carryToCart) : false
     };
@@ -143,7 +145,7 @@
   function restoreLastShipping({activateMoto=false,allowQuote=true,restoreCarry=false}={}) {
     const saved=readLastShipping();
     if(!saved)return false;
-    const quoteValid=allowQuote && saved.quotedDay===localDayKey() && Number(saved.costCents)>0;
+    const quoteValid=allowQuote && saved.quotedDay===localDayKey() && saved.pricingVersion===2 && Number(saved.costCents)>0;
     state.area=saved.area||state.area;
     state.shipping={
       method:activateMoto?'moto':null,
@@ -154,6 +156,7 @@
       lng:Number(saved.lng),
       quoteId:quoteValid?saved.quoteId:null
     };
+    state.shippingQuotes.moto=quoteValid?{distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null,bandDiscount:saved.bandDiscount||null}:null;
     if(restoreCarry && quoteValid && saved.carryToCart && state.cart.length){
       state.shipping.method='moto';
       state.shippingQuoteCarry=true;
@@ -940,6 +943,12 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qs('#checkoutBtn').disabled = !state.cart.length;
   }
   function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart,shipping)}
+  function applyMotoBandDiscount(promotion){
+    const quote=state.shippingQuotes?.moto,rule=quote?.bandDiscount,active=state.shipping.method==='moto'||state.shippingQuoteCarry;
+    if(!active||!rule)return {...promotion,motoBandDiscountCents:0,motoBandDiscountLabel:'',totalAfterMotoCents:promotion.totalCents};
+    const base=Math.max(0,Number(promotion.totalCents)||0),raw=rule.type==='percent'?Math.round(base*Number(rule.value||0)/100):Math.round(Number(rule.value||0)*100),discount=Math.min(base,Math.max(0,raw)),productDiscount=Math.min(discount,Number(promotion.finalSubtotalCents)||0),shippingDiscount=Math.min(discount-productDiscount,Number(promotion.finalShippingCostCents)||0);
+    return {...promotion,motoBandDiscountCents:productDiscount+shippingDiscount,motoBandProductDiscountCents:productDiscount,motoBandShippingDiscountCents:shippingDiscount,motoBandDiscountLabel:quote.discountLabel||`Descuento por tramo de motomensajería`,finalSubtotalAfterMotoCents:Math.max(0,promotion.finalSubtotalCents-productDiscount),finalShippingAfterMotoCents:Math.max(0,promotion.finalShippingCostCents-shippingDiscount),totalAfterMotoCents:Math.max(0,base-productDiscount-shippingDiscount)};
+  }
   function cartShippingAmount(){
     const method=state.shipping.method,cents=Math.max(0,Math.round(Number(state.shipping.costCents)||0));
     if(!state.cart.length||!cents||['pickup','via_cargo'].includes(method))return 0;
@@ -948,13 +957,13 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     return quoteBelongsToMethod||carriedQuote?cents:0;
   }
   function renderCartShippingCarry() {
-    const shipping=cartShippingAmount(),p=cartPromotion(shipping),via=state.shipping.method==='via_cargo',pickup=state.shipping.method==='pickup';
-    const subtotal=cartSubtotal(),discountCents=Math.min(subtotal+shipping,Math.max(0,Math.round(Number(p.totalDiscountCents)||0))),totalCents=Math.max(0,subtotal+shipping-discountCents);
+    const shipping=cartShippingAmount(),basePromotion=cartPromotion(shipping),p=applyMotoBandDiscount(basePromotion),via=state.shipping.method==='via_cargo',pickup=state.shipping.method==='pickup';
+    const subtotal=cartSubtotal(),discountCents=Math.min(subtotal+shipping,Math.max(0,Math.round(Number(basePromotion.totalDiscountCents)||0)+Number(p.motoBandDiscountCents||0))),totalCents=Math.max(0,subtotal+shipping-discountCents);
     qs('#cartSubtotal').textContent=money(subtotal);
     const cost=qs('#cartShippingCost');if(cost)cost.textContent=via?'A cotizar · pago separado':shipping?money(shipping):pickup?'Gratis':'A calcular';
     const total=qs('#cartTotal');if(total)total.textContent=money(totalCents);
     const label=qs('#cartTotalLabel');if(label)label.textContent=via?'Total de productos':shipping||pickup?'Total de la compra':'Total sin envío';
-    const discountRow=qs('#cartPromotion');if(discountRow){discountRow.hidden=!p.totalDiscountCents;discountRow.innerHTML=p.totalDiscountCents?`<span>${escapeHtml(p.label)}</span><strong>− ${money(p.totalDiscountCents)}</strong>`:'';}
+    const discountRow=qs('#cartPromotion');if(discountRow){const rows=[];if(basePromotion.totalDiscountCents)rows.push(`<span>${escapeHtml(basePromotion.label)}</span><strong>− ${money(basePromotion.totalDiscountCents)}</strong>`);if(p.motoBandDiscountCents)rows.push(`<span>${escapeHtml(p.motoBandDiscountLabel)}</span><strong>− ${money(p.motoBandDiscountCents)}</strong>`);discountRow.hidden=!rows.length;discountRow.innerHTML=rows.join('');}
     const address=qs('#cartShippingAddress');if(address)address.textContent=shipping?state.shipping.address||'':'';
   }
   function cartSubtotal() { return state.cart.reduce((sum, x) => sum + x.priceCents * x.qty, 0); }
@@ -1027,16 +1036,16 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
   const deliveryMotoRequests=new Map();
   async function deliveryMotoQuote(d){
-    const day=localDayKey(),key=deliveryQuoteKey(d),cache=loadJSON('salmos_moto_quotes_v1',{});
+    const day=localDayKey(),key=deliveryQuoteKey(d),cache=loadJSON('salmos_moto_quotes_v2',{});
     if(cache.day===day&&cache.quotes?.[key])return cache.quotes[key];
     if(deliveryMotoRequests.has(key))return deliveryMotoRequests.get(key);
     const run=(async()=>{
       const saved=readLastShipping();
-      const same=saved&&saved.quotedDay===day&&Number(saved.costCents)>0&&normalizeSearch(saved.address)===normalizeSearch(d.formattedAddress)&&Math.abs(Number(saved.lat)-Number(d.lat))<.00001&&Math.abs(Number(saved.lng)-Number(d.lng))<.00001;
-      const quote=same?{distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null}:await api('/api/shipping/moto/quote',{method:'POST',body:JSON.stringify({destination:{lat:Number(d.lat),lng:Number(d.lng),address:d.formattedAddress}})});
-      const latest=loadJSON('salmos_moto_quotes_v1',{}),quotes=latest.day===day?latest.quotes||{}:{};
+      const same=saved&&saved.pricingVersion===2&&saved.quotedDay===day&&Number(saved.costCents)>0&&normalizeSearch(saved.address)===normalizeSearch(d.formattedAddress)&&Math.abs(Number(saved.lat)-Number(d.lat))<.00001&&Math.abs(Number(saved.lng)-Number(d.lng))<.00001;
+      const quote=same?{distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null,bandDiscount:saved.bandDiscount||null}:await api('/api/shipping/moto/quote',{method:'POST',body:JSON.stringify({destination:{lat:Number(d.lat),lng:Number(d.lng),address:d.formattedAddress}})});
+      const latest=loadJSON('salmos_moto_quotes_v2',{}),quotes=latest.day===day?latest.quotes||{}:{};
       quotes[key]=quote;
-      try{localStorage.setItem('salmos_moto_quotes_v1',JSON.stringify({day,quotes:Object.fromEntries(Object.entries(quotes).slice(-20))}))}catch{}
+      try{localStorage.setItem('salmos_moto_quotes_v2',JSON.stringify({day,quotes:Object.fromEntries(Object.entries(quotes).slice(-20))}))}catch{}
       return quote;
     })();
     deliveryMotoRequests.set(key,run);
@@ -1665,16 +1674,16 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     if (!state.shipping.lat || !state.shipping.lng) throw new Error('Primero elegí una dirección.');
     state.coupon=null;
     const saved=readLastShipping();
-    if(saved && sameSavedShippingAddress(saved) && saved.quotedDay===localDayKey() && Number(saved.costCents)>0){
+    if(saved && sameSavedShippingAddress(saved) && saved.pricingVersion===2 && saved.quotedDay===localDayKey() && Number(saved.costCents)>0){
       state.shipping.distanceKm=saved.distanceKm;
       state.shipping.costCents=Number(saved.costCents);
-      state.shipping.quoteId=saved.quoteId||null;state.shippingQuotes.moto={distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null};
+      state.shipping.quoteId=saved.quoteId||null;state.shippingQuotes.moto={distanceKm:saved.distanceKm,costCents:Number(saved.costCents),quoteId:saved.quoteId||null,bandDiscount:saved.bandDiscount||null};
       renderMotoQuoteButton();renderCheckoutShippingPriceOnly();
       toast('Usamos la cotización guardada de hoy para no gastar otra consulta.','success');
       return;
     }
     const data = await deliveryMotoQuote({...state.deliveryAddress});
-    state.shipping.distanceKm = data.distanceKm; state.shipping.costCents = data.costCents; state.shipping.quoteId = data.quoteId; state.shippingQuotes.moto={distanceKm:data.distanceKm,costCents:data.costCents,quoteId:data.quoteId};
+    state.shipping.distanceKm = data.distanceKm; state.shipping.costCents = data.costCents; state.shipping.quoteId = data.quoteId; state.shippingQuotes.moto={distanceKm:data.distanceKm,costCents:data.costCents,quoteId:data.quoteId,bandDiscount:data.bandDiscount||null,discountLabel:data.discountLabel||''};
     if(Number.isFinite(Number(data.queriesRemaining))) state.shippingQueriesRemaining=Number(data.queriesRemaining);
     saveLastShipping({withQuote:true,carry:state.shippingQuoteCarry});
     renderMotoQuoteButton();renderCheckoutShippingPriceOnly();
@@ -1739,10 +1748,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const btn=qs('#applyCouponBtn');
     if(btn){btn.disabled=true;btn.textContent='Aplicando...';}
     try{
+      const base=applyMotoBandDiscount(cartPromotion(state.shipping.costCents));
       const data=await api('/api/coupons/preview',{method:'POST',body:JSON.stringify({
         code,
-        subtotalCents:cartPromotion(state.shipping.costCents).finalSubtotalCents,
-        shippingCostCents:cartPromotion(state.shipping.costCents).finalShippingCostCents
+        subtotalCents:base.finalSubtotalAfterMotoCents??base.finalSubtotalCents,
+        shippingCostCents:base.finalShippingAfterMotoCents??base.finalShippingCostCents
       })});
       state.coupon=data;
       toast(`Cupón ${data.code} aplicado`,'success');
@@ -1758,9 +1768,9 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   function renderCheckoutSummary() {
     const subtotal=cartSubtotal();
     const shippingBase=state.shipping.costCents;
-    const promotion=cartPromotion(shippingBase);
+    const basePromotion=cartPromotion(shippingBase),promotion=applyMotoBandDiscount(basePromotion);
     const discount=state.coupon?.totalDiscountCents||0;
-    const total=state.coupon?.totalCents ?? promotion.totalCents;
+    const total=state.coupon?.totalCents ?? promotion.totalAfterMotoCents;
     qs('#checkoutContent').innerHTML = `
       <h2>Revisá tu compra</h2><div class="checkout-sub">Antes de pagar, confirmá que esté todo correcto.</div>
       <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${cartVariantLabel(x)?`${escapeHtml(cartVariantLabel(x))} · `:''}x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
@@ -1777,7 +1787,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       <div style="margin-top:16px">
         <div class="total-row"><span>Subtotal</span><strong>${money(subtotal)}</strong></div>
         <div class="total-row"><span>Envío</span><strong>${state.shipping.method==='via_cargo'?'A cotizar · pago separado':shippingBase ? money(shippingBase) : 'Gratis'}</strong></div>
-        ${promotion.totalDiscountCents?`<div class="total-row discount-row"><span>${escapeHtml(promotion.label)}</span><strong>− ${money(promotion.totalDiscountCents)}</strong></div>`:''}
+        ${basePromotion.totalDiscountCents?`<div class="total-row discount-row"><span>${escapeHtml(basePromotion.label)}</span><strong>− ${money(basePromotion.totalDiscountCents)}</strong></div>`:''}
+        ${promotion.motoBandDiscountCents?`<div class="total-row discount-row"><span>${escapeHtml(promotion.motoBandDiscountLabel)}</span><strong>− ${money(promotion.motoBandDiscountCents)}</strong></div>`:''}
         ${discount?`<div class="total-row discount-row"><span>Descuento · ${escapeHtml(state.coupon.code)}</span><strong>− ${money(discount)}</strong></div>`:''}
         <div class="total-row grand"><span>${state.shipping.method==='via_cargo'?'Total de productos':'Total'}</span><strong>${money(total)}</strong></div>
       </div>
