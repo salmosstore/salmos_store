@@ -918,6 +918,11 @@ details.design-library-group:not([open])>.design-group-body,details.design-libra
 .design-upload-file-measures>summary{cursor:pointer;font-weight:700}
 .design-upload-file-measures .design-measure-editor{margin-top:12px}
 .design-upload-file-measures .measure-detail-field{display:none}
+.design-upload-file-actions{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.design-upload-file-actions small{color:var(--muted)}
+.sheet-missing-status{grid-column:1/-1;min-height:1em;color:var(--gold-2);font-weight:700}
+.sheet-component-row.sheet-component-active{border:1px solid var(--gold);border-radius:12px;padding:12px;background:color-mix(in srgb,var(--gold) 8%,var(--surface))}
+.sheet-marked-count{align-self:center;font-weight:800;color:var(--text)}
 .sheet-preview-canvas.drawing{touch-action:none;cursor:crosshair}
 .sheet-box-draft{position:absolute;z-index:5;pointer-events:none;background:rgba(245,199,79,.2);border:2px solid #e8b439}
 #designUploadDialog .sheet-composition-layout{grid-template-columns:minmax(300px,.85fr) minmax(0,1.5fr)}
