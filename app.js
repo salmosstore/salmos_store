@@ -902,7 +902,7 @@ function normalizePromotions(value){
   if(typeof value==='string'){try{value=JSON.parse(value)}catch{throw new Error('Revisá las promociones guardadas.')}}
   if(!Array.isArray(value)||value.length>50)throw new Error('Podés guardar hasta 50 promociones.');
   return value.map((r,i)=>{
-    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:r.active!==false,trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,target:r.target,targetProductId:Number(r.targetProductId)||0,benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
+    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:r.active!==false,trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
     if(!p.name||!['amount','quantity'].includes(p.trigger)||!['products','shipping','order'].includes(p.target)||!['percent','fixed','unit_price'].includes(p.benefit)||!Number.isSafeInteger(p.threshold)||p.threshold<(p.trigger==='quantity'?1:0)||!Number.isFinite(p.value)||p.value<0||!Number.isSafeInteger(p.triggerProductId)||p.triggerProductId<0||!Number.isSafeInteger(p.targetProductId)||p.targetProductId<0)throw new Error(`Revisá los campos de la promoción ${i+1}.`);
     if(p.benefit==='percent'&&p.value>100)throw new Error('El porcentaje no puede superar 100.');
     if(p.benefit!=='percent'&&!Number.isSafeInteger(p.value))throw new Error('Revisá el importe de la promoción.');
@@ -910,19 +910,20 @@ function normalizePromotions(value){
     return p;
   });
 }
+function promotionProductType(category='',fit=''){const c=String(category).toLowerCase(),f=String(fit).toLowerCase();if(c.includes('remera')||c.includes('shirt'))return f.includes('over')?'shirt_oversize':f.includes('crop')?'shirt_crop':'shirt_classic';if(c.includes('gorra')||c.includes('cap'))return 'cap';if(c.includes('taza')||c.includes('mug'))return 'mug';if(c.includes('vaso')||c.includes('glass'))return 'glass';if(c.includes('termo')||c.includes('thermos'))return 'thermos';return c;}
 function calculatePromotions(rules,items,shippingCostCents=0){
-  const lines=items.map(x=>({productId:Number(x.productId??x.product_id),quantity:Number(x.quantity??x.qty)||0,price:Number(x.priceCents??x.price_cents)||0})),subtotal=lines.reduce((s,x)=>s+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0));
-  let best={id:null,label:'',productDiscountCents:0,shippingDiscountCents:0,totalDiscountCents:0,subtotalCents:subtotal,finalSubtotalCents:subtotal,finalShippingCostCents:shipping,totalCents:subtotal+shipping};
+  const lines=items.map(x=>({productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),quantity:Number(x.quantity??x.qty)||0,price:Number(x.priceCents??x.price_cents)||0})),subtotal=lines.reduce((s,x)=>s+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0));
+  const chosen=new Map();
   for(const rule of rules||[]){if(!rule.active)continue;
-    const condition=lines.filter(x=>!rule.triggerProductId||x.productId===rule.triggerProductId),threshold=condition.reduce((s,x)=>s+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0);
+    const condition=lines.filter(x=>(!rule.triggerProductId||x.productId===rule.triggerProductId)&&(!rule.triggerType||x.type===rule.triggerType)),threshold=condition.reduce((s,x)=>s+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0);
     if(!condition.length||threshold<rule.threshold)continue;
-    const targets=lines.filter(x=>!rule.targetProductId||x.productId===rule.targetProductId),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
+    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===rule.targetProductId)&&(!rule.targetType||x.type===rule.targetType)),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
     const base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:productBase;
     let discount=rule.benefit==='unit_price'?targets.reduce((s,x)=>s+Math.max(0,x.price-rule.value)*x.quantity,0):rule.benefit==='percent'?Math.round(base*rule.value/100):rule.value*(rule.target==='products'&&rule.basis==='unit'?quantity:1);
-    discount=Math.max(0,Math.min(base,Math.round(discount)));if(discount<=best.totalDiscountCents)continue;
-    const pd=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?productBase:subtotal),sd=discount-pd;
-    best={id:rule.id,label:rule.name,productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:discount,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-discount};
-  }return best;
+    discount=Math.max(0,Math.min(base,Math.round(discount)));const key=rule.target==='products'&&rule.targetType?`products:${rule.targetType}`:rule.targetType||rule.triggerType?rule.target:'legacy';const prior=chosen.get(key);if(prior&&prior.discount>=discount)continue;chosen.set(key,{rule,discount,productBase});
+  }
+  let pd=0,sd=0;const applied=[];for(const {rule,discount,productBase} of chosen.values()){const remainingProducts=Math.max(0,subtotal-pd),remainingShipping=Math.max(0,shipping-sd);const productPart=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?Math.min(productBase,remainingProducts):remainingProducts),shippingPart=rule.target==='products'?0:Math.min(remainingShipping,Math.max(0,discount-productPart));if(productPart+shippingPart>0){pd+=productPart;sd+=shippingPart;applied.push(rule)}}
+  return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd};
 }
   function renderCart() {
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
@@ -942,7 +943,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     renderCartShippingCarry();
     qs('#checkoutBtn').disabled = !state.cart.length;
   }
-  function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart,shipping)}
+  function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart.map(x=>{const product=state.products.find(p=>Number(p.id)===Number(x.productId));return {...x,category_slug:product?.category_slug||product?.category_name||'',fit:product?.fit||''}}),shipping)}
   function applyMotoBandDiscount(promotion){
     const quote=state.shippingQuotes?.moto,rule=quote?.bandDiscount,active=state.shipping.method==='moto'||state.shippingQuoteCarry;
     if(!active||!rule)return {...promotion,motoBandDiscountCents:0,motoBandDiscountLabel:'',totalAfterMotoCents:promotion.totalCents};
