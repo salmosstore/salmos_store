@@ -846,7 +846,7 @@ details.design-library-group:not([open])>.design-group-body,details.design-libra
 .sheet-component-row .btn{font-size:.78rem;padding:8px 10px}
 @media(max-width:720px){.sheet-composition-layout{grid-template-columns:1fr}.sheet-preview{position:relative}.sheet-preview-canvas>img{max-height:280px}}
 
-/* V25.2: full-workspace production editor, independent garment/cap tint and precise zoom. */
+/* Production editor: prepared photo variants and precise design placement. */
 @media(min-width:701px){
   #productionDialog{width:100vw!important;max-width:100vw!important;height:100dvh!important;max-height:100dvh!important;margin:0!important;inset:0!important;border-radius:0!important}
   #productionDialog>.dialog-shell{width:100vw!important;height:100dvh!important;max-height:100dvh!important;display:grid;grid-template-rows:auto minmax(0,1fr) auto;border-radius:0!important}
@@ -864,13 +864,6 @@ details.design-library-group:not([open])>.design-group-body,details.design-libra
 .mockup-zoom-controls{display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap}
 .mockup-zoom-controls input[type=range]{width:min(240px,45%);accent-color:var(--gold)}
 .mockup-zoom-controls span{min-width:48px;font-size:.82rem;font-weight:800;text-align:center}
-.mockup-color-picker{height:42px;padding:4px!important;min-width:70px;cursor:pointer}
-.production-mockup-sidebar .mockup-recolor-toggle,.production-mockup-sidebar .mockup-cap-toggle{min-height:42px;align-self:end}
-.garment-mask-editor{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
-.garment-mask-editor>div:first-child{grid-column:1/-1}.garment-mask-editor p{margin:4px 0 0}
-.garment-mask-tools{display:flex;align-items:end;gap:9px;flex-wrap:wrap}
-.garment-mask-tools .field{min-width:180px;margin:0}
-#garmentMaskCanvas{display:block;grid-column:1/-1;width:min(100%,440px);max-height:55vh;object-fit:contain;justify-self:center;border:1px solid var(--line);border-radius:10px;background:#141217;touch-action:none;cursor:crosshair}
 .sheet-preview-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .sheet-preview-tools input[type=range]{width:110px;accent-color:var(--gold)}
 .sheet-preview-viewport{width:100%;max-width:100%;max-height:60vh;overflow:auto;border:1px solid var(--line);border-radius:9px}
@@ -894,8 +887,6 @@ details.design-library-group:not([open])>.design-group-body,details.design-libra
   .production-mockup-preview{height:68vh;min-height:320px;max-height:70vh}
   #productionMockupCanvas{max-height:66vh;max-width:100%;transform-origin:center center}
   .production-mockup-controls{grid-template-columns:1fr 1fr}
-  .garment-mask-editor{grid-template-columns:1fr}
-  .garment-mask-tools{grid-column:1;align-items:stretch}
   .sheet-missing-upload{grid-template-columns:1fr 1fr}
   .design-upload-file-meta{grid-template-columns:1fr 1fr}
   .sheet-preview-viewport{max-height:48vh}
@@ -956,12 +947,69 @@ details.design-library-group:not([open])>.design-group-body,details.design-libra
 .design-gallery-actions{display:flex;align-items:center;gap:10px;margin:6px 0 10px;flex-wrap:wrap}.design-gallery-actions small{color:var(--muted)}
 .design-bulk-check{color:#fff;font-size:16px;opacity:.83}.design-bulk-check:not(.active){color:transparent}.design-bulk-check.active{background:#ad2456;border-color:#fff;opacity:1}
 .design-gallery-card:has(.design-bulk-check.active) .design-gallery-thumb{outline:2px solid #e79cbd;outline-offset:2px}
-.mockup-tint-row{display:grid;grid-template-columns:minmax(70px,1fr) 52px auto auto;align-items:center;gap:7px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
-.mockup-tint-row .mockup-color-picker{width:50px;height:38px;min-width:0;padding:3px;cursor:pointer}.mockup-tint-row .btn{min-height:36px;padding:5px 9px;white-space:nowrap}.mockup-tint-row small{grid-column:1/-1;color:var(--muted)}
-.garment-mask-editor canvas{display:block;max-width:100%;max-height:60vh;touch-action:none;cursor:crosshair;margin:8px auto;border-radius:10px}
 .sheet-preview-box-active{position:absolute;z-index:6;border:2px solid #ffcd40;border-radius:2px;background:rgba(245,198,48,.07);cursor:move;touch-action:none;box-shadow:0 0 0 1px #261912}
 .sheet-preview-pin{z-index:8!important;width:22px;min-width:22px;height:22px;min-height:22px;padding:0!important;display:grid;place-items:center;color:#fff;font-size:10px!important}
 .sheet-resize-handle{position:absolute;width:13px;height:13px;border:2px solid #2d1823;border-radius:3px;background:#ffd447;transform:translate(-50%,-50%);touch-action:none;z-index:9}
 .sheet-handle-n{left:50%;top:0;cursor:ns-resize}.sheet-handle-s{left:50%;top:100%;cursor:ns-resize}.sheet-handle-e{left:100%;top:50%;cursor:ew-resize}.sheet-handle-w{left:0;top:50%;cursor:ew-resize}
 .sheet-handle-ne{left:100%;top:0;cursor:nesw-resize}.sheet-handle-nw{left:0;top:0;cursor:nwse-resize}.sheet-handle-se{left:100%;top:100%;cursor:nwse-resize}.sheet-handle-sw{left:0;top:100%;cursor:nesw-resize}
-@media(max-width:620px){.mockup-tint-row{grid-template-columns:minmax(60px,1fr) 52px auto}.mockup-tint-row [data-reset-tint]{grid-column:3}.mockup-tint-row small{grid-column:1/-1}.sheet-resize-handle{width:18px;height:18px}}
+@media(max-width:620px){.sheet-resize-handle{width:18px;height:18px}}
+
+
+/* v25.7: expanded DTF sheet canvas, clear tag menus, and exact uploaded photo variants. */
+@media(min-width:701px){
+  #designUploadDialog .sheet-composition-layout{grid-template-columns:minmax(0,1.7fr) minmax(300px,.8fr)!important;gap:18px}
+  #designUploadDialog .sheet-preview{max-height:78vh;overflow:auto}
+  #designUploadDialog .sheet-preview-viewport{min-height:55vh;max-height:72vh}
+  #designUploadDialog .sheet-preview-canvas{width:100%;max-width:none;transform:none;transform-origin:top left}
+  #designUploadDialog .sheet-preview-canvas>img{display:block;width:100%;height:auto;max-height:none;max-width:none;object-fit:contain}
+  #designPreviewDialog.sheet-editor-open{width:calc(100vw - 34px)!important;max-width:calc(100vw - 34px)!important;height:calc(100dvh - 34px)!important;max-height:calc(100dvh - 34px)!important;margin:auto!important}
+  #designPreviewDialog.sheet-editor-open .dialog-shell{width:100%;height:100%;max-height:100%;display:grid;grid-template-rows:auto minmax(0,1fr)}
+  #designPreviewDialog.sheet-editor-open .design-preview-layout{min-height:0;height:100%;overflow:auto}
+  #designPreviewDialog.sheet-editor-open .sheet-composition-layout{grid-template-columns:minmax(0,1.7fr) minmax(300px,.8fr)!important;gap:18px}
+  #designPreviewDialog.sheet-editor-open .sheet-preview{max-height:78vh;overflow:auto}
+  #designPreviewDialog.sheet-editor-open .sheet-preview-viewport{min-height:55vh;max-height:72vh}
+  #designPreviewDialog.sheet-editor-open .sheet-preview-canvas{width:100%;max-width:none;transform:none;transform-origin:top left}
+  #designPreviewDialog.sheet-editor-open .sheet-preview-canvas>img{display:block;width:100%;height:auto;max-height:none;max-width:none;object-fit:contain}
+  #designPreviewDialog.sheet-editor-open .design-preview-meta{max-height:none;overflow:visible}
+}
+.sheet-preview-tools small{font-weight:700;color:var(--muted)}
+.sheet-preview-viewport{max-height:72vh;overflow:auto;overscroll-behavior:contain;touch-action:pan-x pan-y}
+.sheet-preview-canvas{width:100%;max-width:none;transform:none;transform-origin:top left;line-height:0}
+.sheet-preview-canvas>img{display:block;width:100%;height:auto;max-width:none;max-height:none;object-fit:contain}
+.sheet-composition-layout{grid-template-columns:minmax(0,1.7fr) minmax(260px,.8fr)}
+.sheet-component-row .sheet-component-identity .design-small-image{width:44px;height:44px}
+.design-origin-costs{display:grid;gap:10px;margin:12px 0}
+.design-origin-costs>section{display:grid;gap:7px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.design-origin-cost-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px;border-radius:8px;background:var(--surface)}
+.design-origin-cost-row .design-small-image{width:42px;height:42px}
+.design-origin-cost-row small{display:block;color:var(--muted)}
+.design-tag-picker{min-width:0}
+.design-tag-picker>label{display:block;margin-bottom:6px;font-weight:700}
+.design-tag-picker>details{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface)}
+.design-tag-picker summary{cursor:pointer;font-weight:700}
+.design-tag-picker-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;padding:10px 0}
+.design-tag-picker-options label{display:flex;gap:7px;align-items:center;padding:5px;border-radius:7px;background:var(--surface-2)}
+.design-tag-picker-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;margin:8px 0}
+.design-tag-picker-manage{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.design-tag-picker-row{display:grid;grid-template-columns:minmax(0,1fr) auto 36px;gap:6px;margin:7px 0}
+.mockup-variant-gallery,.mockup-background-gallery{display:flex;gap:8px;overflow-x:auto;padding:6px 1px 10px;scroll-snap-type:x proximity}
+.mockup-variant-card,.mockup-background-card{flex:0 0 128px;min-width:0;display:grid;align-content:start;gap:5px;padding:7px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer;scroll-snap-align:start}
+.mockup-variant-card img{width:100%;height:142px;object-fit:contain;border-radius:8px;background:var(--surface-2)}
+.mockup-variant-card strong,.mockup-variant-card small,.mockup-background-card small{overflow-wrap:anywhere}
+.mockup-variant-card small{color:var(--muted);font-size:.74rem}
+.mockup-variant-card.selected,.mockup-background-card.selected{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.mockup-background-card img{width:100%;height:100px;object-fit:cover;border-radius:7px}
+.mockup-background-card span{display:grid;place-items:center;min-height:100px;color:var(--muted)}
+.mockup-upload-card [data-colored-field] .input{margin-top:6px}
+@media(max-width:700px){
+  .sheet-composition-layout{grid-template-columns:1fr!important}
+  .sheet-preview{position:relative;max-height:none;overflow:visible}
+  .sheet-preview-viewport{min-height:0;max-height:52vh}
+  .sheet-preview-canvas{width:100%;max-width:none}
+  .sheet-preview-canvas>img{width:100%;height:auto;max-height:none}
+  .design-origin-cost-row{grid-template-columns:36px minmax(0,1fr)}
+  .design-origin-cost-row .design-small-image{width:36px;height:36px}
+  .design-origin-cost-row>strong{grid-column:2}
+  .mockup-variant-card{flex-basis:108px}
+  .mockup-variant-card img{height:112px}
+}
