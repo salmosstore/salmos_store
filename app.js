@@ -898,12 +898,18 @@
 
   function cartVariantLabel(item){return [item?.color,item?.size].map(v=>String(v||'').trim()).filter(Boolean).join(' · ')}
 
-function normalizePromotions(value){
+  function normalizePromotions(value){
   if(typeof value==='string'){try{value=JSON.parse(value)}catch{throw new Error('Revisá las promociones guardadas.')}}
   if(!Array.isArray(value)||value.length>50)throw new Error('Podés guardar hasta 50 promociones.');
   return value.map((r,i)=>{
     const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:r.active!==false,trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
-    if(!p.name||!['amount','quantity'].includes(p.trigger)||!['products','shipping','order'].includes(p.target)||!['percent','fixed','unit_price'].includes(p.benefit)||!Number.isSafeInteger(p.threshold)||p.threshold<(p.trigger==='quantity'?1:0)||!Number.isFinite(p.value)||p.value<0||!Number.isSafeInteger(p.triggerProductId)||p.triggerProductId<0||!Number.isSafeInteger(p.targetProductId)||p.targetProductId<0)throw new Error(`Revisá los campos de la promoción ${i+1}.`);
+    if(!p.name||!['amount','quantity','combination'].includes(p.trigger)||!['products','shipping','order'].includes(p.target)||!['percent','fixed','unit_price'].includes(p.benefit)||!Number.isSafeInteger(p.threshold)||p.threshold<(p.trigger==='quantity'?1:0)||!Number.isFinite(p.value)||p.value<0||!Number.isSafeInteger(p.triggerProductId)||p.triggerProductId<0||!Number.isSafeInteger(p.targetProductId)||p.targetProductId<0)throw new Error(`Revisá los campos de la promoción ${i+1}.`);
+    if(p.trigger==='combination'){
+      if(!Array.isArray(r.requirements)||!r.requirements.length||r.requirements.length>20)throw new Error('Agregá los tipos y cantidades de la combinación.');
+      p.requirements=r.requirements.map(x=>({type:String(x.type||'').trim().slice(0,50),quantity:Number(x.quantity)}));
+      if(p.requirements.some(x=>!x.type||x.type==='__combination__'||!Number.isSafeInteger(x.quantity)||x.quantity<1||x.quantity>10000)||new Set(p.requirements.map(x=>x.type)).size!==p.requirements.length)throw new Error('Cada tipo debe aparecer una sola vez, con una cantidad válida.');
+    }
+    if(p.targetType==='__combination__'&&p.trigger!=='combination')throw new Error('El beneficio sobre la combinación necesita una condición combinada.');
     if(p.benefit==='percent'&&p.value>100)throw new Error('El porcentaje no puede superar 100.');
     if(p.benefit!=='percent'&&!Number.isSafeInteger(p.value))throw new Error('Revisá el importe de la promoción.');
     if(p.benefit==='unit_price'&&p.target!=='products')throw new Error('El precio por unidad solo se aplica a productos.');
@@ -915,16 +921,20 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   const lines=items.map(x=>({productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),quantity:Number(x.quantity??x.qty)||0,price:Number(x.priceCents??x.price_cents)||0})),subtotal=lines.reduce((s,x)=>s+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0));
   const chosen=new Map();
   for(const rule of rules||[]){if(!rule.active)continue;
+    const combined=rule.trigger==='combination',requirements=rule.requirements||[];
+    if(combined&&(!requirements.length||requirements.some(r=>lines.filter(x=>x.type===r.type).reduce((n,x)=>n+x.quantity,0)<r.quantity)))continue;
     const condition=lines.filter(x=>(!rule.triggerProductId||x.productId===rule.triggerProductId)&&(!rule.triggerType||x.type===rule.triggerType)),threshold=condition.reduce((s,x)=>s+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0);
-    if(!condition.length||threshold<rule.threshold)continue;
-    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===rule.targetProductId)&&(!rule.targetType||x.type===rule.targetType)),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
+    if(!combined&&(!condition.length||threshold<rule.threshold))continue;
+    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===rule.targetProductId)&&(!rule.targetType||(rule.targetType==='__combination__'?requirements.some(r=>r.type===x.type):x.type===rule.targetType))),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
     const base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:productBase;
     let discount=rule.benefit==='unit_price'?targets.reduce((s,x)=>s+Math.max(0,x.price-rule.value)*x.quantity,0):rule.benefit==='percent'?Math.round(base*rule.value/100):rule.value*(rule.target==='products'&&rule.basis==='unit'?quantity:1);
-    discount=Math.max(0,Math.min(base,Math.round(discount)));const key=rule.target==='products'&&rule.targetType?`products:${rule.targetType}`:rule.targetType||rule.triggerType?rule.target:'legacy';const prior=chosen.get(key);if(prior&&prior.discount>=discount)continue;chosen.set(key,{rule,discount,productBase});
+    discount=Math.max(0,Math.min(base,Math.round(discount)));const key=combined?(rule.target==='products'?`products:${rule.targetType||'all'}`:rule.target):rule.target==='products'&&rule.targetType?`products:${rule.targetType}`:rule.targetType||rule.triggerType?rule.target:'legacy';const prior=chosen.get(key);if(prior&&prior.discount>=discount)continue;chosen.set(key,{rule,discount,productBase});
   }
   let pd=0,sd=0;const applied=[];for(const {rule,discount,productBase} of chosen.values()){const remainingProducts=Math.max(0,subtotal-pd),remainingShipping=Math.max(0,shipping-sd);const productPart=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?Math.min(productBase,remainingProducts):remainingProducts),shippingPart=rule.target==='products'?0:Math.min(remainingShipping,Math.max(0,discount-productPart));if(productPart+shippingPart>0){pd+=productPart;sd+=shippingPart;applied.push(rule)}}
   return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd};
 }
+
+  
   function renderCart() {
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
     const badge = qs('#cartBadge');
