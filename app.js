@@ -1,3 +1,4 @@
+// SALMOS 25.11
 (() => {
   'use strict';
 
@@ -561,8 +562,10 @@
       state.products = products.items || [];
       document.body.classList.remove('store-pending');
       qs('#porPedido')?.classList.remove('hidden');
+      await initStoreOrderEditor();
       renderCategories();
       renderProducts();
+      if(state.storeOrderEditor?.enabled)qs('#storeOrderToolbar')?.scrollIntoView({block:'start'});
       renderFeatured();
       renderCart();
       const whatsapp = state.config?.whatsapp || cfg.STORE_WHATSAPP || '5491162691341';
@@ -585,7 +588,7 @@
     if(!rows.length) return;
     const visibleCategories = state.categories;
     const activeSlugs = new Set(visibleCategories.map(c => c.slug));
-    const showBar = visibleCategories.length > 1;
+    const showBar = visibleCategories.length > 1 || state.storeOrderEditor?.enabled;
     if(mobileBar) mobileBar.classList.toggle('hidden', !showBar);
     if(desktopNav) desktopNav.classList.toggle('hidden', !showBar);
     if (!showBar || (state.activeCategory !== 'all' && !activeSlugs.has(state.activeCategory))) state.activeCategory = 'all';
@@ -605,13 +608,66 @@
     });
   }
 
+  function orderedStoreProducts(items,scope=state.activeCategory){
+    const draft=state.storeOrderEditor?.drafts.get(scope),positions=draft&&new Map(draft.map((id,i)=>[Number(id),i]));
+    return [...items].sort((a,b)=>positions?(positions.get(Number(a.id))??1e9)-(positions.get(Number(b.id))??1e9):(scope==='all'?0:(Number(a.category_display_order??999999)-Number(b.category_display_order??999999)))||(Number(a.display_order??999999)-Number(b.display_order??999999)));
+  }
+  async function initStoreOrderEditor(){
+    if(new URLSearchParams(location.search).get('ordenar')!=='1')return;
+    const section=qs('#productos');if(!section)return;
+    const toolbar=document.createElement('div');toolbar.id='storeOrderToolbar';toolbar.className='store-order-toolbar';section.before(toolbar);
+    toolbar.innerHTML='<strong>Abriendo el editor de orden…</strong>';
+    try{await api('/api/admin/products',{credentials:'same-origin'});}catch{toolbar.innerHTML='<strong>No se pudo abrir el editor. Entrá a Admin con tu sesión y tocá «Ordenar en la tienda».</strong><a class="btn btn-ghost" href="admin.html">Ir a Admin</a>';return;}
+    state.storeOrderEditor={enabled:true,drafts:new Map(),saving:false};state.activeCategory='all';state.query='';const search=qs('#searchInput');if(search){search.value='';search.disabled=true;}
+    document.body.classList.add('store-order-editing');
+    const style=document.createElement('style');style.textContent=`
+      .store-order-toolbar{scroll-margin-top:110px;position:sticky;top:108px;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px;margin:12px 0;border:1px solid var(--gold,#e8b66e);border-radius:12px;background:var(--surface,#171318);color:var(--text,#fff);box-shadow:0 6px 22px #0004}
+      .store-order-toolbar small{display:block;margin-top:4px}.store-order-actions{display:flex;gap:6px;flex-wrap:wrap}.store-order-toolbar .btn{padding:7px 10px}
+      .store-order-editing .product-media{cursor:grab;touch-action:none}.store-order-editing .product-media img{pointer-events:none;user-select:none;-webkit-user-drag:none}.store-order-editing .favorite-btn{display:none}
+      .store-order-editing .product-card.sorting{opacity:.6;outline:3px solid var(--gold,#e8b66e)}.store-order-editing .product-card{user-select:none}
+      .store-order-card-controls{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:8px}.store-order-card-controls button{border:1px solid var(--gold,#e8b66e);border-radius:8px;background:transparent;color:inherit;min-width:34px;min-height:32px;cursor:pointer}
+      @media(max-width:700px){.store-order-toolbar{top:82px;padding:9px}.store-order-actions .btn{font-size:.75rem}.store-order-toolbar small{font-size:.75rem}}
+    `;document.head.appendChild(style);
+    toolbar.innerHTML='<div><strong id="storeOrderTitle"></strong><small id="storeOrderStatus" role="status"></small></div><div class="store-order-actions"><button class="btn btn-primary" type="button" id="saveStoreOrder">Guardar cambios</button><button class="btn btn-ghost" type="button" id="discardStoreOrder">Descartar cambios</button><a class="btn btn-ghost" href="admin.html">Volver a Admin</a></div>';
+    qs('#saveStoreOrder').addEventListener('click',saveStoreProductOrders);qs('#discardStoreOrder').addEventListener('click',()=>{if(state.storeOrderEditor.saving)return;state.storeOrderEditor.drafts.clear();renderProducts();});
+    document.addEventListener('click',e=>{if(!state.storeOrderEditor?.enabled)return;const card=e.target.closest('.product-card');if(!card)return;e.preventDefault();e.stopImmediatePropagation();const step=e.target.closest('[data-store-order-step]');if(step&&!state.storeOrderEditor.saving){const grid=card.parentElement,cards=[...grid.children],index=cards.indexOf(card),next=cards[index+Number(step.dataset.storeOrderStep)];if(next){if(Number(step.dataset.storeOrderStep)<0)grid.insertBefore(card,next);else grid.insertBefore(card,next.nextSibling);rememberStoreProductOrder();}}},true);
+    window.addEventListener('beforeunload',e=>{if(state.storeOrderEditor?.drafts.size){e.preventDefault();e.returnValue='';}});
+    for(const id of ['productGrid','orderProductGrid'])bindStoreOrderGrid(qs('#'+id));
+  }
+  function bindStoreOrderGrid(grid){
+    if(!grid||grid.dataset.orderBound)return;grid.dataset.orderBound='1';let drag=null;
+    grid.addEventListener('pointerdown',e=>{if(state.storeOrderEditor?.saving||!e.target.closest('.product-media')||(e.button!==0&&e.pointerType!=='touch'))return;const card=e.target.closest('.product-card');if(!card)return;drag={card,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};grid.setPointerCapture?.(e.pointerId);e.preventDefault();});
+    grid.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<6)return;drag.moved=true;drag.card.classList.add('sorting');e.preventDefault();
+      const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.product-card');if(target&&target!==drag.card&&target.parentElement===grid){const cards=[...grid.children],forward=cards.indexOf(drag.card)<cards.indexOf(target);grid.insertBefore(drag.card,forward?target.nextSibling:target);}
+      if(e.clientY>window.innerHeight-64)window.scrollBy(0,18);else if(e.clientY<140)window.scrollBy(0,-18);
+    });
+    const finish=e=>{if(!drag||e.pointerId!==drag.id)return;const moved=drag.moved;drag.card.classList.remove('sorting');drag=null;if(moved)rememberStoreProductOrder();};grid.addEventListener('pointerup',finish);grid.addEventListener('pointercancel',finish);grid.addEventListener('lostpointercapture',finish);
+    grid.addEventListener('dragstart',e=>e.preventDefault());
+  }
+  function rememberStoreProductOrder(){
+    const editor=state.storeOrderEditor;if(!editor)return;const ids=['productGrid','orderProductGrid'].flatMap(id=>qsa('.product-card',qs('#'+id)).map(card=>Number(card.dataset.productId)));
+    editor.drafts.set(state.activeCategory,ids);renderStoreOrderControls();
+  }
+  function renderStoreOrderControls(){
+    const editor=state.storeOrderEditor;if(!editor?.enabled)return;const title=state.activeCategory==='all'?'Todos':state.categories.find(c=>c.slug===state.activeCategory)?.name||state.activeCategory;
+    qs('#storeOrderTitle').textContent=`Ordenar: ${title}`;qs('#storeOrderStatus').textContent=editor.saving?'Guardando…':`${editor.drafts.size?`${editor.drafts.size} pestaña(s) con cambios sin guardar. `:''}Arrastrá las miniaturas o usá ← →. Cada pestaña conserva su propio orden.`;
+    qs('#saveStoreOrder').disabled=editor.saving||!editor.drafts.size;qs('#discardStoreOrder').disabled=editor.saving||!editor.drafts.size;
+    let n=0;for(const id of ['productGrid','orderProductGrid'])for(const card of qsa('.product-card',qs('#'+id))){let controls=qs('.store-order-card-controls',card);if(!controls){controls=document.createElement('div');controls.className='store-order-card-controls';qs('.product-body',card).appendChild(controls);}controls.innerHTML=`<button type="button" data-store-order-step="-1" aria-label="Mover ${escapeHtml(qs('.product-name',card)?.textContent||'producto')} antes" ${editor.saving?'disabled':''}>←</button><span>#${++n}</span><button type="button" data-store-order-step="1" aria-label="Mover después" ${editor.saving?'disabled':''}>→</button>`;}
+  }
+  async function saveStoreProductOrders(){
+    const editor=state.storeOrderEditor;if(!editor||editor.saving||!editor.drafts.size)return;editor.saving=true;renderStoreOrderControls();
+    try{for(const [category,ids] of [...editor.drafts]){await api('/api/admin/products/order',{method:'PATCH',credentials:'same-origin',body:JSON.stringify({category,ids})});const ranks=new Map(ids.map((id,i)=>[Number(id),i]));for(const p of state.products)if(ranks.has(Number(p.id)))p[category==='all'?'display_order':'category_display_order']=ranks.get(Number(p.id));editor.drafts.delete(category);}toast('Orden guardado en la tienda','success');}
+    catch(err){toast(`No se guardaron todos los cambios: ${err.message}`,'error');}
+    finally{editor.saving=false;renderProducts();}
+  }
+
   function filteredProducts() {
     const q = state.query.trim().toLowerCase();
-    return state.products.filter(p => {
+    return orderedStoreProducts(state.products.filter(p => {
       const cat = state.activeCategory === 'all' || p.category_slug === state.activeCategory;
       const hay = !q || [p.name, p.short_description, p.category_name].some(x => String(x || '').toLowerCase().includes(q));
       return cat && hay;
-    });
+    }));
   }
 
   function productCard(p) {
@@ -642,6 +698,7 @@
     if(grid)grid.innerHTML = stockItems.length ? stockItems.map(productCard).join('') : (filtering?`<div class="empty-state" style="grid-column:1/-1"><strong>No encontramos productos con ese filtro.</strong>Probá otra búsqueda.</div>`:'');
     if(productsSection)productsSection.classList.toggle('hidden',!stockItems.length&&!filtering);
     if(orderGrid)orderGrid.innerHTML=orderItems.map(productCard).join('');
+    renderStoreOrderControls();
   }
 
   function renderFeatured() {
@@ -898,7 +955,7 @@
 
   function cartVariantLabel(item){return [item?.color,item?.size].map(v=>String(v||'').trim()).filter(Boolean).join(' · ')}
 
-  function normalizePromotions(value){
+function normalizePromotions(value){
   if(typeof value==='string'){try{value=JSON.parse(value)}catch{throw new Error('Revisá las promociones guardadas.')}}
   if(!Array.isArray(value)||value.length>50)throw new Error('Podés guardar hasta 50 promociones.');
   return value.map((r,i)=>{
@@ -933,8 +990,6 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   let pd=0,sd=0;const applied=[];for(const {rule,discount,productBase} of chosen.values()){const remainingProducts=Math.max(0,subtotal-pd),remainingShipping=Math.max(0,shipping-sd);const productPart=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?Math.min(productBase,remainingProducts):remainingProducts),shippingPart=rule.target==='products'?0:Math.min(remainingShipping,Math.max(0,discount-productPart));if(productPart+shippingPart>0){pd+=productPart;sd+=shippingPart;applied.push(rule)}}
   return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd};
 }
-
-  
   function renderCart() {
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
     const badge = qs('#cartBadge');
