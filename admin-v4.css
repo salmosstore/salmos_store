@@ -1044,3 +1044,27 @@ span.promotion-preview-thumb{display:grid;place-items:center;color:var(--muted)}
 .promotion-preview-rows .select{max-width:100%;min-width:0}
 @media(max-width:700px){#designUploadDialog .sheet-preview-viewport,#designPreviewDialog .sheet-preview-viewport{height:48dvh}.promotion-requirement{grid-template-columns:minmax(0,1fr) 85px 32px}}
 
+
+/* 25.11 · Galerías juntas y ajustes al costado de la vista previa. */
+#productionVariantSection .production-picker-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#productionVariantSection .horizontal-gallery-shell{min-width:0}
+#productionVariantSection .mockup-variant-gallery{width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;padding:6px 35px 12px;scrollbar-width:auto}
+#productionVariantSection .mockup-variant-card{flex:0 0 140px}
+#productionDialog .production-mockup-workspace{align-items:start}
+#productionDialog .production-mockup-preview-column{min-width:0}
+#productionDialog .production-mockup-sidebar{min-width:0}
+#productionDialog .production-mockup-sidebar .production-selected{margin:12px 0}
+#productionDialog .production-mockup-sidebar .production-design-selected-row{grid-template-columns:minmax(0,1fr) 32px;align-items:start;padding:8px;gap:5px}
+#productionDialog .production-mockup-sidebar .production-selected-design-main{display:grid;grid-template-columns:1fr;gap:4px}
+#productionDialog .production-design-select{display:flex;align-items:center;gap:8px;width:100%;min-width:0;text-align:left;background:none;border:0;color:var(--text);padding:0;cursor:pointer}
+#productionDialog .production-design-select strong{white-space:normal;overflow-wrap:anywhere}
+#productionDialog .production-design-select .design-small-image{flex:0 0 44px;width:44px;height:44px}
+#productionDialog .production-design-selected-row.selected{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+#productionDialog .production-design-row-actions{gap:6px;margin-top:4px}
+#productionDialog .production-design-row-actions .btn{padding:5px 8px;min-height:32px;font-size:.76rem}
+#productionDialog .mockup-layer-editor{grid-template-columns:1fr;margin:8px 0}
+.mockup-rotation-controls{display:grid;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.mockup-rotation-inputs{display:grid;grid-template-columns:minmax(0,1fr) 85px;align-items:center;gap:10px}
+.mockup-rotation-inputs input[type=range]{width:100%;min-width:0;accent-color:var(--gold)}
+.mockup-rotation-inputs label{display:flex;align-items:center;gap:4px}.mockup-rotation-inputs .input{width:68px;padding:6px}
+.mockup-rotation-actions{display:flex;gap:6px;flex-wrap:wrap}.mockup-rotation-actions .btn{padding:5px 9px;min-height:32px}
