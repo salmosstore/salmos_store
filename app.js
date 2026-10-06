@@ -671,17 +671,26 @@
   }
 
   function productCard(p) {
-    const image = p.primary_image_url
-      ? `<img loading="lazy" src="${escapeHtml(p.primary_image_url)}" alt="${escapeHtml(p.name)}">`
+    const media=productCardImages(p),first=media[0];
+    const image = first?.url
+      ? `<img loading="lazy" src="${escapeHtml(first.url)}" alt="${escapeHtml(first.alt_text||p.name)}" draggable="false">`
       : `<div class="product-placeholder">SALMOS</div>`;
     const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : '', Number(p.available_stock)<=0 ? '<span class="tag">AGOTADO</span>' : ''].join('');
     return `<article class="product-card" data-product-id="${p.id}" data-sale-mode="${escapeHtml(p.sale_mode||'stock')}">
-      <div class="product-media">${image}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
+      <div class="product-media" data-media-index="0">${image}${media.length>1?`<button type="button" class="product-photo-arrow previous" data-card-media-step="-1" aria-label="Foto anterior de ${escapeHtml(p.name)}">‹</button><button type="button" class="product-photo-arrow next" data-card-media-step="1" aria-label="Foto siguiente de ${escapeHtml(p.name)}">›</button><span class="product-photo-count" aria-live="polite">1 / ${media.length}</span>`:''}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
         <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
       </div>
     </article>`;
+  }
+  function productCardImages(product){const images=(product.images||[]).filter(im=>im.url&&(!im.media_type||im.media_type==='image'));return images.length?images:product.primary_image_url?[{url:product.primary_image_url,alt_text:product.name}]:[];}
+  function cycleProductCardMedia(button){
+    const card=button.closest('.product-card'),host=qs('.product-media',card),product=state.products.find(p=>Number(p.id)===Number(card.dataset.productId));
+    if(!product||!host)return;const media=productCardImages(product);if(media.length<2)return;
+    const index=((Number(host.dataset.mediaIndex)||0)+Number(button.dataset.cardMediaStep)+media.length)%media.length;host.dataset.mediaIndex=String(index);
+    const img=qs('img',host);if(img){img.src=media[index].url;img.alt=media[index].alt_text||product.name;}
+    const count=qs('.product-photo-count',host);if(count)count.textContent=`${index+1} / ${media.length}`;
   }
 
   function renderProducts() {
@@ -710,6 +719,7 @@
     try {
       const data = await api(`/api/products/${id}`);
       const p = data.item;
+      state.detailMediaIndex=0;
       state.selectedProduct = p;
       state.selectedColor = p.colors?.[0] || null;
       state.selectedVariantId = firstAvailableVariant(p, state.selectedColor)?.id || null;
@@ -916,8 +926,9 @@
       <div class="product-detail product-detail-v4">
         <div class="detail-gallery detail-gallery-scroll">
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
+          ${media.length>1?'<button type="button" class="product-photo-arrow previous" data-detail-media-step="-1" aria-label="Foto o video anterior">‹</button><button type="button" class="product-photo-arrow next" data-detail-media-step="1" aria-label="Foto o video siguiente">›</button>':''}
           <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button>
-          ${media.length>1?`<div class="media-dots">${media.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:''}
+          ${media.length>1?`<div class="media-dots">${media.map((_,i)=>`<button type="button" data-detail-media-index="${i}" class="${i===(state.detailMediaIndex||0)?'active':''}" aria-label="Ver imagen ${i+1}"></button>`).join('')}</div>`:''}
         </div>
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
@@ -936,7 +947,8 @@
       </div>`;
     const strip=qs('#detailMediaStrip');
     if(strip && media.length>1){
-      strip.addEventListener('scroll',()=>{const i=Math.round(strip.scrollLeft/Math.max(1,strip.clientWidth));qsa('.media-dots span',modal).forEach((d,n)=>d.classList.toggle('active',n===i));},{passive:true});
+      requestAnimationFrame(()=>{strip.scrollLeft=Math.min(media.length-1,state.detailMediaIndex||0)*strip.clientWidth;});
+      strip.addEventListener('scroll',()=>{const i=Math.round(strip.scrollLeft/Math.max(1,strip.clientWidth));state.detailMediaIndex=i;qsa('[data-detail-media-index]',modal).forEach((d,n)=>d.classList.toggle('active',n===i));},{passive:true});
     }
   }
 
@@ -1961,6 +1973,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(e.target.closest('[data-close-image-viewer]') || (e.target.id==='productImageViewer' && e.target.classList.contains('open'))){closeProductImageViewer();return;}
       const detailImage=e.target.closest('.detail-main-image');if(detailImage){openProductImageViewer(detailImage.currentSrc||detailImage.src,detailImage.alt||state.selectedProduct?.name||'SALMOS');return;}
       if(e.target.closest('[data-share-product]')){await shareSelectedProduct();return;}
+      const cardMedia=e.target.closest('[data-card-media-step]');if(cardMedia){e.preventDefault();e.stopPropagation();cycleProductCardMedia(cardMedia);return;}
+      const detailMedia=e.target.closest('[data-detail-media-step],[data-detail-media-index]');if(detailMedia){
+        e.preventDefault();const strip=qs('#detailMediaStrip'),count=qsa('.detail-media-slide',strip).length;
+        if(strip&&count){const current=Math.round(strip.scrollLeft/Math.max(1,strip.clientWidth)),index=detailMedia.dataset.detailMediaIndex!==undefined?Number(detailMedia.dataset.detailMediaIndex):(current+Number(detailMedia.dataset.detailMediaStep)+count)%count;strip.scrollTo({left:index*strip.clientWidth,behavior:'smooth'});}return;
+      }
       const card=e.target.closest('.product-card'); if(card){ if(card.dataset.saleMode==='order'){const p=state.products.find(x=>Number(x.id)===Number(card.dataset.productId));openCustomOrder('clothing',p||null);return;} openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }

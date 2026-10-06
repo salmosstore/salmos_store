@@ -1068,3 +1068,25 @@ span.promotion-preview-thumb{display:grid;place-items:center;color:var(--muted)}
 .mockup-rotation-inputs input[type=range]{width:100%;min-width:0;accent-color:var(--gold)}
 .mockup-rotation-inputs label{display:flex;align-items:center;gap:4px}.mockup-rotation-inputs .input{width:68px;padding:6px}
 .mockup-rotation-actions{display:flex;gap:6px;flex-wrap:wrap}.mockup-rotation-actions .btn{padding:5px 9px;min-height:32px}
+/* 25.12 · Galerías pegadas al visor y control interno opcional por talle. */
+#productionDialog .production-mockup-preview-column{display:flex;flex-direction:column;gap:6px}
+#productionDialog .production-mockup-preview-column>.production-picker-section{margin:0;padding:6px 8px;border-radius:12px}
+#productionDialog .production-mockup-preview-column .production-picker-head{margin:0 0 4px;min-height:28px}
+#productionDialog .production-mockup-preview-column .production-picker-head h3{font-size:.95rem;margin:0}
+#productionDialog .production-mockup-preview-column .production-picker-head p{display:none}
+#productionDialog .production-mockup-preview-column .production-design-gallery,#productionDialog #productionVariantSection .mockup-variant-gallery{padding-top:2px;padding-bottom:7px;gap:7px}
+#productionDialog .production-mockup-preview-column .production-design-card{flex:0 0 100px;width:100px;padding:6px}
+#productionDialog .production-mockup-preview-column .production-design-card img{height:68px;object-fit:contain}
+#productionDialog #productionVariantSection .mockup-variant-card{flex:0 0 110px;width:110px;padding:6px}
+#productionDialog #productionVariantSection .mockup-variant-card img{height:80px;object-fit:contain}
+#productionDialog .production-mockup-preview-column .production-design-card strong,#productionDialog #productionVariantSection .mockup-variant-card strong{font-size:.75rem}
+#productionDialog .production-mockup-preview-column .production-design-card small,#productionDialog #productionVariantSection .mockup-variant-card small{font-size:.7rem}
+#productionDialog .production-mockup-preview-column>.production-mockup-preview{margin-top:0}
+#productionDialog .production-mockup-sidebar>.production-mockup-head{padding:0 0 10px;flex-wrap:wrap}
+#productionDialog .production-mockup-sidebar>.mockup-zoom-controls{margin-top:10px;flex-wrap:wrap}
+#productionDialog #productionDesignFilters{margin-bottom:8px}
+.variant-row.variant-row-sized{grid-template-columns:minmax(100px,1fr) 70px 115px minmax(160px,1.4fr) 38px}
+.variant-row.variant-row-simple{grid-template-columns:minmax(100px,1fr) 115px minmax(160px,1.4fr) 38px}
+.variant-internal-kind{min-width:0;font-size:.85rem}
+#sheetDraftNotice{padding:10px;border:1px solid var(--line);border-radius:10px;color:var(--text)}
+@media(max-width:650px){.variant-row.variant-row-sized,.variant-row.variant-row-simple{grid-template-columns:minmax(0,1fr) 74px}.variant-row .variant-stock-control{grid-column:1}.variant-row .variant-internal-kind{grid-column:1 / -1}.variant-row .remove-variant{grid-column:2;grid-row:1}}
