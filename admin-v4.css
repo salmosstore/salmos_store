@@ -1168,3 +1168,20 @@ span.promotion-preview-thumb{display:grid;place-items:center;color:var(--muted)}
 @media(max-width:620px){#mockupAssetDialog,.mockup-photo-preview-dialog{width:calc(100vw - 12px);height:calc(100dvh - 12px)}.mockup-upload-card{grid-template-columns:1fr;padding:12px;gap:12px}.mockup-upload-photo{height:240px}.montage-photo-filters{grid-template-columns:1fr 1fr}.montage-photo-filters>small{grid-column:1/-1;padding:0}.montage-photo-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.montage-photo-thumb{height:200px}}
 
 #productionDialog .production-selected-design-main .design-small-image,#productionDialog .mockup-layer-chip .design-small-image,.sheet-sample>span,.sheet-sample img,.design-upload-file-preview img,.design-upload-file-preview>span{background:var(--design-pink)}
+
+/* Montajes editables y galería ordenada por modelo, corte y color. */
+.montage-photo-filters{grid-template-columns:repeat(5,minmax(140px,1fr));align-items:end}
+.montage-filter-actions{grid-column:1/-1;justify-content:flex-start;flex-wrap:wrap;gap:8px}
+.montage-filter-actions>small{margin-left:auto}
+.montage-photo-group{border:1px solid var(--border);border-radius:12px;padding:0;margin:12px 0;background:var(--surface)}
+.montage-photo-group>summary{padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;list-style:none}
+.montage-photo-group>summary::before{content:'▸';flex:none}.montage-photo-group[open]>summary::before{content:'▾'}
+.montage-photo-group>summary::-webkit-details-marker{display:none}
+.montage-photo-group>summary strong{font-size:.95rem}.montage-photo-group>summary small{margin-left:auto;white-space:nowrap}
+.montage-group-level-0>.montage-photo-group,.montage-group-level-1>.montage-photo-group{margin:8px 12px}
+.montage-photo-group>.montage-photo-grid{padding:0 12px 12px}
+.purchase-image-option{position:relative}.purchase-photo-check{position:absolute;right:4px;top:4px;background:var(--gold);color:#191119;border-radius:50%;width:22px;height:22px;font-weight:900;display:grid;place-items:center}
+.purchase-image-picker-head .purchase-image-selected{width:56px;height:66px;object-fit:contain;flex:none}
+#productionImagePreviewStage{display:flex;flex-direction:column;align-items:center;gap:12px}
+@media(max-width:980px){.montage-photo-filters{grid-template-columns:repeat(3,minmax(130px,1fr))}}
+@media(max-width:620px){.montage-photo-filters{grid-template-columns:1fr 1fr}.montage-photo-group>summary{padding:10px}.montage-filter-actions>small{margin-left:0}.montage-group-level-0>.montage-photo-group,.montage-group-level-1>.montage-photo-group{margin:6px}}
