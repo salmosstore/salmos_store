@@ -1,4 +1,4 @@
-// SALMOS 25.17
+// SALMOS 25.18
 (() => {
   'use strict';
 
@@ -1412,10 +1412,14 @@
   }
   function fitSheetPreview(canvas){
     const viewport=canvas?.closest('.sheet-preview-viewport'),img=qs('img',canvas||document);
-    if(!viewport||!img?.naturalWidth||!viewport.clientWidth||!viewport.clientHeight)return;
-    const scale=Math.min((viewport.clientWidth-16)/img.naturalWidth,(viewport.clientHeight-16)/img.naturalHeight)*(state.sheetZoom||1);
-    canvas.style.width=`${Math.max(1,Math.floor(img.naturalWidth*scale))}px`;
-    canvas.style.height=`${Math.max(1,Math.floor(img.naturalHeight*scale))}px`;
+    if(!viewport||!img?.naturalWidth||!img.naturalHeight||!viewport.clientWidth||!viewport.clientHeight)return;
+    const frame=canvas.closest('.sheet-preview-frame'),rotated=Boolean(frame&&window.matchMedia?.('(min-width: 701px) and (hover: hover) and (pointer: fine)').matches&&img.naturalHeight>img.naturalWidth);
+    const displayWidth=rotated?img.naturalHeight:img.naturalWidth,displayHeight=rotated?img.naturalWidth:img.naturalHeight;
+    const scale=Math.min(Math.max(1,viewport.clientWidth-16)/displayWidth,Math.max(1,viewport.clientHeight-16)/displayHeight)*(state.sheetZoom||1);
+    const width=Math.max(1,Math.floor(img.naturalWidth*scale)),height=Math.max(1,Math.floor(img.naturalHeight*scale));
+    canvas.style.width=`${width}px`;canvas.style.height=`${height}px`;
+    canvas.dataset.sheetRotated=String(rotated);canvas.style.transform=rotated?`translateX(${height}px) rotate(90deg)`:'none';
+    if(frame){frame.style.width=`${rotated?height:width}px`;frame.style.height=`${rotated?width:height}px`;}
   }
   function sheetHasPendingUpload(key){return Boolean(qs('[data-missing-sheet-file]',sheetRoot(key))?.files?.length);}
   function syncSheetUploadGate(key){
@@ -1520,7 +1524,7 @@
     }
     const stageImage=key==='detail'?qs('#designPreviewStage img'):null,reusedImage=stageImage&&(stageImage.getAttribute('src')===url||stageImage.getAttribute('src')?.startsWith(url+'?'))?stageImage:null;
     host._sheetResizeObserver?.disconnect();host.dataset.sheetSource=url;
-    host.innerHTML=`<strong>Vista previa de la plancha</strong><div data-sheet-size-notice></div>${image?`<div class="sheet-preview-tools"><span data-sheet-zoom-label>Zoom ${Math.round((state.sheetZoom||1)*100)}%</span><input type="range" min="1" max="5" step=".25" value="${state.sheetZoom||1}" data-sheet-zoom aria-label="Zoom de la plancha"><button type="button" class="btn btn-ghost" data-reset-sheet-zoom>Restablecer</button></div><div data-image-status role="status">Cargando plancha…</div><div class="sheet-preview-viewport"><div class="sheet-preview-canvas checkerboard ${state.sheetBoxTarget?.key===key?'drawing':''}" data-sheet-canvas="${key}" style="width:100%;height:auto"><img crossorigin="use-credentials" ${reusedImage?'':`src="${escapeHtml(url)}"`} alt="Plancha a cargar"><div class="sheet-preview-marks">${sheetPreviewMarks(rows,key)}</div></div></div>`:mime==='application/pdf'?`<iframe src="${escapeHtml(url)}" title="Plancha"></iframe><small>Usá la lista con miniaturas para revisar los diseños.</small>`:`<a class="btn btn-ghost" href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir archivo original</a><small>Este formato no tiene vista previa en el navegador.</small>`}`;
+    host.innerHTML=`<strong>Vista previa de la plancha</strong><div data-sheet-size-notice></div>${image?`<div class="sheet-preview-tools"><span data-sheet-zoom-label>Zoom ${Math.round((state.sheetZoom||1)*100)}%</span><input type="range" min="1" max="5" step=".25" value="${state.sheetZoom||1}" data-sheet-zoom aria-label="Zoom de la plancha"><button type="button" class="btn btn-ghost" data-reset-sheet-zoom>Restablecer</button></div><div data-image-status role="status">Cargando plancha…</div><div class="sheet-preview-viewport"><div class="sheet-preview-frame"><div class="sheet-preview-canvas checkerboard ${state.sheetBoxTarget?.key===key?'drawing':''}" data-sheet-canvas="${key}" style="width:100%;height:auto"><img crossorigin="use-credentials" ${reusedImage?'':`src="${escapeHtml(url)}"`} alt="Plancha a cargar"><div class="sheet-preview-marks">${sheetPreviewMarks(rows,key)}</div></div></div></div>`:mime==='application/pdf'?`<iframe src="${escapeHtml(url)}" title="Plancha"></iframe><small>Usá la lista con miniaturas para revisar los diseños.</small>`:`<a class="btn btn-ghost" href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir archivo original</a><small>Este formato no tiene vista previa en el navegador.</small>`}`;
     const viewport=qs('.sheet-preview-viewport',host),canvas=qs('[data-sheet-canvas]',host);if(reusedImage&&canvas){const placeholder=qs('img',canvas);placeholder.before(reusedImage);placeholder.remove();}
     const img=canvas&&qs('img',canvas);
     if(viewport&&img){
@@ -1563,7 +1567,8 @@
   }
   function sheetBoxCoordinate(canvas,event){
     const rect=canvas.getBoundingClientRect(),clamp=n=>Math.max(0,Math.min(1,n));
-    return {x:clamp((event.clientX-rect.left)/rect.width),y:clamp((event.clientY-rect.top)/rect.height)};
+    const x=(event.clientX-rect.left)/rect.width,y=(event.clientY-rect.top)/rect.height;
+    return canvas.dataset.sheetRotated==='true'?{x:clamp(y),y:clamp(1-x)}:{x:clamp(x),y:clamp(y)};
   }
   function sheetBoxMeasures(box,size){
     const width=box.width*size.width,height=box.height*size.height;
@@ -2376,7 +2381,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const mark=e.target.closest('[data-sheet-mark]');if(mark){state.sheetMarkTarget={key:mark.dataset.sheetKey,index:Number(mark.dataset.sheetMark)};state.sheetBoxTarget=null;renderSheetPreview(mark.dataset.sheetKey);return;}
       const undoMark=e.target.closest('[data-sheet-undo]');if(undoMark){const key=undoMark.dataset.sheetKey,index=Number(undoMark.dataset.sheetUndo),c=state.designSheetDrafts[key]?.[index];if(!c?.previewBoxes?.length)return;c.previewBoxes.pop();c.previewMarks?.pop();c.quantity=c.previewBoxes.length;if(!c.quantity){c.measureOptionId='';delete c.pendingMeasureOption;}state.sheetActiveBox=null;renderSheetSelected(key);return;}
       const pin=e.target.closest('[data-sheet-pin]');if(pin){const selected={key:pin.dataset.sheetKey,rowIndex:Number(pin.dataset.sheetPin),boxIndex:Number(pin.dataset.pinIndex)};state.sheetActiveBox=selected;state.sheetBoxTarget={key:selected.key,index:selected.rowIndex};renderSheetSelected(selected.key);return;}
-      const canvas=e.target.closest('[data-sheet-canvas]');if(canvas){const target=state.sheetMarkTarget,key=canvas.dataset.sheetCanvas;if(target?.key===key){const c=state.designSheetDrafts[key][target.index];if(c){c.previewMarks??=[];if(c.previewMarks.length>=Number(c.quantity)){toast('Ya marcaste todas las unidades de esta fila.','error');return;}const rect=canvas.getBoundingClientRect();c.previewMarks.push({x:Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width)),y:Math.max(0,Math.min(1,(e.clientY-rect.top)/rect.height))});renderSheetSelected(key)}}return;}
+      const canvas=e.target.closest('[data-sheet-canvas]');if(canvas){const target=state.sheetMarkTarget,key=canvas.dataset.sheetCanvas;if(target?.key===key){const c=state.designSheetDrafts[key][target.index];if(c){c.previewMarks??=[];if(c.previewMarks.length>=Number(c.quantity)){toast('Ya marcaste todas las unidades de esta fila.','error');return;}c.previewMarks.push(sheetBoxCoordinate(canvas,e));renderSheetSelected(key)}}return;}
       const addMeasure=e.target.closest('[data-add-measure-option]');if(addMeasure){qs('[data-measure-rows]',addMeasure.closest('[data-measure-editor]')).insertAdjacentHTML('beforeend',designMeasureRow());return;}
       const removeMeasure=e.target.closest('[data-remove-measure-option]');if(removeMeasure){removeMeasure.closest('[data-measure-option]').remove();return;}
       if(e.target.id==='applyProductionMeasureBtn'){try{applyProductionMeasure()}catch(err){toast(err.message,'error')}return;}
@@ -2589,6 +2594,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     if(e.target.closest('#designUploadDialog'))scheduleSheetDraftSave();
   }
   window.addEventListener('beforeunload',persistSheetDraft);
+  window.addEventListener('resize',()=>qsa('[data-sheet-canvas]').forEach(fitSheetPreview));
   document.addEventListener('input',handleSheetPurchaseInput);
   document.addEventListener('change',e=>{if(e.target.closest('#designUploadDialog'))scheduleSheetDraftSave();});
   qs('#designUploadDialog')?.addEventListener('close',persistSheetDraft);
