@@ -10,9 +10,9 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.14">
+  <link rel="stylesheet" href="styles.css?v=25.15">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.14">
+  <link rel="stylesheet" href="admin-v4.css?v=25.15">
 </head>
 <body>
   <div class="admin-layout">
@@ -56,6 +56,7 @@
 
   <datalist id="supplierSuggestions"><option value="Adrian"><option value="Soari"></datalist>
   <dialog class="admin-dialog design-preview-dialog" id="purchaseSheetPreviewDialog"><div class="dialog-shell"><div class="dialog-head"><h2 id="purchaseSheetPreviewTitle">Plancha de la compra</h2><button type="button" class="icon-btn" id="closePurchaseSheetPreviewBtn" aria-label="Cerrar vista previa">×</button></div><div class="dialog-body"><div class="purchase-sheet-preview-stage checkerboard" id="purchaseSheetPreviewStage"></div></div></div></dialog>
+  <dialog class="admin-dialog design-preview-dialog" id="productionImagePreviewDialog"><div class="dialog-shell"><div class="dialog-head"><h2 id="productionImagePreviewTitle">Producto en producción</h2><button type="button" class="icon-btn" id="closeProductionImagePreviewBtn" aria-label="Cerrar vista previa">×</button></div><div class="dialog-body"><div class="purchase-sheet-preview-stage checkerboard" id="productionImagePreviewStage"></div></div></div></dialog>
   <dialog class="admin-dialog purchase-dialog" id="purchaseDialog">
     <form class="dialog-shell" id="purchaseForm" method="dialog">
       <div class="dialog-head"><div><div class="admin-eyebrow">Compras</div><h2 id="purchaseDialogTitle">Nueva compra</h2></div><button class="icon-btn" type="button" id="closePurchaseDialogBtn">×</button></div>
@@ -105,7 +106,7 @@
             <div class="field production-waste-field"><label>Extra DTF por desperdicio (%)</label><input class="input" id="productionWaste" type="number" min="0" step=".01" value="10"></div>
           </div>
           <div class="production-stock-note" id="productionStockNote">Stock físico descuenta la materia prima al iniciar producción. “A stockear” guarda la receta sin consumirla todavía.</div>
-          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
+          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div><button class="btn btn-ghost" type="button" id="productionAddMaterialFromEditorBtn">+ Agregar materia prima</button></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedMaterials"></div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div><button class="btn btn-primary" type="button" id="productionUploadDesignBtn">+ Agregar diseño</button></div><div id="productionDesignFilters"></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedDesigns"></div>
@@ -233,8 +234,8 @@
   <dialog class="admin-dialog tiny-dialog" id="productionDesignMeasureDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Estampa en este producto</div><h2 id="productionDesignMeasureTitle">Medidas</h2></div><button class="icon-btn" type="button" id="closeProductionDesignMeasure">×</button></div><div class="dialog-body"><p class="muted">Estas medidas se aplican a este producto. Podés usar el mismo diseño a otro tamaño en otra receta.</p><div class="form-grid"><div class="field"><label>Ancho (cm)</label><input class="input" id="productionDesignWidth" type="number" min="0.1" step="0.1"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionDesignHeight" type="number" min="0.1" step="0.1"></div></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionDesignMeasure">Cancelar</button><button class="btn btn-primary" type="button" id="confirmProductionDesignMeasure">Usar estas medidas</button></div></div></dialog>
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=25.14" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.14',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=25.15" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.15',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
