@@ -10,9 +10,9 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.15">
+  <link rel="stylesheet" href="styles.css?v=25.16">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.15">
+  <link rel="stylesheet" href="admin-v4.css?v=25.16">
 </head>
 <body>
   <div class="admin-layout">
@@ -111,7 +111,7 @@
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div><button class="btn btn-primary" type="button" id="productionUploadDesignBtn">+ Agregar diseño</button></div><div id="productionDesignFilters"></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedDesigns"></div>
           <section class="production-mockup-card" id="productionMockupStudio">
-            <div class="production-mockup-head"><div><h3>Vista previa del producto</h3><p class="muted">Componé una imagen con tus fotos base y estampas elegidas. No usa generación con IA.</p></div><button class="btn btn-ghost" type="button" id="manageMockupAssetsBtn">Administrar imágenes</button></div>
+            <div class="production-mockup-head"><div><h3>Vista previa del producto</h3><p class="muted">Componé una imagen con tus fotos base y estampas elegidas. No usa generación con IA.</p></div></div>
             <div class="production-mockup-workspace">
               <div class="production-mockup-preview-column"><div class="mockup-zoom-controls" aria-label="Zoom de la vista previa"><small>Rueda del mouse o dos dedos para acercar y alejar</small><span id="mockupZoomValue">100%</span><button type="button" class="btn btn-ghost" id="resetMockupZoomBtn">Ajustar</button></div><div class="production-mockup-preview"><canvas id="productionMockupCanvas" width="720" height="900" aria-label="Vista previa compuesta; podés mover y cambiar el tamaño de cada estampa"></canvas><div id="productionMockupEmpty" class="mockup-empty">Elegí una foto base y al menos un diseño para previsualizar.</div></div><p class="mockup-touch-hint">Arrastrá una estampa para moverla y su esquina para cambiar tamaño. Con zoom, arrastrá un espacio vacío para recorrer la imagen.</p></div>
               <aside class="production-mockup-sidebar"><div class="production-mockup-controls"><label class="field">1 · Género del modelo<select class="select" id="mockupGenderSelect"><option value="Varón">Varón</option><option value="Mujer">Mujer</option></select></label><label class="field"><span id="mockupModelSelectLabel">2 · Modelo</span><select class="select" id="mockupModelSelect"><option value="">Elegir</option></select></label><label class="field">3 · Prenda<select class="select" id="mockupGarmentStyleSelect"><option value="">Elegir corte</option></select></label><label class="field">4 · Vista<select class="select" id="mockupSideSelect"><option value="front">Frente</option><option value="back">Espalda</option></select></label><label class="field">5 · Gorra en la foto<select class="select" id="mockupCapStyleSelect"><option value="none">Sin gorra</option><option value="mesh">Con red</option><option value="solid">Sin red</option></select></label><label class="field full hidden">Foto correspondiente<select class="select" id="mockupBaseSelect"><option value="">Elegir foto</option></select></label><div class="field full"><label>Variantes cargadas · elegí la foto exacta</label><div class="mockup-variant-gallery" id="mockupVariantGallery"></div></div><label class="field full hidden">Fondo<select class="select" id="mockupBackgroundSelect"><option value="">Conservar fondo original</option></select></label><div class="field full"><label>Fondos cargados</label><div class="mockup-background-gallery" id="mockupBackgroundGallery"></div></div></div><div class="mockup-layer-editor" id="mockupLayerEditor"><p class="muted">Elegí una estampa y ajustá cada una por separado.</p></div><div class="production-mockup-actions"><small id="mockupAssetHint">Elegí modelo, pose, prenda y fondo; luego ajustá por separado las estampas elegidas.</small><button class="btn btn-ghost" type="button" id="refreshMockupBtn">Actualizar vista</button><button class="btn btn-secondary" type="button" id="downloadMockupBtn" disabled title="PNG sin pérdida, renderizado con la resolución de la foto original">Descargar PNG · máxima calidad</button><button class="btn btn-primary" type="button" id="addMockupToProductBtn" disabled>Agregar vista a fotos del producto</button></div></aside>
@@ -142,11 +142,29 @@
     </div>
   </dialog>
 
+  <dialog class="admin-dialog production-edit-dialog" id="productionEditDialog">
+    <div class="dialog-shell">
+      <div class="dialog-head"><div><div class="admin-eyebrow">Editar producción</div><h2 id="productionEditTitle"></h2></div><button type="button" class="icon-btn" id="closeProductionEditBtn" aria-label="Cerrar">×</button></div>
+      <div class="dialog-body">
+        <div class="production-edit-summary"><div id="productionEditPreview"></div><div><strong id="productionEditVariant"></strong><small id="productionEditStatus"></small><small>Costo unitario <span id="productionEditCost"></span></small></div></div>
+        <div class="form-grid"><label class="field">Cantidad<input class="input" type="number" min="1" step="1" id="productionEditQuantity"></label><label class="field">Fecha de inicio<input class="input" type="date" id="productionEditDate"></label><label class="field">Hora<input class="input" type="time" step="60" id="productionEditTime"></label><label class="field full">Notas<textarea class="textarea" id="productionEditNotes" rows="3"></textarea></label></div>
+        <button type="button" class="btn btn-ghost" id="editProductionProductBtn">Editar producto, fotos y receta</button>
+      </div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionEditBtn">Cancelar</button><button class="btn btn-primary" type="button" id="saveProductionEditBtn">Guardar cambios</button></div>
+    </div>
+  </dialog>
+
+  <dialog class="admin-dialog mockup-photo-preview-dialog" id="mockupPhotoPreviewDialog">
+    <div class="dialog-shell"><div class="dialog-head"><h2 id="mockupPhotoPreviewTitle">Foto de montaje</h2><button type="button" class="icon-btn" id="closeMockupPhotoPreviewBtn" aria-label="Cerrar">×</button></div>
+      <div class="photo-preview-tools"><button type="button" class="btn btn-ghost" data-photo-zoom="0.8" aria-label="Alejar">−</button><span id="mockupPhotoZoomValue">100%</span><button type="button" class="btn btn-ghost" data-photo-zoom="1.25" aria-label="Acercar">+</button><button type="button" class="btn btn-ghost" data-photo-zoom="fit">Ajustar</button></div>
+      <div class="mockup-photo-preview-stage checkerboard" id="mockupPhotoPreviewStage"></div>
+    </div>
+  </dialog>
+
   <dialog class="admin-dialog mockup-assets-dialog" id="mockupAssetDialog">
-    <div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Biblioteca visual</div><h2>Fotos para el montaje</h2></div><button class="icon-btn" type="button" id="closeMockupAssetsBtn">×</button></div>
+    <div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Biblioteca visual</div><h2 id="mockupAssetDialogTitle">Fotos de montaje</h2></div><button class="icon-btn" type="button" id="closeMockupAssetsBtn">×</button></div>
       <div class="dialog-body"><p class="muted">Subí las fotos ya preparadas para cada variante: persona, prenda, color, frente o espalda, gorra y fondo. Después elegís una miniatura en Producción; el sistema completa sus datos.</p>
-        <form id="mockupAssetForm"><label class="field">Fotos para clasificar<input class="input" id="mockupAssetFile" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><div id="mockupUploadQueue" class="mockup-upload-queue"></div><details class="mockup-catalog-panel"><summary>Administrar nombres, prendas, colores y variantes</summary><div id="mockupCatalogEditor"></div></details><div class="dialog-foot"><button type="button" class="btn btn-ghost" id="cancelMockupAssetBtn">Cerrar</button><button type="submit" class="btn btn-primary" id="saveMockupAssetBtn">Guardar fotos</button></div></form>
-        <div class="mockup-assets-list" id="mockupAssetsList"></div>
+        <form id="mockupAssetForm"><label class="field"><span id="mockupAssetFileLabel">Fotos para clasificar</span><input class="input" id="mockupAssetFile" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><div id="mockupUploadQueue" class="mockup-upload-queue"></div><details class="mockup-catalog-panel"><summary>Administrar nombres, prendas, colores y variantes</summary><div id="mockupCatalogEditor"></div></details><div class="dialog-foot"><button type="button" class="btn btn-ghost" id="cancelMockupAssetBtn">Cerrar</button><button type="submit" class="btn btn-primary" id="saveMockupAssetBtn">Guardar fotos</button></div></form>
       </div>
     </div>
   </dialog>
@@ -234,8 +252,8 @@
   <dialog class="admin-dialog tiny-dialog" id="productionDesignMeasureDialog"><div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Estampa en este producto</div><h2 id="productionDesignMeasureTitle">Medidas</h2></div><button class="icon-btn" type="button" id="closeProductionDesignMeasure">×</button></div><div class="dialog-body"><p class="muted">Estas medidas se aplican a este producto. Podés usar el mismo diseño a otro tamaño en otra receta.</p><div class="form-grid"><div class="field"><label>Ancho (cm)</label><input class="input" id="productionDesignWidth" type="number" min="0.1" step="0.1"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionDesignHeight" type="number" min="0.1" step="0.1"></div></div></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionDesignMeasure">Cancelar</button><button class="btn btn-primary" type="button" id="confirmProductionDesignMeasure">Usar estas medidas</button></div></div></dialog>
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
-  <script src="admin.js?v=25.15" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.15',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=25.16" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.16',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
