@@ -1120,7 +1120,11 @@ span.promotion-preview-thumb{display:grid;place-items:center;color:var(--muted)}
 .sheet-selected-list>summary::-webkit-details-marker{display:none}
 .sheet-selected-list>summary>.sheet-list-collapse-label,.sheet-selected-list>summary>.sheet-list-expand-label{font-size:.76rem;font-weight:500;color:var(--muted)}
 .sheet-selected-list[open] .sheet-list-expand-label,.sheet-selected-list:not([open]) .sheet-list-collapse-label{display:none}
-.sheet-selected-list>[data-sheet-selected]{padding:0 10px 10px}
+.sheet-selected-list>[data-sheet-selected]{padding:0 10px 10px;max-height:clamp(240px,42dvh,520px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;min-width:0}
+.sheet-missing-batch-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px;align-items:stretch}
+.sheet-missing-batch-actions .btn{width:100%;white-space:normal;line-height:1.2}
+.sheet-upload-error{color:var(--danger);overflow-wrap:anywhere}
+.admin-session-notice{margin-bottom:16px}.admin-session-notice>strong{display:block}.admin-session-notice p{margin:8px 0 12px}.admin-session-actions{justify-content:center;gap:10px}.admin-session-notice .admin-session-actions{justify-content:flex-start}
 @media(max-width:480px){.purchase-image-option{flex-basis:92px;width:92px;height:116px}.production-job-preview{width:76px;height:95px}.sheet-selected-list>summary{font-size:.9rem}}
 
 /* 25.16 — imágenes legibles, galería de montaje y edición */
