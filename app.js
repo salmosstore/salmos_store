@@ -617,8 +617,8 @@
     const section=qs('#productos');if(!section)return;
     const toolbar=document.createElement('div');toolbar.id='storeOrderToolbar';toolbar.className='store-order-toolbar';section.before(toolbar);
     toolbar.innerHTML='<strong>Abriendo el editor de orden…</strong>';
-    try{await api('/api/admin/products',{credentials:'same-origin'});}catch{toolbar.innerHTML='<strong>No se pudo abrir el editor. Entrá a Admin con tu sesión y tocá «Ordenar en la tienda».</strong><a class="btn btn-ghost" href="admin.html">Ir a Admin</a>';return;}
-    state.storeOrderEditor={enabled:true,drafts:new Map(),saving:false,backgrounds:window.SalmosColors.backgrounds(state.config?.productCardBackgrounds),savedBackgrounds:window.SalmosColors.backgrounds(state.config?.productCardBackgrounds),backgroundDirty:false};state.activeCategory='all';state.query='';const search=qs('#searchInput');if(search){search.value='';search.disabled=true;}
+    let editableProducts=[];try{const data=await api('/api/admin/products',{credentials:'same-origin'});editableProducts=data.items||[];}catch{toolbar.innerHTML='<strong>No se pudo abrir el editor. Entrá a Admin con tu sesión y tocá «Ordenar en la tienda».</strong><a class="btn btn-ghost" href="admin.html">Ir a Admin</a>';return;}
+    state.storeMontageProductIds=new Set(editableProducts.filter(product=>product.has_production_recipe).map(product=>Number(product.id)));state.storeForegroundPrepared=new Set();state.storeOrderEditor={enabled:true,drafts:new Map(),saving:false,backgrounds:window.SalmosColors.photoBackgrounds(state.config?.productPhotoBackgrounds),savedBackgrounds:window.SalmosColors.photoBackgrounds(state.config?.productPhotoBackgrounds),backgroundDirty:false};state.activeCategory='all';state.query='';const search=qs('#searchInput');if(search){search.value='';search.disabled=true;}
     document.body.classList.add('store-order-editing');
     const style=document.createElement('style');style.textContent=`
       .store-order-toolbar{scroll-margin-top:110px;position:relative;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px;margin:12px 0;border:1px solid var(--gold,#e8b66e);border-radius:12px;background:var(--surface,#171318);color:var(--text,#fff);box-shadow:0 6px 22px #0004}
@@ -628,18 +628,18 @@
       .store-order-card-controls{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:8px}.store-order-card-controls button{border:1px solid var(--gold,#e8b66e);border-radius:8px;background:transparent;color:inherit;min-width:34px;min-height:32px;cursor:pointer}
       @media(max-width:700px){.store-order-toolbar{top:82px;padding:9px}.store-order-actions .btn{font-size:.75rem}.store-order-toolbar small{font-size:.75rem}}
     `;document.head.appendChild(style);
-    toolbar.innerHTML='<div class="store-order-heading"><strong id="storeOrderTitle"></strong><small id="storeOrderStatus" role="status"></small></div><div class="store-order-actions"><button class="btn btn-primary" type="button" id="saveStoreOrder">Guardar cambios</button><button class="btn btn-ghost" type="button" id="discardStoreOrder">Descartar cambios</button><a class="btn btn-ghost" href="admin.html">Volver a Admin</a></div><div class="store-background-controls"><label class="field">Aplicar fondo a<select class="select" id="storeBackgroundScope"></select></label><button class="salmos-color-button" type="button" id="storeBackgroundColor">Fondo de las fotos</button><small id="storeBackgroundHint"></small></div>';
-    qs('#saveStoreOrder').addEventListener('click',saveStoreProductOrders);qs('#discardStoreOrder').addEventListener('click',()=>{if(state.storeOrderEditor.saving)return;state.storeOrderEditor.drafts.clear();state.storeOrderEditor.backgrounds=structuredClone(state.storeOrderEditor.savedBackgrounds);state.storeOrderEditor.backgroundDirty=false;state.config.productCardBackgrounds=structuredClone(state.storeOrderEditor.backgrounds);renderProducts();});
-    qs('#storeBackgroundColor').addEventListener('click',openStoreBackgroundPalette);
+    toolbar.innerHTML='<div class="store-order-heading"><strong id="storeOrderTitle"></strong><small id="storeOrderStatus" role="status"></small></div><div class="store-order-actions"><button class="btn btn-primary" type="button" id="saveStoreOrder">Guardar cambios</button><button class="btn btn-ghost" type="button" id="discardStoreOrder">Descartar cambios</button><a class="btn btn-ghost" href="admin.html">Volver a Admin</a></div><div class="store-background-controls"><label class="field">Aplicar fondo a<select class="select" id="storeBackgroundScope"></select></label><div class="field"><label>Fondos cargados en Fotos de montaje</label><div class="store-background-gallery" id="storeBackgroundGallery"></div></div><small id="storeBackgroundHint"></small></div>';
+    qs('#saveStoreOrder').addEventListener('click',saveStoreProductOrders);qs('#discardStoreOrder').addEventListener('click',()=>{if(state.storeOrderEditor.saving)return;state.storeOrderEditor.drafts.clear();state.storeOrderEditor.foregroundError='';state.storeOrderEditor.backgrounds=structuredClone(state.storeOrderEditor.savedBackgrounds);state.storeOrderEditor.backgroundDirty=false;state.config.productPhotoBackgrounds=structuredClone(state.storeOrderEditor.backgrounds);renderProducts();});
+    qs('#storeBackgroundGallery').addEventListener('click',event=>{const choice=event.target.closest('[data-store-background]');if(choice)applyStorePhotoBackground(state.activeCategory,Number(choice.dataset.storeBackground)).catch(error=>toast(error.message,'error'));});
     qs('#storeBackgroundScope').addEventListener('change',event=>{if(state.storeOrderEditor.saving)return;state.activeCategory=event.target.value;renderCategories();renderProducts();});
     document.addEventListener('salmos-color-error',event=>toast(event.detail,'error'));
-    document.addEventListener('click',e=>{if(!state.storeOrderEditor?.enabled)return;const card=e.target.closest('.product-card');if(!card)return;e.preventDefault();e.stopImmediatePropagation();const step=e.target.closest('[data-store-order-step]');if(step&&!state.storeOrderEditor.saving){const grid=card.parentElement,cards=[...grid.children],index=cards.indexOf(card),next=cards[index+Number(step.dataset.storeOrderStep)];if(next){if(Number(step.dataset.storeOrderStep)<0)grid.insertBefore(card,next);else grid.insertBefore(card,next.nextSibling);rememberStoreProductOrder();}}},true);
+    document.addEventListener('click',e=>{if(!state.storeOrderEditor?.enabled)return;const card=e.target.closest('.product-card');if(!card)return;const background=e.target.closest('.store-product-background');if(background){e.stopImmediatePropagation();if(e.target.closest('summary')){e.preventDefault();background.open=!background.open;return;}const choice=e.target.closest('[data-store-background]');if(choice){e.preventDefault();applyStorePhotoBackground('product-'+card.dataset.productId,Number(choice.dataset.storeBackground)).catch(error=>toast(error.message,'error'));}return;}const photoStep=e.target.closest('[data-card-media-step]');if(photoStep){e.preventDefault();e.stopImmediatePropagation();cycleProductCardMedia(photoStep);return;}e.preventDefault();e.stopImmediatePropagation();const step=e.target.closest('[data-store-order-step]');if(step&&!state.storeOrderEditor.saving){const grid=card.parentElement,cards=[...grid.children],index=cards.indexOf(card),next=cards[index+Number(step.dataset.storeOrderStep)];if(next){if(Number(step.dataset.storeOrderStep)<0)grid.insertBefore(card,next);else grid.insertBefore(card,next.nextSibling);rememberStoreProductOrder();}}},true);
     window.addEventListener('beforeunload',e=>{if(state.storeOrderEditor?.drafts.size||state.storeOrderEditor?.backgroundDirty){e.preventDefault();e.returnValue='';}});
     for(const id of ['productGrid','orderProductGrid'])bindStoreOrderGrid(qs('#'+id));
   }
   function bindStoreOrderGrid(grid){
     if(!grid||grid.dataset.orderBound)return;grid.dataset.orderBound='1';let drag=null;
-    grid.addEventListener('pointerdown',e=>{if(state.storeOrderEditor?.saving||!e.target.closest('.product-media')||(e.button!==0&&e.pointerType!=='touch'))return;const card=e.target.closest('.product-card');if(!card)return;drag={card,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};grid.setPointerCapture?.(e.pointerId);e.preventDefault();});
+    grid.addEventListener('pointerdown',e=>{if(state.storeOrderEditor?.saving||state.storeOrderEditor?.preparing||e.target.closest('button')||!e.target.closest('.product-media')||(e.button!==0&&e.pointerType!=='touch'))return;const card=e.target.closest('.product-card');if(!card)return;drag={card,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};grid.setPointerCapture?.(e.pointerId);e.preventDefault();});
     grid.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<6)return;drag.moved=true;drag.card.classList.add('sorting');e.preventDefault();
       const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.product-card');if(target&&target!==drag.card&&target.parentElement===grid){const cards=[...grid.children],forward=cards.indexOf(drag.card)<cards.indexOf(target);grid.insertBefore(drag.card,forward?target.nextSibling:target);}
       if(e.clientY>window.innerHeight-64)window.scrollBy(0,18);else if(e.clientY<140)window.scrollBy(0,-18);
@@ -653,32 +653,48 @@
   }
   function renderStoreOrderControls(){
     const editor=state.storeOrderEditor;if(!editor?.enabled)return;const title=state.activeCategory==='all'?'Todos':state.categories.find(c=>c.slug===state.activeCategory)?.name||state.activeCategory;
-    qs('#storeOrderTitle').textContent=`Ordenar: ${title}`;qs('#storeOrderStatus').textContent=editor.saving?'Guardando…':`${editor.drafts.size?`${editor.drafts.size} pestaña(s) con cambios sin guardar. `:''}${editor.backgroundDirty?'Fondo sin guardar. ':''}Arrastrá las miniaturas o usá ← →. Cada pestaña conserva su propio orden.`;
-    qs('#saveStoreOrder').disabled=editor.saving||(!editor.drafts.size&&!editor.backgroundDirty);qs('#discardStoreOrder').disabled=editor.saving||(!editor.drafts.size&&!editor.backgroundDirty);renderStoreBackgroundControls();
-    let n=0;for(const id of ['productGrid','orderProductGrid'])for(const card of qsa('.product-card',qs('#'+id))){let controls=qs('.store-order-card-controls',card);if(!controls){controls=document.createElement('div');controls.className='store-order-card-controls';qs('.product-body',card).appendChild(controls);}controls.innerHTML=`<button type="button" data-store-order-step="-1" aria-label="Mover ${escapeHtml(qs('.product-name',card)?.textContent||'producto')} antes" ${editor.saving?'disabled':''}>←</button><span>#${++n}</span><button type="button" data-store-order-step="1" aria-label="Mover después" ${editor.saving?'disabled':''}>→</button>`;}
+    qs('#storeOrderTitle').textContent=`Ordenar: ${title}`;qs('#storeOrderStatus').textContent=editor.foregroundError?`No se pudieron preparar todas las fotos: ${editor.foregroundError} Elegí el fondo otra vez para reintentar.`:editor.preparing?'Preparando fotos sin fondo…':editor.saving?'Guardando…':`${editor.drafts.size?`${editor.drafts.size} pestaña(s) con cambios sin guardar. `:''}${editor.backgroundDirty?'Fondo sin guardar. ':''}Arrastrá las miniaturas o usá ← →. Cada pestaña conserva su propio orden.`;
+    qs('#saveStoreOrder').disabled=editor.saving||editor.preparing||editor.foregroundError||(!editor.drafts.size&&!editor.backgroundDirty);qs('#discardStoreOrder').disabled=editor.saving||editor.preparing||(!editor.drafts.size&&!editor.backgroundDirty);renderStoreBackgroundControls();
+    let n=0;for(const id of ['productGrid','orderProductGrid'])for(const card of qsa('.product-card',qs('#'+id))){let controls=qs('.store-order-card-controls',card);if(!controls){controls=document.createElement('div');controls.className='store-order-card-controls';qs('.product-body',card).appendChild(controls);}controls.innerHTML=`<button type="button" data-store-order-step="-1" aria-label="Mover ${escapeHtml(qs('.product-name',card)?.textContent||'producto')} antes" ${editor.saving?'disabled':''}>←</button><span>#${++n}</span><button type="button" data-store-order-step="1" aria-label="Mover después" ${editor.saving?'disabled':''}>→</button>`;let backgrounds=qs('.store-product-background',card);if(!backgrounds){backgrounds=document.createElement('details');backgrounds.className='store-product-background';qs('.product-body',card).appendChild(backgrounds);}const product=state.products.find(item=>Number(item.id)===Number(card.dataset.productId)),own=Object.hasOwn(editor.backgrounds.products,String(card.dataset.productId));backgrounds.innerHTML=`<summary>Fondo de todas las fotos</summary><div class="store-background-gallery">${storeBackgroundChoices(own?editor.backgrounds.products[card.dataset.productId]:-1,true,editor.saving||editor.preparing)}</div>`;}
   }
   async function saveStoreProductOrders(){
-    const editor=state.storeOrderEditor;if(!editor||editor.saving||(!editor.drafts.size&&!editor.backgroundDirty))return;editor.saving=true;renderStoreOrderControls();
-    try{for(const [category,ids] of [...editor.drafts]){await api('/api/admin/products/order',{method:'PATCH',credentials:'same-origin',body:JSON.stringify({category,ids})});const ranks=new Map(ids.map((id,i)=>[Number(id),i]));for(const p of state.products)if(ranks.has(Number(p.id)))p[category==='all'?'display_order':'category_display_order']=ranks.get(Number(p.id));editor.drafts.delete(category);}if(editor.backgroundDirty){await api('/api/admin/settings',{method:'PUT',credentials:'include',body:JSON.stringify({settings:{product_card_backgrounds:JSON.stringify(editor.backgrounds)}})});editor.savedBackgrounds=structuredClone(editor.backgrounds);editor.backgroundDirty=false;state.config.productCardBackgrounds=structuredClone(editor.backgrounds);}toast('Orden y fondos guardados en la tienda','success');}
+    const editor=state.storeOrderEditor;if(!editor||editor.saving||editor.preparing||editor.preparing||(!editor.drafts.size&&!editor.backgroundDirty))return;editor.saving=true;renderStoreOrderControls();
+    try{for(const [category,ids] of [...editor.drafts]){await api('/api/admin/products/order',{method:'PATCH',credentials:'same-origin',body:JSON.stringify({category,ids})});const ranks=new Map(ids.map((id,i)=>[Number(id),i]));for(const p of state.products)if(ranks.has(Number(p.id)))p[category==='all'?'display_order':'category_display_order']=ranks.get(Number(p.id));editor.drafts.delete(category);}if(editor.backgroundDirty){await api('/api/admin/settings',{method:'PUT',credentials:'include',body:JSON.stringify({settings:{product_photo_backgrounds:JSON.stringify(editor.backgrounds)}})});editor.savedBackgrounds=structuredClone(editor.backgrounds);editor.backgroundDirty=false;state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);}toast('Orden y fondos guardados en la tienda','success');}
     catch(err){toast(`No se guardaron todos los cambios: ${err.message}`,'error');}
     finally{editor.saving=false;renderProducts();}
   }
 
+  function storeBackgroundChoices(value,inherit=false,disabled=false,globalScope=false){
+    const button=(id,label,url='')=>`<button type="button" class="store-background-choice ${Number(value)===id?'selected':''}" data-store-background="${id}" aria-pressed="${Number(value)===id}" ${disabled?'disabled':''}>${url?`<img src="${escapeHtml(apiUrl(url))}" alt="" loading="lazy">`:`<span class="store-no-background">${id<0?'↩':'∅'}</span>`}<small>${escapeHtml(label)}</small></button>`;
+    return (inherit?button(-1,globalScope?'Conservar montaje':'Usar fondo general'):'')+button(0,'Sin fondo')+(state.config?.productBackgroundAssets||[]).map(asset=>button(Number(asset.id),asset.name,asset.url)).join('');
+  }
   function renderStoreBackgroundControls(){
-    const editor=state.storeOrderEditor,select=qs('#storeBackgroundScope'),button=qs('#storeBackgroundColor');if(!editor||!select||!button)return;
-    select.innerHTML='<option value="all">Todos los productos</option>'+state.categories.map(category=>`<option value="${escapeHtml(category.slug)}">${escapeHtml(category.name)}</option>`).join('');select.value=state.activeCategory;select.disabled=editor.saving;button.disabled=editor.saving;
-    const color=window.SalmosColors.backgroundFor(editor.backgrounds,state.activeCategory);button.style.setProperty('--color-swatch',color||'var(--surface-2)');
-    qs('#storeBackgroundHint').textContent=state.activeCategory==='all'?'El fondo general se aplica a todas las categorías.':'Esta categoría puede tener su propio fondo. Restablecer vuelve al fondo general.';
+    const editor=state.storeOrderEditor,select=qs('#storeBackgroundScope'),gallery=qs('#storeBackgroundGallery');if(!editor||!select||!gallery)return;
+    select.innerHTML='<option value="all">Todos los productos</option>'+state.categories.map(category=>`<option value="${escapeHtml(category.slug)}">${escapeHtml(category.name)}</option>`).join('');select.value=state.activeCategory;select.disabled=editor.saving||editor.preparing;
+    const scope=state.activeCategory,value=scope==='all'?(editor.backgrounds.all??-1):Object.hasOwn(editor.backgrounds.categories,scope)?editor.backgrounds.categories[scope]:-1;gallery.innerHTML=storeBackgroundChoices(value,true,editor.saving||editor.preparing,scope==='all');
+    qs('#storeBackgroundHint').textContent=scope==='all'?'Se aplica a todas las fotos de todos los productos. Guardá los cambios para publicarlo.':'Se aplica a todas las fotos de esta categoría. Cada ficha también permite elegir su propio fondo.';
   }
-  function openStoreBackgroundPalette(){
-    const editor=state.storeOrderEditor;if(!editor||editor.saving)return;const scope=state.activeCategory,original=structuredClone(editor.backgrounds),value=window.SalmosColors.backgroundFor(original,scope),button=qs('#storeBackgroundColor');
-    window.SalmosColors.open(button,{value,clearLabel:scope==='all'?'Restablecer':'Usar fondo general',preview:color=>{
-      editor.backgrounds=color===value?structuredClone(original):window.SalmosColors.withBackground(original,scope,color);state.config.productCardBackgrounds=structuredClone(editor.backgrounds);renderProducts();
-    },save:color=>{
-      editor.backgrounds=window.SalmosColors.withBackground(original,scope,color);editor.backgroundDirty=JSON.stringify(editor.backgrounds)!==JSON.stringify(editor.savedBackgrounds);state.config.productCardBackgrounds=structuredClone(editor.backgrounds);renderProducts();
-    }});
+  async function applyStorePhotoBackground(scope,id){
+    const editor=state.storeOrderEditor;if(!editor||editor.saving||editor.preparing)return;
+    editor.backgrounds=window.SalmosColors.withPhotoBackground(editor.backgrounds,scope,id);
+    if(scope!=='all'&&!scope.startsWith('product-'))for(const product of state.products)if(product.category_slug===scope)delete editor.backgrounds.products[String(product.id)];
+    editor.backgroundDirty=JSON.stringify(editor.backgrounds)!==JSON.stringify(editor.savedBackgrounds);state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);editor.foregroundError='';renderProducts();renderFeatured();const selected=state.products.filter(product=>window.SalmosColors.photoBackgroundFor(editor.backgrounds,product.category_slug,product.id)!==null).filter(product=>state.storeMontageProductIds?.has(Number(product.id))&&!state.storeForegroundPrepared.has(Number(product.id)));if(selected.length){editor.preparing=true;renderStoreOrderControls();try{await prepareStoreForegrounds(selected);}catch(error){editor.foregroundError=error.message;throw error;}finally{editor.preparing=false;renderProducts();renderFeatured();}}
   }
-  function productBackground(p){return window.SalmosColors?.backgroundFor(state.config?.productCardBackgrounds,p.category_slug)||'';}
+  function productPhotoMedia(product){const override=window.SalmosColors.photoBackgroundFor(state.config?.productPhotoBackgrounds,product.category_slug,product.id);return (product.images||[]).map(image=>override!==null&&image.foreground_url?{...image,url:image.foreground_url}:image);}
+  async function prepareStoreForegrounds(products){
+    let catalogs=null;const remaining=[...products];
+    const prepare=async()=>{while(remaining.length){const product=remaining.shift(),data=await api(`/api/admin/products/${Number(product.id)}`,{credentials:'include'}),detail=data.item,project=detail?.mount?.project;
+      if(project){const views=Object.entries(project.views||{}).filter(([,view])=>Number(view.baseId)>0&&Number(view.outputMediaId)>0),images=product.images||[];
+        for(const [key,view] of views){const media=images.find(image=>Number(image.id)===Number(view.outputMediaId));if(!media||media.foreground_url)continue;
+          catalogs??=Promise.all([api('/api/admin/mockup-assets',{credentials:'include'}),api('/api/admin/design-assets',{credentials:'include'})]);const [photos,designs]=await catalogs,base=(photos.items||[]).find(asset=>Number(asset.id)===Number(view.baseId));if(!base)throw new Error('Falta una foto base del montaje. Abrí ese producto para actualizarla.');
+          const blob=await window.SalmosForeground.render({project,view,key,base,designs:designs.items||[],assetUrl:(asset,design=false)=>apiUrl(`/api/admin/${design?'design-assets':'mockup-assets'}/${Number(asset.id)}/file`)}),form=new FormData();form.append('file',new File([blob],'vista-sin-fondo.png',{type:'image/png'}));const saved=await api(`/api/admin/products/${Number(product.id)}/media/${Number(media.id)}/foreground`,{method:'POST',credentials:'include',body:form});media.foreground_url=saved.foreground_url;
+        }
+      }state.storeForegroundPrepared.add(Number(product.id));
+    }};
+    const results=await Promise.allSettled([prepare(),prepare()]);const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
+  }
+  function productBackground(p){const id=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id)||0;return (state.config?.productBackgroundAssets||[]).find(asset=>Number(asset.id)===id)||null;}
+  function productBackgroundAttrs(p){const asset=productBackground(p);return `data-photo-background="${asset?.id||0}" style="--product-photo-background:${asset?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none'}"`;}
   function filteredProducts() {
     const q = state.query.trim().toLowerCase();
     return orderedStoreProducts(state.products.filter(p => {
@@ -694,7 +710,7 @@
       ? `<img loading="lazy" src="${escapeHtml(first.url)}" alt="${escapeHtml(first.alt_text||p.name)}" draggable="false">`
       : `<div class="product-placeholder">SALMOS</div>`;
     const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : '', Number(p.available_stock)<=0 ? '<span class="tag">AGOTADO</span>' : ''].join('');
-    return `<article class="product-card" data-product-id="${p.id}" data-sale-mode="${escapeHtml(p.sale_mode||'stock')}"${productBackground(p)?` style="--product-card-background:${productBackground(p)}"`:''}>
+    return `<article class="product-card" data-product-id="${p.id}" data-sale-mode="${escapeHtml(p.sale_mode||'stock')}" ${productBackgroundAttrs(p)}>
       <div class="product-media" data-media-index="0">${image}${media.length>1?`<button type="button" class="product-photo-arrow previous" data-card-media-step="-1" aria-label="Foto anterior de ${escapeHtml(p.name)}">‹</button><button type="button" class="product-photo-arrow next" data-card-media-step="1" aria-label="Foto siguiente de ${escapeHtml(p.name)}">›</button><span class="product-photo-count" aria-live="polite">1 / ${media.length}</span>`:''}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
@@ -702,7 +718,7 @@
       </div>
     </article>`;
   }
-  function productCardImages(product){const images=(product.images||[]).filter(im=>im.url&&(!im.media_type||im.media_type==='image'));return images.length?images:product.primary_image_url?[{url:product.primary_image_url,alt_text:product.name}]:[];}
+  function productCardImages(product){const images=productPhotoMedia(product).filter(im=>im.url&&(!im.media_type||im.media_type==='image'));return images.length?images:product.primary_image_url?[{url:product.primary_image_url,alt_text:product.name}]:[];}
   function cycleProductCardMedia(button){
     const card=button.closest('.product-card'),host=qs('.product-media',card),product=state.products.find(p=>Number(p.id)===Number(card.dataset.productId));
     if(!product||!host)return;const media=productCardImages(product);if(media.length<2)return;
@@ -922,7 +938,7 @@
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
-    const media = p.images?.length ? p.images : [{ url: '', alt_text: p.name, media_type:'image' }];
+    const media = p.images?.length ? productPhotoMedia(p) : [{ url: '', alt_text: p.name, media_type:'image' }];
     const availableVariants = (p.variants || []).filter(v => Number(v.available_stock) > 0);
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(availableVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
@@ -942,7 +958,7 @@
     modal.innerHTML = `
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
       <div class="product-detail product-detail-v4">
-        <div class="detail-gallery detail-gallery-scroll">
+        <div class="detail-gallery detail-gallery-scroll" ${productBackgroundAttrs(p)}>
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
           ${media.length>1?'<button type="button" class="product-photo-arrow previous" data-detail-media-step="-1" aria-label="Foto o video anterior">‹</button><button type="button" class="product-photo-arrow next" data-detail-media-step="1" aria-label="Foto o video siguiente">›</button>':''}
           <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button>

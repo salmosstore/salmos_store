@@ -1,4 +1,4 @@
-// SALMOS 25.24 · Paletas Pickr compartidas por Admin y la tienda.
+// SALMOS 25.25 · Paletas Pickr compartidas por Admin y la tienda.
 (() => {
   'use strict';
   const swatches=['#ffffff','#000000','#faedf3','#f3cadc','#e98bb0','#ef5350','#ffb74d','#ffee58','#81c784','#26a69a','#4fc3f7','#5c6bc0','#ab47bc','#8d6e63','#90a4ae'];
@@ -36,5 +36,12 @@
     if(container.tagName==='DIALOG')container.addEventListener('close',()=>{if(active===picker){picker.hide();picker.destroyAndRemove();active=null;}},{once:true});
     return picker;
   }
-  window.SalmosColors={normalize,backgrounds,backgroundFor,withBackground,defaultBackground,open,swatches};
+  function photoBackgrounds(raw={}){
+    if(typeof raw==='string')try{raw=JSON.parse(raw)}catch{raw={}}
+    const id=value=>Number.isSafeInteger(Number(value))&&Number(value)>=0?Number(value):0;
+    return {all:raw?.all==null?null:id(raw.all),categories:Object.fromEntries(Object.entries(raw?.categories||{}).map(([key,value])=>[key,id(value)])),products:Object.fromEntries(Object.entries(raw?.products||{}).map(([key,value])=>[key,id(value)]))};
+  }
+  function photoBackgroundFor(settings,category,productId){const value=photoBackgrounds(settings);if(productId&&Object.hasOwn(value.products,String(productId)))return value.products[String(productId)];if(Object.hasOwn(value.categories,category))return value.categories[category];return value.all;}
+  function withPhotoBackground(settings,scope,id){const value=photoBackgrounds(settings);if(scope==='all')return {all:Number(id)<0?null:Math.max(0,Number(id)||0),categories:{},products:{}};const map=scope.startsWith('product-')?value.products:value.categories,key=scope.startsWith('product-')?scope.slice(8):scope;if(Number(id)<0)delete map[key];else map[key]=Math.max(0,Number(id)||0);return value;}
+  window.SalmosColors={photoBackgrounds,photoBackgroundFor,withPhotoBackground,normalize,backgrounds,backgroundFor,withBackground,defaultBackground,open,swatches};
 })();
