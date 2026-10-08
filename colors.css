@@ -1,0 +1,12 @@
+/* SALMOS 25.24 · Controles de color y paleta Pickr. */
+.salmos-color-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:44px;box-sizing:border-box;padding:8px 12px;border:1px solid var(--line,#dbc4d0);border-radius:12px;background:var(--surface-2,#faedf3);color:var(--text,#29141e);font:inherit;font-size:.8125rem;line-height:1.2;cursor:pointer}
+.salmos-color-button::before{content:"";flex:0 0 22px;width:22px;height:22px;border-radius:6px;border:1px solid #8888;background:var(--color-swatch,repeating-conic-gradient(#fff 0 25%,#e9dde3 0 50%));background-size:10px 10px}
+.salmos-color-button:focus-visible{outline:3px solid var(--gold,#e98bb0);outline-offset:2px}
+.salmos-color-field{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center}
+.salmos-color-field .salmos-color-button{width:44px;height:44px;padding:0}.salmos-color-field .input{min-width:0}
+.pcr-app.salmos-color-palette{z-index:10000;width: min(330px,calc(100vw - 24px));box-sizing:border-box;border-radius:14px;box-shadow:0 8px 36px #0004;font:500 16px/1.25 system-ui,sans-serif}
+.pcr-app.salmos-color-palette .pcr-selection{gap:10px}.pcr-app.salmos-color-palette .pcr-color-palette{height:190px}
+.pcr-app.salmos-color-palette .pcr-interaction{gap:8px}.pcr-app.salmos-color-palette .pcr-interaction input{min-height:40px;font-size:14px;border-radius:8px}
+.pcr-app.salmos-color-palette .pcr-swatches{gap:8px}.pcr-app.salmos-color-palette .pcr-swatches>button{width:28px;height:28px;min-height:28px;margin:0;border-radius:7px}
+.pcr-app.salmos-color-palette .pcr-interaction .pcr-save{background:#ac3e70}.pcr-app.salmos-color-palette .pcr-interaction .pcr-cancel{background:#685262}.pcr-app.salmos-color-palette .pcr-interaction .pcr-clear{background:#785868}
+@media(max-width:480px){.pcr-app.salmos-color-palette{font-size:16px}.pcr-app.salmos-color-palette .pcr-interaction input{min-height:44px}}

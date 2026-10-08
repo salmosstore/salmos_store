@@ -30,7 +30,9 @@
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.17">
+  <link rel="stylesheet" href="styles.css?v=25.24">
+  <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
+  <link rel="stylesheet" href="colors.css?v=25.24">
 </head>
 <body class="storefront store-pending">
   <header class="site-header">
@@ -184,9 +186,11 @@
   <div class="toast-stack" id="toastStack"></div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=25.17" defer></script>
+  <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
+  <script src="colors.js?v=25.24"></script>
+  <script src="app.js?v=25.24" defer></script>
   <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.17',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.24',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
 </body>
 </html>

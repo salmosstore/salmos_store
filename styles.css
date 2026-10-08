@@ -1369,3 +1369,13 @@ body::before{pointer-events:none}
 .detail-gallery-scroll .product-photo-arrow{width:46px;height:50px;font-size:34px}
 .detail-gallery-scroll .media-dots button{width:11px;height:11px;border:0;border-radius:50%;background:#ffffff80;padding:0;cursor:pointer;box-shadow:0 0 0 1px #0007}
 .detail-gallery-scroll .media-dots button.active{background:var(--gold,#e4ba72);box-shadow:0 0 0 1px #0009}
+
+/* 25.24 · Fondo de las fotos, configurable desde el orden de la tienda. */
+.product-card .product-media{background:var(--product-card-background,var(--surface-2))}
+.product-card .product-placeholder{background:var(--product-card-background,var(--surface-2))}
+.product-card[style*="--product-card-background"] .product-media img{background:transparent}
+.store-background-controls{flex:1 0 100%;display:grid;grid-template-columns:minmax(170px,1fr) minmax(160px,1fr) minmax(180px,2fr);gap:10px;align-items:end;border-top:1px solid var(--line);padding-top:10px}
+.store-background-controls .field{margin:0;min-width:0;display:grid;gap:6px;font-size:.8rem}.store-background-controls .select,.store-background-controls .salmos-color-button{height:44px;min-height:44px;margin:0}
+.store-background-controls small{color:var(--muted);align-self:center;line-height:1.4}
+.store-order-toolbar>.store-order-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.store-order-toolbar>.store-order-actions .btn{display:flex;align-items:center;justify-content:center;min-height:44px;margin:0}
+@media(max-width:680px){.store-background-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.store-background-controls small{grid-column:1/-1}.store-order-toolbar>.store-order-actions{width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}}
