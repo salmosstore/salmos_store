@@ -1337,3 +1337,34 @@ body .design-library-actions>.btn,.design-library-actions .design-bulk-actions>.
   body .admin-section-head>.admin-actions>.btn{flex:1 1 150px;min-width:0}
   body .dialog-foot>.btn{flex:1 1 128px;min-width:0}
 }
+
+/* 25.23 · Características visibles y cantidades junto a las fotos. */
+#purchaseItems .purchase-item-row{container:purchase-item/inline-size}
+#purchaseItems .purchase-item-row>.purchase-item-details{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,.7fr);gap:14px;align-items:start}
+.purchase-item-details>*,.purchase-item-pricing>*{min-width:0}
+.purchase-item-pricing{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start}
+.purchase-item-pricing .purchase-stepper{max-width:none}
+.purchase-item-pricing>.purchase-row-actions{grid-column:1/-1;justify-content:flex-end;align-self:start;margin:0}
+.purchase-item-details .purchase-image-picker-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;margin-bottom:8px}
+.purchase-image-picker-head>label{margin:0;line-height:1.3;overflow-wrap:anywhere}
+.purchase-image-picker-head>label>small{display:block;color:var(--muted);font-weight:400;margin-top:3px}
+.purchase-item-details .purchase-image-picker-head>.btn{min-width:96px;margin:0;align-self:stretch}
+.purchase-item-details .purchase-image-gallery{padding-block:4px 8px}
+.purchase-features-list>summary{box-sizing:border-box;min-height:var(--admin-action-height,44px);font-size:var(--admin-action-font,.8125rem);line-height:1.35}
+.purchase-features-list>summary>[data-purchase-selected-features]{min-width:0;overflow-wrap:anywhere}
+.purchase-features-list>summary::after{flex-shrink:0}
+.purchase-features-list .feature-options>.purchase-feature-manage{display:flex;width:100%;justify-content:center;margin-top:8px;border-color:var(--line);font-weight:600}
+#purchaseItems .purchase-item-row:not(.is-garment):has(.purchase-capacity)>.purchase-features{grid-column:auto}
+@container purchase-item (min-width:700px){
+  .purchase-item-pricing{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .purchase-item-pricing .field>label{min-height:2.5em;display:flex;align-items:flex-end}
+}
+@container purchase-item (max-width:400px){
+  #purchaseItems .purchase-item-row>.purchase-item-details{grid-template-columns:minmax(0,1fr)}
+  .purchase-item-pricing{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .purchase-item-pricing .field>label{min-height:2.5em;display:flex;align-items:flex-end}
+}
+@container purchase-item (max-width:310px){
+  .purchase-item-pricing{grid-template-columns:minmax(0,1fr)}
+  .purchase-item-pricing .field>label{min-height:0}
+}
