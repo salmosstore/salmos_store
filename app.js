@@ -819,29 +819,9 @@
   }
 
   async function sharePage() {
-    const url = `${location.origin}/`;
-    const title = 'SALMOS — Tienda';
-    const text = 'SALMOS · creer · amar · crear · remeras y más';
-
-    // En PC priorizamos algo que siempre funcione: copiar el enlace.
-    if (!isMobileShareDevice() || !navigator.share) {
-      try { await copyLink(url, 'Link de SALMOS copiado'); }
-      catch { toast(url); }
-      return;
-    }
-
-    try {
-      const file = await fetchShareFile(`${location.origin}/banner-salmos.png`, 'salmos');
-      if (file && navigator.canShare?.({ files:[file] })) {
-        await navigator.share({ title, text:`${text}\n${url}`, files:[file] });
-        return;
-      }
-      await navigator.share({ title, text, url });
-    } catch (err) {
-      if (err?.name === 'AbortError') return;
-      try { await copyLink(url, 'Link de SALMOS copiado'); }
-      catch { toast(url); }
-    }
+    const url=`${location.origin}/`,title='SALMOS — Tienda',text='SALMOS · creer · amar · crear · remeras y más',file=state.pageShareFile;
+    try{if(navigator.share){if(file&&navigator.canShare?.({files:[file]})){await navigator.share({title,text:`${text}\n${url}`,files:[file]});return;}await navigator.share({title,text,url});return;}await copyLink(url,'Link de SALMOS copiado');}
+    catch(err){if(err?.name==='AbortError')return;try{await copyLink(url,'Link de SALMOS copiado');}catch{toast(url);}}
   }
 
   async function shareSelectedProduct() {
@@ -1963,7 +1943,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
 
   function bindEvents() {
     qs('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
-    qs('#pageShareBtn')?.addEventListener('click', sharePage);
+    qs('#pageShareBtn')?.addEventListener('click', sharePage);fetchShareFile(`${location.origin}/share-salmos.jpg`,'salmos').then(file=>{state.pageShareFile=file;});
     qs('#searchBtn')?.addEventListener('click',()=>{const panel=qs('#headerSearchPanel');if(!panel)return;const opening=panel.classList.contains('hidden');panel.classList.toggle('hidden',!opening);qs('#searchBtn')?.classList.toggle('active',opening);if(opening)setTimeout(()=>qs('#searchInput')?.focus(),0);});
     qs('#accountBtn')?.addEventListener('click',()=>openAccount('profile'));
     qs('#favoritesBtn')?.addEventListener('click',()=>openAccount('favorites'));
