@@ -1523,3 +1523,26 @@ body:has(dialog[open]){overflow:hidden}
 @media(max-width:700px){.sheet-gallery-controls{grid-template-columns:1fr}.sheet-gallery-controls>*{grid-column:1/-1}#productionDialog .production-design-row-actions{grid-template-columns:1fr 1fr}}
 
 .mockup-model-label{grid-column:1/-1}
+/* v25.30: sheet editor uses the same full modal canvas as upload. */
+#designPreviewDialog.sheet-editor-open>.dialog-shell{width:100%!important;max-width:none!important;min-width:0!important;height:100%!important;max-height:100%!important;display:flex!important;flex-direction:column!important}
+#designPreviewDialog.sheet-editor-open>.dialog-shell>.dialog-body{width:100%!important;max-width:none!important;flex:1 1 auto!important;height:auto!important;min-height:0!important;display:block!important;box-sizing:border-box}
+#designPreviewDialog.sheet-editor-open #designPreviewMeta{width:100%!important;max-width:none!important;display:block!important;box-sizing:border-box}
+#designPreviewDialog.sheet-editor-open #designDetailEditor{width:100%!important;max-width:none!important;box-sizing:border-box}
+#mockupModelDialog{height:fit-content!important;min-height:0!important;max-height:90dvh!important;inset:0!important;margin:auto!important;padding:0!important;width:min(440px,calc(100vw - 24px))!important}
+#mockupModelDialog>.dialog-shell{height:auto!important;min-height:0!important;width:100%!important;max-width:none!important;display:flex!important;flex-direction:column!important}
+#mockupModelDialog .dialog-body{flex:0 0 auto!important}#mockupModelDialog .dialog-foot{position:static!important}
+.design-appearance-toolbar{display:flex;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.design-appearance-toolbar .design-color-controls{display:flex;gap:8px;margin:0;max-width:none}
+.design-appearance-toolbar .design-appearance-actions{display:flex;align-items:center;gap:8px;max-width:none;margin:0;flex-wrap:wrap}
+.design-appearance-toolbar .design-appearance-actions button{width:40px;height:40px;min-width:40px;min-height:40px;padding:9px;display:inline-flex;align-items:center;justify-content:center}
+.design-appearance-toolbar [data-design-appearance-status]:empty{display:none}
+.design-gallery-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.design-gallery-actions .design-tag-picker{margin:0;min-width:180px;max-width:340px;flex:0 1 300px}
+.design-gallery-actions .design-tag-picker>label{display:none}
+.fa-circle-check{--action-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='m7 12 3 3 7-7' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E")}
+.fa-circle-plus{--action-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M12 7v10M7 12h10' stroke='black' stroke-width='2'/%3E%3C/svg%3E")}
+.fa-arrows-rotate{--action-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20 8a9 9 0 0 0-15-3L2 8m0-6v6h6M4 16a9 9 0 0 0 15 3l3-3m0 6v-6h-6' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E")}
+.fa-solid:is(.fa-circle-check,.fa-circle-plus,.fa-arrows-rotate){display:inline-block;width:20px;height:20px;flex:none;background:currentColor;mask:var(--action-icon) center/contain no-repeat;-webkit-mask:var(--action-icon) center/contain no-repeat}
+#designPreviewDialog.sheet-editor-open{width:calc(100vw - 24px)!important;max-width:calc(100vw - 24px)!important;height:calc(100dvh - 24px)!important;max-height:calc(100dvh - 24px)!important;margin:auto!important;padding:0!important}
+.material-cost-history{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.material-cost-history .field-help{margin:0}
