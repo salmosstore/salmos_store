@@ -10,11 +10,11 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.28">
+  <link rel="stylesheet" href="styles.css?v=25.29">
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
-  <link rel="stylesheet" href="colors.css?v=25.28">
+  <link rel="stylesheet" href="colors.css?v=25.29">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.28">
+  <link rel="stylesheet" href="admin-v4.css?v=25.29">
 </head>
 <body>
   <div class="admin-layout">
@@ -140,7 +140,7 @@
           <div class="toggle-row"><label class="toggle-label"><input type="checkbox" id="productionIsNew"> Novedad</label><label class="toggle-label"><input type="checkbox" id="productionFeatured"> Destacado</label><label class="toggle-label"><input type="checkbox" id="productionBestseller"> Más vendido</label></div>
         </section>
       </div>
-      <div class="dialog-foot"><span class="dialog-spacer"></span><button class="btn btn-ghost hidden" type="button" id="productionBackBtn">← Volver a producción</button><button class="btn btn-primary hidden" type="button" id="saveProductionBtn">Guardar e iniciar producción</button></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionBtn">Cancelar</button><span class="dialog-spacer"></span><button class="btn btn-ghost hidden" type="button" id="productionBackBtn">← Volver a producción</button><button class="btn btn-primary hidden" type="button" id="saveProductionBtn">Guardar e iniciar producción</button></div>
     </div>
   </dialog>
 
@@ -218,11 +218,12 @@
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Subir diseño</h2></div><button class="icon-btn" type="button" id="closeDesignUploadBtn">×</button></div>
       <div class="dialog-body">
         <div class="form-grid"><div class="field" data-upload-sheet-only><label>Sección de la plancha</label><select class="select" id="designUploadScope"><option value="salmos">SALMOS</option><option value="clients">Clientes</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field" data-upload-sheet-only><label>Nombre de la plancha (opcional)</label><input class="input" id="designUploadName" placeholder="Usar nombre del archivo"></div><div class="field hidden" data-sheet-size><label>Superficie total de la plancha (cm)</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field" data-upload-sheet-only><label>Costo de la plancha ($)</label><input class="input" id="designUploadCost" type="number" min="0" step=".01" value="10000"></div><div class="field full" data-upload-sheet-only><div id="designUploadTagPicker"></div></div><div class="field"><label>Impresión / costo</label><select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple><small class="field-help">Los archivos se acumulan al elegir más. Para planchas, usá una imagen PNG, JPG o WEBP que puedas marcar.</small></div><div class="field full hidden" id="designUploadBatchMeta"></div></div>
-        <label class="toggle-label hidden" data-upload-sheet-only><input type="checkbox" id="designUploadPrinted" checked> Impreso · registrar la compra de esta plancha al guardar</label>
-        <details class="sheet-purchase-panel hidden" id="designSheetPurchase" open><summary>Compra de la plancha impresa · obligatoria</summary><p class="field-help">Al guardar se registra la compra, el ingreso de DTF y el pago en Caja. Para cargarla sin compra, desmarcá “Impreso”.</p><div class="form-grid"><label class="field">Monto de compra ($)<input class="input" id="sheetPurchaseAmount" type="number" min="0.01" step=".01" data-sheet-purchase-amount></label><label class="field">Proveedor<input class="input" id="sheetPurchaseSupplier" list="supplierSuggestions" value="Adrian" placeholder="Adrian"></label><label class="field">Forma de pago<select class="select" id="sheetPurchaseMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Efectivo y transferencia</option></select></label><label class="field">Recargo<select class="select" id="sheetPurchaseSurchargeType"><option value="fixed">Pesos</option><option value="percent">Porcentaje</option></select></label><label class="field">Importe del recargo<input class="input" id="sheetPurchaseSurcharge" type="number" min="0" step=".01" value="0"></label><label class="field" data-sheet-mixed>Efectivo ($)<input class="input" id="sheetPurchaseCash" type="number" min="0" step=".01"></label><label class="field" data-sheet-mixed>Transferencia ($)<input class="input" id="sheetPurchaseTransfer" type="number" min="0" step=".01"></label><label class="field" data-sheet-transfer>Origen / alias<input class="input" id="sheetPurchaseOrigin" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Destino / alias<input class="input" id="sheetPurchaseDestination" placeholder="Opcional"></label><label class="field" data-sheet-transfer>N.º de operación<input class="input" id="sheetPurchaseReference" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Detalle de la transferencia<input class="input" id="sheetPurchaseDetails" placeholder="Opcional"></label></div><p id="sheetPurchaseTotal" class="field-help"></p></details>
+
+
         <p class="field-help hidden" id="sheetDraftNotice" role="status"></p><div id="designUploadComposition" data-sheet-composition-host class="hidden"></div>
+        <details class="sheet-purchase-panel hidden" id="designSheetPurchase" open><summary>Compra de la plancha impresa · obligatoria</summary><p class="field-help">Al guardar se registra la compra, el ingreso de DTF y el pago en Caja. Para cargarla sin compra, desmarcá “Impreso”.</p><div class="form-grid"><label class="field">Monto de compra ($)<input class="input" id="sheetPurchaseAmount" type="number" min="0.01" step=".01" data-sheet-purchase-amount></label><label class="field">Proveedor<input class="input" id="sheetPurchaseSupplier" list="supplierSuggestions" value="Adrian" placeholder="Adrian"></label><label class="field">Forma de pago<select class="select" id="sheetPurchaseMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Efectivo y transferencia</option></select></label><label class="field">Recargo<select class="select" id="sheetPurchaseSurchargeType"><option value="fixed">Pesos</option><option value="percent">Porcentaje</option></select></label><label class="field">Importe del recargo<input class="input" id="sheetPurchaseSurcharge" type="number" min="0" step=".01" value="0"></label><label class="field" data-sheet-mixed>Efectivo ($)<input class="input" id="sheetPurchaseCash" type="number" min="0" step=".01"></label><label class="field" data-sheet-mixed>Transferencia ($)<input class="input" id="sheetPurchaseTransfer" type="number" min="0" step=".01"></label><label class="field" data-sheet-transfer>Origen / alias<input class="input" id="sheetPurchaseOrigin" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Destino / alias<input class="input" id="sheetPurchaseDestination" placeholder="Opcional"></label><label class="field" data-sheet-transfer>N.º de operación<input class="input" id="sheetPurchaseReference" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Detalle de la transferencia<input class="input" id="sheetPurchaseDetails" placeholder="Opcional"></label></div><p id="sheetPurchaseTotal" class="field-help"></p></details>
       </div>
-      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelDesignUploadBtn">Cancelar</button><button class="btn btn-primary" type="button" id="uploadDesignBtn">Subir sin modificar</button></div>
+      <div class="dialog-foot"><label class="toggle-label hidden" data-upload-sheet-only><input type="checkbox" id="designUploadPrinted" checked> Impreso · registrar la compra de esta plancha al guardar</label><button class="btn btn-ghost" type="button" id="cancelDesignUploadBtn">Cancelar</button><button class="btn btn-primary" type="button" id="uploadDesignBtn">Subir sin modificar</button></div>
     </div>
   </dialog>
 
@@ -249,10 +250,10 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.28"></script>
-  <script src="montage-effects.js?v=25.28"></script>
-  <script src="admin.js?v=25.28" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.28',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="colors.js?v=25.29"></script>
+  <script src="montage-effects.js?v=25.29"></script>
+  <script src="admin.js?v=25.29" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.29',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">

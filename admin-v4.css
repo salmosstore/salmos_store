@@ -1493,3 +1493,33 @@ body .action-icon{width:36px!important;min-width:36px;max-width:36px;min-height:
 #productionDialog .production-preview-frame>.production-mockup-preview{height:100%;min-height:0;max-height:none}
 @media(max-width:760px){#productionDialog .production-preview-frame{height:340px;min-height:260px;max-height:340px}}
 @media(max-width:560px){#productionDialog .production-preview-frame{height:260px;min-height:240px;max-height:300px}#productionDialog .production-mockup-sidebar{max-height:360px;overflow-y:auto;padding:2px;overscroll-behavior:contain}}
+
+/* v25.29: fluid desktop canvas, one modal scroll, compact stamp rows. */
+.admin-content{width:100%;max-width:none;box-sizing:border-box}.admin-main{width:100%;min-width:0}
+body:has(dialog[open]){overflow:hidden}
+#productionDialog #productionSelectedDesigns .production-selected-design-main{display:flex;flex-direction:column;gap:8px;min-width:0;width:100%}
+#productionDialog .production-design-select{display:flex;align-items:center;gap:10px;width:100%;min-width:0;text-align:left}
+#productionDialog .production-design-select .design-small-image{flex:0 0 58px;width:58px;height:58px}
+#productionDialog .production-design-select strong{min-width:0;white-space:normal;overflow-wrap:anywhere}
+#productionDialog .production-design-row-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;align-items:stretch}
+#productionDialog .production-design-row-actions>:is(button,label){width:100%;min-width:0;margin:0;box-sizing:border-box;white-space:normal}
+#productionDialog .production-design-side-field{display:grid;grid-template-columns:1fr;gap:3px}
+#designPreviewDialog.sheet-editor-open .design-preview-layout{display:block!important;width:100%;min-width:0;box-sizing:border-box;overflow-y:auto;overflow-x:hidden}
+#designPreviewDialog.sheet-editor-open #designPreviewMeta{width:100%;min-width:0;overflow:visible;box-sizing:border-box}
+#designPreviewDialog.sheet-editor-open #designDetailEditor{width:100%;box-sizing:border-box}
+#designUploadDialog .dialog-shell{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;overflow:hidden}
+#designUploadDialog .dialog-body{min-height:0;overflow-y:auto;overflow-x:hidden}
+#designUploadDialog .dialog-foot{position:static;flex-wrap:wrap;gap:8px}
+#designUploadDialog .dialog-foot>.toggle-label{margin-right:auto;min-width:0}
+.sheet-gallery-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,1fr);align-items:start;gap:10px;margin-top:10px}
+.sheet-gallery-controls>.sheet-missing-upload,.sheet-gallery-controls>.field-help{grid-column:1/-1}
+.sheet-gallery-controls .sheet-missing-upload{margin:0}.sheet-gallery-controls .design-tag-picker{margin:0}
+.sheet-composition-sidebar{min-width:0}.sheet-selected-list>[data-sheet-selected]{max-height:55dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.mockup-color-picker input[readonly]{cursor:pointer}
+#mockupModelDialog{width:min(440px,calc(100vw - 24px));height:auto;max-height:90dvh}
+#mockupModelDialog .dialog-shell{width:100%;height:auto;max-height:90dvh}
+[data-person-field]:has([data-add-mockup-model]){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end}
+[data-person-field] [data-add-mockup-model]{min-height:40px;height:40px;padding:6px 10px}
+@media(max-width:700px){.sheet-gallery-controls{grid-template-columns:1fr}.sheet-gallery-controls>*{grid-column:1/-1}#productionDialog .production-design-row-actions{grid-template-columns:1fr 1fr}}
+
+.mockup-model-label{grid-column:1/-1}
