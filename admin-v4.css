@@ -961,15 +961,6 @@ details.design-library-group:not([open])>.design-group-body,details.design-libra
 .design-origin-cost-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px;border-radius:8px;background:var(--surface)}
 .design-origin-cost-row .design-small-image{width:42px;height:42px}
 .design-origin-cost-row small{display:block;color:var(--muted)}
-.design-tag-picker{min-width:0}
-.design-tag-picker>label{display:block;margin-bottom:6px;font-weight:700}
-.design-tag-picker>details{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface)}
-.design-tag-picker summary{cursor:pointer;font-weight:700}
-.design-tag-picker-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;padding:10px 0}
-.design-tag-picker-options label{display:flex;gap:7px;align-items:center;padding:5px;border-radius:7px;background:var(--surface-2)}
-.design-tag-picker-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;margin:8px 0}
-.design-tag-picker-manage{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
-.design-tag-picker-row{display:grid;grid-template-columns:minmax(0,1fr) auto var(--admin-action-height,44px);gap:6px;margin:7px 0}
 .mockup-variant-gallery,.mockup-background-gallery{display:flex;gap:8px;overflow-x:auto;padding:6px 1px 10px;scroll-snap-type:x proximity}
 .mockup-variant-card,.mockup-background-card{flex:0 0 128px;min-width:0;display:grid;align-content:start;gap:5px;padding:7px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer;scroll-snap-align:start}
 .mockup-variant-card img{width:100%;height:142px;object-fit:contain;border-radius:8px;background:var(--surface-2)}
@@ -1335,7 +1326,7 @@ body .design-library-actions>.btn,.design-library-actions .design-bulk-actions>.
   body .dialog-foot>.btn{flex:1 1 128px;min-width:0}
 }
 
-/* 25.25 · Cantidad y precio antes de las fotos, con campos de igual altura. */
+/* 25.26 · Cantidad y precio antes de las fotos, con campos de igual altura. */
 #purchaseItems{container:purchase-form/inline-size}
 #purchaseItems .purchase-item-row,#purchaseItems .purchase-item-row.is-garment{grid-template-columns:repeat(4,minmax(0,1fr))}
 #purchaseItems .purchase-item-row>.purchase-item-pricing{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;align-items:start}
@@ -1388,3 +1379,33 @@ body .design-library-actions>.btn,.design-library-actions .design-bulk-actions>.
 .design-appearance-actions .btn{width:100%;box-sizing:border-box;min-height:44px;margin:0;display:flex;align-items:center;justify-content:center}
 .design-appearance-actions small{color:var(--muted);font-size:.8rem;line-height:1.4}
 .mockup-background-gallery{min-width:0;max-width:100%;overflow-x:auto;align-items:stretch}
+/* Controles de superficie: filas coherentes y herramientas agrupadas. */
+.mockup-surface-controls{display:grid;gap:12px;padding-top:12px;border-top:1px solid var(--line)}
+.mockup-tool-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mockup-tool-row .btn{min-height:36px;flex:1 1 110px;margin:0}
+.mockup-effect-sliders{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mockup-effect-sliders .field{min-width:0;margin:0;gap:6px}
+.mockup-effect-sliders input{width:100%}
+.mockup-calibration-row{display:grid;grid-template-columns:minmax(90px,1fr) minmax(110px,1fr);gap:8px;align-items:end;padding:10px 0}
+.mockup-calibration-row .btn,.mockup-calibration-row .input{min-height:40px;margin:0}
+.mockup-export-resolution{margin:0}
+.design-tag-picker{position:relative;min-width:0}
+.design-tag-picker>details>summary{min-height:42px;display:flex;align-items:center;gap:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.design-tag-picker>details>summary::after{content:'▾';margin-left:auto}
+.design-tag-picker>details[open]{position:relative;z-index:10}
+.design-tag-dropdown{position:absolute;top:100%;left:0;width:max(100%,300px);max-width:min(500px,85vw);padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-soft);display:grid;gap:8px}
+.design-tag-picker .design-tag-picker-options{display:flex;flex-direction:column;max-height:240px;overflow:auto;gap:4px;padding:0}
+.design-tag-picker .design-tag-picker-row{display:flex;align-items:center;gap:6px;min-height:36px}
+.design-tag-picker-row>label{display:flex;align-items:center;gap:8px;flex:1;min-width:0;margin:0;padding:4px}
+.design-tag-picker-row>[data-design-tag-value],.design-tag-picker-row>[data-design-tag-save],.design-tag-picker-row>[data-design-tag-delete]{display:none}
+.design-tag-picker.managing .design-tag-picker-row>[data-design-tag-value],.design-tag-picker.managing .design-tag-picker-row>[data-design-tag-save],.design-tag-picker.managing .design-tag-picker-row>[data-design-tag-delete]{display:block}
+.design-tag-picker.managing .design-tag-picker-row>label{flex:0 0 24px}
+.design-tag-picker.managing .design-tag-picker-row>label>span{display:none}
+.design-tag-picker-row>[data-design-tag-value]{flex:1;min-width:0}
+.design-tag-picker .design-tag-picker-add{display:flex;gap:8px;margin:0;padding:0}
+.design-tag-picker-add .input{flex:1;min-width:0}
+.production-variant-stock{display:grid;gap:8px;margin:12px 0}
+.production-variant-stock-row{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:10px;align-items:center}
+@media(max-width:600px){.mockup-effect-sliders{grid-template-columns:1fr 1fr}.design-tag-dropdown{width:min(340px,80vw)}}
+
+.design-tag-filter-dropdown{width:min(320px,100%);margin:8px 0 12px}

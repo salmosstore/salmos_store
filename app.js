@@ -694,7 +694,7 @@
     const results=await Promise.allSettled([prepare(),prepare()]);const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   }
   function productBackground(p){const id=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id)||0;return (state.config?.productBackgroundAssets||[]).find(asset=>Number(asset.id)===id)||null;}
-  function productBackgroundAttrs(p){const asset=productBackground(p);return `data-photo-background="${asset?.id||0}" style="--product-photo-background:${asset?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none'}"`;}
+  function productBackgroundAttrs(p){const asset=productBackground(p),choice=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id);return `data-photo-background="${choice===0?'none':asset?.id||'original'}" style="--product-photo-background:${asset?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none'}"`;}
   function filteredProducts() {
     const q = state.query.trim().toLowerCase();
     return orderedStoreProducts(state.products.filter(p => {
