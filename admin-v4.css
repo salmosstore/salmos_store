@@ -1409,3 +1409,12 @@ body .design-library-actions>.btn,.design-library-actions .design-bulk-actions>.
 @media(max-width:600px){.mockup-effect-sliders{grid-template-columns:1fr 1fr}.design-tag-dropdown{width:min(340px,80vw)}}
 
 .design-tag-filter-dropdown{width:min(320px,100%);margin:8px 0 12px}
+
+/* 25.27: tools occupy the complete width below the photo. */
+#productionDialog .mockup-tools-below{display:grid;grid-template-columns:1fr;gap:14px;width:100%;margin-top:14px;align-items:start}
+#productionDialog .mockup-tools-below .mockup-effect-sliders{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.montage-photo-group>.montage-photo-grid{display:flex;overflow-x:auto;gap:14px;scroll-behavior:smooth;align-items:start}.montage-photo-grid>.montage-photo-card{flex:0 0 210px}
+#mockupVariantGallery [data-sort-photo],#productionDesignGallery [data-sort-photo],#productionMaterialGallery [data-sort-photo],.montage-photo-thumb{position:relative}.photo-sorting{z-index:10;opacity:.75;transition:none!important}.mockup-upload-card [data-model-name-new]{margin-top:8px}
+@media(max-width:700px){#productionDialog .mockup-tools-below{grid-template-columns:1fr}#productionDialog .mockup-tools-below .mockup-effect-sliders{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+#productionDialog .mockup-tools-below .mockup-rotation-controls{display:flex;align-items:center;flex-wrap:wrap;gap:14px}#productionDialog .mockup-tools-below .mockup-rotation-inputs{flex:1;min-width:200px}#productionDialog .mockup-tools-below .mockup-surface-controls{width:100%}

@@ -1,11 +1,11 @@
-// SALMOS 25.26 · Efectos no destructivos compartidos por vista, fotos y descarga.
+// SALMOS 25.27 · Efectos no destructivos compartidos por vista, fotos y descarga.
 (() => {
   'use strict';
   const clamp=(n,a,b)=>Math.max(a,Math.min(b,Number(n)||0)),cache=new WeakMap(),warpedCache=new WeakMap();
   function point(u,v,e={}){
     const curve=clamp(e.curve,-100,100)/100,fold=clamp(e.fold,0,100)/100,phase=(Number(e.phase)||0)*Math.PI/180;
     let x=u,y=v;
-    if(curve){const a=Math.abs(curve)*1.5;x=.5+Math.sin((u-.5)*a)/(2*Math.sin(a/2));y+=(v-.5)*curve*.32*(1-Math.pow(2*u-1,2));}
+    if(curve){const a=Math.abs(curve)*1.5;x=.5+Math.sin((u-.5)*a)/(2*Math.sin(a/2));y+=curve*.16*(1-Math.pow(2*u-1,2));}
     x+=fold*.035*Math.sin(v*Math.PI*6+phase)*Math.sin(u*Math.PI);y+=fold*.055*Math.sin(u*Math.PI*6+phase)*Math.sin(v*Math.PI);
     const grid=e.grid;if(Array.isArray(grid)&&grid.length===9){const gx=Math.min(1,Math.floor(u*2)),gy=Math.min(1,Math.floor(v*2)),tx=u*2-gx,ty=v*2-gy;for(const [i,j,weight] of [[0,0,(1-tx)*(1-ty)],[1,0,tx*(1-ty)],[0,1,(1-tx)*ty],[1,1,tx*ty]]){const offset=grid[(gy+j)*3+gx+i];x+=clamp(offset?.x,-.35,.35)*weight;y+=clamp(offset?.y,-.35,.35)*weight;}}
     return {x,y};
