@@ -20,20 +20,20 @@
   }
   const defaultBackground=theme=>theme==='light'?'#f7f0e3':'#222226';
   let active=null;
-  function openAdvanced(button,{value='',preview=()=>{},save=()=>{},opacity=false,swatches:choices=swatches,clearLabel='Restablecer',name=''}={}){
+  function openAdvanced(button,{value='',preview=()=>{},save=()=>{},opacity=false,swatches:choices=swatches,clearLabel='Restablecer',name='',container:paletteHost=null,inline=false,cancelValue=value}={}){
     if(!window.Pickr)throw new Error('No se pudo abrir la paleta de colores. Recargá la página.');
     if(active){active.hide();active.destroyAndRemove();active=null;}
-    const original=normalize(value),container=button.closest('dialog[open]')||document.body;
-    const picker=window.Pickr.create({el:button,container,useAsButton:true,theme:'nano',appClass:'salmos-color-palette',position:'bottom-middle',closeOnScroll:true,default:original||'#ffffff',defaultRepresentation:'HEX',swatches:[...new Set([...choices,...swatches])],comparison:true,
+    const original=normalize(value),rollback=normalize(cancelValue),container=paletteHost||button.closest('dialog[open]')||document.body;
+    const picker=window.Pickr.create({el:button,container,inline,useAsButton:true,theme:'nano',appClass:'salmos-color-palette'+(inline?' salmos-inline-palette':''),position:'bottom-middle',closeOnScroll:true,default:original||'#ffffff',defaultRepresentation:'HEX',swatches:[...new Set([...choices,...swatches])],comparison:true,
       components:{preview:true,opacity,hue:true,interaction:{hex:true,input:true,clear:true,save:true,cancel:true}},
       i18n:{'ui:dialog':'Elegir color','btn:toggle':'Abrir paleta','btn:swatch':'Elegir muestra','btn:last-color':'Color anterior','btn:save':'Aplicar','btn:cancel':'Cancelar','btn:clear':clearLabel,'aria:btn:save':'Aplicar color','aria:btn:cancel':'Cancelar cambio','aria:btn:clear':clearLabel,'aria:input':'Código del color','aria:palette':'Paleta de color','aria:hue':'Tono','aria:opacity':'Transparencia'}});
     active=picker;let committed=false;
-    let nameInput;picker.on('init',()=>{const label=document.createElement('label');label.className='salmos-color-name';label.textContent='Nombre del color';nameInput=document.createElement('input');nameInput.type='text';nameInput.maxLength=80;nameInput.placeholder='Por ejemplo: verde oliva';nameInput.value=name||nameForColor(original)||'';label.append(nameInput);picker.getRoot().app.append(label);picker.show();});
+    let nameInput;picker.on('init',()=>{if(inline&&paletteHost)paletteHost.append(picker.getRoot().app);const label=document.createElement('label');label.className='salmos-color-name';label.textContent='Nombre del color';nameInput=document.createElement('input');nameInput.type='text';nameInput.maxLength=80;nameInput.placeholder='Por ejemplo: verde oliva';nameInput.value=name||nameForColor(original)||'';label.append(nameInput);picker.getRoot().app.append(label);picker.show();});
     picker.on('change',color=>preview(normalize(color?.toHEXA().toString())));
-    picker.on('save',async color=>{if(committed)return;committed=true;const selected=normalize(color?.toHEXA().toString());picker.hide();try{const label=String(nameInput?.value||'').trim()||nameForColor(selected)||selected;if(selected)remember(label,selected);await save(selected,selected?label:'')}catch(error){preview(original);document.dispatchEvent(new CustomEvent('salmos-color-error',{detail:error.message}));}});
-    picker.on('cancel',()=>{preview(original);picker.hide();});
-    picker.on('hide',()=>{if(!committed)preview(original);});
-    if(container.tagName==='DIALOG')container.addEventListener('close',()=>{if(active===picker){picker.hide();picker.destroyAndRemove();active=null;}},{once:true});
+    picker.on('save',async color=>{if(committed)return;committed=true;const selected=normalize(color?.toHEXA().toString());picker.hide();try{const label=String(nameInput?.value||'').trim()||nameForColor(selected)||selected;if(selected)remember(label,selected);await save(selected,selected?label:'')}catch(error){preview(rollback);document.dispatchEvent(new CustomEvent('salmos-color-error',{detail:error.message}));}});
+    picker.on('cancel',()=>{preview(rollback);picker.hide();});
+    picker.on('hide',()=>{if(!committed)preview(rollback);});
+    const dialog=button.closest('dialog[open]');if(dialog)dialog.addEventListener('close',()=>{if(active===picker){picker.hide();picker.destroyAndRemove();active=null;}},{once:true});
     return picker;
   }
   const basics={'Negro':'#151515','Blanco':'#f7f5ef','Crudo':'#eee2cf','Crema':'#f5ead3','Beige':'#d4bd9b','Gris':'#9da0a5','Azul marino':'#18233d','Azul':'#2454ae','Celeste':'#86cbea','Rojo':'#c63b46','Bordó':'#722632','Verde':'#3b824d','Rosa':'#f29bbc','Marrón':'#79513c','Amarillo':'#e4bc32','Fucsia':'#d84691'};
@@ -50,7 +50,7 @@
     const list=document.createElement('div');list.className='salmos-basic-palette-list';panel.append(list);
     const cleanup=()=>{panel.remove();if(active===controller)active=null;},controller={hide:cleanup,destroyAndRemove:cleanup};active=controller;close.onclick=cleanup;
     const apply=async(value,name)=>{cleanup();try{await options.save?.(value,name)}catch(error){options.preview?.(normalize(options.value));document.dispatchEvent(new CustomEvent('salmos-color-error',{detail:error.message}));}};
-    for(const entry of catalog()){const row=document.createElement('div'),choose=document.createElement('button'),edit=document.createElement('button');choose.type=edit.type='button';choose.className='salmos-basic-color';const dot=document.createElement('i');dot.style.background=entry.color;choose.append(dot,document.createTextNode(entry.name));choose.onclick=()=>apply(entry.color,entry.name);edit.textContent='Editar';edit.setAttribute('aria-label',`Editar ${entry.name}`);edit.onclick=()=>{cleanup();openAdvanced(button,{...options,value:entry.color,name:entry.name});};row.append(choose,edit);list.append(row);}
+    for(const entry of catalog()){const row=document.createElement('div'),choose=document.createElement('button'),edit=document.createElement('button');choose.type=edit.type='button';choose.className='salmos-basic-color';const dot=document.createElement('i');dot.style.background=entry.color;choose.append(dot,document.createTextNode(entry.name));choose.onclick=()=>apply(entry.color,entry.name);edit.textContent='Editar';edit.setAttribute('aria-label',`Editar ${entry.name}`);edit.onclick=()=>{cleanup();openAdvanced(button,{...options,value:entry.color,name:entry.name,cancelValue:options.value});};row.append(choose,edit);list.append(row);}
     const add=document.createElement('button');add.type='button';add.className='btn btn-primary';add.textContent='Agregar color';add.onclick=()=>{cleanup();openAdvanced(button,{...options,name:''});};const clear=document.createElement('button');clear.type='button';clear.className='btn btn-ghost';clear.textContent=options.clearLabel||'Restablecer';clear.onclick=()=>apply('','');panel.append(add,clear);host.append(panel);
     if(host.tagName==='DIALOG')host.addEventListener('close',cleanup,{once:true});close.focus({preventScroll:true});return controller;
   }
