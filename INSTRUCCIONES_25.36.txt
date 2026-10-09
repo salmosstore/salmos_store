@@ -1,0 +1,46 @@
+SALMOS 25.36 — Productos, contactos y WhatsApp manual
+
+INSTALAR
+Copiá los archivos web del ZIP a la carpeta de la tienda respetando los nombres.
+Actualizá también el Worker con worker.js. Esta vez cambió para importar contactos.
+No hay una API de WhatsApp ni credenciales nuevas ni cargos de mensajería.
+
+CONTACTOS → SALMOS
+1. Si el contacto está guardado solo dentro de WhatsApp, abrilo, elegí editar
+   y activá Sincronizar contacto con el teléfono. La exportación siguiente
+   toma los contactos guardados en tu agenda; no extrae números de chats
+   ni participantes de grupos que no hayas guardado.
+2. Elegí una de estas formas para obtener el archivo:
+   PC: https://contacts.google.com → seleccionar contactos → Más acciones
+       → Exportar → CSV de Google.
+   Android: app Contactos → Corregir y gestionar → Exportar a archivo → .vcf.
+   iPhone: https://www.icloud.com/contacts → seleccionar contactos
+       → Compartir → Exportar vCard.
+3. SALMOS → Clientes → Importar contactos → seleccionar CSV o VCF.
+4. Revisá nombre y teléfono. Usá el código de país y el número completo
+   que corresponde a WhatsApp; para celulares argentinos suele ser +54 9…
+   No se agregan prefijos automáticamente porque podrían cambiar el número.
+5. Marcá los contactos que quieras guardar y tocá Importar.
+   Los teléfonos repetidos se omiten y los clientes existentes conservan
+   sus datos. Si se interrumpe, podés volver a importar sin duplicarlos.
+   Los archivos se leen en tu dispositivo; SALMOS recibe solo los datos
+   de los contactos que marcaste, no el archivo original completo.
+
+WHATSAPP SIN API
+SALMOS prepara texto y enlaces para cada destinatario. La confirmación del
+mensaje se hace dentro de WhatsApp; no hay envío automático a todos.
+En PC: Copiar imagen → abrir el chat → pegar con Ctrl+V y confirmar envío.
+En el teléfono: Compartir archivo abre el menú de compartir con la imagen
+ o el video original; elegí WhatsApp y sus destinatarios y confirmá.
+No se descargan archivos automáticamente. Adjuntar en WhatsApp sigue siendo
+una alternativa cuando el navegador no permite compartir o copiar.
+Un enlace puede tener vista previa, pero la genera WhatsApp. La nueva URL
+https://salmos.com.ar/compartir.html tiene los metadatos y la imagen de SALMOS;
+no se puede forzar la vista previa desde un enlace que abre el chat.
+
+AYUDA OFICIAL
+Google (PC): https://support.google.com/contacts/answer/7199294?co=GENIE.Platform%3DDesktop&hl=es
+Google (Android): https://support.google.com/contacts/answer/7199294?co=GENIE.Platform%3DAndroid&hl=es
+Apple: https://support.apple.com/es-lamr/guide/icloud/mmfba748b2/icloud
+WhatsApp contactos: https://faq.whatsapp.com/5472030609512325/
+WhatsApp abrir chats: https://faq.whatsapp.com/5913398998672934
