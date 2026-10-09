@@ -1,5 +1,5 @@
-const CACHE='salmos-pwa-v25-27';
-const CORE=['/','/index.html','/styles.css?v=25.27','/app.js?v=25.27','/config.js','/colors.js?v=25.27','/foreground.js?v=25.27','/montage-effects.js?v=25.27','/colors.css?v=25.27','/vendor/pickr/pickr.min.js?v=1.9.1','/vendor/pickr/nano.min.css?v=1.9.1','/icon-192.png','/icon-512.png','/logo-mark.png','/banner-salmos-header.png','/banner-salmos-light.png','/manifest.webmanifest'];
+const CACHE='salmos-pwa-v25-28';
+const CORE=['/','/index.html','/styles.css?v=25.28','/app.js?v=25.28','/config.js','/colors.js?v=25.28','/foreground.js?v=25.28','/montage-effects.js?v=25.28','/colors.css?v=25.28','/vendor/pickr/pickr.min.js?v=1.9.1','/vendor/pickr/nano.min.css?v=1.9.1','/icon-192.png','/icon-512.png','/logo-mark.png','/banner-salmos-header.png','/banner-salmos-light.png','/manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).catch(()=>{}).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
