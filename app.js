@@ -531,25 +531,7 @@
       host.innerHTML=state.flyers.map(f=>`<article class="flyer-card"><div class="flyer-media">${String(f.mime_type||'').startsWith('video/')?`<video src="${escapeHtml(f.url)}" controls playsinline preload="metadata"></video>`:String(f.mime_type||'').includes('pdf')?`<a class="flyer-pdf" href="${escapeHtml(f.url)}" target="_blank" rel="noopener">PDF<br><small>${escapeHtml(f.title||'Flyer')}</small></a>`:`<img src="${escapeHtml(f.url)}" alt="${escapeHtml(f.title||'Flyer SALMOS')}">`}</div><div class="flyer-actions"><strong>${escapeHtml(f.title||'SALMOS')}</strong><button class="btn btn-ghost" data-share-flyer="${f.id}">Compartir</button></div></article>`).join('');
     }catch(err){console.error(err);launch.classList.add('hidden');section.classList.add('hidden');}
   }
-  async function shareFlyer(id){
-    const f=state.flyers.find(x=>Number(x.id)===Number(id));if(!f)return;
-    try{
-      if(navigator.share){
-        try{
-          const r=await fetch(f.url);const blob=await r.blob();const ext=(f.title||'flyer').split('.').pop();const file=new File([blob],f.file_name||`salmos-flyer.${ext}`,{type:f.mime_type||blob.type||'application/octet-stream'});
-          if(navigator.canShare?.({files:[file]})){await navigator.share({title:f.title||'SALMOS',files:[file]});return;}
-        }catch(err){if(err?.name==='AbortError')return;}
-        await navigator.share({title:f.title||'SALMOS',text:'SALMOS · creer · amar · crear',url:f.url});return;
-      }
-      await navigator.clipboard.writeText(f.url);toast('Link del flyer copiado','success');
-    }catch(err){if(err?.name!=='AbortError')toast('No pudimos compartir este flyer.','error');}
-  }
-
-  function renderSkeletons() {
-    const grid=qs('#productGrid');if(grid)grid.innerHTML='';
-    document.body.classList.add('store-pending');
-    qs('#porPedido')?.classList.add('hidden');
-  }
+  function shareFlyer(id){const flyer=state.flyers.find(x=>Number(x.id)===Number(id));if(flyer)window.SalmosShare.open({flyer});}
 
   async function loadStore() {
     renderSkeletons();
@@ -819,7 +801,7 @@
   }
 
   async function sharePage() {
-    const url=`${location.origin}/compartir.html`,title='SALMOS — Tienda',text='SALMOS · creer · amar · crear · remeras y más',file=state.pageShareFile;
+    const url=`${location.origin}/api/share/salmos`,title='SALMOS — Tienda',text='SALMOS · creer · amar · crear · remeras y más',file=state.pageShareFile;
     try{if(navigator.share){if(file&&navigator.canShare?.({files:[file]})){await navigator.share({title,text:`${text}\n${url}`,files:[file]});return;}await navigator.share({title,text,url});return;}await copyLink(url,'Link de SALMOS copiado');}
     catch(err){if(err?.name==='AbortError')return;try{await copyLink(url,'Link de SALMOS copiado');}catch{toast(url);}}
   }
@@ -1904,7 +1886,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const btn=qs('#payBtn'); if (btn) { btn.disabled=true; btn.textContent='Procesando...'; }
     try {
       const orderHeaders=new Headers();const customerToken=await currentIdToken().catch(()=> '');if(customerToken)orderHeaders.set('Authorization',`Bearer ${customerToken}`);
-      const order = await api('/api/orders', { method:'POST', headers:orderHeaders, body:JSON.stringify({ customer:state.customer, items:state.cart.map(x=>({variantId:x.variantId,quantity:x.qty})), shipping:state.shipping, couponCode:state.coupon?.code||'' }) });
+      const order = await api('/api/orders', { method:'POST', headers:orderHeaders, body:JSON.stringify({ customer:state.customer, items:state.cart.map(x=>({variantId:x.variantId,quantity:x.qty})), shipping:{...state.shipping,clientLocation:{address:state.deliveryAddress?.formattedAddress||state.shipping.address||'',locality:state.deliveryAddress?.locality||'',province:state.deliveryAddress?.provinceName||''}}, couponCode:state.coupon?.code||'' }) });
       state.order = order.order;
       state.pendingCheckout = { id:order.order.id, code:order.order.code, at:Date.now() };
       localStorage.setItem('salmos_pending_checkout', JSON.stringify(state.pendingCheckout));

@@ -10,11 +10,12 @@
   <link rel="icon" href="admin-salmos-rosa-ui.png">
   <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.36">
+  <link rel="stylesheet" href="styles.css?v=25.37">
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
-  <link rel="stylesheet" href="colors.css?v=25.36">
+  <link rel="stylesheet" href="colors.css?v=25.37">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.36">
+  <link rel="stylesheet" href="admin-v4.css?v=25.37">
+  <link rel="stylesheet" href="sharing.css?v=25.37">
 </head>
 <body>
   <div class="admin-layout">
@@ -209,7 +210,7 @@
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Flyer</div><h2 id="flyerDetailHeading">Detalles</h2></div><button class="icon-btn" type="button" id="closeFlyerDetailBtn">×</button></div>
       <div class="dialog-body"><div class="flyer-detail-preview" id="flyerDetailPreview"></div><div class="form-grid flyer-detail-fields"><div class="field"><label>Título</label><input class="input" id="flyerDetailTitle" autocomplete="off"></div><div class="field"><label>Orden</label><input class="input" id="flyerDetailSort" type="number" step="1"></div><div class="field full"><label class="toggle-label"><input type="checkbox" id="flyerDetailPublic"> Público en la tienda</label></div></div></div>
-      <div class="dialog-foot"><button class="btn btn-danger" type="button" id="deleteFlyerDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelFlyerDetailBtn">Cerrar</button><button class="btn btn-primary" type="button" id="saveFlyerDetailBtn">Guardar cambios</button></div>
+      <div class="dialog-foot"><button class="btn btn-danger" type="button" id="deleteFlyerDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelFlyerDetailBtn">Cerrar</button><button class="btn btn-primary" type="button" id="shareFlyerDetailBtn"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Compartir</button><button class="btn btn-primary" type="button" id="saveFlyerDetailBtn">Guardar cambios</button></div>
     </div>
   </dialog>
 
@@ -250,12 +251,13 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.36"></script>
-  <script src="montage-effects.js?v=25.36"></script>
-  <script src="contacts-import.js?v=25.36" defer></script>
-  <script src="clients.js?v=25.36" defer></script>
-  <script src="admin.js?v=25.36" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.36',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="colors.js?v=25.37"></script>
+  <script src="montage-effects.js?v=25.37"></script>
+  <script src="contacts-import.js?v=25.37" defer></script>
+  <script src="sharing.js?v=25.37" defer></script>
+  <script src="clients.js?v=25.37" defer></script>
+  <script src="admin.js?v=25.37" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.37',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
