@@ -1,0 +1,42 @@
+@font-face{font-family:"SALMOS Nimbus Sans";src:url("fonts/font0-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Nimbus Sans";src:url("fonts/font0-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Nimbus Sans Narrow";src:url("fonts/font1-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Nimbus Sans Narrow";src:url("fonts/font1-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Nimbus Roman";src:url("fonts/font2-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Nimbus Roman";src:url("fonts/font2-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Nimbus Mono";src:url("fonts/font3-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Nimbus Mono";src:url("fonts/font3-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS URW Gothic";src:url("fonts/font4-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS URW Gothic";src:url("fonts/font4-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS URW Bookman";src:url("fonts/font5-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS URW Bookman";src:url("fonts/font5-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS C059";src:url("fonts/font6-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS C059";src:url("fonts/font6-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS P052";src:url("fonts/font7-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS P052";src:url("fonts/font7-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Z003 Script";src:url("fonts/font8-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS DejaVu Sans";src:url("fonts/font9-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS DejaVu Sans";src:url("fonts/font9-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS DejaVu Serif";src:url("fonts/font10-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS DejaVu Serif";src:url("fonts/font10-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS DejaVu Mono";src:url("fonts/font11-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS DejaVu Mono";src:url("fonts/font11-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Roman";src:url("fonts/font12-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Roman";src:url("fonts/font12-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Caps";src:url("fonts/font13-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Dunhill";src:url("fonts/font14-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Slanted";src:url("fonts/font15-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Slanted";src:url("fonts/font15-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Unslanted";src:url("fonts/font16-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Sans";src:url("fonts/font17-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Sans";src:url("fonts/font17-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Demi";src:url("fonts/font18-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Quotation";src:url("fonts/font19-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Quotation";src:url("fonts/font19-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Mono";src:url("fonts/font20-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Mono Caps";src:url("fonts/font21-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Mono Light";src:url("fonts/font22-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Mono Light";src:url("fonts/font22-700.woff") format("woff");font-weight:700;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Mono Condensed";src:url("fonts/font23-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Mono Proportional";src:url("fonts/font24-400.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"SALMOS Latin Modern Mono Slanted";src:url("fonts/font25-400.woff") format("woff");font-weight:400;font-display:swap}

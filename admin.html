@@ -3,19 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="SALMOS Admin">
   <meta name="theme-color" content="#e98bb0">
   <title>SALMOS — Administración</title>
-  <link rel="icon" href="admin-salmos-rosa-ui.png">
-  <link rel="apple-touch-icon" href="admin-salmos-rosa-ui.png">
+  <link rel="icon" href="admin-icon-black.svg">
+  <link rel="apple-touch-icon" href="admin-icon-black-192.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.37">
+  <link rel="stylesheet" href="styles.css?v=25.38">
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
-  <link rel="stylesheet" href="colors.css?v=25.37">
+  <link rel="stylesheet" href="colors.css?v=25.38">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.37">
-  <link rel="stylesheet" href="sharing.css?v=25.37">
+  <link rel="stylesheet" href="admin-v4.css?v=25.38">
+  <link rel="stylesheet" href="sharing.css?v=25.38">
+  <link rel="stylesheet" href="production-fonts.css?v=25.38">
 </head>
 <body>
   <div class="admin-layout">
@@ -116,7 +118,7 @@
           <section class="production-mockup-card" id="productionMockupStudio">
             <div class="production-mockup-head"><div><h3>Vista previa del producto</h3><p class="muted">Componé una imagen con tus fotos base y estampas elegidas. No usa generación con IA.</p></div></div>
             <div class="production-mockup-workspace">
-              <div class="production-mockup-preview-column"><div class="mockup-zoom-controls" aria-label="Zoom de la vista previa"><small>Rueda del mouse o dos dedos para acercar y alejar</small><span id="mockupZoomValue">100%</span><button type="button" class="btn btn-ghost" id="resetMockupZoomBtn">Ajustar</button></div><div class="production-mockup-preview"><canvas id="productionMockupCanvas" width="720" height="900" aria-label="Vista previa compuesta; podés mover y cambiar el tamaño de cada estampa"></canvas><div id="productionMockupEmpty" class="mockup-empty">Elegí una foto base y al menos un diseño para previsualizar.</div></div><p class="mockup-touch-hint">Arrastrá una estampa para moverla y su esquina para cambiar tamaño. Con zoom, arrastrá un espacio vacío para recorrer la imagen.</p></div>
+              <div class="production-mockup-preview-column"><div class="mockup-zoom-controls" aria-label="Zoom de la vista previa"><span id="mockupZoomValue">100%</span></div><div class="production-mockup-preview"><canvas id="productionMockupCanvas" width="720" height="900" aria-label="Vista previa compuesta; podés mover y cambiar el tamaño de cada estampa"></canvas><div id="productionMockupEmpty" class="mockup-empty">Elegí una foto base y al menos un diseño para previsualizar.</div></div><p class="mockup-touch-hint">Arrastrá una estampa para moverla y su esquina para cambiar tamaño. Con zoom, arrastrá un espacio vacío para recorrer la imagen.</p></div>
               <aside class="production-mockup-sidebar"><div class="production-mockup-controls"><label class="field full hidden">Foto correspondiente<select class="select" id="mockupBaseSelect"><option value="">Elegir foto</option></select></label><div class="field full"><label>Variantes cargadas · elegí la foto exacta</label><div class="mockup-variant-gallery" id="mockupVariantGallery"></div></div><label class="field full hidden">Fondo<select class="select" id="mockupBackgroundSelect"><option value="">Sin fondo agregado</option></select></label><div class="field full"><label>Fondos cargados</label><div class="mockup-background-gallery" id="mockupBackgroundGallery"></div></div></div><div class="mockup-layer-editor" id="mockupLayerEditor"><p class="muted">Elegí una estampa y ajustá cada una por separado.</p></div><div class="production-mockup-actions"><small id="mockupAssetHint">Elegí modelo, vista y prenda; luego ajustá por separado las estampas elegidas.</small><button class="btn btn-secondary" type="button" id="downloadMockupBtn" disabled title="PNG sin pérdida, renderizado con la resolución de la foto original">Descargar PNG · máxima calidad</button><button class="btn btn-ghost" type="button" id="downloadAllProductViewsBtn">Descargar todas las vistas</button><button class="btn btn-primary" type="button" id="addMockupToProductBtn" disabled>Agregar vista a fotos del producto</button><div class="mockup-product-views" id="mockupProductViews" aria-label="Vistas agregadas al producto"></div></div></aside>
             </div>
           </section>
@@ -201,7 +203,7 @@
   <dialog class="admin-dialog" id="flyerUploadDialog">
     <form class="dialog-shell" id="flyerUploadForm" method="dialog">
       <div class="dialog-head"><div><div class="admin-eyebrow">Flyers</div><h2>Subir flyer</h2></div><button class="icon-btn" type="button" id="closeFlyerUploadBtn">×</button></div>
-      <div class="dialog-body"><p class="muted">Subí imágenes, videos o PDF. La galería queda limpia y la configuración se hace acá.</p><div class="form-grid"><div class="field"><label>Título (opcional)</label><input class="input" name="title" autocomplete="off"></div><div class="field"><label class="toggle-label"><input type="checkbox" name="public"> Publicar ahora</label></div></div></div>
+      <div class="dialog-body"><div class="field full"><label>Archivos</label><input class="input" name="files" type="file" accept="image/*,video/*,application/pdf" multiple required></div><div class="form-grid"><div class="field"><label>Título (opcional)</label><input class="input" name="title" autocomplete="off"></div><div class="field"><label class="toggle-label"><input type="checkbox" name="public"> Publicar ahora</label></div></div></div>
       <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelFlyerUploadBtn">Cancelar</button><button type="button" class="btn btn-primary" id="uploadFlyersBtn">Subir archivos</button></div>
     </form>
   </dialog>
@@ -209,8 +211,8 @@
   <dialog class="admin-dialog" id="flyerDetailDialog">
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Flyer</div><h2 id="flyerDetailHeading">Detalles</h2></div><button class="icon-btn" type="button" id="closeFlyerDetailBtn">×</button></div>
-      <div class="dialog-body"><div class="flyer-detail-preview" id="flyerDetailPreview"></div><div class="form-grid flyer-detail-fields"><div class="field"><label>Título</label><input class="input" id="flyerDetailTitle" autocomplete="off"></div><div class="field"><label>Orden</label><input class="input" id="flyerDetailSort" type="number" step="1"></div><div class="field full"><label class="toggle-label"><input type="checkbox" id="flyerDetailPublic"> Público en la tienda</label></div></div></div>
-      <div class="dialog-foot"><button class="btn btn-danger" type="button" id="deleteFlyerDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelFlyerDetailBtn">Cerrar</button><button class="btn btn-primary" type="button" id="shareFlyerDetailBtn"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Compartir</button><button class="btn btn-primary" type="button" id="saveFlyerDetailBtn">Guardar cambios</button></div>
+      <div class="dialog-body"><div class="flyer-detail-preview" id="flyerDetailPreview"></div><div class="form-grid flyer-detail-fields"><div class="field"><label>Título</label><input class="input" id="flyerDetailTitle" autocomplete="off"></div><input id="flyerDetailSort" type="hidden"><div class="field full"><label class="toggle-label"><input type="checkbox" id="flyerDetailPublic"> Público en la tienda</label></div></div><div id="flyerSharePanel"></div></div>
+      <div class="dialog-foot"><button class="btn btn-danger" type="button" id="deleteFlyerDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelFlyerDetailBtn">Cerrar</button><button class="btn btn-primary" type="button" id="saveFlyerDetailBtn">Guardar cambios</button></div>
     </div>
   </dialog>
 
@@ -218,7 +220,7 @@
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Subir diseño</h2></div><button class="icon-btn" type="button" id="closeDesignUploadBtn">×</button></div>
       <div class="dialog-body">
-        <div class="form-grid"><div class="field full"><label>Archivos</label><input class="input" name="files" type="file" accept="image/*,video/*,application/pdf" multiple required></div><div class="field" data-upload-sheet-only><label>Sección de la plancha</label><select class="select" id="designUploadScope"><option value="salmos">SALMOS</option><option value="clients">Clientes</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo de archivo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field" data-upload-sheet-only><label>Nombre de la plancha (opcional)</label><input class="input" id="designUploadName" placeholder="Usar nombre del archivo"></div><div class="field hidden" data-sheet-size><label>Superficie total de la plancha (cm)</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field" data-upload-sheet-only><label>Costo de la plancha ($)</label><input class="input" id="designUploadCost" type="number" min="0" step=".01" value="10000"></div><div class="hidden" id="designUploadTagPicker"></div><div class="field"><label>Impresión / costo</label><select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple></div><div class="field full design-client-link"><button type="button" class="btn btn-ghost" data-add-design-client>+ Cliente</button><span data-design-client-name></span><button type="button" class="btn btn-ghost" data-choose-design-client>Elegir cliente</button></div><div class="field full hidden" id="designUploadBatchMeta"></div></div>
+        <div class="form-grid"><div class="field" data-upload-sheet-only><label>Sección de la plancha</label><select class="select" id="designUploadScope"><option value="salmos">SALMOS</option><option value="clients">Clientes</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo de archivo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field" data-upload-sheet-only><label>Nombre de la plancha (opcional)</label><input class="input" id="designUploadName" placeholder="Usar nombre del archivo"></div><div class="field hidden" data-sheet-size><label>Superficie total de la plancha (cm)</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field" data-upload-sheet-only><label>Costo de la plancha ($)</label><input class="input" id="designUploadCost" type="number" min="0" step=".01" value="10000"></div><div class="hidden" id="designUploadTagPicker"></div><div class="field"><label>Impresión / costo</label><select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple></div><div class="field full design-client-link"><button type="button" class="btn btn-ghost" data-add-design-client>+ Cliente</button><span data-design-client-name></span><button type="button" class="btn btn-ghost" data-choose-design-client>Elegir cliente</button></div><div class="field full hidden" id="designUploadBatchMeta"></div></div>
 
 
         <p class="field-help hidden" id="sheetDraftNotice" role="status"></p><div id="designUploadComposition" data-sheet-composition-host class="hidden"></div>
@@ -251,13 +253,14 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.37"></script>
-  <script src="montage-effects.js?v=25.37"></script>
-  <script src="contacts-import.js?v=25.37" defer></script>
-  <script src="sharing.js?v=25.37" defer></script>
-  <script src="clients.js?v=25.37" defer></script>
-  <script src="admin.js?v=25.37" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.37',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="colors.js?v=25.38"></script>
+  <script src="montage-effects.js?v=25.38"></script>
+  <script src="contacts-import.js?v=25.38" defer></script>
+  <script src="sharing.js?v=25.38" defer></script>
+  <script src="clients.js?v=25.38" defer></script>
+  <script src="production-text.js?v=25.38" defer></script>
+  <script src="admin.js?v=25.38" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.38',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
