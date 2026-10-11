@@ -11,13 +11,13 @@
   <link rel="icon" href="admin-icon-black.svg">
   <link rel="apple-touch-icon" href="admin-icon-black-192.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.39">
+  <link rel="stylesheet" href="styles.css?v=25.40">
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
-  <link rel="stylesheet" href="colors.css?v=25.39">
+  <link rel="stylesheet" href="colors.css?v=25.40">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.39">
-  <link rel="stylesheet" href="sharing.css?v=25.39">
-  <link rel="stylesheet" href="production-fonts.css?v=25.39">
+  <link rel="stylesheet" href="admin-v4.css?v=25.40">
+  <link rel="stylesheet" href="sharing.css?v=25.40">
+  <link rel="stylesheet" href="production-fonts.css?v=25.40">
 </head>
 <body>
   <div class="admin-layout">
@@ -108,6 +108,7 @@
             <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock físico</option><option value="to_stock">A stockear / preparar al vender</option></select></div>
             <div class="field production-qty-field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
             
+            <div class="field production-print-type-field"><label>DTF</label><select class="select" id="productionPrintType"><option value="dtf_textile">Textil</option><option value="dtf_uv">UV</option></select></div><div class="field production-print-rate-field"><label id="productionPrintRateLabel">Costo del metro ($)</label><input class="input" id="productionPrintRate" type="number" min="0" step="any" value="10000"></div>
             <div class="field production-waste-field"><label>Extra DTF por desperdicio (%)</label><input class="input" id="productionWaste" type="number" min="0" step=".01" value="10"></div>
           </div>
           <div class="production-stock-note" id="productionStockNote">Stock físico descuenta la materia prima al iniciar producción. “A stockear” guarda la receta sin consumirla todavía.</div>
@@ -118,8 +119,8 @@
           <section class="production-mockup-card" id="productionMockupStudio">
             <div class="production-mockup-head"><div><h3>Vista previa del producto</h3><p class="muted">Componé una imagen con tus fotos base y estampas elegidas. No usa generación con IA.</p></div></div>
             <div class="production-mockup-workspace">
-              <div class="production-mockup-preview-column"><div class="mockup-zoom-controls" aria-label="Zoom de la vista previa"><span id="mockupZoomValue">100%</span></div><div class="production-mockup-preview"><canvas id="productionMockupCanvas" width="720" height="900" aria-label="Vista previa compuesta; podés mover y cambiar el tamaño de cada estampa"></canvas><div id="productionMockupEmpty" class="mockup-empty">Elegí una foto base y al menos un diseño para previsualizar.</div></div><p class="mockup-touch-hint">Arrastrá una estampa para moverla y su esquina para cambiar tamaño. Con zoom, arrastrá un espacio vacío para recorrer la imagen.</p></div>
-              <aside class="production-mockup-sidebar"><div class="production-mockup-controls"><label class="field full hidden">Foto correspondiente<select class="select" id="mockupBaseSelect"><option value="">Elegir foto</option></select></label><div class="field full"><label>Variantes cargadas · elegí la foto exacta</label><div class="mockup-variant-gallery" id="mockupVariantGallery"></div></div><label class="field full hidden">Fondo<select class="select" id="mockupBackgroundSelect"><option value="">Sin fondo agregado</option></select></label><div class="field full"><label>Fondos cargados</label><div class="mockup-background-gallery" id="mockupBackgroundGallery"></div></div></div><div class="mockup-layer-editor" id="mockupLayerEditor"><p class="muted">Elegí una estampa y ajustá cada una por separado.</p></div><div class="production-mockup-actions"><small id="mockupAssetHint">Elegí modelo, vista y prenda; luego ajustá por separado las estampas elegidas.</small><button class="btn btn-secondary" type="button" id="downloadMockupBtn" disabled title="PNG sin pérdida, renderizado con la resolución de la foto original">Descargar PNG · máxima calidad</button><button class="btn btn-ghost" type="button" id="downloadAllProductViewsBtn">Descargar todas las vistas</button><button class="btn btn-primary" type="button" id="addMockupToProductBtn" disabled>Agregar vista a fotos del producto</button><div class="mockup-product-views" id="mockupProductViews" aria-label="Vistas agregadas al producto"></div></div></aside>
+              <div class="production-mockup-preview-column"><div class="mockup-zoom-controls" aria-label="Herramientas de edición"><span id="mockupZoomValue">100%</span></div><div class="production-mockup-preview"><canvas id="productionMockupCanvas" width="720" height="900" aria-label="Vista previa compuesta; podés mover y cambiar el tamaño de cada estampa"></canvas><div id="productionMockupEmpty" class="mockup-empty">Elegí una foto base y al menos un diseño para previsualizar.</div></div><p class="mockup-touch-hint">Arrastrá una estampa para moverla y su esquina para cambiar tamaño. Con zoom, arrastrá un espacio vacío para recorrer la imagen.</p></div>
+              <aside class="production-mockup-sidebar"><div class="production-mockup-controls"><label class="field full hidden">Foto correspondiente<select class="select" id="mockupBaseSelect"><option value="">Elegir foto</option></select></label><div class="field full"><label>Variantes cargadas · elegí la foto exacta</label><div class="mockup-variant-gallery" id="mockupVariantGallery"></div></div><label class="field full hidden">Fondo<select class="select" id="mockupBackgroundSelect"><option value="">Sin fondo agregado</option></select></label><div class="field full"><label>Fondos cargados</label><div class="mockup-background-gallery" id="mockupBackgroundGallery"></div></div></div><div class="mockup-layer-editor" id="mockupLayerEditor"><p class="muted">Elegí una estampa y ajustá cada una por separado.</p></div><div class="production-mockup-actions"><small id="mockupAssetHint">Elegí modelo, vista y prenda; luego ajustá por separado las estampas elegidas.</small><button class="btn btn-secondary" type="button" id="downloadMockupBtn" disabled title="PNG sin pérdida, renderizado con la resolución de la foto original">Descargar PNG · máxima calidad</button><button class="btn btn-ghost" type="button" id="downloadAllProductViewsBtn">Descargar todas las vistas</button><button class="btn btn-primary" type="button" id="addMockupToProductBtn" disabled>Agregar vista a fotos del producto</button><label class="mockup-keep-layout"><input type="checkbox" id="mockupKeepLayout"> Conservar composición al cambiar foto</label><div class="mockup-product-views" id="mockupProductViews" aria-label="Vistas agregadas al producto"></div></div></aside>
             </div>
           </section>
           
@@ -253,14 +254,14 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.39"></script>
-  <script src="montage-effects.js?v=25.39"></script>
-  <script src="contacts-import.js?v=25.39" defer></script>
-  <script src="sharing.js?v=25.39" defer></script>
-  <script src="clients.js?v=25.39" defer></script>
-  <script src="production-text.js?v=25.39" defer></script>
-  <script src="admin.js?v=25.39" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.39',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="colors.js?v=25.40"></script>
+  <script src="montage-effects.js?v=25.40"></script>
+  <script src="contacts-import.js?v=25.40" defer></script>
+  <script src="sharing.js?v=25.40" defer></script>
+  <script src="clients.js?v=25.40" defer></script>
+  <script src="production-text.js?v=25.40" defer></script>
+  <script src="admin.js?v=25.40" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.40',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">

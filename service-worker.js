@@ -1,5 +1,5 @@
-const CACHE='salmos-pwa-v25-39';
-const CORE=['/','/index.html','/styles.css?v=25.39','/app.js?v=25.39','/config.js','/sharing.js?v=25.39','/sharing.css?v=25.39','/colors.js?v=25.39','/foreground.js?v=25.39','/montage-effects.js?v=25.39','/colors.css?v=25.39','/vendor/pickr/pickr.min.js?v=1.9.1','/vendor/pickr/nano.min.css?v=1.9.1','/icon-192.png','/icon-512.png','/logo-mark.png','/share-salmos-25-35.jpg','/banner-salmos-header.png','/banner-salmos-light.png','/manifest.webmanifest'];
+const CACHE='salmos-pwa-v25-40';
+const CORE=['/','/index.html','/styles.css?v=25.40','/app.js?v=25.40','/config.js','/sharing.js?v=25.40','/sharing.css?v=25.40','/colors.js?v=25.40','/foreground.js?v=25.40','/montage-effects.js?v=25.40','/colors.css?v=25.40','/vendor/pickr/pickr.min.js?v=1.9.1','/vendor/pickr/nano.min.css?v=1.9.1','/icon-192.png','/icon-512.png','/logo-mark.png','/share-salmos-25-35.jpg','/banner-salmos-header.png','/banner-salmos-light.png','/manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).catch(()=>{}).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{

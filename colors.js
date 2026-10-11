@@ -25,7 +25,7 @@
     if(active){active.hide();active.destroyAndRemove();active=null;}
     const original=normalize(value),rollback=normalize(cancelValue),container=paletteHost||button.closest('dialog[open]')||document.body;
     const picker=window.Pickr.create({el:button,container,inline,useAsButton:true,theme:'nano',appClass:'salmos-color-palette'+(inline?' salmos-inline-palette':''),position:'bottom-middle',closeOnScroll:true,default:original||'#ffffff',defaultRepresentation:'HEX',swatches:[...new Set([...choices,...swatches])],comparison:true,
-      components:{preview:true,opacity,hue:true,interaction:{hex:true,input:true,clear:true,save:true,cancel:true}},
+      components:{preview:true,opacity,hue:true,interaction:{hex:false,input:true,clear:true,save:true,cancel:true}},
       i18n:{'ui:dialog':'Elegir color','btn:toggle':'Abrir paleta','btn:swatch':'Elegir muestra','btn:last-color':'Color anterior','btn:save':'Aplicar','btn:cancel':'Cancelar','btn:clear':clearLabel,'aria:btn:save':'Aplicar color','aria:btn:cancel':'Cancelar cambio','aria:btn:clear':clearLabel,'aria:input':'Código del color','aria:palette':'Paleta de color','aria:hue':'Tono','aria:opacity':'Transparencia'}});
     active=picker;let committed=false;
     let nameInput;picker.on('init',()=>{if(inline&&paletteHost)paletteHost.append(picker.getRoot().app);const label=document.createElement('label');label.className='salmos-color-name';label.textContent='Nombre del color';nameInput=document.createElement('input');nameInput.type='text';nameInput.maxLength=80;nameInput.placeholder='Por ejemplo: verde oliva';nameInput.value=name||nameForColor(original)||'';label.append(nameInput);picker.getRoot().app.append(label);picker.show();});

@@ -1,0 +1,80 @@
+SALMOS — Actualización 25.40
+
+INSTALACIÓN
+Aplicar sobre la versión 25.39. Este ZIP contiene solamente archivos modificados
+o nuevos; los demás archivos permanecen en el sitio.
+1. Reemplazar los archivos web incluidos, respetando los nombres y rutas.
+2. Publicar también worker.js en el Worker de SALMOS. Es necesario para guardar
+   variantes múltiples y el tipo de impresión de las medidas nuevas.
+3. No ejecutar schema.sql ni seed.sql. La columna de tipo de impresión se agrega
+   automáticamente, conservando las recetas y datos existentes.
+4. Recargar la página. Si sigue apareciendo la versión anterior, cerrar y volver
+   a abrir la aplicación o recargar sin caché en PC.
+
+FOTOS DE MONTAJE
+- Materiales/características usa el mismo catálogo por producto que Compras.
+- Materiales y variantes permiten marcar varias opciones en un desplegable.
+- Las opciones se administran desde el mismo listado. Se conserva la vista Ambos.
+- Los materiales y las variantes seleccionados se guardan al subir o editar.
+
+EDICIÓN EN PRODUCCIÓN
+- PC y celular usan un único slider según la herramienta seleccionada:
+  superficie, pincel, curvatura, pliegues, posición del pliegue u opacidad.
+- La herramienta activa queda marcada con fondo y borde; se conserva la edición
+  directa con mouse o dedos. El pincel mantiene tamaño e intensidad ajustables.
+- Fuentes, Aa, B, color, los tres giros y deshacer están en una misma fila de
+  botones compactos. Los giros afectan a la estampa o al texto seleccionado.
+- Al quitar el texto o su selección se cierra la lista de fuentes.
+- Deshacer y deshacer todo recuperan los cambios de la composición: posiciones,
+  tamaños, giros, efectos, pincel, texto, fondo y foto base. Ctrl+Z usa ese historial
+  cuando no se está escribiendo dentro de un campo de texto.
+- Seleccionar un diseño conserva el desplazamiento de la galería.
+- Se quitaron Compra y pago debajo de Agregar vista, Aplicar en lado A/B y
+  Agregar a la otra cara. La compra se gestiona desde Editar materia prima.
+- Conservar composición al cambiar foto permite reutilizar ubicación, tamaño,
+  giro y efectos de las estampas o textos al elegir una foto nueva. Desmarcado,
+  una foto nueva empieza sin estampas. Las vistas existentes conservan su edición.
+
+MEDIDAS Y COSTOS
+- La medida de impresión sigue respetando el ancho y alto ingresados.
+- A su lado se muestra el uso visual actual aproximado, que cambia al escalar.
+- Ancho real (cm) permite ajustar la referencia del producto. El botón contiguo
+  permite marcar dos extremos de ese ancho en la foto para calibrarla.
+- Se sugieren 50 cm para prendas, 20 cm para gorras, 10 cm para tazas/vasos y
+  8 cm para termos. Son referencias editables: una foto por sí sola no determina
+  una medida física exacta. En fotos Ambos se contempla que hay dos vistas.
+- Antes del desperdicio se agregaron DTF Textil/UV y su precio, en la misma fila.
+- Sugerencias: textil $10.000 por metro; UV $12.000 por medio metro.
+- El cálculo por superficie usa 58 × 100 cm en textil y 58 × 50 cm en UV.
+- Las medidas nuevas o personalizadas usan ese costo sugerido; un costo ingresado
+  manualmente se conserva. Las medidas de una plancha mantienen su costo registrado.
+- El tipo DTF elegido para medidas personalizadas se guarda en la receta de esta
+  producción y usa el insumo correspondiente, sin cambiar el diseño original.
+
+WHATSAPP
+- PC conserva la apertura de pestañas por contacto, texto y enlaces precargados,
+  y copia de la imagen al portapapeles en la misma acción.
+- Celular vuelve a compartir el archivo original junto al texto y enlaces mediante
+  el menú del dispositivo. Ahí se elige WhatsApp y el contacto manualmente.
+- Los contactos seleccionados quedan debajo, con un check manual para registrar
+  a quién ya se envió. Sus botones abren el chat individual con el texto cargado.
+- Sin archivo, WhatsApp en celular abre directamente el primer contacto elegido.
+- No hay envío automático ni API paga. Los checks no se marcan por abrir un chat:
+  se marcan manualmente después del envío.
+
+PRODUCTOS, MATERIA PRIMA Y DISEÑOS
+- El círculo de color está antes del talle en PC y celular, sin deformarse.
+- Check de guardar stock más chico, con más espacio para los botones menos/más.
+- El lápiz pasa a check al activar la edición, conservando los guardados por fila.
+- Agregar un renglón en Compras lleva al renglón nuevo. Al guardar materia prima
+  desde producción se selecciona y muestra su ficha en la galería.
+- Los diseños de clientes están cerrados por defecto al entrar en Diseños;
+  se pueden abrir con su flecha y siguen funcionando en la galería completa.
+- La paleta Pickr conserva sus colores y controles, sin el botón técnico HEXA.
+
+VERIFICACIÓN
+Se comprobaron controles reales de la interfaz, clasificación múltiple, giros de
+texto, conservación de vistas, historial de edición, medidas, costos, compras,
+stock y las dos rutas de compartir. Se comprobaron las migraciones y recetas
+contra SQLite, incluida la selección de insumo UV sin alterar el diseño original.
+El envío final dentro de WhatsApp se realiza manualmente en el dispositivo.
