@@ -1,22 +1,26 @@
-# SALMOS V23
+Actualización actual: `INSTRUCCIONES_25.42.txt`. El Worker vigente es `worker.js`.
 
-Actualización acumulativa de la tienda y el administrador.
+# SALMOS 25.12
 
-Leé `ACTUALIZAR_V23.txt`: esta versión requiere actualizar tanto la tienda como
-el Worker. Conservá las variables, secretos y enlaces actuales de Cloudflare.
-Los cambios están detallados en `CAMBIOS_V23.txt`.
+Actualización puntual de la tienda y el administrador: carga de diseños por
+partes, respaldo local de marcas, disponibilidad por defecto en los talles,
+control interno opcional, galerías junto al visor y descarga PNG de Producción
+con la resolución de la foto original.
 
-No ejecutar `schema.sql` o `seed.sql` sobre la base existente.
+Leé `ACTUALIZAR_25_12.txt`. Actualizá el Worker con `worker.js` y los siete
+archivos de la tienda allí indicados. Si aún conservás la plancha abierta,
+seguí primero los pasos de `GUARDAR_PLANCHA_ABIERTA.js` para guardarla sin
+recargar la pestaña.
 
-Vía Cargo se habilita desde Configuración y se coordina con el costo separado.
+La base existente se conserva mediante migraciones automáticas. No ejecutar
+`schema.sql` ni `seed.sql` sobre ella.
 
-Para ejecutar las comprobaciones locales, usá Node con soporte para `node:sqlite`:
+Comprobaciones locales (Node 24, sin dependencias adicionales):
 
 ```
-node tests/backend.cjs
-node tests/frontend.cjs
-node tests/shipping.cjs
+node checks/backend.cjs
+node checks/frontend.cjs
 ```
 
-Las pruebas usan datos locales y transporte simulado, sin enviar correos ni
-modificar la tienda publicada.
+Usan una base temporal, transporte simulado y un DOM de prueba. No envían
+correos ni acceden a los datos de la tienda publicada.
