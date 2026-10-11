@@ -11,13 +11,13 @@
   <link rel="icon" href="admin-icon-black.svg">
   <link rel="apple-touch-icon" href="admin-icon-black-192.png">
   <link rel="manifest" href="admin-manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.42">
+  <link rel="stylesheet" href="styles.css?v=25.43">
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
-  <link rel="stylesheet" href="colors.css?v=25.42">
+  <link rel="stylesheet" href="colors.css?v=25.43">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.42">
-  <link rel="stylesheet" href="sharing.css?v=25.42">
-  <link rel="stylesheet" href="production-fonts.css?v=25.42">
+  <link rel="stylesheet" href="admin-v4.css?v=25.43">
+  <link rel="stylesheet" href="sharing.css?v=25.43">
+  <link rel="stylesheet" href="production-fonts.css?v=25.43">
 </head>
 <body>
   <div class="admin-layout">
@@ -45,7 +45,7 @@
       <header class="admin-topbar">
         <button class="icon-btn admin-menu-btn" id="adminMenuBtn" type="button">☰</button>
         <div class="admin-title-wrap"><img class="admin-title-seal" src="admin-sello-gloria-rosa-ui.png" alt="" aria-hidden="true"><div><div class="admin-eyebrow">Panel SALMOS</div><h1 id="viewTitle">Dashboard</h1></div></div>
-        <div class="admin-topbar-actions"><button type="button" class="icon-btn" id="adminNotificationsBtn" aria-label="Notificaciones"><i class="fa-solid fa-bell"></i></button><button class="btn btn-ghost admin-list-toggle" id="collapseAdminListsBtn" type="button" title="Comprimir listados largos">Comprimir listas</button><button class="btn btn-ghost admin-list-toggle hidden" id="expandAdminListsBtn" type="button" title="Descomprimir listados">Descomprimir listas</button><button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button></div>
+        <div class="admin-topbar-actions"><button class="btn btn-ghost admin-list-toggle" id="collapseAdminListsBtn" type="button" title="Comprimir listados largos">Comprimir listas</button><button class="btn btn-ghost admin-list-toggle hidden" id="expandAdminListsBtn" type="button" title="Descomprimir listados">Descomprimir listas</button><button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button></div>
       </header>
       <section class="admin-content" id="adminContent"><div class="empty-state"><strong>Cargando panel...</strong></div></section>
     </main>
@@ -140,7 +140,7 @@
             <div class="field full"><label>Versículo</label><textarea class="textarea" id="productionVerse" rows="3"></textarea></div>
             <div class="field full"><label>Cita</label><input class="input" id="productionVerseReference" placeholder="Ej.: Salmos 121:2"></div>
           </div></div>
-          <div class="form-section shipping-suggestion-card"><div class="admin-section-head"><div><h3>Datos para envío</h3><p class="muted">Se sugieren según el artículo y su capacidad. Podés editar cualquier valor.</p></div><span class="status" id="productionShippingHint">Sugerido</span></div><div class="form-grid"><div class="field"><label>Capacidad (ml)</label><input class="input" id="productionCapacity" type="number" min="0" step="10" placeholder="Si aplica"></div><div class="field"><label>Peso (g)</label><input class="input" id="productionWeight" type="number" min="0"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionHeight" type="number" min="0" step=".1"></div><div class="field"><label>Ancho (cm)</label><input class="input" id="productionWidth" type="number" min="0" step=".1"></div><div class="field"><label>Largo (cm)</label><input class="input" id="productionDepth" type="number" min="0" step=".1"></div></div></div>
+          <div class="form-section shipping-suggestion-card"><div class="admin-section-head"><div><h3>Datos para envío</h3><p class="muted">Se sugieren según el artículo y su capacidad. Podés editar cualquier valor.</p></div><span class="status" id="productionShippingHint">Sugerido</span></div><div class="form-grid"><div class="field hidden"><label>Capacidad (ml)</label><input class="input" id="productionCapacity" type="number" min="0" step="10" placeholder="Si aplica"></div><div class="field"><label>Peso (g)</label><input class="input" id="productionWeight" type="number" min="0"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionHeight" type="number" min="0" step=".1"></div><div class="field"><label>Ancho (cm)</label><input class="input" id="productionWidth" type="number" min="0" step=".1"></div><div class="field"><label>Largo (cm)</label><input class="input" id="productionDepth" type="number" min="0" step=".1"></div></div></div>
           <div class="toggle-row"><label class="toggle-label"><input type="checkbox" id="productionIsNew"> Novedad</label><label class="toggle-label"><input type="checkbox" id="productionFeatured"> Destacado</label><label class="toggle-label"><input type="checkbox" id="productionBestseller"> Más vendido</label></div>
         </section>
       </div>
@@ -254,14 +254,14 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.42"></script>
-  <script src="montage-effects.js?v=25.42"></script>
-  <script src="contacts-import.js?v=25.42" defer></script>
-  <script src="sharing.js?v=25.42" defer></script>
-  <script src="clients.js?v=25.42" defer></script>
-  <script src="production-text.js?v=25.42" defer></script>
-  <script src="admin.js?v=25.42" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.42',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="colors.js?v=25.43"></script>
+  <script src="montage-effects.js?v=25.43"></script>
+  <script src="contacts-import.js?v=25.43" defer></script>
+  <script src="sharing.js?v=25.43" defer></script>
+  <script src="clients.js?v=25.43" defer></script>
+  <script src="production-text.js?v=25.43" defer></script>
+  <script src="admin.js?v=25.43" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.43',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">

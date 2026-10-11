@@ -533,6 +533,7 @@
   }
   function shareFlyer(id){const flyer=state.flyers.find(x=>Number(x.id)===Number(id));if(flyer)window.SalmosShare.open({flyer});}
 
+  function renderSkeletons(){for(const id of ['productGrid','orderProductGrid']){const grid=qs('#'+id);if(grid)grid.innerHTML=Array.from({length:6},()=>'<div class="product-card store-loading-card" aria-hidden="true"><div class="product-media"></div><div class="product-body"><span class="store-loading-line"></span></div></div>').join('');}}
   async function loadStore() {
     renderSkeletons();
     try {
@@ -599,7 +600,7 @@
     const section=qs('#productos');if(!section)return;
     const toolbar=document.createElement('div');toolbar.id='storeOrderToolbar';toolbar.className='store-order-toolbar';section.before(toolbar);
     toolbar.innerHTML='<strong>Abriendo el editor de orden…</strong>';
-    let editableProducts=[];try{const data=await api('/api/admin/products',{credentials:'same-origin'});editableProducts=data.items||[];}catch{toolbar.innerHTML='<strong>No se pudo abrir el editor. Entrá a Admin con tu sesión y tocá «Ordenar en la tienda».</strong><a class="btn btn-ghost" href="admin.html">Ir a Admin</a>';return;}
+    let editableProducts=[];try{const data=await api('/api/admin/products',{credentials:'include',redirect:'manual'});editableProducts=data.items||[];}catch{toolbar.innerHTML='<strong>No se pudo abrir el editor. Entrá a Admin con tu sesión y tocá «Ordenar en la tienda».</strong><a class="btn btn-ghost" href="admin.html">Ir a Admin</a>';return;}
     state.storeMontageProductIds=new Set(editableProducts.filter(product=>product.has_production_recipe).map(product=>Number(product.id)));state.storeForegroundPrepared=new Set();state.storeOrderEditor={enabled:true,drafts:new Map(),saving:false,backgrounds:window.SalmosColors.photoBackgrounds(state.config?.productPhotoBackgrounds),savedBackgrounds:window.SalmosColors.photoBackgrounds(state.config?.productPhotoBackgrounds),backgroundDirty:false};state.activeCategory='all';state.query='';const search=qs('#searchInput');if(search){search.value='';search.disabled=true;}
     document.body.classList.add('store-order-editing');
     const style=document.createElement('style');style.textContent=`
@@ -641,7 +642,7 @@
   }
   async function saveStoreProductOrders(){
     const editor=state.storeOrderEditor;if(!editor||editor.saving||editor.preparing||editor.preparing||(!editor.drafts.size&&!editor.backgroundDirty))return;editor.saving=true;renderStoreOrderControls();
-    try{for(const [category,ids] of [...editor.drafts]){await api('/api/admin/products/order',{method:'PATCH',credentials:'same-origin',body:JSON.stringify({category,ids})});const ranks=new Map(ids.map((id,i)=>[Number(id),i]));for(const p of state.products)if(ranks.has(Number(p.id)))p[category==='all'?'display_order':'category_display_order']=ranks.get(Number(p.id));editor.drafts.delete(category);}if(editor.backgroundDirty){await api('/api/admin/settings',{method:'PUT',credentials:'include',body:JSON.stringify({settings:{product_photo_backgrounds:JSON.stringify(editor.backgrounds)}})});editor.savedBackgrounds=structuredClone(editor.backgrounds);editor.backgroundDirty=false;state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);}toast('Orden y fondos guardados en la tienda','success');}
+    try{for(const [category,ids] of [...editor.drafts]){await api('/api/admin/products/order',{method:'PATCH',credentials:'include',redirect:'manual',body:JSON.stringify({category,ids})});const ranks=new Map(ids.map((id,i)=>[Number(id),i]));for(const p of state.products)if(ranks.has(Number(p.id)))p[category==='all'?'display_order':'category_display_order']=ranks.get(Number(p.id));editor.drafts.delete(category);}if(editor.backgroundDirty){await api('/api/admin/settings',{method:'PUT',credentials:'include',body:JSON.stringify({settings:{product_photo_backgrounds:JSON.stringify(editor.backgrounds)}})});editor.savedBackgrounds=structuredClone(editor.backgrounds);editor.backgroundDirty=false;state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);}toast('Orden y fondos guardados en la tienda','success');}
     catch(err){toast(`No se guardaron todos los cambios: ${err.message}`,'error');}
     finally{editor.saving=false;renderProducts();}
   }
