@@ -1831,3 +1831,9 @@ body #fitCatalogDialog [data-fit-catalog-rows]{max-height:55dvh;overflow-y:auto;
 .purchase-notes-grid>.purchase-payment-details .purchase-payment-grid{grid-template-columns:1fr}
 #purchaseFunding{margin:14px 0}#purchaseExistingReceipts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 @media(max-width:650px){.purchase-notes-grid>.purchase-payment-details,.purchase-notes-grid>.field:has([name="attachments"]){grid-column:1/-1}}
+
+/* Distinguir la fila de título sin cambiar la distribución existente. */
+body .purchase-compact-row{position:relative;isolation:isolate}
+body .purchase-compact-row::before{content:"";position:absolute;inset:4px 4px auto;height:54px;border-radius:9px;background:#7a3654;z-index:-1;pointer-events:none}
+body .purchase-compact-row .purchase-row-heading{color:#fff0f7}
+@media(max-width:760px){body .purchase-compact-row::before{height:42px}}
