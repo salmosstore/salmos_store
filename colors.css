@@ -21,6 +21,3 @@
 .pcr-app.salmos-color-palette .salmos-color-name input{min-height:40px}
 .pcr-app.salmos-inline-palette{max-height:calc(100dvh - 48px);overflow-y:auto;scroll-margin-top:16px}
 
-.pcr-app.salmos-color-palette .pcr-interaction .pcr-save{background:#efbfd5;color:#503446}
-.pcr-app.salmos-color-palette .pcr-interaction .pcr-cancel{background:#f6dce8;color:#503446}
-.pcr-app.salmos-color-palette .pcr-interaction .pcr-clear{background:#edd2e0;color:#503446}
