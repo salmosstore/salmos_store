@@ -1824,3 +1824,10 @@ body .purchase-funding-summary{padding:10px 0;border-top:1px solid var(--line)}
 body #purchaseExistingReceipts:empty{display:none}
 body #purchaseFunding [data-funding-new]{min-width:0}
 body #fitCatalogDialog [data-fit-catalog-rows]{max-height:55dvh;overflow-y:auto;overflow-x:hidden}
+
+/* Compra: comprobantes y detalle juntos; notas al final. */
+.purchase-notes-grid>.purchase-payment-details{grid-column:auto;min-width:0}
+.purchase-notes-grid>.field:has([name="attachments"]){grid-column:auto}
+.purchase-notes-grid>.purchase-payment-details .purchase-payment-grid{grid-template-columns:1fr}
+#purchaseFunding{margin:14px 0}#purchaseExistingReceipts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+@media(max-width:650px){.purchase-notes-grid>.purchase-payment-details,.purchase-notes-grid>.field:has([name="attachments"]){grid-column:1/-1}}

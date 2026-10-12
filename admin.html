@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.44">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.44">
+  <link rel="stylesheet" href="admin-v4.css?v=25.45">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -85,13 +85,13 @@
             <div class="field payment-cash-field"><label>Importe abonado en efectivo ($)</label><input class="input" name="cash_amount" id="purchaseCashAmount" type="number" min="0" step="0.01"></div>
             <div class="field payment-transfer-field hidden"><label>Importe abonado por transferencia ($)</label><input class="input" name="transfer_amount" id="purchaseTransferAmount" type="number" min="0" step="0.01"></div>
           </div>
-          <div class="purchase-payment-details payment-transfer-field hidden">
+          <div class="purchase-payment-help" id="purchasePaymentHelp">Al guardar la compra, el pago se registra automáticamente en Caja.</div>
+        </section>
+        <div class="form-grid purchase-notes-grid">          <div class="purchase-payment-details payment-transfer-field hidden">
             <div class="purchase-transfer-title">Detalles de la transferencia / alias</div>
             <div class="purchase-payment-grid"><div class="field"><label>Cuenta / alias de origen (opcional)</label><input class="input" id="purchaseTransferOrigin" name="transfer_origin" list="purchaseAccountOptions" placeholder="Mercado Pago, banco, alias..."></div><div class="field"><label>Cuenta / alias de destino <span class="muted">(opcional)</span></label><input class="input" id="purchaseTransferDestination" name="transfer_destination" placeholder="Cuenta / alias del proveedor"></div><div class="field"><label>N.º de operación / referencia</label><input class="input" id="purchaseTransferReference" name="transfer_reference" placeholder="Opcional"></div><div class="field"><label>Detalle de la transferencia</label><input class="input" id="purchaseTransferDetails" name="transfer_details" placeholder="Banco, titular u observaciones"></div></div>
           </div>
-          <div class="purchase-payment-help" id="purchasePaymentHelp">Al guardar la compra, el pago se registra automáticamente en Caja.</div>
-        </section>
-        <div class="form-grid purchase-notes-grid"><div class="field full"><label>Notas</label><textarea class="textarea" name="notes" rows="2" placeholder="Opcional"></textarea></div><div class="field full"><label>Comprobantes / imágenes</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Quedan vinculados a la compra y al egreso generado en Caja.</small></div></div>
+<div class="field full"><label>Notas</label><textarea class="textarea" name="notes" rows="2" placeholder="Opcional"></textarea></div><div class="field full"><label>Comprobantes / imágenes</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Quedan vinculados a la compra y al egreso generado en Caja.</small></div></div>
       </div>
       <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelPurchaseBtn">Cancelar</button><button class="btn btn-primary" type="button" id="savePurchaseBtn">Guardar compra</button></div>
     </form>
@@ -260,7 +260,7 @@
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.44" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.44.1" defer></script>
+  <script src="admin.js?v=25.45" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.44.1',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
