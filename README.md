@@ -1,4 +1,4 @@
-Actualización actual: `INSTRUCCIONES_25.43.txt`. El Worker vigente es `worker.js`.
+Actualización actual: `INSTRUCCIONES_25.44.txt`. El Worker vigente es `worker.js`.
 
 # SALMOS 25.12
 
