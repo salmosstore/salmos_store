@@ -4,7 +4,7 @@
 
   const cfg = window.SALMOS_CONFIG || {};
   const API = (cfg.API_BASE_URL || '').replace(/\/$/, '');
-  const apiUrl = path => `${API}${path}`;
+  const apiUrl = path => /^https?:\/\//i.test(String(path))?String(path):`${API}${path}`;
   const qs = (s,r=document)=>r.querySelector(s);
   const qsa=(s,r=document)=>[...r.querySelectorAll(s)];
   const escapeHtml=(v='')=>String(v).replace(/[&<>'"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[s]));
@@ -750,7 +750,7 @@
   }
   function purchaseTypeField(item,i){
     const type=item.materialType||'shirt',opts=currentPurchaseTypes(),isKnown=opts.some(([v])=>v===type);
-    return `<div class="field purchase-type-field"><label>Tipo</label><select class="select" data-purchase-type-select data-row="${i}">${opts.map(([v,l])=>`<option value="${v}" ${type===v?'selected':''}>${escapeHtml(l)}</option>`).join('')}${!isKnown&&type!=='__other__'?`<option value="${escapeHtml(type)}" selected>${escapeHtml(materialTypeLabel(type))}</option>`:''}<option value="__other__">＋ Otro...</option>${field==='fit'?'<option value="__manage_fits__">Administrar cortes…</option>':''}</select></div>`;
+    return `<div class="field purchase-type-field"><label>Tipo</label><select class="select" data-purchase-type-select data-row="${i}">${opts.map(([v,l])=>`<option value="${v}" ${type===v?'selected':''}>${escapeHtml(l)}</option>`).join('')}${!isKnown&&type!=='__other__'?`<option value="${escapeHtml(type)}" selected>${escapeHtml(materialTypeLabel(type))}</option>`:''}<option value="__other__">＋ Otro...</option></select></div>`;
   }
   function purchaseImageField(item,i){
     if(materialIsDtf(item.materialType)){
@@ -3090,7 +3090,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(e.target.closest('[data-open-balance-chart]')){openBalanceChart();return;}
       const review=e.target.closest('[data-view-purchase]');if(review){try{await openPurchaseReview(Number(review.dataset.viewPurchase));}catch(err){toast(err.message,'error');}return;}
       const itemPhotos=e.target.closest('[data-purchase-item-photos]');if(itemPhotos){openPurchaseItemPhotos(Number(itemPhotos.dataset.purchaseItemPhotos));return;}const reviewArrow=e.target.closest('[data-purchase-review-arrow]');if(reviewArrow){const item=state.purchaseReview?.items[state.purchaseReview.activeItem];if(item?.photos.length)item.index=(item.index+Number(reviewArrow.dataset.purchaseReviewArrow)+item.photos.length)%item.photos.length;renderPurchaseReviewPhoto();return;}
-      const reviewedEdit=e.target.closest('[data-edit-reviewed-purchase]');if(reviewedEdit){qs('#purchaseReviewDialog').close();await openPurchaseDialog(state.purchases.find(x=>Number(x.id)===Number(reviewedEdit.dataset.editReviewedPurchase)));return;}
+      const reviewedEdit=e.target.closest('[data-edit-reviewed-purchase]');if(reviewedEdit){try{const data=await api(`/api/admin/purchases/${Number(reviewedEdit.dataset.editReviewedPurchase)}`,{cache:'no-store'});await openPurchaseDialog(data.item);qs('#purchaseReviewDialog')?.close();}catch(error){toast(error.message,'error');}return;}
       const colorFilter=e.target.closest('[data-product-global-color]');if(colorFilter){const value=colorFilter.dataset.productGlobalColor;state.stockFilters.color=state.stockFilters.color===value?'':value;const select=qs('#stockFilterColor');if(select)select.value=state.stockFilters.color;renderUnifiedProducts();return;}const cardColor=e.target.closest('[data-product-color-filter]');if(cardColor){state.productColorFilters??={};const id=cardColor.dataset.productColorFilter;state.productColorFilters[id]=state.productColorFilters[id]===cardColor.dataset.color?'':cardColor.dataset.color;renderUnifiedProducts();return;}const sizeFilter=e.target.closest('[data-product-size-filter]');if(sizeFilter){const value=sizeFilter.dataset.productSizeFilter;if(!value){resetProductFilters();renderProducts().catch(err=>toast(err.message,'error'));return;}state.stockFilters.size=state.stockFilters.size===value?'':value;const select=qs('#stockFilterSize');if(select)select.value=state.stockFilters.size;renderUnifiedProducts();return;}
       const editGroup=e.target.closest('[data-stock-edit-group]');if(editGroup){const key=editGroup.closest('[data-stock-group]').dataset.stockGroup;state.stockEditingGroups??=new Set();state.stockEditingGroups.has(key)?state.stockEditingGroups.delete(key):state.stockEditingGroups.add(key);renderStockFiltered();return;}
       const stockLevelStep=e.target.closest('[data-stock-level-step]');if(stockLevelStep){const row=stockLevelStep.closest('[data-stock-level-row]'),input=qs(`[data-stock-level="${stockLevelStep.dataset.kind}"]`,row);input.value=String(Math.max(0,Number(input.value)+Number(stockLevelStep.dataset.stockLevelStep)));rememberStockLevels(row);return;}
