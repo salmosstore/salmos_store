@@ -1857,3 +1857,11 @@ body .purchase-row-items{padding:5px 3px!important;border-top:0!important}
 
 body .purchase-row-header .admin-date-stamp{display:inline-flex!important;align-items:center;gap:6px;white-space:nowrap}
 body .purchase-row-header .admin-date-stamp .admin-date-time{display:inline!important;margin:0!important}
+
+/* Medidas y referencia comparten la primera fila de comandos. */
+body #productionDialog .production-text-toolbar{display:flex!important;align-items:center!important;gap:4px!important;flex-wrap:wrap!important;margin:0!important}
+body #productionDialog #mockupResizeReadout{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:8px!important;height:30px!important;min-height:30px!important;padding:0 7px!important;margin:0 0 0 4px!important;font-size:11px!important;box-sizing:border-box}
+body #productionDialog #mockupResizeReadout label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+body #productionDialog #mockupResizeReadout input{height:26px!important;min-height:26px!important;width:65px!important;padding:3px 5px!important;box-sizing:border-box}
+body #productionDialog .production-text-toolbar>.icon-btn{height:30px!important;min-height:30px!important;box-sizing:border-box}
+body #productionDialog #productionTextTools{margin:0!important;padding:0!important}
