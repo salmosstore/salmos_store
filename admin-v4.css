@@ -1865,3 +1865,17 @@ body #productionDialog #mockupResizeReadout label{display:flex;align-items:cente
 body #productionDialog #mockupResizeReadout input{height:26px!important;min-height:26px!important;width:65px!important;padding:3px 5px!important;box-sizing:border-box}
 body #productionDialog .production-text-toolbar>.icon-btn{height:30px!important;min-height:30px!important;box-sizing:border-box}
 body #productionDialog #productionTextTools{margin:0!important;padding:0!important}
+
+/* Edición de originales y vistas terminadas. */
+.artwork-editor-dialog{width:min(1100px,96vw)!important;max-width:96vw!important}
+.artwork-editor-stage{display:grid;place-items:center;overflow:auto;max-height:62dvh;min-height:180px;border-radius:10px}
+.artwork-editor-stage canvas{display:block;max-width:100%;max-height:60dvh;width:auto;height:auto;cursor:crosshair}
+.artwork-editor-fields{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:10px 0}
+.artwork-editor-fields>label{display:flex;align-items:center;gap:6px;font-size:12px}
+.artwork-editor-fields input[type=range]{width:140px}.artwork-editor-fields input[type=color]{width:40px;height:30px}
+.production-carry-bulk{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 7px;margin:6px 0;font-size:11px;align-items:center}
+.production-carry-bulk button{border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:var(--surface);color:var(--text);cursor:pointer}
+.production-view-ok{display:inline-flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap}.production-view-ok input{width:15px;height:15px}
+.saved-view-ok{display:flex;align-items:center;justify-content:center;gap:3px;font-size:11px;padding:3px;color:var(--text)}.saved-view-ok input{width:14px;height:14px;margin:0}
+body .selected-design-preview-line{display:flex!important;flex-wrap:wrap;align-items:center;gap:6px}body .selected-design-preview-line .mockup-keep-design{font-size:10px}
+.design-upload-file-preview[data-edit-upload-artwork],.sheet-missing-thumb[data-edit-missing-artwork]{cursor:zoom-in}
