@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.49">
+  <link rel="stylesheet" href="admin-v4.css?v=25.50">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -26,14 +26,9 @@
       <nav class="admin-nav">
         <button class="admin-nav-btn active" data-view="dashboard">⌂ <span>Dashboard</span></button>
         <button class="admin-nav-btn" data-view="products">◫ <span>Productos</span></button>
-        <button class="admin-nav-btn" data-view="orders">▤ <span>Órdenes</span></button>
-        <button class="admin-nav-btn" data-view="customOrders">✦ <span>Pedidos</span></button>
         <button class="admin-nav-btn" data-view="clients">♙ <span>Clientes</span></button>
-        <button class="admin-nav-btn" data-view="purchases">🛒 <span>Compras</span></button>
         <button class="admin-nav-btn" data-view="production">⚒ <span>Producción</span></button>
-        <button class="admin-nav-btn" data-view="designs">◩ <span>Diseños</span></button>
         <button class="admin-nav-btn" data-view="coupons">🎟 <span>Cupones</span></button>
-        <button class="admin-nav-btn" data-view="categories">▦ <span>Categorías</span></button>
         <button class="admin-nav-btn" data-view="expenses">↕ <span>Caja</span></button>
         <button class="admin-nav-btn" data-view="flyers">▣ <span>Flyers</span></button>
         <button class="admin-nav-btn" data-view="settings">⚙ <span>Configuración</span></button>
@@ -45,7 +40,7 @@
       <header class="admin-topbar">
         <button class="icon-btn admin-menu-btn" id="adminMenuBtn" type="button">☰</button>
         <div class="admin-title-wrap"><img class="admin-title-seal" src="admin-sello-gloria-rosa-ui.png" alt="" aria-hidden="true"><div><div class="admin-eyebrow">Panel SALMOS</div><h1 id="viewTitle">Dashboard</h1></div></div>
-        <div class="admin-topbar-actions"><button class="btn btn-ghost admin-list-toggle" id="collapseAdminListsBtn" type="button" title="Comprimir listados largos">Comprimir listas</button><button class="btn btn-ghost admin-list-toggle hidden" id="expandAdminListsBtn" type="button" title="Descomprimir listados">Descomprimir listas</button><button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button></div>
+        <div class="admin-topbar-actions"><button class="btn btn-ghost admin-list-toggle" id="collapseAdminListsBtn" type="button" title="Ocultar listados" aria-label="Ocultar listados"><i class="fa-solid fa-chevron-up"></i></button><button class="btn btn-ghost admin-list-toggle hidden" id="expandAdminListsBtn" type="button" title="Mostrar listados" aria-label="Mostrar listados"><i class="fa-solid fa-chevron-down"></i></button><button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button></div>
       </header>
       <section class="admin-content" id="adminContent"><div class="empty-state"><strong>Cargando panel...</strong></div></section>
     </main>
@@ -221,13 +216,16 @@
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Diseños</div><h2>Subir diseño</h2></div><button class="icon-btn" type="button" id="closeDesignUploadBtn">×</button></div>
       <div class="dialog-body">
-        <div class="form-grid"><div class="field" data-upload-sheet-only><label>Sección de la plancha</label><select class="select" id="designUploadScope"><option value="salmos">SALMOS</option><option value="clients">Clientes</option><option value="mixed">Planchas mixtas</option></select></div><div class="field"><label>Tipo de archivo</label><select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></div><div class="field" data-upload-sheet-only><label>Nombre de la plancha (opcional)</label><input class="input" id="designUploadName" placeholder="Usar nombre del archivo"></div><div class="field hidden" data-sheet-size><label>Superficie total de la plancha (cm)</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min="0" step=".1" placeholder="Ancho cm"><span>×</span><input class="input" id="designUploadHeight" type="number" min="0" step=".1" placeholder="Alto cm"></div></div><div class="field" data-upload-sheet-only><label>Costo de la plancha ($)</label><input class="input" id="designUploadCost" type="number" min="0" step=".01" value="10000"></div><div class="hidden" id="designUploadTagPicker"></div><div class="field"><label>Impresión / costo</label><select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></div><div class="field full"><label>Archivos</label><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple></div><div class="field full design-client-link"><button type="button" class="btn btn-ghost" data-add-design-client>+ Cliente</button><span data-design-client-name></span><button type="button" class="btn btn-ghost" data-choose-design-client>Elegir cliente</button></div><div class="field full hidden" id="designUploadBatchMeta"></div></div>
+        <label class="field"><span>Archivos</span><input class="input" id="designUploadFiles" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.tif,.tiff" multiple></label>
+        <div class="design-upload-general-summary"><small id="designUploadMetaSummary"></small><button type="button" class="icon-btn" id="editDesignUploadMetaBtn" title="Datos generales" aria-label="Datos generales"><i class="fa-solid fa-sliders"></i></button></div>
+        <div class="form-grid"><div class="field hidden" data-upload-sheet-only><label>Sección de la plancha</label><select class="select" id="designUploadScope"><option value="salmos">SALMOS</option><option value="clients">Clientes</option><option value="mixed">Planchas mixtas</option></select></div><div class="field hidden" data-upload-sheet-only><label>Nombre de la plancha</label><input class="input" id="designUploadName"></div><div class="field hidden" data-sheet-size><label>Superficie de la plancha (cm)</label><div class="design-measures"><input class="input" id="designUploadWidth" type="number" min=".1" step="any" aria-label="Ancho de la plancha"><span>×</span><input class="input" id="designUploadHeight" type="number" min=".1" step="any" aria-label="Alto de la plancha"></div></div><div class="hidden" id="designUploadTagPicker"></div><div class="field full hidden" id="designUploadBatchMeta"></div></div>
+        <dialog class="admin-dialog tiny-dialog centered-prompt" id="designUploadMetaDialog"><div class="dialog-shell"><div class="dialog-head"><h2>Datos generales</h2><button type="button" class="icon-btn" id="closeDesignUploadMetaBtn" aria-label="Cerrar">×</button></div><div class="dialog-body"><div class="form-grid"><label class="field">Tipo de archivo<select class="select" id="designUploadKind"><option value="individual">Individual</option><option value="sheet">Plancha</option></select></label><label class="field">Tipo de impresión<select class="select" id="designUploadPrintType"><option value="dtf_textile">DTF textil</option><option value="dtf_uv">DTF UV</option><option value="none">Sin DTF</option></select></label><label class="field">Costo DTF ($)<input class="input" id="designUploadCost" type="number" min="0" step="1" value="10000"></label><label class="field" id="designUploadLengthField">Medida de impresión (cm)<span class="purchase-stepper"><button type="button" data-print-length-step="-1" aria-label="Restar medida">−</button><input class="input" id="designUploadLength" type="number" min="100" step="100" value="100"><button type="button" data-print-length-step="1" aria-label="Sumar medida">+</button></span></label><label class="toggle-label"><input type="checkbox" id="designUploadPrinted">Impreso</label></div></div><div class="dialog-foot"><button type="button" class="btn btn-primary" id="confirmDesignUploadMetaBtn">Continuar</button></div></div></dialog>
 
 
         <p class="field-help hidden" id="sheetDraftNotice" role="status"></p><div id="designUploadComposition" data-sheet-composition-host class="hidden"></div>
         <details class="sheet-purchase-panel hidden" id="designSheetPurchase" open><summary>Compra de la plancha impresa · obligatoria</summary><p class="field-help">Al guardar se registra la compra, el ingreso de DTF y el pago en Caja. Para cargarla sin compra, desmarcá “Impreso”.</p><div class="form-grid"><label class="field">Monto de compra ($)<input class="input" id="sheetPurchaseAmount" type="number" min="0.01" step=".01" data-sheet-purchase-amount></label><label class="field">Proveedor<input class="input" id="sheetPurchaseSupplier" list="supplierSuggestions" value="Adrian" placeholder="Adrian"></label><label class="field">Forma de pago<select class="select" id="sheetPurchaseMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Efectivo y transferencia</option></select></label><label class="field">Recargo<select class="select" id="sheetPurchaseSurchargeType"><option value="fixed">Pesos</option><option value="percent">Porcentaje</option></select></label><label class="field">Importe del recargo<input class="input" id="sheetPurchaseSurcharge" type="number" min="0" step=".01" value="0"></label><label class="field" data-sheet-mixed>Efectivo ($)<input class="input" id="sheetPurchaseCash" type="number" min="0" step=".01"></label><label class="field" data-sheet-mixed>Transferencia ($)<input class="input" id="sheetPurchaseTransfer" type="number" min="0" step=".01"></label><label class="field" data-sheet-transfer>Origen / alias<input class="input" id="sheetPurchaseOrigin" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Destino / alias<input class="input" id="sheetPurchaseDestination" placeholder="Opcional"></label><label class="field" data-sheet-transfer>N.º de operación<input class="input" id="sheetPurchaseReference" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Detalle de la transferencia<input class="input" id="sheetPurchaseDetails" placeholder="Opcional"></label></div><p id="sheetPurchaseTotal" class="field-help"></p></details>
       </div>
-      <div class="dialog-foot"><label class="toggle-label hidden" data-upload-sheet-only><input type="checkbox" id="designUploadPrinted" checked> Impreso · registrar la compra de esta plancha al guardar</label><button class="btn btn-ghost" type="button" id="cancelDesignUploadBtn">Cancelar</button><button class="btn btn-primary" type="button" id="uploadDesignBtn">Subir sin modificar</button></div>
+      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelDesignUploadBtn">Cancelar</button><button class="btn btn-primary" type="button" id="uploadDesignBtn">Guardar diseños</button></div>
     </div>
   </dialog>
 
@@ -258,9 +256,9 @@
   <script src="montage-effects.js?v=25.44"></script>
   <script src="contacts-import.js?v=25.44" defer></script>
   <script src="sharing.js?v=25.44" defer></script>
-  <script src="clients.js?v=25.44" defer></script>
+  <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.49" defer></script>
+  <script src="admin.js?v=25.50" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.44.1',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
@@ -273,6 +271,6 @@
     </div>
   </dialog>
 
-<dialog class="admin-dialog compact-prompt" id="designUploadKindPrompt"><div class="dialog-shell"><div class="dialog-head"><h2>¿Qué estás cargando?</h2></div><div class="dialog-body"><div class="admin-actions"><button type="button" class="btn btn-primary" data-upload-kind-choice="individual">Diseño individual</button><button type="button" class="btn btn-primary" data-upload-kind-choice="sheet">Plancha</button></div></div></div></dialog>
+
 </body>
 </html>
