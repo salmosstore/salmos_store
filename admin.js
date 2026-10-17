@@ -1,4 +1,4 @@
-// SALMOS 25.52
+// SALMOS 25.53
 (() => {
   'use strict';
 
@@ -18,19 +18,20 @@
     const figure=qs('#adminDailyPassage'),sidebar=qs('#adminSidebar');
     if(!figure||!sidebar)return;
     const desktop=window.matchMedia('(min-width:981px)');
-    let passages=null,loading=null,timer=null,shownDay='';
+    let passages=null,loading=null,timer=null,selectionDay='',manualOffset=0,shownKey='';
     const hide=()=>{clearTimeout(timer);figure.hidden=true;sidebar.classList.remove('has-daily-passage');};
     function render(){
       clearTimeout(timer);
       if(!desktop.matches||!passages?.length){hide();return;}
       const day=today();
-      if(day!==shownDay){
+      if(day!==selectionDay){selectionDay=day;manualOffset=0;}
+      const elapsed=Math.round((Date.parse(day)-Date.UTC(2026,9,17))/86400000),index=(((elapsed+manualOffset)%passages.length)+passages.length)%passages.length,key=day+':'+index;
+      if(key!==shownKey){
         // Una fecha de Argentina, una selección estable; al día siguiente avanza un pasaje.
-        const elapsed=Math.round((Date.parse(day)-Date.UTC(2026,9,17))/86400000);
-        const passage=passages[((elapsed%passages.length)+passages.length)%passages.length];
+        const passage=passages[index];
         qs('#adminDailyPassageText').textContent=passage.verses.join(' ');
         qs('#adminDailyPassageReference').textContent=passage.reference;
-        figure.dataset.date=day;qs('#adminDailyPassageText').scrollTop=0;shownDay=day;
+        figure.dataset.date=day;figure.dataset.passageIndex=String(index);qs('#adminDailyPassageText').scrollTop=0;shownKey=key;
       }
       figure.hidden=false;sidebar.classList.add('has-daily-passage');
       const midnight=Date.parse(`${day}T00:00:00-03:00`)+86400000;
@@ -52,6 +53,7 @@
       render();
     }
     desktop.addEventListener('change',sync);
+    qsa('[data-daily-passage-step]',figure).forEach(button=>button.addEventListener('click',()=>{if(!passages?.length)return;if(selectionDay!==today())render();manualOffset+=Number(button.dataset.dailyPassageStep);render();}));
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync();});
     window.addEventListener('pageshow',sync);
     sync();
@@ -625,7 +627,7 @@
   async function renderCategories(){
     const d=await api('/api/admin/categories');state.categories=d.items||[];
     qs('#adminContent').innerHTML=`
-      <div class="admin-section-head"><div><h2 style="margin:0">Categorías</h2><p class="muted" style="margin:4px 0 0">Solo las categorías activas pueden aparecer en la tienda. Mientras solo esté activa Remeras, la barra pública de categorías queda oculta.</p></div><button class="btn btn-primary" id="newCategoryBtn">+ Nueva categoría</button></div>
+      <div class="admin-section-head"><div><h2 style="margin:0">Categorías</h2><p class="muted" style="margin:4px 0 0">Solo las categorías activas pueden aparecer en la tienda. Mientras solo esté activa Remeras, la barra pública de categorías queda oculta.</p></div><div class="admin-actions"><button type="button" class="icon-btn" data-panel-tab="products" title="Volver a productos" aria-label="Volver a productos"><i class="fa-solid fa-table-cells" aria-hidden="true"></i></button><button class="btn btn-primary" id="newCategoryBtn">+ Nueva categoría</button></div></div>
       <div class="admin-card admin-table-wrap"><table class="admin-table editable-category-table"><thead><tr><th>Nombre</th><th>Slug</th><th>Orden</th><th>Activa</th><th></th></tr></thead><tbody>${state.categories.map(c=>`<tr data-category-row="${c.id}"><td><input class="input" data-category-name value="${escapeHtml(c.name)}"></td><td>${escapeHtml(c.slug)}</td><td><input class="input small-number" data-category-sort type="number" value="${Number(c.sort_order)||0}"></td><td><label class="toggle-label"><input type="checkbox" data-category-active ${Number(c.active)?'checked':''}> Sí</label></td><td><button class="btn btn-ghost" data-save-category="${c.id}">Guardar</button></td></tr>`).join('')}</tbody></table></div>`;
   }
 
@@ -1978,7 +1980,7 @@
   function fitSheetPreview(canvas){
     const viewport=canvas?.closest('.sheet-preview-viewport'),img=qs('img',canvas||document);
     if(!viewport||!img?.naturalWidth||!img.naturalHeight||!viewport.clientWidth||!viewport.clientHeight)return;
-    const frame=canvas.closest('.sheet-preview-frame'),key=canvas.dataset.sheetCanvas,automatic=frame&&window.matchMedia?.('(min-width: 701px) and (hover: hover) and (pointer: fine)').matches&&img.naturalHeight>img.naturalWidth?90:0,rotation=Number(state.sheetRotation?.[key]??automatic),rotated=rotation%180!==0;
+    const frame=canvas.closest('.sheet-preview-frame'),key=canvas.dataset.sheetCanvas,desktop=window.matchMedia('(min-width:761px)').matches,automatic=(desktop?img.naturalHeight>img.naturalWidth:img.naturalWidth>img.naturalHeight)?90:0,rotation=Number(state.sheetRotation?.[key]??automatic),rotated=rotation%180!==0;
     const displayWidth=rotated?img.naturalHeight:img.naturalWidth,displayHeight=rotated?img.naturalWidth:img.naturalHeight;
     const scale=Math.min(Math.max(1,viewport.clientWidth-16)/displayWidth,Math.max(1,viewport.clientHeight-16)/displayHeight)*(state.sheetZoom||1);
     const width=Math.max(1,Math.floor(img.naturalWidth*scale)),height=Math.max(1,Math.floor(img.naturalHeight*scale));
@@ -2600,7 +2602,6 @@
   async function uploadDesignFiles(button){
     if(state.designUploadBusy)return;
     if(!state.designUploadMetaConfirmed){openDesignUploadMetadata();return;}
-    if(qs('#designUploadKind').value==='individual'&&qs('#designUploadPrinted').checked){const pending=(state.designUploadFiles||[]).find(record=>!record.linkedSheetId);if(pending){await openDesignSheetLink(pending);return;}}
     const scope=qs('#designUploadScope').value,kind=scope==='mixed'?'sheet':qs('#designUploadKind').value,records=state.designUploadFiles||[],files=kind==='sheet'?[state.sheetUploadPreview?.file].filter(Boolean):records.map(x=>x.file),detail=kind==='sheet'?sheetPayload('upload'):null;
     if(!files.length)throw new Error('Elegí al menos un archivo.');
     if(kind==='sheet'&&records.length>1)throw new Error('Tenés varios archivos cargados. Quitá los demás o elegí Individual; los archivos se conservan al cambiar de tipo.');
@@ -3324,7 +3325,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       e.preventDefault();const canvas=qs('[data-sheet-canvas]',viewport),old=state.sheetZoom||1,next=Math.max(1,Math.min(5,Math.round((old*(e.deltaY<0?1.12:1/1.12))*100)/100));if(!canvas||next===old)return;
       const before=canvas.getBoundingClientRect(),x=(e.clientX-before.left)/before.width,y=(e.clientY-before.top)/before.height;
       state.sheetZoom=next;fitSheetPreview(canvas);const after=canvas.getBoundingClientRect();viewport.scrollLeft+=after.left+x*after.width-e.clientX;viewport.scrollTop+=after.top+y*after.height-e.clientY;
-      const tools=viewport.previousElementSibling,label=tools?.querySelector('span'),slider=tools?.querySelector('[data-sheet-zoom]');if(label)label.textContent=`Zoom ${Math.round(next*100)}%`;if(slider)slider.value=String(next);
+      const host=canvas.closest('[data-sheet-preview]'),label=qs('[data-sheet-zoom-label]',host),slider=qs('[data-sheet-zoom]',host);if(label)label.textContent=`Zoom ${Math.round(next*100)}%`;if(slider)slider.value=String(next);
     },{passive:false});
     document.addEventListener('input',e=>{if(e.target.matches('[data-stock-level]')){rememberStockLevels(e.target.closest('[data-stock-level-row]'));return;}if(['productionMeasureWidth','productionMeasureHeight'].includes(e.target.id)){updateProductionMeasureSuggestion();return;}if(e.target.id==='productionMeasureCost'){state.productionMeasureCostDirty=true;return;}if(e.target.id==='productionProductName'){syncProductionSaleTitle();return;}if(e.target.id==='productionPrintRate'){state.productionPrintRateDirty=true;refreshProductionPrintCosts();return;}if(e.target.id==='mockupReferenceWidth'){const view=rememberMockupView();if(view){view.referenceWidthCm=Math.max(.1,Number(e.target.value)||10);delete view.calibration;}const layer=mockupLayers().find(x=>x.key===state.mockupSelectedLayer);syncMockupSize(layer,qs('#productionMockupCanvas'));return;}if(e.target.matches('[data-surface-field]')){updateMockupSurface(e.target);syncMockupMobileControls();return;}if(e.target.matches('[data-missing-sheet-name]')){rememberMissingSheetFields(e.target.closest('[data-sheet-editor]').dataset.sheetEditor);return;}if(e.target.matches('[data-mockup-rotation]')){if(e.target.value!=='')setMockupRotation(e.target.dataset.mockupRotation,e.target.value);return;}if(e.target.matches('[data-sheet-search]'))filterSheetGallery(e.target.closest('[data-sheet-editor]').dataset.sheetEditor);if(e.target.matches('[data-promo-field],[data-promo-preview],[data-promo-requirement-quantity]')){const row=e.target.closest('[data-promotion-row]');if(row)renderPromotionPreview(row)}if(e.target.matches('#designUploadWidth,#designUploadHeight')){(state.sheetSizeManual??={}).upload=true;updateDrawnSheetSizes();updateSheetMetrics('upload');state.sheetCompositionConfirmation=null;if(qs('#designSheetCompositionComplete'))qs('#designSheetCompositionComplete').checked=false;}if(e.target.matches('#designUploadCost,[data-design-cost]'))updateSheetMetrics(e.target.closest('#designUploadDialog')?'upload':'detail');if(e.target.matches('[data-design-width],[data-design-height]')){updateDrawnSheetSizes('detail');updateSheetMetrics('detail');}if(e.target.matches('[data-sheet-zoom]')){state.sheetZoom=Number(e.target.value)||1;const canvas=qs(`[data-sheet-canvas="${e.target.closest('[data-sheet-editor]')?.dataset.sheetEditor||'upload'}"]`);if(canvas)fitSheetPreview(canvas);const label=qs('.sheet-preview-tools span',e.target.closest('[data-sheet-editor]'));if(label)label.textContent=`Zoom ${Math.round(state.sheetZoom*100)}%`;}if(e.target.closest?.('#productForm')&&(e.target.matches('[data-v="color"],[data-v="size"],#productRecipeWaste,#productRecipeExtra,[data-recipe-design-qty],[data-recipe-material-qty],#productForm [name="fit"]')))updateProductCostEstimate();if(['productionQuantity','productionWaste','mockupCapSalePrice'].includes(e.target.id))calcProductionBuilderCost();if(e.target.id==='productionSalePrice'){state.productionPriceDirty=true;calcProductionBuilderCost();}if(e.target.matches('[data-purchase-color-native]')){const i=Number(e.target.dataset.row),x=state.purchaseItems[i];if(x){x.color=e.target.value;x._custom??={};x._custom.color=true;const text=qs('[data-purchase-field="color"]',e.target.closest('[data-purchase-row]'));if(text)text.value=e.target.value;}}});
 
@@ -3401,7 +3402,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const {item:product}=await api(`/api/admin/products/${Number(id)}`);if(!product)throw new Error('Producto no encontrado.');
     const photos=(product.images||state.stockGroupPhotos?.['product:'+id]||[]).filter(photo=>photo.media_type!=='video').map(photo=>({...photo}));if(!photos.length)return;const generated=[];for(const photo of photos){const view=Object.values(product.mount?.project?.views||{}).find(view=>view.locked&&Number(view.outputMediaId)===Number(photo.id));if(view){const url=URL.createObjectURL(await productPhotoBlob(product,photo,'original'));generated.push(url);photo.url=url;}}
     const dialog=ensureAdminDialog('productGalleryDialog',product.name||'Galería');dialog.classList.add('product-gallery-dialog');dialog.addEventListener('close',()=>generated.forEach(url=>URL.revokeObjectURL(url)),{once:true});state.productGallery={product,photos};
-    qs('.dialog-body',dialog).innerHTML=`<section class="product-share-card"><div class="product-large-gallery">${photos.map((photo,index)=>`<img crossorigin="use-credentials" src="${escapeHtml(apiUrl(photo.url))}" alt="${escapeHtml(product.name||'Producto')} · ${index+1}">`).join('')}</div><div class="product-gallery-caption">${product.verse_text?`<p class="product-gallery-verse">${escapeHtml(product.verse_text)}</p>`:''}${product.verse_reference?`<p class="product-gallery-reference">${escapeHtml(product.verse_reference)}</p>`:''}${productGalleryFit(product)?`<small class="product-gallery-fit">${escapeHtml(productGalleryFit(product))}</small>`:''}${productGalleryFabric(product)?`<small class="product-gallery-fabric">${escapeHtml(productGalleryFabric(product))}</small>`:''}<strong class="product-gallery-price">${money(product.price_cents)}</strong></div></section><div class="admin-actions product-gallery-share-actions"><button type="button" class="icon-btn" data-download-gallery-card title="Descargar imagen" aria-label="Descargar imagen"><i class="fa-solid fa-download"></i></button><button type="button" class="icon-btn" data-share-gallery-card title="Compartir en redes" aria-label="Compartir en redes"><i class="fa-solid fa-share-nodes"></i></button><span role="status" data-gallery-status></span></div>`;dialog.showModal();
+    qs('.dialog-body',dialog).innerHTML=`<section class="product-share-card"><div class="product-large-gallery">${photos.map((photo,index)=>`<img crossorigin="use-credentials" src="${escapeHtml(apiUrl(photo.url))}" alt="${escapeHtml(product.name||'Producto')} · ${index+1}">`).join('')}</div><div class="product-gallery-caption">${product.verse_text?`<p class="product-gallery-verse">${escapeHtml(product.verse_text)}</p>`:''}${product.verse_reference?`<p class="product-gallery-reference">${escapeHtml(product.verse_reference)}</p>`:''}${productGalleryDetails(product)?`<small class="product-gallery-fabric product-gallery-details">${escapeHtml(productGalleryDetails(product))}</small>`:''}<strong class="product-gallery-price">${money(product.price_cents)}</strong></div></section><div class="admin-actions product-gallery-share-actions"><button type="button" class="icon-btn" data-download-gallery-card title="Descargar imagen" aria-label="Descargar imagen"><i class="fa-solid fa-download"></i></button><button type="button" class="icon-btn" data-share-gallery-card title="Compartir en redes" aria-label="Compartir en redes"><i class="fa-solid fa-share-nodes"></i></button><span role="status" data-gallery-status></span></div>`;dialog.showModal();
   }
   function productGalleryFit(product){
     const ids=(product.recipe?.materials||[]).map(item=>Number(item.material_id??item.materialId)),materials=state.materials.filter(item=>ids.includes(Number(item.id))),garment=materials.find(item=>materialIsGarment(item.material_type)),category=normalizeCategoryKey([product.category_name,product.category_slug,product.product_type].filter(Boolean).join(' '));
@@ -3410,6 +3411,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const key=normalizeCategoryKey(raw),label=key.includes('crop')&&key.includes('over')?'Crop oversize':key.includes('over')?'Oversize':key.includes('crop')?'Crop':/clas|basic|regular/.test(key)?'Clásico':key.includes('baby')?'Baby tee':key.includes('boxy')?'Boxy':raw;
     return 'Corte '+label;
   }
+  function productGalleryDetails(product){return [productGalleryFit(product),productGalleryFabric(product)].filter(Boolean).join(' · ');}
   function productGalleryFabric(product){
     const ids=(product.recipe?.materials||[]).map(m=>Number(m.material_id??m.materialId)),materials=state.materials.filter(m=>ids.includes(Number(m.id))),text=normalizeCategoryKey([product.short_description,product.description,...materials.map(m=>[m.name,...itemFeatures(m)].join(' '))].filter(Boolean).join(' '));
     if(!/algodon/.test(text)||!/peinado/.test(text)||!/(?:24[.,/ ]1|24\s*[:.]\s*1)/.test(text))return '';
@@ -3423,11 +3425,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     try{
       const grid=qs('#productGalleryDialog .product-large-gallery'),columns=getComputedStyle(grid).gridTemplateColumns.split(' ').length>1?Math.min(2,images.length):1,width=columns===1?1080:1800,padding=36,gap=24,cell=(width-padding*2-gap*(columns-1))/columns,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
       ctx.font='bold 54px Georgia';const title=canvasWrappedLines(ctx,product.name||'SALMOS',width-2*padding),rows=[];for(let i=0;i<images.length;i+=columns)rows.push(Math.max(...images.slice(i,i+columns).map(image=>cell*image.height/image.width)));
-      ctx.font='34px Arial';const verse=product.verse_text?canvasWrappedLines(ctx,product.verse_text,width-2*padding-40):[];ctx.font='28px Arial';const reference=product.verse_reference?canvasWrappedLines(ctx,product.verse_reference,width-2*padding-40):[],fit=productGalleryFit(product)?canvasWrappedLines(ctx,productGalleryFit(product),width-2*padding-40):[],fabric=productGalleryFabric(product)?canvasWrappedLines(ctx,productGalleryFabric(product),width-2*padding-40):[];
-      const header=padding+title.length*65+padding,height=header+rows.reduce((a,b)=>a+b,0)+Math.max(0,rows.length-1)*gap+verse.length*46+reference.length*38+fit.length*36+fabric.length*36+160;
+      ctx.font='34px Arial';const verse=product.verse_text?canvasWrappedLines(ctx,product.verse_text,width-2*padding-40):[];ctx.font='28px Arial';const reference=product.verse_reference?canvasWrappedLines(ctx,product.verse_reference,width-2*padding-40):[];ctx.font='24px Arial';const details=productGalleryDetails(product)?canvasWrappedLines(ctx,productGalleryDetails(product),width-2*padding-40):[];
+      const header=padding+title.length*65+padding,height=header+rows.reduce((a,b)=>a+b,0)+Math.max(0,rows.length-1)*gap+verse.length*46+reference.length*38+details.length*36+160;
       if(width*height>64000000||height>16384)throw new Error('Hay demasiadas fotos para una sola imagen.');canvas.width=width;canvas.height=Math.ceil(height);const card=qs('#productGalleryDialog .product-share-card'),theme=getComputedStyle(card),ink=theme.color,bg=theme.backgroundColor;ctx.fillStyle=bg==='rgba(0, 0, 0, 0)'?'#4a2438':bg;ctx.fillRect(0,0,width,height);ctx.fillStyle=ink;ctx.font='bold 54px Georgia';ctx.textAlign='left';title.forEach((line,index)=>ctx.fillText(line,padding,padding+54+index*65));let y=header;
       for(let row=0;row<rows.length;row++){for(let column=0;column<columns;column++){const image=images[row*columns+column];if(!image)continue;drawContained(ctx,image,padding+column*(cell+gap),y,cell,rows[row]);}y+=rows[row]+gap;}
-      ctx.textAlign='center';ctx.fillStyle=ink;ctx.font='34px Arial';for(const line of verse){y+=46;ctx.fillText(line,width/2,y);}ctx.font='28px Arial';for(const line of reference){y+=38;ctx.fillText(line,width/2,y);}ctx.globalAlpha=.9;for(const line of fit){y+=36;ctx.fillText(line,width/2,y);}ctx.fillStyle=ink;ctx.globalAlpha=.65;ctx.font='24px Arial';for(const line of fabric){y+=36;ctx.fillText(line,width/2,y);}ctx.fillStyle=ink;ctx.globalAlpha=1;ctx.font='bold 48px Arial';ctx.fillText(money(product.price_cents),width/2,y+80);
+      ctx.textAlign='center';ctx.fillStyle=ink;ctx.font='34px Arial';for(const line of verse){y+=46;ctx.fillText(line,width/2,y);}ctx.font='28px Arial';for(const line of reference){y+=38;ctx.fillText(line,width/2,y);}ctx.fillStyle=ink;ctx.globalAlpha=.65;ctx.font='24px Arial';for(const line of details){y+=36;ctx.fillText(line,width/2,y);}ctx.fillStyle=ink;ctx.globalAlpha=1;ctx.font='bold 48px Arial';ctx.fillText(money(product.price_cents),width/2,y+80);
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('No se pudo preparar la imagen.');return {blob,name:'SALMOS-'+String(product.name||'producto').replace(/[^a-z0-9_-]+/gi,'-')+'.png'};
     }finally{images.forEach(image=>image.close());}
   }
@@ -3480,7 +3482,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     let readout=qs('#mockupResizeReadout');if(!layer){readout?.remove();return;}
     const column=qs('.production-mockup-preview-column'),toolbar=qs('#productionTextTools .production-text-toolbar');if(!column||!toolbar)return;
     if(!readout){readout=document.createElement('div');readout.id='mockupResizeReadout';readout.innerHTML='<output data-current-mockup-size aria-live="polite"></output><label>Ancho de referencia (cm)<input class="input" type="number" min=".1" step="any" data-fullscreen-reference-width></label><button type="button" class="icon-btn" data-mockup-calibrate title="Marcar ancho de referencia" aria-label="Marcar ancho de referencia"><i class="fa-solid fa-vector-square"></i></button>';}
-    const fullscreen=qs('#productionDialog').classList.contains('production-editor-fullscreen');if(fullscreen){if(readout.parentElement!==toolbar)toolbar.append(readout);}else{const zoom=qs('.mockup-zoom-controls',column);if(readout.previousElementSibling!==zoom)zoom.after(readout);}
+    const reset=qs('[data-mockup-undo-all]',toolbar);if(readout.previousElementSibling!==reset)reset.after(readout);
     const size=mockupUsageDimensions(layer,canvas),format=n=>n.toLocaleString('es-AR',{maximumFractionDigits:2});qs('[data-current-mockup-size]',readout).textContent=`${format(size.width)} × ${format(size.height)} cm`;
     const input=qs('[data-fullscreen-reference-width]',readout);input.disabled=activeProductionViewLocked();if(document.activeElement!==input)input.value=String(Number(rememberMockupView()?.referenceWidthCm)||mockupReferenceDefault());
     updateProductionDesignUsage(layer,canvas);
@@ -3571,28 +3573,72 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   });
 
   async function openDesignSheetLink(record){
-    if(!record)return;const asset=record.existingDesign?record.savedItem:await saveDesignUploadRecord(record);
+    if(!record||qs('#designSheetLinkDialog')?.open)return;
+    const asset=record.existingDesign?record.savedItem:await saveDesignUploadRecord(record);
     const dialog=ensureAdminDialog('designSheetLinkDialog','Plancha de impresión');dialog.classList.add('design-sheet-link-dialog','centered-prompt');
     const type=record.existingDesign?asset.print_material_type:qs('#designUploadPrintType').value,length=record.existingDesign?Number(asset.print_length_cm)||(type==='dtf_uv'?50:100):Number(qs('#designUploadLength').value),cost=record.existingDesign?Number(asset.print_rate_cents)||pesosToCents(type==='dtf_uv'?12000:10000):pesosToCents(qs('#designUploadCost').value);
     const pending=state.designAssets.filter(sheet=>sheet.kind==='sheet'&&!Number(sheet.composition_complete??1)&&sheet.print_material_type===type);
-    const draft=record.printLinkDraft??={sheet:null,file:null,url:'',boxes:[],width:58,height:length};
-    qs('.dialog-body',dialog).innerHTML=`<div class="sheet-link-design">${designSmallImage(asset)}<strong>${escapeHtml(asset.name||asset.file_name)}</strong></div><div class="sheet-link-choices"><label class="btn btn-ghost">Cargar plancha<input type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-link-sheet-file></label><select class="select" data-link-sheet-existing aria-label="Relacionar a una plancha pendiente"><option value="">Planchas pendientes</option>${pending.map(sheet=>`<option value="${sheet.id}">${escapeHtml(sheet.name||sheet.file_name)}</option>`).join('')}</select></div><div class="sheet-link-dimensions"><label>Ancho (cm)<input class="input" type="number" min=".1" step="any" data-link-sheet-width value="${draft.width}"></label><label>Alto (cm)<input class="input" type="number" min=".1" step="any" data-link-sheet-height value="${draft.height}"></label><button type="button" class="icon-btn" data-link-sheet-undo title="Quitar última marca" aria-label="Quitar última marca"><i class="fa-solid fa-rotate-left"></i></button></div><div class="sheet-link-stage checkerboard"><canvas data-link-sheet-canvas aria-label="Marcá únicamente este diseño sobre la plancha"></canvas></div><output data-link-sheet-measures></output><div data-link-sheet-purchase class="hidden">${sheetPurchasePanelHtml('link')}</div><p role="status" data-link-sheet-status></p><div class="admin-actions"><button type="button" class="btn btn-primary" data-link-sheet-save>Guardar relación</button></div>`;
-    const canvas=qs('[data-link-sheet-canvas]',dialog),ctx=canvas.getContext('2d'),status=qs('[data-link-sheet-status]',dialog);let image=null,drag=null,busy=false;
+    const drafts=state.designPrintLinkDrafts??=new Map(),draft=record.printLinkDraft??=drafts.get(Number(asset.id))||{sheet:null,file:null,url:'',boxes:[],width:58,height:length};drafts.set(Number(asset.id),draft);
+    qs('.dialog-body',dialog).innerHTML=`<div class="sheet-link-design">${designSmallImage(asset)}<strong>${escapeHtml(asset.name||asset.file_name)}</strong></div><div class="sheet-link-choices"><label class="btn btn-ghost">Cargar plancha<input type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-link-sheet-file></label><select class="select" data-link-sheet-existing aria-label="Relacionar a una plancha pendiente"><option value="">Planchas pendientes</option>${pending.map(sheet=>`<option value="${sheet.id}">${escapeHtml(sheet.name||sheet.file_name)}</option>`).join('')}</select></div><div class="sheet-link-dimensions"><label>Ancho (cm)<input class="input" type="number" min=".1" step="any" data-link-sheet-width value="${draft.width}"></label><label>Alto (cm)<input class="input" type="number" min=".1" step="any" data-link-sheet-height value="${draft.height}"></label><button type="button" class="icon-btn" data-link-sheet-undo title="Quitar última marca" aria-label="Quitar última marca"><i class="fa-solid fa-rotate-left"></i></button><div class="sheet-link-zoom"><button type="button" class="icon-btn" data-link-sheet-zoom="out" title="Alejar" aria-label="Alejar">−</button><output data-link-sheet-zoom-label>100%</output><button type="button" class="icon-btn" data-link-sheet-zoom="in" title="Acercar" aria-label="Acercar">+</button><button type="button" class="icon-btn" data-link-sheet-zoom="fit" title="Ajustar plancha a la vista" aria-label="Ajustar plancha a la vista"><i class="fa-solid fa-expand"></i></button></div></div><div class="sheet-link-stage checkerboard" tabindex="0" aria-label="Plancha de impresión"><div class="sheet-link-loading" data-link-sheet-loading role="status" hidden><span>Cargando plancha…</span><button type="button" class="btn btn-ghost" data-link-sheet-retry hidden>Reintentar</button></div><div class="sheet-link-canvas-frame"><canvas data-link-sheet-canvas aria-label="Marcá únicamente este diseño sobre la plancha" hidden></canvas></div></div><output data-link-sheet-measures></output><div data-link-sheet-purchase class="hidden">${sheetPurchasePanelHtml('link')}</div><p role="status" data-link-sheet-status></p><div class="admin-actions"><button type="button" class="btn btn-primary" data-link-sheet-save>Guardar relación</button></div>`;
+    const canvas=qs('[data-link-sheet-canvas]',dialog),ctx=canvas.getContext('2d'),stage=qs('.sheet-link-stage',dialog),frame=qs('.sheet-link-canvas-frame',dialog),status=qs('[data-link-sheet-status]',dialog),loading=qs('[data-link-sheet-loading]',dialog),save=qs('[data-link-sheet-save]',dialog);
+    let image=null,drag=null,busy=false,loadingImage=false,closed=false,loadSeq=0,rotated=false,sourceWidth=0,sourceHeight=0,active=-1,zoom=Number(draft.zoom)||1;
+    const controls=()=>{save.disabled=busy||loadingImage||!image;qs('[data-close-review-dialog]',dialog).disabled=busy;for(const el of qsa('[data-link-sheet-file],[data-link-sheet-existing],[data-link-sheet-width],[data-link-sheet-height],[data-link-sheet-undo],[data-link-sheet-zoom]',dialog))el.disabled=busy||loadingImage;};
     const readSize=()=>{draft.width=Number(qs('[data-link-sheet-width]',dialog).value);draft.height=Number(qs('[data-link-sheet-height]',dialog).value);};
-    const draw=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);if(image)ctx.drawImage(image,0,0,canvas.width,canvas.height);const previous=(draft.sheet?.components||[]).flatMap(component=>(component.previewBoxes||[]).map(box=>({...box,previous:true}))),boxes=[...previous,...draft.boxes,...(drag?.box?[drag.box]:[])];for(const box of boxes){ctx.fillStyle=box.previous?'#00000028':'#ffb0d33b';ctx.strokeStyle=box.previous?'#888':'#ff8cbe';ctx.lineWidth=2;ctx.fillRect(box.x*canvas.width,box.y*canvas.height,box.width*canvas.width,box.height*canvas.height);ctx.strokeRect(box.x*canvas.width,box.y*canvas.height,box.width*canvas.width,box.height*canvas.height);}readSize();qs('[data-link-sheet-measures]',dialog).textContent=draft.boxes.map(box=>(box.width*draft.width).toLocaleString('es-AR',{maximumFractionDigits:2})+' × '+(box.height*draft.height).toLocaleString('es-AR',{maximumFractionDigits:2})+' cm').join(' · ');};
-    const showPurchase=()=>{const needed=Boolean(image&&!draft.sheet?.purchase_id);qs('[data-link-sheet-purchase]',dialog).classList.toggle('hidden',!needed);const base=Number(draft.sheet?.cost_cents)||cost;qs('#linkedSheetPurchaseAmount').value=String(base/100);qs('#linkedSheetPurchaseMethod').value='cash';qs('#linkedSheetPurchaseSurchargeType').value='fixed';qs('#linkedSheetPurchaseSurcharge').value='0';qsa('[data-sheet-mixed],[data-sheet-transfer]',qs('#linkedDesignSheetPurchase')).forEach(el=>el.classList.add('hidden'));};
-    const load=async(url,autoSize=false)=>{const next=new Image();next.crossOrigin='use-credentials';next.src=url;await next.decode();image=next;const scale=Math.min(1,1600/next.width,2000/next.height);canvas.width=Math.max(1,Math.round(next.width*scale));canvas.height=Math.max(1,Math.round(next.height*scale));if(autoSize){const ratio=next.width/next.height,normal=Math.abs(Math.log(ratio/(58/length))),rotated=Math.abs(Math.log(ratio/(length/58)));draft.width=rotated<normal?length:58;draft.height=rotated<normal?58:length;}qs('[data-link-sheet-width]',dialog).value=String(draft.width);qs('[data-link-sheet-height]',dialog).value=String(draft.height);draw();showPurchase();};
-    qs('[data-link-sheet-file]',dialog).onchange=async event=>{const file=event.target.files?.[0];if(!file)return;try{if(draft.url.startsWith('blob:'))URL.revokeObjectURL(draft.url);Object.assign(draft,{sheet:null,file,url:URL.createObjectURL(file),boxes:[],options:null,components:null});qs('[data-link-sheet-existing]',dialog).value='';await load(draft.url,true);}catch(error){status.textContent=error.message;}};
-    qs('[data-link-sheet-existing]',dialog).onchange=async event=>{const sheet=pending.find(sheet=>Number(sheet.id)===Number(event.target.value));if(!sheet)return;try{if(draft.url.startsWith('blob:'))URL.revokeObjectURL(draft.url);Object.assign(draft,{sheet,file:null,url:apiUrl(`/api/admin/design-assets/${sheet.id}/file`),boxes:[],width:Number(sheet.width_cm),height:Number(sheet.height_cm),options:null,components:null});await load(draft.url);}catch(error){status.textContent=error.message;}};
-    const point=event=>{const rect=canvas.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width)),y:Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height))};};
-    canvas.onpointerdown=event=>{if(!image||busy||event.button>0)return;event.preventDefault();drag={start:point(event),pointerId:event.pointerId};canvas.setPointerCapture(event.pointerId);};
-    canvas.onpointermove=event=>{if(!drag||drag.pointerId!==event.pointerId)return;const p=point(event),a=drag.start;drag.box={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),width:Math.abs(a.x-p.x),height:Math.abs(a.y-p.y),rotation:0};draw();};
-    canvas.onpointerup=event=>{if(!drag)return;if(drag.box?.width>.004&&drag.box?.height>.004){draft.boxes.push(drag.box);draft.options=null;draft.components=null;}drag=null;draw();};canvas.onpointercancel=()=>{drag=null;draw();};
-    qs('[data-link-sheet-undo]',dialog).onclick=()=>{draft.boxes.pop();draft.options=null;draft.components=null;draw();};
-    qsa('[data-link-sheet-width],[data-link-sheet-height]',dialog).forEach(input=>input.oninput=draw);
+    const invalidate=()=>{draft.options=null;draft.components=null;};
+    function draw(){
+      ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);if(!image)return;
+      ctx.save();if(rotated){ctx.translate(canvas.width,0);ctx.rotate(Math.PI/2);}ctx.drawImage(image,0,0,sourceWidth,sourceHeight);
+      const ratio=Math.max(.01,canvas.clientWidth/canvas.width),previous=(draft.sheet?.components||[]).flatMap(component=>(component.previewBoxes||[]).map(box=>({...box,previous:true}))),boxes=[...previous,...draft.boxes,...(drag?.mode==='draw'&&drag.box?[drag.box]:[])];
+      boxes.forEach((box,i)=>{ctx.fillStyle=box.previous?'#00000028':'#ffb0d33b';ctx.strokeStyle=box.previous?'#888':'#ff8cbe';ctx.lineWidth=2/ratio;ctx.fillRect(box.x*sourceWidth,box.y*sourceHeight,box.width*sourceWidth,box.height*sourceHeight);ctx.strokeRect(box.x*sourceWidth,box.y*sourceHeight,box.width*sourceWidth,box.height*sourceHeight);if(!box.previous&&i-previous.length===active){ctx.fillStyle='#ff8cbe';const h=7/ratio;for(const x of [box.x,box.x+box.width])for(const y of [box.y,box.y+box.height])ctx.fillRect(x*sourceWidth-h/2,y*sourceHeight-h/2,h,h);}});ctx.restore();
+      readSize();qs('[data-link-sheet-measures]',dialog).textContent=draft.boxes.map(box=>(box.width*draft.width).toLocaleString('es-AR',{maximumFractionDigits:2})+' × '+(box.height*draft.height).toLocaleString('es-AR',{maximumFractionDigits:2})+' cm').join(' · ');
+    }
+    function fit(){
+      if(!image||closed||!stage.clientWidth||!stage.clientHeight)return;
+      const desktop=window.matchMedia('(min-width:761px)').matches,nextRotation=desktop?image.naturalHeight>image.naturalWidth:image.naturalWidth>image.naturalHeight;
+      const raster=Math.min(1,2000/Math.max(image.naturalWidth,image.naturalHeight));sourceWidth=Math.max(1,Math.round(image.naturalWidth*raster));sourceHeight=Math.max(1,Math.round(image.naturalHeight*raster));rotated=nextRotation;
+      const width=rotated?sourceHeight:sourceWidth,height=rotated?sourceWidth:sourceHeight;if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+      const scale=Math.min(Math.max(1,stage.clientWidth-16)/width,Math.max(1,stage.clientHeight-16)/height)*zoom;
+      frame.style.width=Math.max(1,width*scale)+'px';frame.style.height=Math.max(1,height*scale)+'px';canvas.dataset.rotation=rotated?'90':'0';draft.zoom=zoom;qs('[data-link-sheet-zoom-label]',dialog).textContent=Math.round(zoom*100)+'%';draw();
+    }
+    const showPurchase=()=>{const needed=Boolean(image&&!draft.sheet?.purchase_id);qs('[data-link-sheet-purchase]',dialog).classList.toggle('hidden',!needed);qs('#linkedSheetPurchaseAmount').value=String((Number(draft.sheet?.cost_cents)||cost)/100);qs('#linkedSheetPurchaseMethod').value='cash';qs('#linkedSheetPurchaseSurchargeType').value='fixed';qs('#linkedSheetPurchaseSurcharge').value='0';for(const [id,value] of Object.entries(draft.purchaseFields||{})){const input=qs('#'+id,dialog);if(input)input.value=value;}const method=qs('#linkedSheetPurchaseMethod').value;qsa('[data-sheet-mixed]',dialog).forEach(el=>el.classList.toggle('hidden',method!=='mixed'));qsa('[data-sheet-transfer]',dialog).forEach(el=>el.classList.toggle('hidden',method==='cash'));};
+    async function load(url,autoSize=false){
+      const seq=++loadSeq;loadingImage=true;image=null;drag=null;canvas.hidden=true;loading.hidden=false;qs('span',loading).textContent='Cargando plancha…';qs('[data-link-sheet-retry]',dialog).hidden=true;stage.setAttribute('aria-busy','true');status.textContent='';controls();
+      try{const next=new Image();next.crossOrigin='use-credentials';next.src=url;await next.decode();if(closed||seq!==loadSeq)return;
+        image=next;if(autoSize){const ratio=next.naturalWidth/next.naturalHeight,normal=Math.abs(Math.log(ratio/(58/length))),rotatedRatio=Math.abs(Math.log(ratio/(length/58)));draft.width=rotatedRatio<normal?length:58;draft.height=rotatedRatio<normal?58:length;}
+        qs('[data-link-sheet-width]',dialog).value=String(draft.width);qs('[data-link-sheet-height]',dialog).value=String(draft.height);canvas.hidden=false;loading.hidden=true;fit();showPurchase();
+      }catch(error){if(closed||seq!==loadSeq)return;qs('span',loading).textContent='No se pudo cargar la plancha.';qs('[data-link-sheet-retry]',dialog).hidden=false;status.textContent='Reintentá la carga de la imagen.';}
+      finally{if(!closed&&seq===loadSeq){loadingImage=false;stage.setAttribute('aria-busy','false');controls();}}
+    }
+    const changeSource=values=>{if(draft.url.startsWith('blob:'))URL.revokeObjectURL(draft.url);Object.assign(draft,{boxes:[],options:null,components:null,purchaseFields:null,uploadId:null,uploadMetadata:null,...values});active=-1;zoom=1;};
+    qs('[data-link-sheet-file]',dialog).onchange=async event=>{const file=event.target.files?.[0];if(!file)return;changeSource({sheet:null,file,url:URL.createObjectURL(file)});qs('[data-link-sheet-existing]',dialog).value='';await load(draft.url,true);};
+    qs('[data-link-sheet-existing]',dialog).onchange=async event=>{const sheet=pending.find(sheet=>Number(sheet.id)===Number(event.target.value));if(!sheet)return;changeSource({sheet,file:null,url:apiUrl(`/api/admin/design-assets/${sheet.id}/file`),width:Number(sheet.width_cm),height:Number(sheet.height_cm)});await load(draft.url);};
+    qs('[data-link-sheet-retry]',dialog).onclick=()=>load(draft.url,Boolean(draft.file&&!draft.sheet));
+    const point=event=>{const rect=canvas.getBoundingClientRect(),u=(event.clientX-rect.left)/rect.width,v=(event.clientY-rect.top)/rect.height;return {x:Math.max(0,Math.min(1,rotated?v:u)),y:Math.max(0,Math.min(1,rotated?1-u:v))};};
+    function hit(p){const rect=canvas.getBoundingClientRect(),sx=rotated?rect.height:rect.width,sy=rotated?rect.width:rect.height;for(let i=draft.boxes.length-1;i>=0;i--){const b=draft.boxes[i];for(const [edge,x,y] of [['nw',b.x,b.y],['ne',b.x+b.width,b.y],['sw',b.x,b.y+b.height],['se',b.x+b.width,b.y+b.height]])if(Math.abs((p.x-x)*sx)<=10&&Math.abs((p.y-y)*sy)<=10)return {index:i,edge};if(p.x>=b.x&&p.x<=b.x+b.width&&p.y>=b.y&&p.y<=b.y+b.height)return {index:i};}return null;}
+    canvas.onpointerdown=event=>{
+      if(!image||busy||loadingImage||event.button>1)return;event.preventDefault();const p=point(event),picked=hit(p);canvas.setPointerCapture(event.pointerId);
+      if(event.ctrlKey||event.metaKey||event.button===1){drag={mode:'pan',pointerId:event.pointerId,x:event.clientX,y:event.clientY,left:stage.scrollLeft,top:stage.scrollTop};return;}
+      active=picked?.index??-1;drag={mode:picked?(picked.edge?'resize':'move'):'draw',pointerId:event.pointerId,start:p,index:picked?.index,edge:picked?.edge,original:picked?{...draft.boxes[picked.index]}:null};draw();
+    };
+    canvas.onpointermove=event=>{
+      const p=point(event);if(!drag){const picked=hit(p);canvas.style.cursor=picked?(picked.edge?'nwse-resize':'move'):'crosshair';return;}if(drag.pointerId!==event.pointerId)return;
+      if(drag.mode==='pan'){stage.scrollLeft=drag.left-(event.clientX-drag.x);stage.scrollTop=drag.top-(event.clientY-drag.y);return;}
+      const a=drag.start,b=drag.original;
+      if(drag.mode==='draw')drag.box={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),width:Math.abs(a.x-p.x),height:Math.abs(a.y-p.y),rotation:0};
+      else if(drag.mode==='move')draft.boxes[drag.index]={...b,x:Math.max(0,Math.min(1-b.width,b.x+p.x-a.x)),y:Math.max(0,Math.min(1-b.height,b.y+p.y-a.y))};
+      else{const left=drag.edge.includes('w')?Math.min(p.x,b.x+b.width-.002):b.x,right=drag.edge.includes('e')?Math.max(p.x,b.x+.002):b.x+b.width,top=drag.edge.includes('n')?Math.min(p.y,b.y+b.height-.002):b.y,bottom=drag.edge.includes('s')?Math.max(p.y,b.y+.002):b.y+b.height;draft.boxes[drag.index]={...b,x:left,y:top,width:right-left,height:bottom-top};}
+      draw();
+    };
+    const endDrag=(event,cancel=false)=>{if(!drag||drag.pointerId!==event.pointerId)return;if(cancel&&drag.original)draft.boxes[drag.index]=drag.original;else if(!cancel&&drag.mode==='draw'&&drag.box?.width>.004&&drag.box?.height>.004){draft.boxes.push(drag.box);active=draft.boxes.length-1;}if(drag.mode!=='pan')invalidate();drag=null;if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);draw();};
+    canvas.onpointerup=event=>endDrag(event);canvas.onpointercancel=event=>endDrag(event,true);
+    const setZoom=(next,event)=>{if(!image||busy||loadingImage)return;const rect=canvas.getBoundingClientRect(),anchor=event||{clientX:stage.getBoundingClientRect().left+stage.clientWidth/2,clientY:stage.getBoundingClientRect().top+stage.clientHeight/2},u=(anchor.clientX-rect.left)/rect.width,v=(anchor.clientY-rect.top)/rect.height;zoom=Math.max(1,Math.min(8,next));fit();const after=canvas.getBoundingClientRect();stage.scrollLeft+=after.left+u*after.width-anchor.clientX;stage.scrollTop+=after.top+v*after.height-anchor.clientY;};
+    stage.addEventListener('wheel',event=>{if(!event.ctrlKey)return;event.preventDefault();setZoom(zoom*Math.exp(-event.deltaY*.002),event);},{passive:false});
+    qsa('[data-link-sheet-zoom]',dialog).forEach(button=>button.onclick=()=>{const action=button.dataset.linkSheetZoom;setZoom(action==='fit'?1:zoom*(action==='in'?1.25:1/1.25));});
+    qs('[data-link-sheet-undo]',dialog).onclick=()=>{draft.boxes.pop();active=draft.boxes.length-1;invalidate();draw();};
+    qsa('[data-link-sheet-width],[data-link-sheet-height]',dialog).forEach(input=>input.oninput=()=>{invalidate();draw();});
     qs('#linkedSheetPurchaseMethod').onchange=event=>{const method=event.target.value;qsa('[data-sheet-mixed]',dialog).forEach(el=>el.classList.toggle('hidden',method!=='mixed'));qsa('[data-sheet-transfer]',dialog).forEach(el=>el.classList.toggle('hidden',method==='cash'));};
-    qs('[data-link-sheet-save]',dialog).onclick=async event=>{
-      const button=event.currentTarget;if(busy)return;busy=true;button.disabled=true;status.textContent='';
+    save.onclick=async()=>{
+      if(busy||loadingImage)return;busy=true;controls();status.textContent='Guardando relación…';
       try{
         readSize();if(!image||!draft.boxes.length||!(draft.width>0&&draft.height>0))throw new Error('Marcá el diseño sobre la plancha y revisá sus medidas.');
         if(draft.sheet&&Number(draft.sheet.composition_complete))throw new Error('Esa plancha ya está completa. Elegí otra pendiente.');
@@ -3609,11 +3655,13 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         if(!draft.sheet.purchase_id)await registerSheetPurchase(draft.sheet,'link');
         const printed=await api(`/api/admin/design-assets/${asset.id}`,{method:'PATCH',body:JSON.stringify({printed:true})});record.savedItem=printed.item;record.linkedSheetId=Number(draft.sheet.id);
         state.designAssets=state.designAssets.filter(design=>![Number(asset.id),Number(draft.sheet.id)].includes(Number(design.id)));state.designAssets.push(record.savedItem,draft.sheet);
-        const label=qs(`[data-batch-linked-sheet="${record.id}"]`);if(label)label.textContent=draft.sheet.name||draft.sheet.file_name;dialog.close();toast('Diseño relacionado a la plancha pendiente','success');
+        const label=qs(`[data-batch-linked-sheet="${record.id}"]`);if(label)label.textContent=draft.sheet.name||draft.sheet.file_name;drafts.delete(Number(asset.id));record.printLinkDraft=null;if(draft.url.startsWith('blob:'))URL.revokeObjectURL(draft.url);dialog.close();toast('Diseño relacionado a la plancha pendiente','success');
         if(record.existingDesign){await renderDesigns();if(qs('#designPreviewDialog')?.open)openDesignPreview(asset.id);}
-      }catch(error){status.textContent=error.message;}finally{busy=false;button.disabled=false;}
+      }catch(error){status.textContent=error.message;}finally{busy=false;controls();}
     };
-    dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();},{once:true});dialog.showModal();
+    dialog.oncancel=event=>{if(busy)event.preventDefault();};
+    let observer=null;dialog.addEventListener('close',()=>{closed=true;loadSeq++;observer?.disconnect();draft.purchaseFields=Object.fromEntries(qsa('[data-link-sheet-purchase] input,[data-link-sheet-purchase] select',dialog).map(input=>[input.id,input.value]));},{once:true});
+    dialog.showModal();if(window.ResizeObserver){observer=new ResizeObserver(fit);observer.observe(stage);}controls();
     if(draft.url){if(draft.sheet)qs('[data-link-sheet-existing]',dialog).value=String(draft.sheet.id);await load(draft.url);}
   }
   document.addEventListener('change',async event=>{

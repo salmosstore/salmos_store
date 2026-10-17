@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.52">
+  <link rel="stylesheet" href="admin-v4.css?v=25.53">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -24,17 +24,17 @@
     <aside class="admin-sidebar" id="adminSidebar">
       <div class="admin-brand"><img src="admin-salmos-rosa-ui.png" alt="SALMOS"><div><strong>SALMOS</strong><small>Administración</small></div></div>
       <nav class="admin-nav">
-        <button class="admin-nav-btn active" data-view="dashboard">⌂ <span>Dashboard</span></button>
-        <button class="admin-nav-btn" data-view="products">◫ <span>Productos</span></button>
-        <button class="admin-nav-btn" data-view="clients">♙ <span>Clientes</span></button>
-        <button class="admin-nav-btn" data-view="expenses">↕ <span>Caja</span></button>
-        <button class="admin-nav-btn" data-view="flyers">▣ <span>Flyers</span></button>
-        <button class="admin-nav-btn" data-view="settings">⚙ <span>Configuración</span></button>
+        <button class="admin-nav-btn active" data-view="dashboard" aria-label="Dashboard" title="Dashboard"><i class="fa-solid fa-gauge" aria-hidden="true"></i><span>Dashboard</span></button>
+        <button class="admin-nav-btn" data-view="products" aria-label="Productos" title="Productos"><i class="fa-solid fa-table-cells" aria-hidden="true"></i><span>Productos</span></button>
+        <button class="admin-nav-btn" data-view="clients" aria-label="Clientes" title="Clientes"><i class="fa-solid fa-user-tag" aria-hidden="true"></i><span>Clientes</span></button>
+        <button class="admin-nav-btn" data-view="expenses" aria-label="Caja" title="Caja"><i class="fa-solid fa-landmark" aria-hidden="true"></i><span>Caja</span></button>
+        <button class="admin-nav-btn" data-view="flyers" aria-label="Flyers" title="Flyers"><i class="fa-solid fa-image" aria-hidden="true"></i><span>Flyers</span></button>
+        <button class="admin-nav-btn" data-view="settings" aria-label="Configuración" title="Configuración">⚙ <span>Configuración</span></button>
       </nav>
       <figure class="admin-daily-passage" id="adminDailyPassage" aria-label="Pasaje del día" hidden>
         <div class="admin-daily-passage-content">
           <blockquote id="adminDailyPassageText" tabindex="0"></blockquote>
-          <figcaption><cite id="adminDailyPassageReference"></cite><span>NTV</span></figcaption>
+          <figcaption><div class="admin-daily-passage-controls"><button type="button" data-daily-passage-step="-1" aria-label="Pasaje anterior" title="Pasaje anterior">‹</button><cite id="adminDailyPassageReference"></cite><button type="button" data-daily-passage-step="1" aria-label="Pasaje siguiente" title="Pasaje siguiente">›</button></div><span>NTV</span></figcaption>
         </div>
       </figure>
       <a class="btn btn-ghost full" href="/">Ver tienda</a>
@@ -262,7 +262,7 @@
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.52" defer></script>
+  <script src="admin.js?v=25.53" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.44.1',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
