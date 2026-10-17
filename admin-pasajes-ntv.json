@@ -1,0 +1,1775 @@
+{
+  "translation": "NTV",
+  "source": "https://github.com/VidaAbundante-TristanSuarez/VidaAbundante/blob/main/biblia_ntv.json",
+  "sourceSha256": "d3db4811bebacf2df7b1b1aa23ac176b0ec3044c6365e23e59569ceb73597d6c",
+  "passages": [
+    {
+      "reference": "Salmos 23:1–6",
+      "book": "Salmos",
+      "chapter": 23,
+      "start": 1,
+      "end": 6,
+      "verses": [
+        "El SEÑOR es mi pastor; tengo todo lo que necesito.",
+        "En verdes prados me deja descansar; me conduce junto a arroyos tranquilos.",
+        "Él renueva mis fuerzas. Me guía por sendas correctas, y así da honra a su nombre.",
+        "Aun cuando yo pase por el valle más oscuro, no temeré, porque tú estás a mi lado. Tu vara y tu cayado me protegen y me confortan.",
+        "Me preparas un banquete en presencia de mis enemigos. Me honras ungiendo mi cabeza con aceite. Mi copa se desborda de bendiciones.",
+        "Ciertamente tu bondad y tu amor inagotable me seguirán todos los días de mi vida, y en la casa del SEÑOR viviré por siempre."
+      ]
+    },
+    {
+      "reference": "Santiago 5:13–16",
+      "book": "Santiago",
+      "chapter": 5,
+      "start": 13,
+      "end": 16,
+      "verses": [
+        "¿Alguno de ustedes está pasando por dificultades? Que ore. ¿Alguno está feliz? Que cante alabanzas.",
+        "¿Alguno está enfermo? Que llame a los ancianos de la iglesia, para que vengan y que oren por él y lo unjan con aceite en el nombre del Señor.",
+        "Una oración ofrecida con fe, sanará al enfermo, y el Señor hará que se recupere; y si ha cometido pecados, será perdonado.",
+        "Confiésense los pecados unos a otros y oren los unos por los otros, para que sean sanados. La oración ferviente de una persona justa tiene mucho poder y da resultados maravillosos."
+      ]
+    },
+    {
+      "reference": "Filipenses 1:3–6",
+      "book": "Filipenses",
+      "chapter": 1,
+      "start": 3,
+      "end": 6,
+      "verses": [
+        "Cada vez que pienso en ustedes, le doy gracias a mi Dios.",
+        "Siempre que oro, pido por todos ustedes con alegría,",
+        "porque han colaborado conmigo en dar a conocer la Buena Noticia acerca de Cristo desde el momento que la escucharon por primera vez hasta ahora.",
+        "Y estoy seguro de que Dios, quien comenzó la buena obra en ustedes, la continuará hasta que quede completamente terminada el día que Cristo Jesús vuelva."
+      ]
+    },
+    {
+      "reference": "Salmos 119:9–11",
+      "book": "Salmos",
+      "chapter": 119,
+      "start": 9,
+      "end": 11,
+      "verses": [
+        "¿Cómo puede un joven mantenerse puro? Obedeciendo tu palabra.",
+        "Me esforcé tanto por encontrarte, no permitas que me aleje de tus mandatos.",
+        "He guardado tu palabra en mi corazón, para no pecar contra ti."
+      ]
+    },
+    {
+      "reference": "Gálatas 6:7–10",
+      "book": "Gálatas",
+      "chapter": 6,
+      "start": 7,
+      "end": 10,
+      "verses": [
+        "No se dejen engañar: nadie puede burlarse de la justicia de Dios. Siempre se cosecha lo que se siembra.",
+        "Los que viven sólo para satisfacer los deseos de su propia naturaleza pecaminosa cosecharán, de esa naturaleza, destrucción y muerte; pero los que viven para agradar al Espíritu, del Espíritu, cosecharán vida eterna.",
+        "Así que no nos cansemos de hacer el bien. A su debido tiempo, cosecharemos numerosas bendiciones si no nos damos por vencidos.",
+        "Por lo tanto, siempre que tengamos la oportunidad, hagamos el bien a todos, en especial a los de la familia de la fe."
+      ]
+    },
+    {
+      "reference": "1 Crónicas 16:8–11",
+      "book": "1 Crónicas",
+      "chapter": 16,
+      "start": 8,
+      "end": 11,
+      "verses": [
+        "Den gracias al SEÑOR y proclamen su grandeza; que todo el mundo sepa lo que él ha hecho.",
+        "Canten a él; sí, cántenle alabanzas; cuéntenle a todo el mundo acerca de sus obras maravillosas.",
+        "Regocíjense por su santo nombre; alégrense ustedes, los que adoran al SEÑOR.",
+        "Busquen al SEÑOR y su fuerza, búsquenlo continuamente."
+      ]
+    },
+    {
+      "reference": "Salmos 121:1–8",
+      "book": "Salmos",
+      "chapter": 121,
+      "start": 1,
+      "end": 8,
+      "verses": [
+        "Levanto la vista hacia las montañas, ¿viene de allí mi ayuda?",
+        "¡Mi ayuda viene del SEÑOR, quien hizo el cielo y la tierra!",
+        "Él no permitirá que tropieces; el que te cuida no se dormirá.",
+        "En efecto, el que cuida a Israel nunca duerme ni se adormece.",
+        "¡El SEÑOR mismo te cuida! El SEÑOR está a tu lado como tu sombra protectora.",
+        "El sol no te hará daño durante el día, ni la luna durante la noche.",
+        "El SEÑOR te libra de todo mal y cuida tu vida.",
+        "El SEÑOR te protege al entrar y al salir, ahora y para siempre."
+      ]
+    },
+    {
+      "reference": "1 Juan 3:16–18",
+      "book": "1 Juan",
+      "chapter": 3,
+      "start": 16,
+      "end": 18,
+      "verses": [
+        "Conocemos lo que es el amor verdadero, porque Jesús entregó su vida por nosotros. De manera que nosotros también tenemos que dar la vida por nuestros hermanos.",
+        "Si alguien tiene suficiente dinero para vivir bien y ve a un hermano en necesidad pero no le muestra compasión, ¿cómo puede estar el amor de Dios en esa persona?",
+        "Queridos hijos, que nuestro amor no quede sólo en palabras; mostremos la verdad por medio de nuestras acciones."
+      ]
+    },
+    {
+      "reference": "Juan 10:27–30",
+      "book": "Juan",
+      "chapter": 10,
+      "start": 27,
+      "end": 30,
+      "verses": [
+        "Mis ovejas escuchan mi voz; yo las conozco, y ellas me siguen.",
+        "Les doy vida eterna, y nunca perecerán. Nadie puede quitármelas,",
+        "porque mi Padre me las ha dado, y él es más poderoso que todos. Nadie puede quitarlas de la mano del Padre.",
+        "El Padre y yo somos uno."
+      ]
+    },
+    {
+      "reference": "Filipenses 4:8–9",
+      "book": "Filipenses",
+      "chapter": 4,
+      "start": 8,
+      "end": 9,
+      "verses": [
+        "Y ahora, amados hermanos, una cosa más para terminar. Concéntrense en todo lo que es verdadero, todo lo honorable, todo lo justo, todo lo puro, todo lo bello y todo lo admirable. Piensen en cosas excelentes y dignas de alabanza.",
+        "No dejen de poner en práctica todo lo que aprendieron y recibieron de mí, todo lo que oyeron de mis labios y vieron que hice. Entonces el Dios de paz estará con ustedes."
+      ]
+    },
+    {
+      "reference": "Proverbios 3:5–6",
+      "book": "Proverbios",
+      "chapter": 3,
+      "start": 5,
+      "end": 6,
+      "verses": [
+        "Confía en el SEÑOR con todo tu corazón, no dependas de tu propio entendimiento.",
+        "Busca su voluntad en todo lo que hagas, y él te mostrará cuál camino tomar."
+      ]
+    },
+    {
+      "reference": "Salmos 37:3–7",
+      "book": "Salmos",
+      "chapter": 37,
+      "start": 3,
+      "end": 7,
+      "verses": [
+        "Confía en el SEÑOR y haz el bien; entonces vivirás seguro en la tierra y prosperarás.",
+        "Deléitate en el SEÑOR, y él te concederá los deseos de tu corazón.",
+        "Entrega al SEÑOR todo lo que haces; confía en él, y él te ayudará.",
+        "Él hará resplandecer tu inocencia como el amanecer, y la justicia de tu causa brillará como el sol de mediodía.",
+        "Quédate quieto en la presencia del SEÑOR, y espera con paciencia a que él actúe. No te inquietes por la gente mala que prospera, ni te preocupes por sus perversas maquinaciones."
+      ]
+    },
+    {
+      "reference": "Mateo 7:24–27",
+      "book": "Mateo",
+      "chapter": 7,
+      "start": 24,
+      "end": 27,
+      "verses": [
+        "Todo el que escucha mi enseñanza y la sigue es sabio, como la persona que construye su casa sobre una roca sólida.",
+        "Aunque llueva a cántaros y suban las aguas de la inundación y los vientos golpeen contra esa casa, no se vendrá abajo porque está construida sobre un lecho de roca.",
+        "Sin embargo, el que oye mi enseñanza y no la obedece es un necio, como la persona que construye su casa sobre la arena.",
+        "Cuando vengan las lluvias y lleguen las inundaciones y los vientos golpeen contra esa casa, se derrumbará con un gran estruendo."
+      ]
+    },
+    {
+      "reference": "Proverbios 3:9–10",
+      "book": "Proverbios",
+      "chapter": 3,
+      "start": 9,
+      "end": 10,
+      "verses": [
+        "Honra al SEÑOR con tus riquezas y con lo mejor de todo lo que produces.",
+        "Entonces él llenará tus graneros, y tus tinajas se desbordarán de buen vino."
+      ]
+    },
+    {
+      "reference": "Juan 14:25–27",
+      "book": "Juan",
+      "chapter": 14,
+      "start": 25,
+      "end": 27,
+      "verses": [
+        "Les digo estas cosas ahora, mientras todavía estoy con ustedes.",
+        "Sin embargo, cuando el Padre envíe al Abogado Defensor como mi representante —es decir, al Espíritu Santo—, él les enseñará todo y les recordará cada cosa que les he dicho.",
+        "Les dejo un regalo: paz en la mente y en el corazón. Y la paz que yo doy es un regalo que el mundo no puede dar. Así que no se angustien ni tengan miedo."
+      ]
+    },
+    {
+      "reference": "Juan 15:4–5",
+      "book": "Juan",
+      "chapter": 15,
+      "start": 4,
+      "end": 5,
+      "verses": [
+        "Permanezcan en mí, y yo permaneceré en ustedes. Pues una rama no puede producir fruto si la cortan de la vid, y ustedes tampoco pueden ser fructíferos a menos que permanezcan en mí.",
+        "Ciertamente, yo soy la vid; ustedes son las ramas. Los que permanecen en mí y yo en ellos producirán mucho fruto porque, separados de mí, no pueden hacer nada."
+      ]
+    },
+    {
+      "reference": "Sofonías 3:16–17",
+      "book": "Sofonías",
+      "chapter": 3,
+      "start": 16,
+      "end": 17,
+      "verses": [
+        "En ese día, la proclama en Jerusalén será: ¡Ánimo Sión! ¡No temas!",
+        "Pues el SEÑOR tu Dios vive en medio de ti. Él es un poderoso salvador. Se deleitará en ti con alegría. Con su amor calmará todos tus temores. Se gozará por ti con cantos de alegría."
+      ]
+    },
+    {
+      "reference": "Salmos 130:5–8",
+      "book": "Salmos",
+      "chapter": 130,
+      "start": 5,
+      "end": 8,
+      "verses": [
+        "Yo cuento con el SEÑOR; sí, cuento con él; en su palabra he puesto mi esperanza.",
+        "Anhelo al Señor más que los centinelas el amanecer, sí, más de lo que los centinelas anhelan el amanecer.",
+        "Oh Israel, espera en el SEÑOR; porque en el SEÑOR hay amor inagotable; su redención sobreabunda.",
+        "Él mismo redimirá a Israel de toda clase de pecado."
+      ]
+    },
+    {
+      "reference": "Juan 13:34–35",
+      "book": "Juan",
+      "chapter": 13,
+      "start": 34,
+      "end": 35,
+      "verses": [
+        "Así que ahora les doy un nuevo mandamiento: ámense unos a otros. Tal como yo los he amado, ustedes deben amarse unos a otros.",
+        "El amor que tengan unos por otros será la prueba ante el mundo de que son mis discípulos."
+      ]
+    },
+    {
+      "reference": "Habacuc 3:17–19",
+      "book": "Habacuc",
+      "chapter": 3,
+      "start": 17,
+      "end": 19,
+      "verses": [
+        "Aunque las higueras no florezcan y no haya uvas en las vides, aunque se pierda la cosecha de oliva y los campos queden vacíos y no den fruto, aunque los rebaños mueran en los campos y los establos estén vacíos,",
+        "¡aun así me alegraré en el SEÑOR! ¡Me gozaré en el Dios de mi salvación!",
+        "¡El SEÑOR Soberano es mi fuerza! Él me da pie firme como al venado, capaz de pisar sobre las alturas.(Para el director del coro: esta oración se acompaña de instrumentos de cuerda)."
+      ]
+    },
+    {
+      "reference": "Romanos 15:4–6",
+      "book": "Romanos",
+      "chapter": 15,
+      "start": 4,
+      "end": 6,
+      "verses": [
+        "Tales cosas se escribieron hace tiempo en las Escrituras para que nos sirvan de enseñanza. Y las Escrituras nos dan esperanza y ánimo mientras esperamos con paciencia hasta que se cumplan las promesas de Dios.",
+        "Que Dios, quien da esa paciencia y ese ánimo, los ayude a vivir en plena armonía unos con otros, como corresponde a los seguidores de Cristo Jesús.",
+        "Entonces todos ustedes podrán unirse en una sola voz para dar alabanza y gloria a Dios, el Padre de nuestro Señor Jesucristo."
+      ]
+    },
+    {
+      "reference": "Romanos 5:1–5",
+      "book": "Romanos",
+      "chapter": 5,
+      "start": 1,
+      "end": 5,
+      "verses": [
+        "Por lo tanto, ya que fuimos declarados justos a los ojos de Dios por medio de la fe, tenemos paz con Dios gracias a lo que Jesucristo nuestro Señor hizo por nosotros.",
+        "Debido a nuestra fe, Cristo nos hizo entrar en este lugar de privilegio inmerecido en el cual ahora permanecemos, y esperamos con confianza y alegría participar de la gloria de Dios.",
+        "También nos alegramos al enfrentar pruebas y dificultades porque sabemos que nos ayudan a desarrollar resistencia.",
+        "Y la resistencia desarrolla firmeza de carácter, y el carácter fortalece nuestra esperanza segura de salvación.",
+        "Y esa esperanza no acabará en desilusión. Pues sabemos con cuánta ternura nos ama Dios, porque nos ha dado el Espíritu Santo para llenar nuestro corazón con su amor."
+      ]
+    },
+    {
+      "reference": "Mateo 7:12",
+      "book": "Mateo",
+      "chapter": 7,
+      "start": 12,
+      "end": 12,
+      "verses": [
+        "Haz a los demás todo lo que quieras que te hagan a ti. Ésa es la esencia de todo lo que se enseña en la ley y en los profetas."
+      ]
+    },
+    {
+      "reference": "Salmos 40:1–3",
+      "book": "Salmos",
+      "chapter": 40,
+      "start": 1,
+      "end": 3,
+      "verses": [
+        "Con paciencia esperé que el SEÑOR me ayudara, y él se fijo en mí y oyó mi clamor.",
+        "Me sacó del foso de desesperación, del lodo y del fango. Puso mis pies sobre suelo firme y a medida que yo caminaba, me estabilizó.",
+        "Me dio un canto nuevo para entonar, un himno de alabanza a nuestro Dios. Muchos verán lo que él hizo y quedarán asombrados; pondrán su confianza en el SEÑOR."
+      ]
+    },
+    {
+      "reference": "Miqueas 6:6–8",
+      "book": "Miqueas",
+      "chapter": 6,
+      "start": 6,
+      "end": 8,
+      "verses": [
+        "¿Qué podemos presentar al SEÑOR? ¿Qué clase de ofrendas debemos darle? ¿Debemos inclinarnos ante Dios con ofrendas de becerros de sólo un año?",
+        "¿Debemos ofrecerle miles de carneros y diez mil ríos de aceite de oliva? ¿Debemos sacrificar a nuestros hijos mayores para pagar por nuestros pecados?",
+        "¡No!, oh pueblo. El SEÑOR te ha dicho lo que es bueno, y lo que él exige de ti: que hagas lo que es correcto, que ames la compasión y que camines humildemente con tu Dios."
+      ]
+    },
+    {
+      "reference": "Lucas 6:27–31",
+      "book": "Lucas",
+      "chapter": 6,
+      "start": 27,
+      "end": 31,
+      "verses": [
+        "A los que están dispuestos a escuchar, les digo: ¡amen a sus enemigos! Hagan bien a quienes los odian.",
+        "Bendigan a quienes los maldicen. Oren por aquellos que los lastiman.",
+        "Si alguien te da una bofetada en una mejilla, ofrécele también la otra mejilla. Si alguien te exige el abrigo, ofrécele también la camisa.",
+        "Dale a cualquiera que te pida; y cuando te quiten las cosas, no trates de recuperarlas.",
+        "Traten a los demás como les gustaría que ellos los trataran a ustedes."
+      ]
+    },
+    {
+      "reference": "Salmos 103:8–13",
+      "book": "Salmos",
+      "chapter": 103,
+      "start": 8,
+      "end": 13,
+      "verses": [
+        "El SEÑOR es compasivo y misericordioso, lento para enojarse y está lleno de amor inagotable.",
+        "No nos reprenderá todo el tiempo, ni seguirá enojado para siempre.",
+        "No nos castiga por todos nuestros pecados; no nos trata con la severidad que merecemos.",
+        "Pues su amor inagotable hacia los que le temen es tan inmenso como la altura de los cielos sobre la tierra.",
+        "Llevó nuestros pecados tan lejos de nosotros como está el oriente del occidente.",
+        "El SEÑOR es como un padre con sus hijos, tierno y compasivo con los que le temen."
+      ]
+    },
+    {
+      "reference": "2 Timoteo 3:14–17",
+      "book": "2 Timoteo",
+      "chapter": 3,
+      "start": 14,
+      "end": 17,
+      "verses": [
+        "Pero tú debes permanecer fiel a las cosas que se te han enseñado. Sabes que son verdad, porque sabes que puedes confiar en quienes te las enseñaron.",
+        "Desde la niñez, se te han enseñado las sagradas Escrituras, las cuales te han dado la sabiduría para recibir la salvación que viene por confiar en Cristo Jesús.",
+        "Toda la Escritura es inspirada por Dios y es útil para enseñarnos lo que es verdad y para hacernos ver lo que está mal en nuestra vida. Nos corrige cuando estamos equivocados y nos enseña a hacer lo correcto.",
+        "Dios la usa para preparar y capacitar a su pueblo para que haga toda buena obra."
+      ]
+    },
+    {
+      "reference": "Hebreos 4:14–16",
+      "book": "Hebreos",
+      "chapter": 4,
+      "start": 14,
+      "end": 16,
+      "verses": [
+        "Por lo tanto, ya que tenemos un gran Sumo Sacerdote que entró en el cielo, Jesús el Hijo de Dios, aferrémonos a lo que creemos.",
+        "Nuestro Sumo Sacerdote comprende nuestras debilidades, porque enfrentó todas y cada una de las pruebas que enfrentamos nosotros, sin embargo él nunca pecó.",
+        "Así que acerquémonos con toda confianza al trono de la gracia de nuestro Dios. Allí recibiremos su misericordia y encontraremos la gracia que nos ayudará cuando más la necesitemos."
+      ]
+    },
+    {
+      "reference": "Salmos 19:7–10",
+      "book": "Salmos",
+      "chapter": 19,
+      "start": 7,
+      "end": 10,
+      "verses": [
+        "Las enseñanzas del SEÑOR son perfectas, reavivan el alma. Los decretos del SEÑOR son confiables, hacen sabio al sencillo.",
+        "Los mandamientos del SEÑOR son rectos, traen alegría al corazón. Los mandatos del SEÑOR son claros, dan buena percepción para vivir.",
+        "La reverencia al SEÑOR es pura, permanece para siempre. Las leyes del SEÑOR son verdaderas, cada una de ellas es imparcial.",
+        "Son más deseables que el oro, incluso que el oro más puro. Son más dulces que la miel, incluso que la miel que gotea del panal."
+      ]
+    },
+    {
+      "reference": "Romanos 8:31–32",
+      "book": "Romanos",
+      "chapter": 8,
+      "start": 31,
+      "end": 32,
+      "verses": [
+        "¿Qué podemos decir acerca de cosas tan maravillosas como éstas? Si Dios está a favor de nosotros, ¿quién podrá ponerse en nuestra contra?",
+        "Si Dios no se guardó ni a su propio Hijo, sino que lo entregó por todos nosotros, ¿no nos dará también todo lo demás?"
+      ]
+    },
+    {
+      "reference": "Efesios 3:16–19",
+      "book": "Efesios",
+      "chapter": 3,
+      "start": 16,
+      "end": 19,
+      "verses": [
+        "Pido en oración que, de sus gloriosos e inagotables recursos, los fortalezca con poder en el ser interior por medio de su Espíritu.",
+        "Entonces Cristo habitará en el corazón de ustedes a medida que confíen en él. Echarán raíces profundas en el amor de Dios, y ellas los mantendrán fuertes.",
+        "Espero que puedan comprender, como corresponde a todo el pueblo de Dios, cuán ancho, cuán largo, cuán alto y cuán profundo es su amor.",
+        "Es mi deseo que experimenten el amor de Cristo, aun cuando es demasiado grande para comprenderlo todo. Entonces serán completos con toda la plenitud de la vida y el poder que proviene de Dios."
+      ]
+    },
+    {
+      "reference": "Lucas 10:38–42",
+      "book": "Lucas",
+      "chapter": 10,
+      "start": 38,
+      "end": 42,
+      "verses": [
+        "Durante el viaje a Jerusalén, Jesús y sus discípulos llegaron a cierta aldea donde una mujer llamada Marta los recibió en su casa.",
+        "Su hermana María se sentó a los pies del Señor a escuchar sus enseñanzas,",
+        "pero Marta estaba distraída con los preparativos para la gran cena. Entonces se acercó a Jesús y le dijo: —Maestro, ¿no te parece injusto que mi hermana esté aquí sentada mientras yo hago todo el trabajo? Dile que venga a ayudarme.",
+        "El Señor le dijo: —Mi apreciada Marta, ¡estás preocupada y tan inquieta con todos los detalles!",
+        "Hay una sola cosa por la que vale la pena preocuparse. María la ha descubierto, y nadie se la quitará."
+      ]
+    },
+    {
+      "reference": "Santiago 4:7–10",
+      "book": "Santiago",
+      "chapter": 4,
+      "start": 7,
+      "end": 10,
+      "verses": [
+        "Así que humíllense delante de Dios. Resistan al diablo, y él huirá de ustedes.",
+        "Acérquense a Dios, y Dios se acercará a ustedes. Lávense las manos, pecadores; purifiquen su corazón, porque su lealtad está dividida entre Dios y el mundo.",
+        "Derramen lágrimas por lo que han hecho. Que haya lamento y profundo dolor. Que haya llanto en lugar de risa y tristeza en lugar de alegría.",
+        "Humíllense delante del Señor, y él los levantará con honor."
+      ]
+    },
+    {
+      "reference": "Efesios 6:10–13",
+      "book": "Efesios",
+      "chapter": 6,
+      "start": 10,
+      "end": 13,
+      "verses": [
+        "Una palabra final: sean fuertes en el Señor y en su gran poder.",
+        "Pónganse toda la armadura de Dios para poder mantenerse firmes contra todas las estrategias del diablo.",
+        "Pues no luchamos contra enemigos de carne y hueso, sino contra gobernadores malignos y autoridades del mundo invisible, contra fuerzas poderosas de este mundo tenebroso y contra espíritus malignos de los lugares celestiales.",
+        "Por lo tanto, pónganse todas las piezas de la armadura de Dios para poder resistir al enemigo en el tiempo del mal. Así, después de la batalla, todavía seguirán de pie, firmes."
+      ]
+    },
+    {
+      "reference": "Juan 16:32–33",
+      "book": "Juan",
+      "chapter": 16,
+      "start": 32,
+      "end": 33,
+      "verses": [
+        "Pero se acerca el tiempo —de hecho, ya ha llegado— cuando ustedes serán dispersados, cada uno se irá por su lado y me dejarán solo. Sin embargo, no estoy solo, porque el Padre está conmigo.",
+        "Les he dicho todo lo anterior para que en mí tengan paz. Aquí en el mundo tendrán muchas pruebas y tristezas; pero anímense, porque yo he vencido al mundo."
+      ]
+    },
+    {
+      "reference": "1 Pedro 5:6–10",
+      "book": "1 Pedro",
+      "chapter": 5,
+      "start": 6,
+      "end": 10,
+      "verses": [
+        "Así que humíllense ante el gran poder de Dios y, a su debido tiempo, él los levantará con honor.",
+        "Pongan todas sus preocupaciones y ansiedades en las manos de Dios, porque él cuida de ustedes.",
+        "¡Estén alerta! Cuídense de su gran enemigo, el diablo, porque anda al acecho como un león rugiente, buscando a quién devorar.",
+        "Manténganse firmes contra él y sean fuertes en su fe. Recuerden que sus hermanos en Cristo, en todo el mundo, también están pasando por el mismo sufrimiento.",
+        "En su bondad, Dios los llamó a ustedes a que participen de su gloria eterna por medio de Cristo Jesús. Entonces, después de que hayan sufrido un poco de tiempo, él los restaurará, los sostendrá, los fortalecerá y los afirmará sobre un fundamento sólido."
+      ]
+    },
+    {
+      "reference": "Proverbios 19:20–21",
+      "book": "Proverbios",
+      "chapter": 19,
+      "start": 20,
+      "end": 21,
+      "verses": [
+        "Consigue todo el consejo y la instrucción que puedas, para que seas sabio por el resto de tu vida.",
+        "Puedes hacer todos los planes que quieras, pero el propósito del SEÑOR prevalecerá."
+      ]
+    },
+    {
+      "reference": "Juan 4:13–14",
+      "book": "Juan",
+      "chapter": 4,
+      "start": 13,
+      "end": 14,
+      "verses": [
+        "Jesús contestó: —Cualquiera que beba de esta agua pronto volverá a tener sed,",
+        "pero todos los que beban del agua que yo doy no tendrán sed jamás. Esa agua se convierte en un manantial que brota con frescura dentro de ellos y les da vida eterna."
+      ]
+    },
+    {
+      "reference": "Salmos 62:5–8",
+      "book": "Salmos",
+      "chapter": 62,
+      "start": 5,
+      "end": 8,
+      "verses": [
+        "Que todo mi ser espere en silencio delante de Dios, porque en él está mi esperanza.",
+        "Sólo él es mi roca y mi salvación, mi fortaleza donde no seré sacudido.",
+        "Mi victoria y mi honor provienen solamente de Dios; él es mi refugio, una roca donde ningún enemigo puede alcanzarme.",
+        "Oh pueblo mío, confía en Dios en todo momento; dile lo que hay en tu corazón, porque él es nuestro refugio. Interludio"
+      ]
+    },
+    {
+      "reference": "1 Pedro 2:9–10",
+      "book": "1 Pedro",
+      "chapter": 2,
+      "start": 9,
+      "end": 10,
+      "verses": [
+        "Pero ustedes no son así porque son un pueblo elegido. Son sacerdotes del Rey, una nación santa, posesión exclusiva de Dios. Por eso pueden mostrar a otros la bondad de Dios, pues él los ha llamado a salir de la oscuridad y entrar en su luz maravillosa.",
+        "Antes no tenían identidad como pueblo, ahora son pueblo de Dios. Antes no recibieron misericordia, ahora han recibido la misericordia de Dios."
+      ]
+    },
+    {
+      "reference": "2 Corintios 4:16–18",
+      "book": "2 Corintios",
+      "chapter": 4,
+      "start": 16,
+      "end": 18,
+      "verses": [
+        "Es por esto que nunca nos damos por vencidos. Aunque nuestro cuerpo está muriéndose, nuestro espíritu va renovándose cada día.",
+        "Pues nuestras dificultades actuales son pequeñas y no durarán mucho tiempo. Sin embargo, ¡nos producen una gloria que durará para siempre y que es de mucho más peso que las dificultades!",
+        "Así que no miramos las dificultades que ahora vemos; en cambio, fijamos nuestra vista en cosas que no pueden verse. Pues las cosas que ahora podemos ver pronto se habrán ido, pero las cosas que no podemos ver permanecerán para siempre."
+      ]
+    },
+    {
+      "reference": "Juan 15:9–12",
+      "book": "Juan",
+      "chapter": 15,
+      "start": 9,
+      "end": 12,
+      "verses": [
+        "Yo los he amado a ustedes tanto como el Padre me ha amado a mí. Permanezcan en mi amor.",
+        "Cuando obedecen mis mandamientos, permanecen en mi amor, así como yo obedezco los mandamientos de mi Padre y permanezco en su amor.",
+        "Les he dicho estas cosas para que se llenen de mi gozo; así es, desbordarán de gozo.",
+        "Éste es mi mandamiento: Ámense unos a otros de la misma manera en que yo los he amado."
+      ]
+    },
+    {
+      "reference": "Hebreos 13:5–6",
+      "book": "Hebreos",
+      "chapter": 13,
+      "start": 5,
+      "end": 6,
+      "verses": [
+        "No amen el dinero; estén contentos con lo que tienen, pues Dios ha dicho: Nunca te fallaré. Jamás te abandonaré.",
+        "Así que podemos decir con toda confianza: El SEÑOR es quien me ayuda, por eso no tendré miedo. ¿Qué me puede hacer un simple mortal?."
+      ]
+    },
+    {
+      "reference": "Eclesiastés 12:13–14",
+      "book": "Eclesiastés",
+      "chapter": 12,
+      "start": 13,
+      "end": 14,
+      "verses": [
+        "Aquí culmina el relato. Mi conclusión final es la siguiente: teme a Dios y obedece sus mandatos, porque ese es el deber que tenemos todos.",
+        "Dios nos juzgará por cada cosa que hagamos, incluso lo que hayamos hecho en secreto, sea bueno o sea malo."
+      ]
+    },
+    {
+      "reference": "Juan 14:1–3",
+      "book": "Juan",
+      "chapter": 14,
+      "start": 1,
+      "end": 3,
+      "verses": [
+        "No dejen que el corazón se les llene de angustia; confíen en Dios y confíen también en mí.",
+        "En el hogar de mi Padre, hay lugar más que suficiente. Si no fuera así, ¿acaso les habría dicho que voy a prepararles un lugar?",
+        "Cuando todo esté listo, volveré para llevarlos, para que siempre estén conmigo donde yo estoy."
+      ]
+    },
+    {
+      "reference": "Filipenses 4:4–7",
+      "book": "Filipenses",
+      "chapter": 4,
+      "start": 4,
+      "end": 7,
+      "verses": [
+        "Estén siempre llenos de alegría en el Señor. Lo repito, ¡alégrense!",
+        "Que todo el mundo vea que son considerados en todo lo que hacen. Recuerden que el Señor vuelve pronto.",
+        "No se preocupen por nada; en cambio, oren por todo. Díganle a Dios lo que necesitan y denle gracias por todo lo que él ha hecho.",
+        "Así experimentarán la paz de Dios, que supera todo lo que podemos entender. La paz de Dios cuidará su corazón y su mente mientras vivan en Cristo Jesús."
+      ]
+    },
+    {
+      "reference": "Isaías 43:1–3",
+      "book": "Isaías",
+      "chapter": 43,
+      "start": 1,
+      "end": 3,
+      "verses": [
+        "Pero ahora, oh Jacob, escucha al SEÑOR, quien te creó. Oh Israel, el que te formó dice: No tengas miedo, porque he pagado tu rescate; te he llamado por tu nombre; eres mío.",
+        "Cuando pases por aguas profundas, yo estaré contigo. Cuando pases por ríos de dificultad, no te ahogarás. Cuando pases por el fuego de la opresión, no te quemarás; las llamas no te consumirán.",
+        "Pues yo soy el SEÑOR, tu Dios, el Santo de Israel, tu Salvador. Yo di a Egipto como rescate por tu libertad; en tu lugar di a Etiopía y a Seba."
+      ]
+    },
+    {
+      "reference": "Santiago 3:17–18",
+      "book": "Santiago",
+      "chapter": 3,
+      "start": 17,
+      "end": 18,
+      "verses": [
+        "Sin embargo, la sabiduría que proviene del cielo es, ante todo, pura y también ama la paz; siempre es amable y dispuesta a ceder ante los demás. Está llena de compasión y de buenas acciones. No muestra favoritismo y siempre es sincera.",
+        "Y los que procuran la paz sembrarán semillas de paz y recogerán una cosecha de justicia."
+      ]
+    },
+    {
+      "reference": "2 Timoteo 1:6–8",
+      "book": "2 Timoteo",
+      "chapter": 1,
+      "start": 6,
+      "end": 8,
+      "verses": [
+        "Por esta razón, te recuerdo que avives el fuego del don espiritual que Dios te dio cuando te impuse mis manos.",
+        "Pues Dios no nos ha dado un espíritu de temor y timidez sino de poder, amor y autodisciplina.",
+        "Así que nunca te avergüences de contarles a otros acerca de nuestro Señor, ni te avergüences de mí, aun cuando estoy preso por él. Con las fuerzas que Dios te da prepárate para sufrir conmigo a causa de la Buena Noticia."
+      ]
+    },
+    {
+      "reference": "Romanos 12:14–18",
+      "book": "Romanos",
+      "chapter": 12,
+      "start": 14,
+      "end": 18,
+      "verses": [
+        "Bendigan a quienes los persiguen. No los maldigan, sino pídanle a Dios en oración que los bendiga.",
+        "Alégrense con los que están alegres y lloren con los que lloran.",
+        "Vivan en armonía unos con otros. No sean tan orgullosos como para no disfrutar de la compañía de la gente común. ¡Y no piensen que lo saben todo!",
+        "Nunca devuelvan a nadie mal por mal. Compórtense de tal manera que todo el mundo vea que ustedes son personas honradas.",
+        "Hagan todo lo posible por vivir en paz con todos."
+      ]
+    },
+    {
+      "reference": "Salmos 63:1–4",
+      "book": "Salmos",
+      "chapter": 63,
+      "start": 1,
+      "end": 4,
+      "verses": [
+        "Oh Dios, tú eres mi Dios; de todo corazón te busco. Mi alma tiene sed de ti; todo mi cuerpo te anhela en esta tierra reseca y agotada donde no hay agua.",
+        "Te he visto en tu santuario y he contemplado tu poder y tu gloria.",
+        "Tu amor inagotable es mejor que la vida misma, ¡cuánto te alabo!",
+        "Te alabaré mientras viva, a ti levantaré mis manos en oración."
+      ]
+    },
+    {
+      "reference": "Salmos 127:1–2",
+      "book": "Salmos",
+      "chapter": 127,
+      "start": 1,
+      "end": 2,
+      "verses": [
+        "Si el SEÑOR no construye la casa, el trabajo de los constructores es una pérdida de tiempo. Si el SEÑOR no protege la ciudad, protegerla con guardias no sirve para nada.",
+        "Es inútil que te esfuerces tanto, desde la mañana temprano hasta tarde en la noche, y te preocupes por conseguir alimento; porque Dios da descanso a sus amados."
+      ]
+    },
+    {
+      "reference": "Mateo 5:14–16",
+      "book": "Mateo",
+      "chapter": 5,
+      "start": 14,
+      "end": 16,
+      "verses": [
+        "Ustedes son la luz del mundo, como una ciudad en lo alto de una colina que no puede esconderse.",
+        "Nadie enciende una lámpara y luego la pone debajo de una canasta. En cambio, la coloca en un lugar alto donde ilumina a todos los que están en la casa.",
+        "De la misma manera, dejen que sus buenas acciones brillen a la vista de todos, para que todos alaben a su Padre celestial."
+      ]
+    },
+    {
+      "reference": "Gálatas 5:22–25",
+      "book": "Gálatas",
+      "chapter": 5,
+      "start": 22,
+      "end": 25,
+      "verses": [
+        "En cambio, la clase de fruto que el Espíritu Santo produce en nuestra vida es: amor, alegría, paz, paciencia, gentileza, bondad, fidelidad,",
+        "humildad y control propio. ¡No existen leyes contra esas cosas!",
+        "Los que pertenecen a Cristo Jesús han clavado en la cruz las pasiones y los deseos de la naturaleza pecaminosa y los han crucificado allí.",
+        "Ya que vivimos por el Espíritu, sigamos la guía del Espíritu en cada aspecto de nuestra vida."
+      ]
+    },
+    {
+      "reference": "Isaías 58:10–11",
+      "book": "Isaías",
+      "chapter": 58,
+      "start": 10,
+      "end": 11,
+      "verses": [
+        "Alimenten a los hambrientos y ayuden a los que están en apuros. Entonces su luz resplandecerá desde la oscuridad, y la oscuridad que los rodea será tan radiante como el mediodía.",
+        "El SEÑOR los guiará continuamente, les dará agua cuando tengan sed y restaurará sus fuerzas. Serán como un huerto bien regado, como un manantial que nunca se seca."
+      ]
+    },
+    {
+      "reference": "Salmos 139:23–24",
+      "book": "Salmos",
+      "chapter": 139,
+      "start": 23,
+      "end": 24,
+      "verses": [
+        "Examíname, oh Dios, y conoce mi corazón; pruébame y conoce los pensamientos que me inquietan.",
+        "Señálame cualquier cosa en mí que te ofenda y guíame por el camino de la vida eterna."
+      ]
+    },
+    {
+      "reference": "Proverbios 11:24–25",
+      "book": "Proverbios",
+      "chapter": 11,
+      "start": 24,
+      "end": 25,
+      "verses": [
+        "Da con generosidad y serás más rico; sé tacaño y lo perderás todo.",
+        "El generoso prosperará, y el que reanima a otros será reanimado."
+      ]
+    },
+    {
+      "reference": "Romanos 12:1–2",
+      "book": "Romanos",
+      "chapter": 12,
+      "start": 1,
+      "end": 2,
+      "verses": [
+        "Por lo tanto, amados hermanos, les ruego que entreguen su cuerpo a Dios por todo lo que él ha hecho a favor de ustedes. Que sea un sacrificio vivo y santo, la clase de sacrificio que a él le agrada. Esa es la verdadera forma de adorarlo.",
+        "No imiten las conductas ni las costumbres de este mundo, más bien dejen que Dios los transforme en personas nuevas al cambiarles la manera de pensar. Entonces aprenderán a conocer la voluntad de Dios para ustedes, la cual es buena, agradable y perfecta."
+      ]
+    },
+    {
+      "reference": "Colosenses 3:12–15",
+      "book": "Colosenses",
+      "chapter": 3,
+      "start": 12,
+      "end": 15,
+      "verses": [
+        "Dado que Dios los eligió para que sean su pueblo santo y amado por él, ustedes tienen que vestirse de tierna compasión, bondad, humildad, gentileza y paciencia.",
+        "Sean comprensivos con las faltas de los demás y perdonen a todo el que los ofenda. Recuerden que el Señor los perdonó a ustedes, así que ustedes deben perdonar a otros.",
+        "Sobre todo, vístanse de amor, lo cual nos une a todos en perfecta armonía.",
+        "Y que la paz que viene de Cristo gobierne en sus corazones. Pues, como miembros de un mismo cuerpo, ustedes son llamados a vivir en paz. Y sean siempre agradecidos."
+      ]
+    },
+    {
+      "reference": "1 Pedro 3:8–9",
+      "book": "1 Pedro",
+      "chapter": 3,
+      "start": 8,
+      "end": 9,
+      "verses": [
+        "Por último, todos deben ser de un mismo parecer. Compadézcanse unos de otros. Ámense como hermanos y hermanas. Sean de buen corazón y mantengan una actitud humilde.",
+        "No paguen mal por mal. No respondan con insultos cuando la gente los insulte. Por el contrario, contesten con una bendición. A esto los ha llamado Dios, y él los bendecirá por hacerlo."
+      ]
+    },
+    {
+      "reference": "Números 6:24–26",
+      "book": "Números",
+      "chapter": 6,
+      "start": 24,
+      "end": 26,
+      "verses": [
+        "«Que el SEÑOR te bendiga y te proteja.",
+        "Que el SEÑOR sonría sobre ti y sea compasivo contigo.",
+        "Que el SEÑOR te muestre su favor y te dé su paz»."
+      ]
+    },
+    {
+      "reference": "Salmos 118:21–24",
+      "book": "Salmos",
+      "chapter": 118,
+      "start": 21,
+      "end": 24,
+      "verses": [
+        "Te doy gracias por contestar mi oración, ¡y por darme la victoria!",
+        "La piedra que los constructores rechazaron ahora se ha convertido en la piedra principal.",
+        "Esto es obra del SEÑOR y es maravilloso verlo.",
+        "Este es el día que hizo el SEÑOR; nos gozaremos y alegraremos en él."
+      ]
+    },
+    {
+      "reference": "2 Pedro 1:5–8",
+      "book": "2 Pedro",
+      "chapter": 1,
+      "start": 5,
+      "end": 8,
+      "verses": [
+        "En vista de todo esto, esfuércense al máximo por responder a las promesas de Dios complementando su fe con una abundante provisión de excelencia moral; la excelencia moral, con conocimiento;",
+        "el conocimiento, con control propio; el control propio, con perseverancia; la perseverancia, con sumisión a Dios;",
+        "la sumisión a Dios, con afecto fraternal, y el afecto fraternal, con amor por todos.",
+        "Cuanto más crezcan de esta manera, más productivos y útiles serán en el conocimiento de nuestro Señor Jesucristo;"
+      ]
+    },
+    {
+      "reference": "Filipenses 2:1–5",
+      "book": "Filipenses",
+      "chapter": 2,
+      "start": 1,
+      "end": 5,
+      "verses": [
+        "¿Hay algún estímulo en pertenecer a Cristo? ¿Existe algún consuelo en su amor? ¿Tenemos en conjunto alguna comunión en el Espíritu? ¿Tienen ustedes un corazón tierno y compasivo?",
+        "Entonces, háganme verdaderamente feliz poniéndose de acuerdo de todo corazón entre ustedes, amándose unos a otros y trabajando juntos con un mismo pensamiento y un mismo propósito.",
+        "No sean egoístas; no traten de impresionar a nadie. Sean humildes, es decir, considerando a los demás como mejores que ustedes.",
+        "No se ocupen sólo de sus propios intereses, sino también procuren interesarse en los demás.",
+        "Tengan la misma actitud que tuvo Cristo Jesús."
+      ]
+    },
+    {
+      "reference": "Proverbios 27:17",
+      "book": "Proverbios",
+      "chapter": 27,
+      "start": 17,
+      "end": 17,
+      "verses": [
+        "Como el hierro se afila con hierro, así un amigo se afila con su amigo."
+      ]
+    },
+    {
+      "reference": "Romanos 8:38–39",
+      "book": "Romanos",
+      "chapter": 8,
+      "start": 38,
+      "end": 39,
+      "verses": [
+        "Y estoy convencido de que nada podrá jamás separarnos del amor de Dios. Ni la muerte ni la vida, ni ángeles ni demonios, ni nuestros temores de hoy ni nuestras preocupaciones de mañana. Ni siquiera los poderes del infierno pueden separarnos del amor de Dios.",
+        "Ningún poder en las alturas ni en las profundidades, de hecho, nada en toda la creación podrá jamás separarnos del amor de Dios, que está revelado en Cristo Jesús nuestro Señor."
+      ]
+    },
+    {
+      "reference": "Isaías 41:10–13",
+      "book": "Isaías",
+      "chapter": 41,
+      "start": 10,
+      "end": 13,
+      "verses": [
+        "No tengas miedo, porque yo estoy contigo; no te desalientes, porque yo soy tu Dios. Te daré fuerzas y te ayudaré; te sostendré con mi mano derecha victoriosa.",
+        "¿Ves? Todos tus furiosos enemigos están allí tendidos, confundidos y humillados. Todo el que se te oponga morirá y quedará en la nada.",
+        "Buscarás en vano a los que trataron de conquistarte. Los que te ataquen quedarán en la nada.",
+        "Pues yo te sostengo de tu mano derecha; yo, el SEÑOR tu Dios. Y te digo: «No tengas miedo, aquí estoy para ayudarte."
+      ]
+    },
+    {
+      "reference": "Santiago 1:2–5",
+      "book": "Santiago",
+      "chapter": 1,
+      "start": 2,
+      "end": 5,
+      "verses": [
+        "Amados hermanos, cuando tengan que enfrentar problemas, considérenlo como un tiempo para alegrarse mucho",
+        "porque ustedes saben que, siempre que se pone a prueba la fe, la constancia tiene una oportunidad para desarrollarse.",
+        "Así que dejen que crezca, pues una vez que su constancia se haya desarrollado plenamente, serán perfectos y completos, y no les faltará nada.",
+        "Si necesitan sabiduría, pídansela a nuestro generoso Dios, y él se la dará; no los reprenderá por pedirla."
+      ]
+    },
+    {
+      "reference": "Job 19:25–27",
+      "book": "Job",
+      "chapter": 19,
+      "start": 25,
+      "end": 27,
+      "verses": [
+        "Pero en cuanto a mí, sé que mi Redentor vive, y un día por fin estará sobre la tierra.",
+        "Y después que mi cuerpo se haya descompuesto, ¡todavía en mi cuerpo veré a Dios!",
+        "Yo mismo lo veré; así es, lo veré con mis propios ojos. ¡Este pensamiento me llena de asombro!"
+      ]
+    },
+    {
+      "reference": "1 Pedro 4:8–11",
+      "book": "1 Pedro",
+      "chapter": 4,
+      "start": 8,
+      "end": 11,
+      "verses": [
+        "Lo más importante de todo es que sigan demostrando profundo amor unos a otros, porque el amor cubre gran cantidad de pecados.",
+        "Abran las puertas de su hogar con alegría al que necesite un plato de comida o un lugar donde dormir.",
+        "Dios, de su gran variedad de dones espirituales, les ha dado un don a cada uno de ustedes. Úsenlos bien para servirse los unos a los otros.",
+        "¿Has recibido el don de hablar en público? Entonces, habla como si Dios mismo estuviera hablando por medio de ti. ¿Has recibido el don de ayudar a otros? Ayúdalos con toda la fuerza y la energía que Dios te da. Así, cada cosa que hagan traerá gloria a Dios por medio de Jesucristo. ¡A él sea toda la gloria y todo el poder por siempre y para siempre! Amén."
+      ]
+    },
+    {
+      "reference": "Santiago 1:19–22",
+      "book": "Santiago",
+      "chapter": 1,
+      "start": 19,
+      "end": 22,
+      "verses": [
+        "Mis amados hermanos, quiero que entiendan lo siguiente: todos ustedes deben ser rápidos para escuchar, lentos para hablar y lentos para enojarse.",
+        "El enojo humano no produce la rectitud que Dios desea.",
+        "Así que quiten de su vida todo lo malo y lo sucio, y acepten con humildad la palabra que Dios les ha sembrado en el corazón, porque tiene el poder para salvar su alma.",
+        "No sólo escuchen la palabra de Dios, tienen que ponerla en práctica. De lo contrario, solamente se engañan a sí mismos."
+      ]
+    },
+    {
+      "reference": "1 Juan 1:5–9",
+      "book": "1 Juan",
+      "chapter": 1,
+      "start": 5,
+      "end": 9,
+      "verses": [
+        "Este es el mensaje que oímos de Jesús y que ahora les declaramos a ustedes: Dios es luz y en él no hay nada de oscuridad.",
+        "Por lo tanto, mentimos si afirmamos que tenemos comunión con Dios pero seguimos viviendo en oscuridad espiritual; no estamos practicando la verdad.",
+        "Si vivimos en la luz, así como Dios está en la luz, entonces tenemos comunión unos con otros, y la sangre de Jesús, su Hijo, nos limpia de todo pecado.",
+        "Si afirmamos que no tenemos pecado, lo único que hacemos es engañarnos a nosotros mismos y no vivimos en la verdad;",
+        "pero si confesamos nuestros pecados a Dios, él es fiel y justo para perdonarnos nuestros pecados y limpiarnos de toda maldad."
+      ]
+    },
+    {
+      "reference": "Filipenses 4:11–13",
+      "book": "Filipenses",
+      "chapter": 4,
+      "start": 11,
+      "end": 13,
+      "verses": [
+        "No que haya pasado necesidad alguna vez, porque he aprendido a estar contento con lo que tengo.",
+        "Sé vivir con casi nada o con todo lo necesario. He aprendido el secreto de vivir en cualquier situación, sea con el estómago lleno o vacío, con mucho o con poco.",
+        "Pues todo lo puedo hacer por medio de Cristo, quien me da las fuerzas."
+      ]
+    },
+    {
+      "reference": "Juan 8:12",
+      "book": "Juan",
+      "chapter": 8,
+      "start": 12,
+      "end": 12,
+      "verses": [
+        "Jesús habló una vez más al pueblo y dijo: Yo soy la luz del mundo. Si ustedes me siguen, no tendrán que andar en la oscuridad porque tendrán la luz que lleva a la vida."
+      ]
+    },
+    {
+      "reference": "Hebreos 10:23–25",
+      "book": "Hebreos",
+      "chapter": 10,
+      "start": 23,
+      "end": 25,
+      "verses": [
+        "Mantengámonos firmes sin titubear en la esperanza que afirmamos, porque se puede confiar en que Dios cumplirá su promesa.",
+        "Pensemos en maneras de motivarnos unos a otros a realizar actos de amor y buenas acciones.",
+        "Y no dejemos de congregarnos, como lo hacen algunos, sino animémonos unos a otros, sobre todo ahora que el día de su regreso se acerca."
+      ]
+    },
+    {
+      "reference": "Romanos 8:1–2",
+      "book": "Romanos",
+      "chapter": 8,
+      "start": 1,
+      "end": 2,
+      "verses": [
+        "Por lo tanto, ya no hay condenación para los que pertenecen a Cristo Jesús;",
+        "y porque ustedes pertenecen a él, el poder del Espíritu que da vida los ha libertado del poder del pecado, que lleva a la muerte."
+      ]
+    },
+    {
+      "reference": "Mateo 11:28–30",
+      "book": "Mateo",
+      "chapter": 11,
+      "start": 28,
+      "end": 30,
+      "verses": [
+        "Luego dijo Jesús: Vengan a mí todos los que están cansados y llevan cargas pesadas, y yo les daré descanso.",
+        "Pónganse mi yugo. Déjenme enseñarles, porque yo soy humilde y tierno de corazón, y encontrarán descanso para el alma.",
+        "Pues mi yugo es fácil de llevar y la carga que les doy es liviana."
+      ]
+    },
+    {
+      "reference": "Apocalipsis 3:20–21",
+      "book": "Apocalipsis",
+      "chapter": 3,
+      "start": 20,
+      "end": 21,
+      "verses": [
+        "¡Mira! Yo estoy a la puerta y llamo. Si oyes mi voz y abres la puerta, yo entraré y cenaremos juntos como amigos.",
+        "Todos los que salgan vencedores se sentarán conmigo en mi trono, tal como yo salí vencedor y me senté con mi Padre en su trono."
+      ]
+    },
+    {
+      "reference": "Mateo 7:7–11",
+      "book": "Mateo",
+      "chapter": 7,
+      "start": 7,
+      "end": 11,
+      "verses": [
+        "Sigue pidiendo y recibirás lo que pides; sigue buscando y encontrarás; sigue llamando, y la puerta se te abrirá.",
+        "Pues todo el que pide, recibe; todo el que busca, encuentra; y a todo el que llama, se le abrirá la puerta.",
+        "Ustedes, los que son padres, si sus hijos les piden un pedazo de pan, ¿acaso les dan una piedra en su lugar?",
+        "O si les piden un pescado, ¿les dan una serpiente? ¡Claro que no!",
+        "Así que si ustedes, gente pecadora, saben dar buenos regalos a sus hijos, cuánto más su Padre celestial dará buenos regalos a quienes le pidan."
+      ]
+    },
+    {
+      "reference": "Salmos 51:10–12",
+      "book": "Salmos",
+      "chapter": 51,
+      "start": 10,
+      "end": 12,
+      "verses": [
+        "Crea en mí, oh Dios, un corazón limpio y renueva un espíritu fiel dentro de mí.",
+        "No me expulses de tu presencia y no me quites tu Espíritu Santo.",
+        "Restaura en mí la alegría de tu salvación y haz que esté dispuesto a obedecerte."
+      ]
+    },
+    {
+      "reference": "Lamentaciones 3:22–24",
+      "book": "Lamentaciones",
+      "chapter": 3,
+      "start": 22,
+      "end": 24,
+      "verses": [
+        "¡el fiel amor del SEÑOR nunca se acaba! Sus misericordias jamás terminan.",
+        "Grande es su fidelidad; sus misericordias son nuevas cada mañana.",
+        "Me digo: El SEÑOR es mi herencia, por lo tanto, ¡esperaré en él!"
+      ]
+    },
+    {
+      "reference": "2 Corintios 12:8–10",
+      "book": "2 Corintios",
+      "chapter": 12,
+      "start": 8,
+      "end": 10,
+      "verses": [
+        "En tres ocasiones distintas, le supliqué al Señor que me la quitara.",
+        "Cada vez él me dijo: Mi gracia es todo lo que necesitas; mi poder actúa mejor en la debilidad. Así que ahora me alegra jactarme de mis debilidades, para que el poder de Cristo pueda actuar a través de mí.",
+        "Es por esto que me deleito en mis debilidades, y en los insultos, en privaciones, persecuciones y dificultades que sufro por Cristo. Pues, cuando soy débil, entonces soy fuerte."
+      ]
+    },
+    {
+      "reference": "Salmos 100:1–5",
+      "book": "Salmos",
+      "chapter": 100,
+      "start": 1,
+      "end": 5,
+      "verses": [
+        "¡Aclamen con alegría al SEÑOR, habitantes de toda la tierra!",
+        "Adoren al SEÑOR con gozo. Vengan ante él cantando con alegría.",
+        "¡Reconozcan que el SEÑOR es Dios! Él nos hizo, y le pertenecemos; somos su pueblo, ovejas de su prado.",
+        "Entren por sus puertas con acción de gracias; vayan a sus atrios con alabanza. Denle gracias y alaben su nombre.",
+        "Pues el SEÑOR es bueno. Su amor inagotable permanece para siempre, y su fidelidad continúa de generación en generación."
+      ]
+    },
+    {
+      "reference": "Marcos 10:42–45",
+      "book": "Marcos",
+      "chapter": 10,
+      "start": 42,
+      "end": 45,
+      "verses": [
+        "Así que Jesús los reunió a todos y les dijo: Ustedes saben que los gobernantes de este mundo tratan a su pueblo con prepotencia y los funcionarios hacen alarde de su autoridad frente a los súbditos.",
+        "Pero entre ustedes será diferente. El que quiera ser líder entre ustedes deberá ser sirviente,",
+        "y el que quiera ser el primero entre ustedes deberá ser esclavo de los demás.",
+        "Pues ni aun el Hijo del Hombre vino para que le sirvan, sino para servir a otros y para dar su vida en rescate por muchos."
+      ]
+    },
+    {
+      "reference": "Proverbios 17:17",
+      "book": "Proverbios",
+      "chapter": 17,
+      "start": 17,
+      "end": 17,
+      "verses": [
+        "Un amigo es siempre leal, y un hermano nace para ayudar en tiempo de necesidad."
+      ]
+    },
+    {
+      "reference": "Mateo 6:25–27",
+      "book": "Mateo",
+      "chapter": 6,
+      "start": 25,
+      "end": 27,
+      "verses": [
+        "Por eso les digo que no se preocupen por la vida diaria, si tendrán suficiente alimento y bebida, o suficiente ropa para vestirse. ¿Acaso no es la vida más que la comida y el cuerpo más que la ropa?",
+        "Miren los pájaros. No plantan ni cosechan ni guardan comida en graneros, porque el Padre celestial los alimenta. ¿Y no son ustedes para él mucho más valiosos que ellos?",
+        "¿Acaso con todas sus preocupaciones pueden añadir un solo momento a su vida?"
+      ]
+    },
+    {
+      "reference": "1 Samuel 16:7",
+      "book": "1 Samuel",
+      "chapter": 16,
+      "start": 7,
+      "end": 7,
+      "verses": [
+        "Pero el SEÑOR le dijo a Samuel: —No juzgues por su apariencia o por su estatura, porque yo lo he rechazado. El SEÑOR no ve las cosas de la manera en que tú las ves. La gente juzga por las apariencias, pero el SEÑOR mira el corazón."
+      ]
+    },
+    {
+      "reference": "1 Tesalonicenses 5:16–22",
+      "book": "1 Tesalonicenses",
+      "chapter": 5,
+      "start": 16,
+      "end": 22,
+      "verses": [
+        "Estén siempre alegres.",
+        "Nunca dejen de orar.",
+        "Sean agradecidos en toda circunstancia, pues esta es la voluntad de Dios para ustedes, los que pertenecen a Cristo Jesús.",
+        "No apaguen al Espíritu Santo.",
+        "No se burlen de las profecías,",
+        "sino pongan a prueba todo lo que se dice. Retengan lo que es bueno.",
+        "Aléjense de toda clase de mal."
+      ]
+    },
+    {
+      "reference": "1 Corintios 13:4–7",
+      "book": "1 Corintios",
+      "chapter": 13,
+      "start": 4,
+      "end": 7,
+      "verses": [
+        "El amor es paciente y bondadoso. El amor no es celoso ni fanfarrón ni orgulloso",
+        "ni ofensivo. No exige que las cosas se hagan a su manera. No se irrita ni lleva un registro de las ofensas recibidas.",
+        "No se alegra de la injusticia sino que se alegra cuando la verdad triunfa.",
+        "El amor nunca se da por vencido, jamás pierde la fe, siempre tiene esperanzas y se mantiene firme en toda circunstancia."
+      ]
+    },
+    {
+      "reference": "Proverbios 18:10",
+      "book": "Proverbios",
+      "chapter": 18,
+      "start": 10,
+      "end": 10,
+      "verses": [
+        "El nombre del SEÑOR es una fortaleza firme; los justos corren a él y quedan a salvo."
+      ]
+    },
+    {
+      "reference": "Salmos 139:1–6",
+      "book": "Salmos",
+      "chapter": 139,
+      "start": 1,
+      "end": 6,
+      "verses": [
+        "Oh SEÑOR, has examinado mi corazón y sabes todo acerca de mí.",
+        "Sabes cuándo me siento y cuándo me levanto; conoces mis pensamientos aun cuando me encuentro lejos.",
+        "Me ves cuando viajo y cuando descanso en casa. Sabes todo lo que hago.",
+        "Sabes lo que voy a decir incluso antes de que lo diga, SEÑOR.",
+        "Vas delante y detrás de mí. Pones tu mano de bendición sobre mi cabeza.",
+        "Semejante conocimiento es demasiado maravilloso para mí, ¡es tan elevado que no puedo entenderlo!"
+      ]
+    },
+    {
+      "reference": "Proverbios 16:1–3",
+      "book": "Proverbios",
+      "chapter": 16,
+      "start": 1,
+      "end": 3,
+      "verses": [
+        "Podemos hacer nuestros propios planes, pero la respuesta correcta viene del SEÑOR.",
+        "La gente puede considerarse pura según su propia opinión, pero el SEÑOR examina sus intenciones.",
+        "Pon todo lo que hagas en manos del SEÑOR, y tus planes tendrán éxito."
+      ]
+    },
+    {
+      "reference": "Salmos 119:105–106",
+      "book": "Salmos",
+      "chapter": 119,
+      "start": 105,
+      "end": 106,
+      "verses": [
+        "Tu palabra es una lámpara que guía mis pies y una luz para mi camino.",
+        "Lo prometí una vez y volveré a prometerlo: obedeceré tus justas ordenanzas."
+      ]
+    },
+    {
+      "reference": "Éxodo 34:6–7",
+      "book": "Éxodo",
+      "chapter": 34,
+      "start": 6,
+      "end": 7,
+      "verses": [
+        "El SEÑOR pasó por delante de Moisés proclamando: ¡Yahveh! ¡El SEÑOR! ¡El Dios de compasión y misericordia! Soy lento para enojarme y estoy lleno de amor inagotable y fidelidad.",
+        "Yo derramo amor inagotable a mil generaciones, y perdono la iniquidad, la rebelión y el pecado. Pero no absuelvo al culpable, sino que extiendo los pecados de los padres sobre sus hijos y sus nietos; toda la familia se ve afectada, hasta los hijos de la tercera y cuarta generación."
+      ]
+    },
+    {
+      "reference": "Mateo 6:31–34",
+      "book": "Mateo",
+      "chapter": 6,
+      "start": 31,
+      "end": 34,
+      "verses": [
+        "Así que no se preocupen por todo eso diciendo: «¿Qué comeremos?, ¿qué beberemos?, ¿qué ropa nos pondremos?».",
+        "Esas cosas dominan el pensamiento de los incrédulos, pero su Padre celestial ya conoce todas sus necesidades.",
+        "Busquen el reino de Dios por encima de todo lo demás y lleven una vida justa, y él les dará todo lo que necesiten.",
+        "Así que no se preocupen por el mañana, porque el día de mañana traerá sus propias preocupaciones. Los problemas del día de hoy son suficientes por hoy."
+      ]
+    },
+    {
+      "reference": "Salmos 145:8–13",
+      "book": "Salmos",
+      "chapter": 145,
+      "start": 8,
+      "end": 13,
+      "verses": [
+        "El SEÑOR es misericordioso y compasivo, lento para enojarse y lleno de amor inagotable.",
+        "El SEÑOR es bueno con todos; desborda compasión sobre toda su creación.",
+        "Todas tus obras te agradecerán, SEÑOR, y tus fieles seguidores te darán alabanza.",
+        "Hablarán de la gloria de tu reino; darán ejemplos de tu poder.",
+        "Contarán de tus obras poderosas y de la majestad y la gloria de tu reinado.",
+        "Pues tu reino es un reino eterno; gobiernas de generación en generación. El SEÑOR siempre cumple sus promesas; es bondadoso en todo lo que hace."
+      ]
+    },
+    {
+      "reference": "Mateo 5:3–10",
+      "book": "Mateo",
+      "chapter": 5,
+      "start": 3,
+      "end": 10,
+      "verses": [
+        "Dios bendice a los que son pobres en espíritu y se dan cuenta de la necesidad que tienen de él, porque el reino del cielo les pertenece.",
+        "Dios bendice a los que lloran, porque serán consolados.",
+        "Dios bendice a los que son humildes, porque heredarán toda la tierra.",
+        "Dios bendice a los que tienen hambre y sed de justicia, porque serán saciados.",
+        "Dios bendice a los compasivos, porque serán tratados con compasión.",
+        "Dios bendice a los que tienen corazón puro, porque ellos verán a Dios.",
+        "Dios bendice a los que procuran la paz, porque serán llamados hijos de Dios.",
+        "Dios bendice a los que son perseguidos por hacer lo correcto, porque el reino del cielo les pertenece."
+      ]
+    },
+    {
+      "reference": "Romanos 12:19–21",
+      "book": "Romanos",
+      "chapter": 12,
+      "start": 19,
+      "end": 21,
+      "verses": [
+        "Queridos amigos, nunca tomen venganza. Dejen que se encargue la justa ira de Dios. Pues dicen las Escrituras: Yo tomaré venganza; Yo les pagaré lo que se merecen, dice el SEÑOR.",
+        "En cambio, Si tus enemigos tienen hambre, dales de comer. Si tienen sed, dales de beber. Al hacer eso, amontonarás carbones encendidos de vergüenza sobre su cabeza.",
+        "No dejen que el mal los venza, más bien venzan el mal haciendo el bien."
+      ]
+    },
+    {
+      "reference": "Eclesiastés 4:9–12",
+      "book": "Eclesiastés",
+      "chapter": 4,
+      "start": 9,
+      "end": 12,
+      "verses": [
+        "Es mejor ser dos que uno, porque ambos pueden ayudarse mutuamente a lograr el éxito.",
+        "Si uno cae, el otro puede darle la mano y ayudarle; pero el que cae y está solo, ese sí que está en problemas.",
+        "Del mismo modo, si dos personas se recuestan juntas, pueden brindarse calor mutuamente; pero ¿cómo hace uno solo para entrar en calor?",
+        "Alguien que está solo, puede ser atacado y vencido, pero si son dos, se ponen de espalda con espalda y vencen; mejor todavía si son tres, porque una cuerda triple no se corta fácilmente."
+      ]
+    },
+    {
+      "reference": "Salmos 42:1–2",
+      "book": "Salmos",
+      "chapter": 42,
+      "start": 1,
+      "end": 2,
+      "verses": [
+        "Como el ciervo anhela las corrientes de las aguas, así te anhelo a ti, oh Dios.",
+        "Tengo sed de Dios, del Dios viviente. ¿Cuándo podré ir para estar delante de él?"
+      ]
+    },
+    {
+      "reference": "Tito 3:4–7",
+      "book": "Tito",
+      "chapter": 3,
+      "start": 4,
+      "end": 7,
+      "verses": [
+        "Pero: Cuando Dios nuestro Salvador dio a conocer su bondad y amor,",
+        "él nos salvó, no por las acciones justas que nosotros habíamos hecho, sino por su misericordia. Nos lavó, quitando nuestros pecados, y nos dio un nuevo nacimiento y vida nueva por medio del Espíritu Santo.",
+        "Él derramó su Espíritu sobre nosotros en abundancia por medio de Jesucristo nuestro Salvador.",
+        "Por su gracia él nos declaró justos y nos dio la seguridad de que vamos a heredar la vida eterna."
+      ]
+    },
+    {
+      "reference": "Hebreos 12:1–3",
+      "book": "Hebreos",
+      "chapter": 12,
+      "start": 1,
+      "end": 3,
+      "verses": [
+        "Por lo tanto, ya que estamos rodeados por una enorme multitud de testigos de la vida de fe, quitémonos todo peso que nos impida correr, especialmente el pecado que tan fácilmente nos hace tropezar. Y corramos con perseverancia la carrera que Dios nos ha puesto por delante.",
+        "Esto lo hacemos al fijar la mirada en Jesús, el campeón que inicia y perfecciona nuestra fe. Debido al gozo que le esperaba, Jesús soportó la cruz, sin importarle la vergüenza que ésta representaba. Ahora está sentado en el lugar de honor, junto al trono de Dios.",
+        "Piensen en toda la hostilidad que soportó por parte de pecadores, así no se cansarán ni se darán por vencidos."
+      ]
+    },
+    {
+      "reference": "1 Corintios 15:55–58",
+      "book": "1 Corintios",
+      "chapter": 15,
+      "start": 55,
+      "end": 58,
+      "verses": [
+        "Oh muerte, ¿dónde está tu victoria? Oh muerte, ¿dónde está tu aguijón?.",
+        "Pues el pecado es el aguijón que termina en muerte, y la ley le da al pecado su poder.",
+        "¡Pero gracias a Dios! Él nos da la victoria sobre el pecado y la muerte por medio de nuestro Señor Jesucristo.",
+        "Por lo tanto, mis amados hermanos, permanezcan fuertes y constantes. Trabajen siempre para el Señor con entusiasmo, porque ustedes saben que nada de lo que hacen para el Señor es inútil."
+      ]
+    },
+    {
+      "reference": "Salmos 16:7–11",
+      "book": "Salmos",
+      "chapter": 16,
+      "start": 7,
+      "end": 11,
+      "verses": [
+        "Bendeciré al SEÑOR, quien me guía; aun de noche mi corazón me enseña.",
+        "Sé que el SEÑOR siempre está conmigo; no seré sacudido, porque él está aquí a mi lado.",
+        "Con razón mi corazón está contento y yo me alegro; mi cuerpo descansa seguro,",
+        "porque tú no dejarás mi alma entre los muertos ni permitirás que tu santo se pudra en la tumba.",
+        "Me mostrarás el camino de la vida, me concederás la alegría de tu presencia y el placer de vivir contigo para siempre."
+      ]
+    },
+    {
+      "reference": "Salmos 126:4–6",
+      "book": "Salmos",
+      "chapter": 126,
+      "start": 4,
+      "end": 6,
+      "verses": [
+        "Restaura nuestro bienestar, SEÑOR, como los arroyos renuevan el desierto.",
+        "Los que siembran con lágrimas cosecharán con gritos de alegría.",
+        "Lloran al ir sembrando sus semillas, pero regresan cantando cuando traen la cosecha."
+      ]
+    },
+    {
+      "reference": "Judas 1:24–25",
+      "book": "Judas",
+      "chapter": 1,
+      "start": 24,
+      "end": 25,
+      "verses": [
+        "Y ahora, que toda la gloria sea para Dios, quien es poderoso para evitar que caigan, y para llevarlos sin mancha y con gran alegría a su gloriosa presencia.",
+        "Que toda la gloria sea para él, quien es el único Dios, nuestro Salvador por medio de Jesucristo nuestro Señor. ¡Toda la gloria, la majestad, el poder y la autoridad le pertenecen a él desde antes de todos los tiempos, en el presente y por toda la eternidad! Amén."
+      ]
+    },
+    {
+      "reference": "Isaías 40:28–31",
+      "book": "Isaías",
+      "chapter": 40,
+      "start": 28,
+      "end": 31,
+      "verses": [
+        "¿Acaso nunca han oído? ¿Nunca han entendido? El SEÑOR es el Dios eterno, el Creador de toda la tierra. Él nunca se debilita ni se cansa; nadie puede medir la profundidad de su entendimiento.",
+        "Él da poder a los indefensos y fortaleza a los débiles.",
+        "Hasta los jóvenes se debilitan y se cansan, y los hombres jóvenes caen exhaustos.",
+        "En cambio, los que confían en el SEÑOR encontrarán nuevas fuerzas; volarán alto, como con alas de águila. Correrán y no se cansarán; caminarán y no desmayarán."
+      ]
+    },
+    {
+      "reference": "Salmos 46:1–3",
+      "book": "Salmos",
+      "chapter": 46,
+      "start": 1,
+      "end": 3,
+      "verses": [
+        "Dios es nuestro refugio y nuestra fuerza, siempre está dispuesto a ayudar en tiempos de dificultad.",
+        "Por lo tanto, no temeremos cuando vengan terremotos y las montañas se derrumben en el mar.",
+        "¡Que rujan los océanos y hagan espuma! ¡Que tiemblen las montañas mientras suben las aguas! Interludio"
+      ]
+    },
+    {
+      "reference": "Marcos 12:41–44",
+      "book": "Marcos",
+      "chapter": 12,
+      "start": 41,
+      "end": 44,
+      "verses": [
+        "Jesús se sentó cerca de la caja de las ofrendas del templo y observó mientras la gente depositaba su dinero. Muchos ricos echaban grandes cantidades.",
+        "Entonces llegó una viuda pobre y echó dos monedas pequeñas.",
+        "Jesús llamó a sus discípulos y les dijo: Les digo la verdad, esta viuda pobre ha dado más que todos los demás que ofrendan.",
+        "Pues ellos dieron una mínima parte de lo que les sobraba, pero ella, con lo pobre que es, dio todo lo que tenía para vivir."
+      ]
+    },
+    {
+      "reference": "Lucas 15:4–7",
+      "book": "Lucas",
+      "chapter": 15,
+      "start": 4,
+      "end": 7,
+      "verses": [
+        "Si un hombre tiene cien ovejas y una de ellas se pierde, ¿qué hará? ¿No dejará las otras noventa y nueve en el desierto y saldrá a buscar la perdida hasta que la encuentre?",
+        "Y, cuando la encuentre, la cargará con alegría en sus hombros y la llevará a su casa.",
+        "Cuando llegue, llamará a sus amigos y vecinos y les dirá: «Alégrense conmigo porque encontré mi oveja perdida».",
+        "De la misma manera, ¡hay más alegría en el cielo por un pecador perdido que se arrepiente y regresa a Dios que por noventa y nueve justos que no se extraviaron!"
+      ]
+    },
+    {
+      "reference": "Isaías 55:8–11",
+      "book": "Isaías",
+      "chapter": 55,
+      "start": 8,
+      "end": 11,
+      "verses": [
+        "Mis pensamientos no se parecen en nada a sus pensamientos —dice el SEÑOR—. Y mis caminos están muy por encima de lo que pudieran imaginarse.",
+        "Pues así como los cielos están más altos que la tierra, así mis caminos están más altos que sus caminos y mis pensamientos, más altos que sus pensamientos.",
+        "La lluvia y la nieve descienden de los cielos y quedan en el suelo para regar la tierra. Hacen crecer el grano, y producen semillas para el agricultor y pan para el hambriento.",
+        "Lo mismo sucede con mi palabra. La envío y siempre produce fruto; logrará todo lo que yo quiero, y prosperará en todos los lugares donde yo la envíe."
+      ]
+    },
+    {
+      "reference": "Lucas 11:9–13",
+      "book": "Lucas",
+      "chapter": 11,
+      "start": 9,
+      "end": 13,
+      "verses": [
+        "Así que les digo, sigan pidiendo y recibirán lo que piden; sigan buscando y encontrarán; sigan llamando, y la puerta se les abrirá.",
+        "Pues todo el que pide, recibe; todo el que busca, encuentra; y a todo el que llama, se le abrirá la puerta.",
+        "Ustedes, los que son padres, si sus hijos les piden un pescado, ¿les dan una serpiente en su lugar?",
+        "O si les piden un huevo, ¿les dan un escorpión? ¡Claro que no!",
+        "Así que si ustedes, gente pecadora, saben dar buenos regalos a sus hijos, cuánto más su Padre celestial dará el Espíritu Santo a quienes lo pidan."
+      ]
+    },
+    {
+      "reference": "Lucas 6:35–36",
+      "book": "Lucas",
+      "chapter": 6,
+      "start": 35,
+      "end": 36,
+      "verses": [
+        "¡Amen a sus enemigos! Háganles bien. Presten sin esperar nada a cambio. Entonces su recompensa del cielo será grande, y se estarán comportando verdaderamente como hijos del Altísimo, pues él es bondadoso con los que son desagradecidos y perversos.",
+        "Deben ser compasivos, así como su Padre es compasivo."
+      ]
+    },
+    {
+      "reference": "Mateo 22:36–40",
+      "book": "Mateo",
+      "chapter": 22,
+      "start": 36,
+      "end": 40,
+      "verses": [
+        "—Maestro, ¿cuál es el mandamiento más importante en la ley de Moisés?",
+        "Jesús contestó: —«Amarás al SEÑOR tu Dios con todo tu corazón, con toda tu alma y con toda tu mente».",
+        "Este es el primer mandamiento y el más importante.",
+        "Hay un segundo mandamiento que es igualmente importante: «Amarás a tu prójimo como a ti mismo».",
+        "Toda la ley y las exigencias de los profetas se basan en estos dos mandamientos."
+      ]
+    },
+    {
+      "reference": "2 Tesalonicenses 3:3–5",
+      "book": "2 Tesalonicenses",
+      "chapter": 3,
+      "start": 3,
+      "end": 5,
+      "verses": [
+        "Pero el Señor es fiel; él los fortalecerá y los protegerá del maligno.",
+        "Además, confiamos en el Señor que ustedes hacen y seguirán haciendo lo que les ordenamos.",
+        "Que el Señor les guíe el corazón a un entendimiento total y a una expresión plena del amor de Dios, y a la perseverancia con paciencia que proviene de Cristo."
+      ]
+    },
+    {
+      "reference": "1 Juan 4:7–12",
+      "book": "1 Juan",
+      "chapter": 4,
+      "start": 7,
+      "end": 12,
+      "verses": [
+        "Queridos amigos, sigamos amándonos unos a otros, porque el amor viene de Dios. Todo el que ama es un hijo de Dios y conoce a Dios;",
+        "pero el que no ama no conoce a Dios, porque Dios es amor.",
+        "Dios mostró cuánto nos ama al enviar a su único Hijo al mundo, para que tengamos vida eterna por medio de él.",
+        "En esto consiste el amor verdadero: no en que nosotros hayamos amado a Dios, sino en que él nos amó a nosotros y envió a su Hijo como sacrificio para quitar nuestros pecados.",
+        "Queridos amigos, ya que Dios nos amó tanto, sin duda nosotros también debemos amarnos unos a otros.",
+        "Nadie jamás ha visto a Dios; pero si nos amamos unos a otros, Dios vive en nosotros y su amor llega a la máxima expresión en nosotros."
+      ]
+    },
+    {
+      "reference": "Efesios 2:8–10",
+      "book": "Efesios",
+      "chapter": 2,
+      "start": 8,
+      "end": 10,
+      "verses": [
+        "Dios los salvó por su gracia cuando creyeron. Ustedes no tienen ningún mérito en eso; es un regalo de Dios.",
+        "La salvación no es un premio por las cosas buenas que hayamos hecho, así que ninguno de nosotros puede jactarse de ser salvo.",
+        "Pues somos la obra maestra de Dios. Él nos creó de nuevo en Cristo Jesús, a fin de que hagamos las cosas buenas que preparó para nosotros tiempo atrás."
+      ]
+    },
+    {
+      "reference": "Romanos 12:9–13",
+      "book": "Romanos",
+      "chapter": 12,
+      "start": 9,
+      "end": 13,
+      "verses": [
+        "No finjan amar a los demás; ámenlos de verdad. Aborrezcan lo malo. Aférrense a lo bueno.",
+        "Ámense unos a otros con un afecto genuino y deléitense al honrarse mutuamente.",
+        "No sean nunca perezosos, más bien trabajen con esmero y sirvan al Señor con entusiasmo.",
+        "Alégrense por la esperanza segura que tenemos. Tengan paciencia en las dificultades y sigan orando.",
+        "Estén listos para ayudar a los hijos de Dios cuando pasen necesidad. Estén siempre dispuestos a brindar hospitalidad."
+      ]
+    },
+    {
+      "reference": "Jeremías 17:7–8",
+      "book": "Jeremías",
+      "chapter": 17,
+      "start": 7,
+      "end": 8,
+      "verses": [
+        "Pero benditos son los que confían en el SEÑOR y han hecho que el SEÑOR sea su esperanza y confianza.",
+        "Son como árboles plantados junto a la ribera de un río con raíces que se hunden en las aguas. A esos árboles no les afecta el calor ni temen los largos meses de sequía. Sus hojas están siempre verdes y nunca dejan de producir fruto."
+      ]
+    },
+    {
+      "reference": "Efesios 4:29–32",
+      "book": "Efesios",
+      "chapter": 4,
+      "start": 29,
+      "end": 32,
+      "verses": [
+        "No empleen un lenguaje grosero ni ofensivo. Que todo lo que digan sea bueno y útil, a fin de que sus palabras resulten de estímulo para quienes las oigan.",
+        "No entristezcan al Espíritu Santo de Dios con la forma en que viven. Recuerden que él los identificó como suyos, y así les ha garantizado que serán salvos el día de la redención.",
+        "Líbrense de toda amargura, furia, enojo, palabras ásperas, calumnias y toda clase de mala conducta.",
+        "Por el contrario, sean amables unos con otros, sean de buen corazón, y perdónense unos a otros, tal como Dios los ha perdonado a ustedes por medio de Cristo."
+      ]
+    },
+    {
+      "reference": "1 Corintios 10:12–13",
+      "book": "1 Corintios",
+      "chapter": 10,
+      "start": 12,
+      "end": 13,
+      "verses": [
+        "Si ustedes piensan que están firmes, tengan cuidado de no caer.",
+        "Las tentaciones que enfrentan en su vida no son distintas de las que otros atraviesan. Y Dios es fiel; no permitirá que la tentación sea mayor de lo que puedan soportar. Cuando sean tentados, él les mostrará una salida, para que puedan resistir."
+      ]
+    },
+    {
+      "reference": "Juan 6:35–37",
+      "book": "Juan",
+      "chapter": 6,
+      "start": 35,
+      "end": 37,
+      "verses": [
+        "Jesús les respondió: —Yo soy el pan de vida. El que viene a mí nunca volverá a tener hambre; el que cree en mí no tendrá sed jamás.",
+        "Pero ustedes no han creído en mí, a pesar de que me han visto.",
+        "Sin embargo, los que el Padre me ha dado, vendrán a mí, y jamás los rechazaré."
+      ]
+    },
+    {
+      "reference": "Apocalipsis 21:3–5",
+      "book": "Apocalipsis",
+      "chapter": 21,
+      "start": 3,
+      "end": 5,
+      "verses": [
+        "Oí una fuerte voz que salía del trono y decía: ¡Miren, el hogar de Dios ahora está entre su pueblo! Él vivirá con ellos, y ellos serán su pueblo. Dios mismo estará con ellos.",
+        "Él les secará toda lágrima de los ojos, y no habrá más muerte ni tristeza ni llanto ni dolor. Todas esas cosas ya no existirán más.",
+        "Y el que estaba sentado en el trono dijo: ¡Miren, hago nuevas todas las cosas! Entonces me dijo: Escribe esto, porque lo que te digo es verdadero y digno de confianza."
+      ]
+    },
+    {
+      "reference": "1 Pedro 1:3–5",
+      "book": "1 Pedro",
+      "chapter": 1,
+      "start": 3,
+      "end": 5,
+      "verses": [
+        "Que toda la alabanza sea para Dios, el Padre de nuestro Señor Jesucristo. Es por su gran misericordia que hemos nacido de nuevo, porque Dios levantó a Jesucristo de los muertos. Ahora vivimos con gran expectación",
+        "y tenemos una herencia que no tiene precio, una herencia que está reservada en el cielo para ustedes, pura y sin mancha, que no puede cambiar ni deteriorarse.",
+        "Por la fe que tienen, Dios los protege con su poder hasta que reciban esta salvación, la cual está lista para ser revelada en el día final, a fin de que todos la vean."
+      ]
+    },
+    {
+      "reference": "2 Corintios 9:6–8",
+      "book": "2 Corintios",
+      "chapter": 9,
+      "start": 6,
+      "end": 8,
+      "verses": [
+        "Recuerden lo siguiente: un agricultor que siembra sólo unas cuantas semillas obtendrá una cosecha pequeña. Pero el que siembra abundantemente obtendrá una cosecha abundante.",
+        "Cada uno debe decidir en su corazón cuánto dar; y no den de mala gana ni bajo presión, porque Dios ama a la persona que da con alegría.",
+        "Y Dios proveerá con generosidad todo lo que necesiten. Entonces siempre tendrán todo lo necesario y habrá bastante de sobra que compartir con otros."
+      ]
+    },
+    {
+      "reference": "Proverbios 4:20–23",
+      "book": "Proverbios",
+      "chapter": 4,
+      "start": 20,
+      "end": 23,
+      "verses": [
+        "Hijo mío, presta atención a lo que te digo. Escucha atentamente mis palabras.",
+        "No las pierdas de vista. Déjalas llegar hasta lo profundo de tu corazón,",
+        "pues traen vida a quienes las encuentran y dan salud a todo el cuerpo.",
+        "Sobre todas las cosas cuida tu corazón, porque éste determina el rumbo de tu vida."
+      ]
+    },
+    {
+      "reference": "Salmos 91:1–4",
+      "book": "Salmos",
+      "chapter": 91,
+      "start": 1,
+      "end": 4,
+      "verses": [
+        "Los que viven al amparo del Altísimo encontrarán descanso a la sombra del Todopoderoso.",
+        "Declaro lo siguiente acerca del SEÑOR: Sólo él es mi refugio, mi lugar seguro; él es mi Dios y en él confío.",
+        "Te rescatará de toda trampa y te protegerá de enfermedades mortales.",
+        "Con sus plumas te cubrirá y con sus alas te dará refugio. Sus fieles promesas son tu armadura y tu protección."
+      ]
+    },
+    {
+      "reference": "1 Juan 5:14–15",
+      "book": "1 Juan",
+      "chapter": 5,
+      "start": 14,
+      "end": 15,
+      "verses": [
+        "Y estamos seguros de que él nos oye cada vez que le pedimos algo que le agrada;",
+        "y como sabemos que él nos oye cuando le hacemos nuestras peticiones, también sabemos que nos dará lo que le pedimos."
+      ]
+    },
+    {
+      "reference": "1 Timoteo 4:12–16",
+      "book": "1 Timoteo",
+      "chapter": 4,
+      "start": 12,
+      "end": 16,
+      "verses": [
+        "No permitas que nadie te subestime por ser joven. Sé un ejemplo para todos los creyentes en lo que dices, en la forma en que vives, en tu amor, tu fe y tu pureza.",
+        "Hasta que yo llegue, dedícate a leer las Escrituras a la iglesia, y a animar y a enseñarles a los creyentes.",
+        "No descuides el don espiritual que recibiste mediante la profecía que se pronunció acerca de ti cuando los ancianos de la iglesia te impusieron las manos.",
+        "Presta suma atención a estos asuntos. Entrégate de lleno a tus tareas, para que todos vean cuánto has progresado.",
+        "Ten mucho cuidado de cómo vives y de lo que enseñas. Mantente firme en lo que es correcto por el bien de tu propia salvación y la de quienes te oyen."
+      ]
+    },
+    {
+      "reference": "Colosenses 3:16–17",
+      "book": "Colosenses",
+      "chapter": 3,
+      "start": 16,
+      "end": 17,
+      "verses": [
+        "Que el mensaje de Cristo, con toda su riqueza, llene sus vidas. Enséñense y aconséjense unos a otros con toda la sabiduría que él da. Canten salmos e himnos y canciones espirituales a Dios con un corazón agradecido.",
+        "Y todo lo que hagan o digan, háganlo como representantes del Señor Jesús y den gracias a Dios Padre por medio de él."
+      ]
+    },
+    {
+      "reference": "Juan 3:16–17",
+      "book": "Juan",
+      "chapter": 3,
+      "start": 16,
+      "end": 17,
+      "verses": [
+        "Pues Dios amó tanto al mundo que dio a su único Hijo, para que todo el que crea en él no se pierda, sino que tenga vida eterna.",
+        "Dios no envió a su Hijo al mundo para condenar al mundo, sino para salvarlo por medio de él."
+      ]
+    },
+    {
+      "reference": "Deuteronomio 6:4–9",
+      "book": "Deuteronomio",
+      "chapter": 6,
+      "start": 4,
+      "end": 9,
+      "verses": [
+        "¡Escucha, Israel! El SEÑOR es nuestro Dios, solamente el SEÑOR.",
+        "Ama al SEÑOR tu Dios con todo tu corazón, con toda tu alma y con todas tus fuerzas.",
+        "Debes comprometerte con todo tu ser a cumplir cada uno de estos mandatos que hoy te entrego.",
+        "Repíteselos a tus hijos una y otra vez. Habla de ellos en tus conversaciones cuando estés en tu casa y cuando vayas por el camino, cuando te acuestes y cuando te levantes.",
+        "Átalos a tus manos y llévalos sobre la frente como un recordatorio.",
+        "Escríbelos en los marcos de la entrada de tu casa y sobre las puertas de la ciudad."
+      ]
+    },
+    {
+      "reference": "Eclesiastés 3:1–8",
+      "book": "Eclesiastés",
+      "chapter": 3,
+      "start": 1,
+      "end": 8,
+      "verses": [
+        "Hay una temporada para todo, un tiempo para cada actividad bajo el cielo.",
+        "Un tiempo para nacer y un tiempo para morir. Un tiempo para sembrar y un tiempo para cosechar.",
+        "Un tiempo para matar y un tiempo para sanar. Un tiempo para derribar y un tiempo para construir.",
+        "Un tiempo para llorar y un tiempo para reír. Un tiempo para entristecerse y un tiempo para bailar.",
+        "Un tiempo para esparcir piedras y un tiempo para juntar piedras. Un tiempo para abrazarse y un tiempo para apartarse.",
+        "Un tiempo para buscar y un tiempo para dejar de buscar. Un tiempo para guardar y un tiempo para botar.",
+        "Un tiempo para rasgar y un tiempo para remendar. Un tiempo para callar y un tiempo para hablar.",
+        "Un tiempo para amar y un tiempo para odiar. Un tiempo para la guerra y un tiempo para la paz."
+      ]
+    },
+    {
+      "reference": "Juan 1:1–5",
+      "book": "Juan",
+      "chapter": 1,
+      "start": 1,
+      "end": 5,
+      "verses": [
+        "En el principio la Palabra ya existía. La Palabra estaba con Dios, y la Palabra era Dios.",
+        "El que es la Palabra existía en el principio con Dios.",
+        "Dios creó todas las cosas por medio de él, y nada fue creado sin él.",
+        "La Palabra le dio vida a todo lo creado, y su vida trajo luz a todos.",
+        "La luz brilla en la oscuridad, y la oscuridad jamás podrá apagarla."
+      ]
+    },
+    {
+      "reference": "Josué 1:7–9",
+      "book": "Josué",
+      "chapter": 1,
+      "start": 7,
+      "end": 9,
+      "verses": [
+        "Sé fuerte y muy valiente. Ten cuidado de obedecer todas las instrucciones que Moisés te dio. No te desvíes de ellas ni a la derecha ni a la izquierda. Entonces te irá bien en todo lo que hagas.",
+        "Estudia constantemente este libro de instrucción. Medita en él de día y de noche para asegurarte de obedecer todo lo que allí está escrito. Sólo entonces prosperarás y te irá bien en todo lo que hagas.",
+        "Mi mandato es: «¡Sé fuerte y valiente! No tengas miedo ni te desanimes, porque el SEÑOR tu Dios está contigo dondequiera que vayas»."
+      ]
+    },
+    {
+      "reference": "2 Corintios 5:17–21",
+      "book": "2 Corintios",
+      "chapter": 5,
+      "start": 17,
+      "end": 21,
+      "verses": [
+        "Esto significa que todo el que pertenece a Cristo se ha convertido en una persona nueva. La vida antigua ha pasado, ¡una nueva vida ha comenzado!",
+        "Y todo esto es un regalo de Dios, quien nos trajo de vuelta a sí mismo por medio de Cristo. Y Dios nos ha dado la tarea de reconciliar a la gente con él.",
+        "Pues Dios estaba en Cristo reconciliando al mundo consigo mismo, no tomando más en cuenta el pecado de la gente. Y nos dio a nosotros este maravilloso mensaje de reconciliación.",
+        "Así que somos embajadores de Cristo; Dios hace su llamado por medio de nosotros. Hablamos en nombre de Cristo cuando les rogamos: ¡Vuelvan a Dios!",
+        "Pues Dios hizo que Cristo, quien nunca pecó, fuera la ofrenda por nuestro pecado, para que nosotros pudiéramos estar en una relación correcta con Dios por medio de Cristo."
+      ]
+    },
+    {
+      "reference": "Salmos 34:4–8",
+      "book": "Salmos",
+      "chapter": 34,
+      "start": 4,
+      "end": 8,
+      "verses": [
+        "Oré al SEÑOR, y él me respondió; me libró de todos mis temores.",
+        "Los que buscan su ayuda, estarán radiantes de alegría; ninguna sombra de vergüenza les oscurecerá el rostro.",
+        "En mi desesperación oré, y el SEÑOR me escuchó; me salvó de todas mis dificultades.",
+        "Pues el ángel del SEÑOR es un guardián; rodea y defiende a todos los que le temen.",
+        "Prueben y vean que el SEÑOR es bueno; ¡qué alegría para los que se refugian en él!"
+      ]
+    },
+    {
+      "reference": "Mateo 6:19–21",
+      "book": "Mateo",
+      "chapter": 6,
+      "start": 19,
+      "end": 21,
+      "verses": [
+        "No almacenes tesoros aquí en la tierra, donde las polillas se los comen y el óxido los destruye, y donde los ladrones entran y roban.",
+        "Almacena tus tesoros en el cielo, donde las polillas y el óxido no pueden destruir, y los ladrones no entran a robar.",
+        "Donde esté tu tesoro, allí estarán también los deseos de tu corazón."
+      ]
+    },
+    {
+      "reference": "Romanos 8:14–17",
+      "book": "Romanos",
+      "chapter": 8,
+      "start": 14,
+      "end": 17,
+      "verses": [
+        "Pues todos los que son guiados por el Espíritu de Dios son hijos de Dios.",
+        "Y ustedes no han recibido un espíritu que los esclavice al miedo. En cambio, recibieron el Espíritu de Dios cuando él los adoptó como sus propios hijos. Ahora lo llamamos Abba, Padre.",
+        "Pues su Espíritu se une a nuestro espíritu para confirmar que somos hijos de Dios.",
+        "Así que como somos sus hijos, también somos sus herederos. De hecho, somos herederos junto con Cristo de la gloria de Dios; pero si vamos a participar de su gloria, también debemos participar de su sufrimiento."
+      ]
+    },
+    {
+      "reference": "Romanos 15:13",
+      "book": "Romanos",
+      "chapter": 15,
+      "start": 13,
+      "end": 13,
+      "verses": [
+        "Le pido a Dios, fuente de esperanza, que los llene completamente de alegría y paz, porque confían en él. Entonces rebosarán de una esperanza segura mediante el poder del Espíritu Santo."
+      ]
+    },
+    {
+      "reference": "Salmos 84:10–12",
+      "book": "Salmos",
+      "chapter": 84,
+      "start": 10,
+      "end": 12,
+      "verses": [
+        "Un solo día en tus atrios, ¡es mejor que mil en cualquier otro lugar! Prefiero ser un portero en la casa de mi Dios que vivir la buena vida en la casa de los perversos.",
+        "Pues el SEÑOR Dios es nuestro sol y nuestro escudo; él nos da gracia y gloria. El SEÑOR no negará ningún bien a quienes hacen lo que es correcto.",
+        "Oh SEÑOR de los Ejércitos Celestiales, qué alegría tienen los que confían en ti."
+      ]
+    }
+  ]
+}

@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.50">
+  <link rel="stylesheet" href="admin-v4.css?v=25.52">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -27,12 +27,16 @@
         <button class="admin-nav-btn active" data-view="dashboard">⌂ <span>Dashboard</span></button>
         <button class="admin-nav-btn" data-view="products">◫ <span>Productos</span></button>
         <button class="admin-nav-btn" data-view="clients">♙ <span>Clientes</span></button>
-        <button class="admin-nav-btn" data-view="production">⚒ <span>Producción</span></button>
-        <button class="admin-nav-btn" data-view="coupons">🎟 <span>Cupones</span></button>
         <button class="admin-nav-btn" data-view="expenses">↕ <span>Caja</span></button>
         <button class="admin-nav-btn" data-view="flyers">▣ <span>Flyers</span></button>
         <button class="admin-nav-btn" data-view="settings">⚙ <span>Configuración</span></button>
       </nav>
+      <figure class="admin-daily-passage" id="adminDailyPassage" aria-label="Pasaje del día" hidden>
+        <div class="admin-daily-passage-content">
+          <blockquote id="adminDailyPassageText" tabindex="0"></blockquote>
+          <figcaption><cite id="adminDailyPassageReference"></cite><span>NTV</span></figcaption>
+        </div>
+      </figure>
       <a class="btn btn-ghost full" href="/">Ver tienda</a>
     </aside>
 
@@ -258,7 +262,7 @@
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.50" defer></script>
+  <script src="admin.js?v=25.52" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.44.1',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>

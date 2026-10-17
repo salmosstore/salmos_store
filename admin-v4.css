@@ -1916,3 +1916,33 @@ body .selected-design-preview-line{display:flex!important;flex-wrap:wrap;align-i
 .fa-solid.fa-chevron-up{display:inline-block;width:18px;height:18px;flex:none;background:currentColor;mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22black%22%20fill-rule%3D%22evenodd%22%20d%3D%22M3%2018l9-9%209%209%203-3L12%203%200%2015z%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat;-webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22black%22%20fill-rule%3D%22evenodd%22%20d%3D%22M3%2018l9-9%209%209%203-3L12%203%200%2015z%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat}
 .fa-solid.fa-user{display:inline-block;width:18px;height:18px;flex:none;background:currentColor;mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22black%22%20fill-rule%3D%22evenodd%22%20d%3D%22M12%201a6%206%200%201%201%200%2012%206%206%200%200%201%200-12zM1%2023v-3a7%207%200%200%201%207-6h8a7%207%200%200%201%207%206v3z%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat;-webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22black%22%20fill-rule%3D%22evenodd%22%20d%3D%22M12%201a6%206%200%201%201%200%2012%206%206%200%200%201%200-12zM1%2023v-3a7%207%200%200%201%207-6h8a7%207%200%200%201%207%206v3z%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat}
 .fa-solid.fa-table-cells{display:inline-block;width:18px;height:18px;flex:none;background:currentColor;mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22black%22%20fill-rule%3D%22evenodd%22%20d%3D%22M1%202h22v20H1zm3%203v5h6V5zm10%200v5h6V5zM4%2014v5h6v-5zm10%200v5h6v-5z%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat;-webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22black%22%20fill-rule%3D%22evenodd%22%20d%3D%22M1%202h22v20H1zm3%203v5h6V5zm10%200v5h6V5zM4%2014v5h6v-5zm10%200v5h6v-5z%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat}
+
+/* SALMOS 25.51 · compact color filters and continuous settings layout */
+#productStockSummary .product-quick-color{display:inline-flex;align-items:center;justify-content:center;flex:0 0 31px;width:31px;height:31px;min-height:31px;padding:4px;border:1px solid transparent;border-radius:50%;background:transparent;cursor:pointer}
+#productStockSummary .product-quick-color .color-dot{display:block;width:21px;height:21px;min-width:21px;margin:0;border:1px solid #cbb3bf;box-shadow:0 1px 3px #0003}
+#productStockSummary .product-quick-color:hover,#productStockSummary .product-quick-color:focus-visible{border-color:var(--text);outline:0}
+#productStockSummary .product-quick-color.active{border:2px solid var(--admin-rose,#f3b4cd);background:#ed8db322;box-shadow:0 0 0 1px #9f577640}
+#settingsForm .settings-grid-compact{display:grid;grid-template-columns:minmax(0,1fr)!important;gap:14px;align-items:start}
+#settingsForm .settings-grid-compact>.settings-card{width:100%;min-width:0;box-sizing:border-box;grid-column:1/-1!important}
+.settings-card-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.settings-card-heading h3,.settings-card-heading h4{margin:0}
+.settings-contact-fields,.settings-moto-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}.settings-contact-fields .field,.settings-moto-fields .field{min-width:0}
+.settings-shipping-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;align-items:start}.settings-subsection{min-width:0;display:flex;flex-direction:column;gap:10px}.settings-subsection h3{margin-bottom:0}.settings-subsection .field-help{margin:0}.settings-subsection .textarea{min-height:84px;resize:vertical}
+.product-gallery-fit{font-size:.9rem;opacity:.9;font-weight:600}
+@media(max-width:760px){.settings-contact-fields,.settings-moto-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.settings-shipping-grid{grid-template-columns:1fr;gap:22px}.settings-card-heading{flex-wrap:wrap}.settings-subsection+.settings-subsection{padding-top:16px;border-top:1px solid var(--line)}}
+@media(max-width:480px){.settings-contact-fields{grid-template-columns:1fr}}
+
+/* SALMOS 25.52 · pasaje diario NTV en el espacio libre del menú de PC */
+.admin-daily-passage{display:none}
+@media(min-width:981px){
+  .admin-sidebar.has-daily-passage .admin-nav{flex:0 0 auto}
+  .admin-sidebar.has-daily-passage>.admin-brand,.admin-sidebar.has-daily-passage>.btn{flex-shrink:0}
+  .admin-daily-passage:not([hidden]){display:flex;flex-direction:column;flex:1 1 0;min-height:0;margin:0;color:#f3b4cd}
+  .admin-daily-passage-content{display:flex;flex-direction:column;flex:0 1 auto;min-height:0;max-height:100%;margin-block:auto;text-align:center}
+  .admin-daily-passage blockquote{min-height:0;margin:0;padding:2px 4px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#f3b4cd55 transparent;font-family:Georgia,'Times New Roman',serif;font-size:.86rem;line-height:1.55;font-weight:400;overflow-wrap:anywhere}
+  .admin-daily-passage blockquote:focus-visible{outline:1px solid currentColor;outline-offset:-1px;border-radius:4px}
+  .admin-daily-passage figcaption{display:flex;flex-direction:column;flex-shrink:0;gap:3px;margin-top:12px;font-size:.74rem;line-height:1.4}
+  .admin-daily-passage cite{font-style:normal;font-weight:600}
+  .admin-daily-passage figcaption>span{font-size:.63rem;letter-spacing:.12em;opacity:.8}
+  :root[data-theme="light"] .admin-daily-passage{color:#74344d}
+  :root[data-theme="light"] .admin-daily-passage blockquote{scrollbar-color:#74344d55 transparent}
+}
