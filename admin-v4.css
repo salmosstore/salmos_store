@@ -1721,8 +1721,7 @@ body #productionDialog #mockupZoomSlider[hidden],body #productionDialog #mockupZ
 body .unified-product-card .stock-inline-stepper:has(input[readonly]){grid-template-columns:1fr!important}
 @media(max-width:760px){body .unified-product-card{grid-template-columns:minmax(0,1fr) minmax(174px,.95fr)!important}}
 
-body #productionDialog .production-top-grid{grid-template-columns:minmax(135px,1.25fr) minmax(100px,.8fr) minmax(100px,.7fr) minmax(150px,1.25fr) minmax(120px,1fr)!important}
-body #productionDialog .production-top-grid .production-type-field{display:none!important}
+body #productionDialog .production-top-grid{grid-template-columns:minmax(110px,.9fr) minmax(155px,1.25fr) minmax(100px,.8fr) minmax(85px,.7fr) minmax(130px,1.1fr) minmax(110px,.9fr)!important}
 body #productionDialog .mockup-brush-mobile{display:flex;align-items:center;gap:10px;margin:5px 0}
 body #productionDialog .mockup-brush-mobile label{display:flex;align-items:center;gap:5px;font-size:12px}
 body #productionDialog .mockup-brush-mobile input{width:50px;padding:4px;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:6px}
@@ -2097,3 +2096,10 @@ body #productionDialog #mockupResizeReadout .icon-btn{width:26px!important;min-w
 @media(max-width:680px){body .admin-sidebar{height:100dvh;box-sizing:border-box}}
 
 .fa-solid.fa-sun{display:inline-block;width:18px;height:18px;flex:none;background:currentColor;mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224%22%2F%3E%3Cpath%20d%3D%22M12%202v2m0%2016v2M2%2012h2m16%200h2M4.93%204.93l1.42%201.42m11.3%2011.3%201.42%201.42M4.93%2019.07l1.42-1.42m11.3-11.3%201.42-1.42%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat;-webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224%22%2F%3E%3Cpath%20d%3D%22M12%202v2m0%2016v2M2%2012h2m16%200h2M4.93%204.93l1.42%201.42m11.3%2011.3%201.42%201.42M4.93%2019.07l1.42-1.42m11.3-11.3%201.42-1.42%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat}
+
+/* 25.55 — product type and complete production galleries. */
+body #productionDialog #productionDesignFilters{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;max-width:420px}
+body #productionDialog #productionDesignFilters>.design-filter-line{flex:1 1 210px;min-width:0}
+body #productionDialog .production-design-count{color:var(--muted);font-size:11px;white-space:nowrap}
+body #productionDialog #productionMaterialFilters[hidden]{display:none!important}
+@media(min-width:761px) and (max-width:1050px){body #productionDialog .production-top-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
