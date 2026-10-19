@@ -129,8 +129,9 @@
         <section class="production-tab-panel hidden" data-production-panel="2">
           <div class="form-section production-media-first"><div class="admin-section-head"><div><h3>Fotos y videos</h3></div></div><input class="input" id="productionImagesInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime,video/x-m4v" multiple><div class="salmos-media-list" id="productionMediaOrderList"></div></div>
           <div class="form-section production-publication-section"><div class="admin-section-head"><div><h3>Datos para publicar</h3><p class="muted">Categoría, corte y género se toman de la materia prima elegida.</p></div></div><div class="form-grid production-publication-grid">
-            <div class="field full"><label>Nombre del producto</label><input class="input" id="productionProductName" required placeholder="Ej.: YESHUA"></div>
+            <div class="field"><label for="productionProductName">Nombre del producto</label><input class="input" id="productionProductName" required placeholder="Ej.: YESHUA"></div>
             <input type="hidden" id="productionCategory">
+            <div class="field"><label for="productionPublicationVariant">Variante para el enlace (opcional)</label><input class="input" id="productionPublicationVariant" maxlength="80" placeholder="Ej.: oversize negra"></div>
             <div class="field"><label>Estado de publicación</label><select class="select" id="productionStatus"><option value="draft">Borrador</option><option value="published">Publicado</option><option value="hidden">Oculto</option></select></div>
             
             <div class="field full"><label>Descripción</label><textarea class="textarea" id="productionDescription" rows="3"></textarea></div>
@@ -249,8 +250,8 @@
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.58" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.57',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=25.59" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.59',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">

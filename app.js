@@ -1,4 +1,4 @@
-// SALMOS 25.17
+// SALMOS 25.59
 (() => {
   'use strict';
 
@@ -14,7 +14,7 @@
     return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
   }
   function productPathKey(value='') { return productPathSegment(value).toLowerCase(); }
-  function productSharePath(product) { return `/${productPathSegment(product?.name||product?.slug||'producto')}`; }
+  function productSharePath(product) { return `/${productPathSegment(product?.slug||product?.name||'producto')}`; }
   function productShareUrl(product) { return `${location.origin}${productSharePath(product)}`; }
   function currentProductPathKey() {
     const raw=decodeURIComponent(location.pathname||'/').replace(/^\/+|\/+$/g,'');
@@ -750,7 +750,7 @@
   async function openProductFromCurrentPath() {
     const key=currentProductPathKey();
     if(!key)return;
-    const found=state.products.find(p=>productPathKey(p.name)===key || productPathKey(p.slug)===key);
+    const found=state.products.find(p=>productPathKey(p.slug)===key)||state.products.find(p=>productPathKey(p.name)===key);
     if(found){await openProduct(found.id,{updatePath:false});return;}
     // Si el enlace quedó viejo por un cambio de nombre, no rompemos la tienda.
     toast('Ese producto no está disponible o el enlace cambió.','error');
