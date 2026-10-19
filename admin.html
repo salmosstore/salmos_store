@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.58">
+  <link rel="stylesheet" href="admin-v4.css?v=25.60">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -112,7 +112,7 @@
           <div class="production-stock-note" id="productionStockNote">Stock físico descuenta la materia prima al iniciar producción. “A stockear” guarda la receta sin consumirla todavía.</div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div><button class="btn btn-ghost" type="button" id="productionAddMaterialFromEditorBtn">+ Agregar materia prima</button></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedMaterials"></div>
-          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div><button class="btn btn-primary" type="button" id="productionUploadDesignBtn">+ Agregar diseño</button></div><div id="productionDesignFilters"></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
+          <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div><div class="production-design-gallery-actions"><button class="icon-btn" type="button" id="productionDesignSearchBtn" aria-label="Buscar diseños" title="Buscar diseños" aria-expanded="false" aria-controls="productionDesignSearchRow"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button><button class="icon-btn" type="button" id="productionDesignExpandBtn" aria-label="Ampliar galería de diseños" title="Ampliar galería de diseños"><i class="fa-solid fa-expand" aria-hidden="true"></i></button><button class="btn btn-primary" type="button" id="productionUploadDesignBtn">+ Agregar diseño</button></div></div><div class="production-design-search-row" id="productionDesignSearchRow" hidden><input class="input" id="productionDesignSearch" type="search" aria-label="Buscar diseños" placeholder="Buscar…" autocomplete="off"></div><div id="productionDesignFilters"></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedDesigns"></div>
           <section class="production-mockup-card" id="productionMockupStudio">
             <div class="production-mockup-head"><div><h3>Vista previa del producto</h3><p class="muted">Componé una imagen con tus fotos base y estampas elegidas. No usa generación con IA.</p></div></div>
@@ -250,7 +250,7 @@
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.59" defer></script>
+  <script src="admin.js?v=25.60" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.59',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
