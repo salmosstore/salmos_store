@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.56">
+  <link rel="stylesheet" href="admin-v4.css?v=25.57">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -127,7 +127,7 @@
           <div class="production-next-row"><button class="btn btn-primary" type="button" id="productionNextBtn">Continuar a publicación →</button></div>
         </section>
         <section class="production-tab-panel hidden" data-production-panel="2">
-          <div class="form-section production-media-first"><div class="admin-section-head"><div><h3>Fotos y videos</h3><p class="muted">Subí primero lo visual; después completá la publicación.</p></div></div><input class="input" id="productionImagesInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime,video/x-m4v" multiple><div class="salmos-media-list" id="productionMediaOrderList"></div></div>
+          <div class="form-section production-media-first"><div class="admin-section-head"><div><h3>Fotos y videos</h3></div></div><input class="input" id="productionImagesInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime,video/x-m4v" multiple><div class="salmos-media-list" id="productionMediaOrderList"></div></div>
           <div class="form-section production-publication-section"><div class="admin-section-head"><div><h3>Datos para publicar</h3><p class="muted">Categoría, corte y género se toman de la materia prima elegida.</p></div></div><div class="form-grid production-publication-grid">
             <div class="field full"><label>Nombre del producto</label><input class="input" id="productionProductName" required placeholder="Ej.: YESHUA"></div>
             <input type="hidden" id="productionCategory">
@@ -143,18 +143,6 @@
         </section>
       </div>
       <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionBtn">Cancelar</button><span class="dialog-spacer"></span><button class="btn btn-ghost hidden" type="button" id="productionBackBtn">← Volver a producción</button><button class="btn btn-primary hidden" type="button" id="saveProductionBtn">Guardar e iniciar producción</button></div>
-    </div>
-  </dialog>
-
-  <dialog class="admin-dialog production-edit-dialog" id="productionEditDialog">
-    <div class="dialog-shell">
-      <div class="dialog-head"><div><div class="admin-eyebrow">Editar producción</div><h2 id="productionEditTitle"></h2></div><button type="button" class="icon-btn" id="closeProductionEditBtn" aria-label="Cerrar">×</button></div>
-      <div class="dialog-body">
-        <div class="production-edit-summary"><div id="productionEditPreview"></div><div><strong id="productionEditVariant"></strong><small id="productionEditStatus"></small><small>Costo unitario <span id="productionEditCost"></span></small></div></div>
-        <div class="form-grid"><label class="field">Cantidad<input class="input" type="number" min="1" step="1" id="productionEditQuantity"></label><label class="field">Fecha de inicio<input class="input" type="date" id="productionEditDate"></label><label class="field">Hora<input class="input" type="time" step="60" id="productionEditTime"></label><label class="field full">Notas<textarea class="textarea" id="productionEditNotes" rows="3"></textarea></label></div>
-        <button type="button" class="btn btn-ghost" id="editProductionProductBtn">Editar producto, fotos y receta</button>
-      </div>
-      <div class="dialog-foot"><button class="btn btn-ghost" type="button" id="cancelProductionEditBtn">Cancelar</button><button class="btn btn-primary" type="button" id="saveProductionEditBtn">Guardar cambios</button></div>
     </div>
   </dialog>
 
@@ -256,13 +244,13 @@
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
   <script src="colors.js?v=25.46"></script>
-  <script src="montage-effects.js?v=25.44"></script>
+  <script src="montage-effects.js?v=25.57"></script>
   <script src="contacts-import.js?v=25.44" defer></script>
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.55" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.44.1',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=25.57" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.57',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
