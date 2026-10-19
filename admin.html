@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.61">
+  <link rel="stylesheet" href="admin-v4.css?v=25.63">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -168,7 +168,7 @@
       <div class="dialog-body">
         <div class="form-grid">
           <div class="field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
-          <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
+          <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div><div class="field"><label>Hora</label><input class="input" name="time" type="time" step="60"></div>
           <div class="field"><label>Motivo / etiqueta</label><select class="select" id="movementCategorySelect"><option value="">Elegir motivo...</option></select><input class="input hidden movement-category-other" name="category" id="movementCategoryOther" placeholder="Escribí el nuevo motivo" required></div>
           <section class="full movement-sale-section" id="movementSaleSection"><label class="toggle-label"><input type="checkbox" id="movementSaleEnabled"> Vincular productos vendidos a este ingreso</label><div id="movementSaleDetails" class="hidden"><div id="movementSaleRows"></div><button type="button" class="btn btn-ghost" id="addMovementSaleBtn">+ Agregar producto vendido</button><p class="field-help">Descuenta el stock físico. Si falta, queda pendiente de preparar. La publicación de la tienda se conserva.</p></div></section><div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
           <div class="field"><label for="movementPaymentMethod">Forma del ingreso / egreso</label><select class="select" name="payment_method" id="movementPaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option></select></div>
@@ -179,7 +179,7 @@
           <div class="field movement-transfer-field hidden"><label>Transferencia ($)</label><input class="input" name="transfer_amount" id="movementTransferAmount" type="number" min="0" step="0.01"></div>
           <section class="full movement-transfer-field hidden"><h3>Detalles de la transferencia</h3><div class="form-grid"><div class="field"><label>Cuenta / alias de origen (opcional)</label><input class="input" name="transfer_origin" id="movementTransferOrigin" placeholder="Banco, alias o titular"></div><div class="field"><label>Cuenta / alias de destino (opcional)</label><input class="input" name="transfer_destination" id="movementTransferDestination" placeholder="Banco, alias o titular"></div><div class="field"><label>N.º de operación / referencia</label><input class="input" name="transfer_reference" id="movementTransferReference" placeholder="Opcional"></div><div class="field"><label>Detalle de la transferencia</label><input class="input" name="transfer_details" id="movementTransferDetails" placeholder="Observaciones"></div></div></section>
           <small class="full" id="movementPaymentHelp"></small>
-          <div class="field full" id="movementAttachmentUpload"><label>Comprobantes / imágenes (opcional)</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Podés adjuntar fotos de tickets, comprobantes o capturas.</small></div><div class="full admin-actions" id="movementExistingAttachments"></div><div class="full movement-route"><label class="field">Origen<input class="input" name="origin" placeholder="Opcional · Caja SALMOS, cliente"></label><label class="field">Destino<input class="input" name="destination" placeholder="Opcional · Proveedor, Caja SALMOS"></label></div>
+          <label class="field full">Notas<textarea class="textarea" name="notes" rows="2"></textarea></label><div class="field full" id="movementAttachmentUpload"><label>Comprobantes / imágenes (opcional)</label><input class="input" name="attachments" type="file" accept="image/*" multiple><small class="field-help">Podés adjuntar fotos de tickets, comprobantes o capturas.</small></div><div class="full admin-actions" id="movementExistingAttachments"></div><div class="full movement-route"><label class="field">Origen<input class="input" name="origin" placeholder="Opcional · Caja SALMOS, cliente"></label><label class="field">Destino<input class="input" name="destination" placeholder="Opcional · Proveedor, Caja SALMOS"></label></div>
         </div>
       </div>
       <div class="dialog-foot"><button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button><button class="btn btn-primary hidden" id="editViewedMovementBtn" type="button">Editar</button><button class="btn btn-primary" id="saveMovementBtn" type="button">Guardar</button></div>
@@ -250,7 +250,7 @@
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.62" defer></script>
+  <script src="admin.js?v=25.63" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.61',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
