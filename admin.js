@@ -1,4 +1,4 @@
-// SALMOS 25.64
+// SALMOS 25.66
 (() => {
   'use strict';
 
@@ -106,9 +106,12 @@
   async function requestApi(path, options={}){
     const headers=new Headers(options.headers||{});
     if(options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type','application/json');
-    const res=await fetch(apiUrl(path),{...options,headers,credentials:'include',redirect:'manual'});
-    if(res.type==='opaqueredirect'||res.status===401)throw adminSessionError();
-    const text=await res.text();let data=null;try{data=text?JSON.parse(text):null}catch{if(/cloudflare access|cloudflareaccess\.com|cdn-cgi\/access\/login/i.test(text))throw adminSessionError();const err=new Error('La API devolvió una respuesta inválida. Volvé a intentar la carga.');err.status=res.status>=400?res.status:502;throw err;}
+    const controller=String(options.method||'GET').toUpperCase()==='GET'&&!options.signal?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),25000):null;
+    let res,text;
+    try{res=await fetch(apiUrl(path),{...options,headers,credentials:'include',redirect:'manual',...(controller?{signal:controller.signal}:{})});if(res.type==='opaqueredirect'||res.status===401)throw adminSessionError();text=await res.text();}
+    catch(error){if(controller?.signal.aborted){const timeout=new Error('La carga está tardando demasiado. Tocá Reintentar.');timeout.status=504;throw timeout;}throw error;}
+    finally{if(timer)clearTimeout(timer);}
+    let data=null;try{data=text?JSON.parse(text):null}catch{if(/cloudflare access|cloudflareaccess\.com|cdn-cgi\/access\/login/i.test(text))throw adminSessionError();const err=new Error('La API devolvió una respuesta inválida. Volvé a intentar la carga.');err.status=res.status>=400?res.status:502;throw err;}
     if(!res.ok){
       const err=new Error(data?.error||data?.message||`Error ${res.status}`); err.status=res.status; throw err;
     }
@@ -353,7 +356,14 @@
   }
 
   async function renderProducts(){
-    await ensureCategories();const [products,stock,materials]=await Promise.all([api('/api/admin/products'),api('/api/admin/stock'),api('/api/admin/materials'),loadMockupAssets()]);state.products=products.items||[];state.stockItems=stock.items||[];state.materials=materials.items||[];state.selectedProductIds??=new Set();
+    const sequence=state.productRenderSequence=(state.productRenderSequence||0)+1;
+    ensureCategories().catch(error=>console.warn('Categorías:',error.message));
+    api('/api/admin/materials').then(data=>{state.materials=data.items||[];}).catch(error=>console.warn('Materiales:',error.message));
+    loadMockupAssets().catch(error=>console.warn('Fotos de montaje:',error.message));
+    const [products,stock]=await Promise.all([api('/api/admin/products'),api('/api/admin/stock')]);
+    if(sequence!==state.productRenderSequence||state.view!=='products')return;
+    state.products=products.items||[];state.stockItems=stock.items||[];state.selectedProductIds??=new Set();
+    if(!state.categories.length)state.categories=[...new Map(state.products.map(product=>[Number(product.category_id),{id:product.category_id,name:product.category_name,slug:product.category_slug}])).values()];
     const options=(field,current)=>`<option value="">Todos</option>${stockUnique(field).map(v=>`<option value="${escapeHtml(v)}" ${current===v?'selected':''}>${escapeHtml(v)}</option>`).join('')}`,f=state.stockFilters;
     qs('#adminContent').innerHTML=`<div class="unified-product-toolbar"><input class="input" id="adminProductSearch" type="search" placeholder="Buscar producto…" value="${escapeHtml(state.productSearch||'')}"><div id="productStockSummary" class="product-stock-summary"></div><details class="product-filter-menu"><summary class="btn btn-ghost">Filtrar</summary><div class="product-filter-fields">${[['Category','category','Categoría','category_name'],['Stage','stage','Estado','inventory_stage'],['Size','size','Talle','size'],['Fit','fit','Corte','fit'],['Audience','audience','Género','audience']].map(([id,key,label,field])=>`<label>${label}<select class="select" id="stockFilter${id}">${key==='stage'?`<option value="">Todos</option>${[['finished','Terminado'],['to_print','En producción'],['outlet','Outlet']].map(([v,name])=>`<option value="${v}" ${f.stage===v?'selected':''}>${name}</option>`).join('')}`:options(field,f[key])}</select></label>`).join('')}<details class="product-color-menu"><summary class="btn btn-ghost">Colores <span aria-hidden="true">⌄</span></summary><div>${stockUnique('color').map(color=>`<button class="btn btn-ghost" type="button" data-product-global-color="${escapeHtml(color)}">${colorDetail(color)}</button>`).join('')}</div></details><label>Publicación<select class="select" data-product-publication-filter><option value="">Todas</option>${[['published','Publicado'],['draft','Borrador'],['hidden','Oculto']].map(([value,label])=>`<option value="${value}" ${state.productPublication===value?'selected':''}>${label}</option>`).join('')}</select></label><label>Ordenar<select class="select" id="stockSort">${[['product','Producto'],['size','Talle'],['color','Color'],['fit','Corte'],['stock_desc','Mayor stock'],['stock_asc','Menor stock']].map(([v,label])=>`<option value="${v}" ${f.sort===v?'selected':''}>${label}</option>`).join('')}</select></label><button class="btn btn-ghost" type="button" id="clearStockFiltersBtn">Limpiar filtros</button></div></details><div class="unified-product-actions"><button type="button" class="icon-btn" data-panel-tab="categories" aria-label="Categorías" title="Categorías"><i class="fa-solid fa-table-list" aria-hidden="true"></i></button><a class="icon-btn" href="index.html?ordenar=1#productos" aria-label="Ordenar en la tienda" title="Ordenar en la tienda"><i class="fa-solid fa-grip" aria-hidden="true"></i></a><button class="icon-btn" type="button" id="toggleBulkPriceBtn" aria-label="Ajustes masivos" title="Ajustes masivos"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button><button class="icon-btn" type="button" id="newProductBtn" aria-label="Nuevo producto" title="Nuevo producto"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i></button></div></div>
       <section class="settings-card bulk-price-card ${state.productBulkMode?'':'hidden'}" id="bulkPricePanel">

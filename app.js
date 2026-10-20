@@ -1,4 +1,4 @@
-// SALMOS 25.61
+// SALMOS 25.66
 (() => {
   'use strict';
 
@@ -187,8 +187,12 @@
     const headers = new Headers(options.headers || {});
     if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     if (!headers.has('X-Salmos-Checkout-Token')) headers.set('X-Salmos-Checkout-Token', state.checkoutToken);
-    const res = await fetch(apiUrl(path), { ...options, headers });
-    const text = await res.text();
+    const controller=String(options.method||'GET').toUpperCase()==='GET'&&!options.signal?new AbortController():null;
+    const timer=controller?setTimeout(()=>controller.abort(),25000):null;
+    let res,text;
+    try{res=await fetch(apiUrl(path), { ...options, headers,...(controller?{signal:controller.signal}:{}) });text=await res.text();}
+    catch(error){if(controller?.signal.aborted){const timeout=new Error('La carga está tardando demasiado. Volvé a intentar.');timeout.status=504;throw timeout;}throw error;}
+    finally{if(timer)clearTimeout(timer);}
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = { message: text }; }
     if (!res.ok) {const error=new Error(data?.error || data?.message || `Error ${res.status}`);error.status=res.status;throw error;}
@@ -535,32 +539,40 @@
 
   function renderSkeletons(){for(const id of ['productGrid','orderProductGrid']){const grid=qs('#'+id);if(grid)grid.innerHTML=Array.from({length:6},()=>'<div class="product-card store-loading-card" aria-hidden="true"><div class="product-media"></div><div class="product-body"><span class="store-loading-line"></span></div></div>').join('');}}
   async function loadStore() {
+    const sequence=state.storeLoadSequence=(state.storeLoadSequence||0)+1,current=()=>sequence===state.storeLoadSequence;
+    state.storeProductsLoaded=false;
     renderSkeletons();
+    document.body.classList.remove('store-pending');
+    qs('#productos')?.classList.remove('hidden');
+    const refresh=()=>{if(!current()||!state.storeProductsLoaded)return;renderCategories();renderProducts();renderFeatured();renderCart();};
+    // El catálogo se muestra apenas llega, sin esperar configuración, filtros ni flyers.
+    const configLoad=api('/api/config/public').then(config=>{
+      if(!current())return;state.config=config;
+      const wa=qs('#footerWhatsapp');if(wa)wa.href=`https://wa.me/${config?.whatsapp||cfg.STORE_WHATSAPP||'5491162691341'}`;
+      refresh();
+    }).catch(error=>console.warn('Configuración de tienda:',error.message));
+    const categoriesLoad=api('/api/categories').then(data=>{if(!current())return;state.categories=data.items||[];refresh();}).catch(error=>console.warn('Categorías:',error.message));
     try {
-      const [publicConfig, categories, products] = await Promise.all([
-        api('/api/config/public'), api('/api/categories'), api('/api/products')
-      ]);
-      state.config = publicConfig;
-      state.categories = categories.items || [];
-      state.products = products.items || [];
-      document.body.classList.remove('store-pending');
+      const products=await api('/api/products');
+      if(!current())return;
+      if(!Array.isArray(products?.items))throw new Error('No se pudo leer el catálogo. Volvé a intentar.');
+      state.products=products.items;
+      if(!state.categories.length)state.categories=[...new Map(state.products.filter(product=>product.category_slug).map(product=>[product.category_slug,{name:product.category_name,slug:product.category_slug}])).values()];
+      state.storeProductsLoaded=true;
       qs('#porPedido')?.classList.remove('hidden');
-      await initStoreOrderEditor();
-      renderCategories();
-      renderProducts();
-      if(state.storeOrderEditor?.enabled)qs('#storeOrderToolbar')?.scrollIntoView({block:'start'});
-      renderFeatured();
-      renderCart();
+      refresh();
       const whatsapp = state.config?.whatsapp || cfg.STORE_WHATSAPP || '5491162691341';
       const wa=qs('#footerWhatsapp');if(wa)wa.href = `https://wa.me/${whatsapp}`;
-      await loadPublicFlyers().catch(err=>console.error('Flyers',err));
-      await openProductFromCurrentPath();
+      Promise.allSettled([configLoad,categoriesLoad]).then(async()=>{if(!current()||state.storeOrderEditor?.enabled)return;await initStoreOrderEditor();if(!current())return;refresh();if(state.storeOrderEditor?.enabled)qs('#storeOrderToolbar')?.scrollIntoView({block:'start'});}).catch(error=>console.warn('Editor de orden:',error.message));
+      loadPublicFlyers().catch(error=>console.warn('Flyers:',error.message));
+      openProductFromCurrentPath().catch(error=>console.warn('Producto compartido:',error.message));
     } catch (err) {
+      if(!current())return;
       console.error(err);
-      const grid=qs('#productGrid');if(grid)grid.innerHTML='';
-      qs('#porPedido')?.classList.add('hidden');
-      // Si la API tarda o falla, no mostramos estados vacíos que parezcan falta de stock.
-      // La cabecera y el bloque de WhatsApp/cotización siguen disponibles.
+      const grid=qs('#productGrid');if(grid)grid.innerHTML='<div class="empty-state" style="grid-column:1/-1" role="status"><strong>No pudimos cargar los productos.</strong><p>Volvé a intentar en unos segundos.</p><button type="button" class="btn btn-primary" data-store-retry>Reintentar</button></div>';
+      const orderGrid=qs('#orderProductGrid');if(orderGrid)orderGrid.innerHTML='';
+      qs('#productos')?.classList.remove('hidden');
+      qs('#porPedido')?.classList.remove('hidden');
     }
   }
 
@@ -714,6 +726,7 @@
   }
 
   function renderProducts() {
+    if(!state.storeProductsLoaded)return;
     const items = filteredProducts();
     const stockItems=items.filter(p=>p.sale_mode!=='order');
     const orderItems=items.filter(p=>p.sale_mode==='order');
@@ -1928,6 +1941,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
 
   function bindEvents() {
+    document.addEventListener('click',event=>{if(event.target.closest('[data-store-retry]'))loadStore();});
     qs('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
     qs('#pageShareBtn')?.addEventListener('click', sharePage);fetchShareFile(`${location.origin}/share-salmos-25-35.jpg`,'salmos').then(file=>{state.pageShareFile=file;});
     qs('#searchBtn')?.addEventListener('click',()=>{const panel=qs('#headerSearchPanel');if(!panel)return;const opening=panel.classList.contains('hidden');panel.classList.toggle('hidden',!opening);qs('#searchBtn')?.classList.toggle('active',opening);if(opening)setTimeout(()=>qs('#searchInput')?.focus(),0);});
@@ -2372,8 +2386,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   async function boot() {
     initTheme();initInfoRotator();initPwaInstall();
     restoreLastShipping({activateMoto:false,allowQuote:true,restoreCarry:true});
-    ensureAccountUi(); bindEvents(); await handlePaymentReturn();
-    await Promise.all([loadStore(), initFirebaseAuth()]);
+    ensureAccountUi(); bindEvents();
+    await Promise.allSettled([loadStore(),initFirebaseAuth(),handlePaymentReturn()]);
   }
   document.addEventListener('input',e=>{if(e.target.matches?.('#viaCargoDestination,#viaCargoAgency'))syncViaCargoFields();});
   document.addEventListener('change',e=>{if(e.target.matches?.('#viaCargoDeliveryType,#viaCargoAccept'))syncViaCargoFields();});
