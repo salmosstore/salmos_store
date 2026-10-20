@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.63">
+  <link rel="stylesheet" href="admin-v4.css?v=25.64">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -103,7 +103,7 @@
         <section class="production-tab-panel" data-production-panel="1">
           <div class="production-top-grid">
             <div class="field production-type-field"><label for="productionMaterialType">Tipo de producto</label><select class="select" id="productionMaterialType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="glass">Vaso</option><option value="thermos">Termo</option><option value="bag">Bolso</option><option value="other">Otro</option></select></div>
-            <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock físico</option><option value="to_stock">Stock virtual / preparar al vender</option></select></div>
+            <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock físico</option><option value="to_stock">Stock virtual</option></select></div>
             <div class="field production-qty-field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
             
             <div class="field production-print-type-field"><label>DTF</label><select class="select" id="productionPrintType"><option value="dtf_textile">Textil</option><option value="dtf_uv">UV</option></select></div><div class="field production-print-rate-field"><label id="productionPrintRateLabel">Costo del metro ($)</label><input class="input" id="productionPrintRate" type="number" min="0" step="any" value="10000"></div>
@@ -245,12 +245,12 @@
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
   <script src="colors.js?v=25.46"></script>
-  <script src="montage-effects.js?v=25.57"></script>
+  <script src="montage-effects.js?v=25.64"></script>
   <script src="contacts-import.js?v=25.44" defer></script>
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.63" defer></script>
+  <script src="admin.js?v=25.64" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.61',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>

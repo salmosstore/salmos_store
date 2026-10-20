@@ -1,4 +1,4 @@
-// SALMOS 25.57 · Efectos no destructivos compartidos por vista, fotos y descarga.
+// SALMOS 25.64 · Efectos no destructivos compartidos por vista, fotos y descarga.
 (() => {
   'use strict';
   const clamp=(n,a,b)=>Math.max(a,Math.min(b,Number(n)||0)),cache=new WeakMap(),warpedCache=new WeakMap(),meshCache=new WeakMap(),artworkCache=new WeakMap();
@@ -48,7 +48,7 @@
     const ax=(a.x-.5)*w,ay=(a.y-.5)*h,bx=(b.x-.5)*w,by=(b.y-.5)*h,cx=(c.x-.5)*w,cy=(c.y-.5)*h,m11=((bx-ax)*vy-(cx-ax)*uy)/det,m12=((by-ay)*vy-(cy-ay)*uy)/det,m21=((cx-ax)*ux-(bx-ax)*vx)/det,m22=((cy-ay)*ux-(by-ay)*vx)/det;
     if(Math.abs(m11*m22-m12*m21)<1e-12)return;ctx.save();ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.lineTo(cx,cy);ctx.closePath();ctx.clip();ctx.transform(m11,m12,m21,m22,ax-m11*sx-m21*sy,ay-m12*sx-m22*sy);ctx.drawImage(image,0,0);ctx.restore();
   }
-  function draw(ctx,image,width,height,e={}){const fit=Math.min(width/image.width,height/image.height),w=image.width*fit,h=image.height*fit;ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.globalAlpha=clamp(e.opacity??100,0,100)/100;
+  function draw(ctx,image,width,height,e={}){const crop=e.outputCrop,fit=Math.min(width/(image.width*(crop?.w||1)),height/(image.height*(crop?.h||1))),w=image.width*fit,h=image.height*fit;ctx.save();if(crop){ctx.beginPath();ctx.rect(-width/2,-height/2,width,height);ctx.clip();ctx.translate((.5-crop.x-crop.w/2)*w,(.5-crop.y-crop.h/2)*h);}ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.globalAlpha=clamp(e.opacity??100,0,100)/100;
     const input=source(image,e,w,h);if(!e.curve&&!e.fold&&!e.grid?.some(p=>p?.x||p?.y))ctx.drawImage(input,-w/2,-h/2,w,h);
     else{const rasterScale=Math.min(1,8192/(1.8*Math.max(w,h)),Math.sqrt(12000000/(3.24*w*h))),rw=Math.max(1,Math.floor(w*rasterScale)),rh=Math.max(1,Math.floor(h*rasterScale)),signature=JSON.stringify([rw,rh,e.curve,e.fold,e.phase,e.grid,e.strokes?.length,e.strokes?.at(-1)?.points?.length]);let entries=warpedCache.get(image);if(!entries){entries=new WeakMap();warpedCache.set(image,entries);}let entry=entries.get(e);if(entry?.signature!==signature||entry.effects!==e||entry.strokes!==e.strokes||entry.lastStroke!==e.strokes?.at(-1)){const canvas=document.createElement('canvas');canvas.width=Math.ceil(rw*1.8);canvas.height=Math.ceil(rh*1.8);const paint=canvas.getContext('2d');paint.imageSmoothingEnabled=true;paint.imageSmoothingQuality='high';paint.translate(canvas.width/2,canvas.height/2);paint.globalCompositeOperation='lighter';for(const t of mesh(e))triangle(paint,input,t,rw,rh);entry={signature,canvas,rw,rh,effects:e,strokes:e.strokes,lastStroke:e.strokes?.at(-1)};entries.set(e,entry);}ctx.drawImage(entry.canvas,-entry.canvas.width*w/entry.rw/2,-entry.canvas.height*h/entry.rh/2,entry.canvas.width*w/entry.rw,entry.canvas.height*h/entry.rh);}
     ctx.restore();}
