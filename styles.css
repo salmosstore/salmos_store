@@ -1325,15 +1325,17 @@ body::before{pointer-events:none}
 
 
 /* V21 · Una cabecera, texturas de marca y contraste por tema. */
-.storefront{--store-art:url('banner-salmos-header.png');background:#080705!important}
-.storefront::before{z-index:0!important;opacity:1;background-image:linear-gradient(rgba(5,4,2,.40),rgba(5,4,2,.60)),var(--store-art);background-size:100% 100%,1200% auto;background-position:center,left top;background-repeat:no-repeat}
+.storefront,.storefront-export{--store-art:url('banner-salmos-header.png');--store-background-color:#080705;--store-background-top:rgba(5,4,2,.40);--store-background-bottom:rgba(5,4,2,.60);--store-background-opacity:.65;--store-art-scale:12;background:var(--store-background-color)!important}
+.storefront::before,.storefront-export::before{z-index:0!important;opacity:var(--store-background-opacity)!important;background-image:linear-gradient(var(--store-background-top),var(--store-background-bottom)),var(--store-art);background-size:100% 100%,calc(100% * var(--store-art-scale)) auto;background-position:center,left top;background-repeat:no-repeat}
+.storefront-export{--text:#f5f3ed;--muted:#aaa6a0;--gold:#d9a72d;--gold-2:#f4cf63;--surface:rgba(23,23,25,.88);--line:rgba(255,255,255,.09);position:relative;isolation:isolate;overflow:hidden;color:var(--text);font:400 16px Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.storefront-export::before{content:"";position:absolute;inset:0;pointer-events:none}
+.storefront-export>*{position:relative;z-index:1}
 .storefront .site-header{background:color-mix(in srgb,var(--bg) 96%,transparent);border-bottom:0}
 .storefront .site-header .salmos-info-bar{position:relative!important;top:auto!important;z-index:auto!important;margin:0;isolation:auto}
 .storefront .hero.hero-compact{aspect-ratio:2048/460!important;position:relative;background:transparent;height:auto!important}
 .storefront .hero.hero-compact>img{position:absolute;inset:0;width:100%;height:100%!important;object-fit:cover!important}
 .storefront .hero-banner-light{display:none!important}
-:root[data-theme="light"] .storefront{--store-art:url('banner-salmos-light.png');--gold-2:#80560e;--gold:#855a10;--muted:#5f584c;--bg:#fffdf8;--bg-soft:#fffcf5;--surface:#fffdfa;--surface-2:#f7f0e3;background:#fffdf8!important}
-:root[data-theme="light"] .storefront::before{background-image:linear-gradient(rgba(255,253,248,.83),rgba(255,253,248,.90)),var(--store-art)}
+:root[data-theme="light"] .storefront,.storefront-export[data-store-theme="light"]{--store-art:url('banner-salmos-light.png');--store-background-color:#fffdf8;--store-background-top:rgba(255,253,248,.83);--store-background-bottom:rgba(255,253,248,.90);--gold-2:#80560e;--gold:#855a10;--muted:#5f584c;--bg:#fffdf8;--bg-soft:#fffcf5;--surface:#fffdfa;--surface-2:#f7f0e3;background:var(--store-background-color)!important}
 :root[data-theme="light"] .storefront .hero-banner-dark{display:none!important}
 :root[data-theme="light"] .storefront .hero-banner-light{display:block!important}
 :root[data-theme="light"] .storefront .salmos-info-bar{background:#fff7e5;color:#33250d;border-color:#dfc58a}
@@ -1354,7 +1356,7 @@ body::before{pointer-events:none}
 :root[data-theme="light"] .storefront :is(.option.active,.favorite-btn.active,.account-tabs button.active,#searchBtn.active,.category-chip.active,.category-btn.active,.category-pill.active,.chip.active,.chip:hover){background:linear-gradient(135deg,#f4cf63,#dbab32);color:#191307}
 
 /* V22.1 · Lectura del modo claro y estado de las cotizaciones. */
-:root[data-theme="light"] .storefront{--text:#201a12;--muted:#3d352b}
+:root[data-theme="light"] .storefront,.storefront-export[data-store-theme="light"]{--text:#201a12;--muted:#3d352b}
 :root[data-theme="light"] .storefront :is(.muted,.field-help,.notice,.shipping-auto-note,.shared-delivery-head small,.shipping-copy small){color:#3d352b}
 :root[data-theme="light"] .storefront :is(.input,.textarea)::placeholder{color:#51483d;opacity:1}
 .delivery-quote-error{margin-top:10px;line-height:1.5}

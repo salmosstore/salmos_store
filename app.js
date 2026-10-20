@@ -1,4 +1,4 @@
-// SALMOS 25.66
+// SALMOS 25.68
 (() => {
   'use strict';
 
@@ -716,7 +716,23 @@
       </div>
     </article>`;
   }
-  function productCardImages(product){const images=productPhotoMedia(product).filter(im=>im.url&&(!im.media_type||im.media_type==='image'));return images.length?images:product.primary_image_url?[{url:product.primary_image_url,alt_text:product.name}]:[];}
+  function productMediaKey(url){try{return new URL(String(url),location.origin).href;}catch{return String(url||'');}}
+  function productImageAvailable(url){return url&&!state.failedProductMedia?.has(productMediaKey(url));}
+  function productCardImages(product){const images=productPhotoMedia(product).filter(im=>productImageAvailable(im.url)&&(!im.media_type||im.media_type==='image'));return images.length?images:productImageAvailable(product.primary_image_url)?[{url:product.primary_image_url,alt_text:product.name}]:[];}
+  function reconcileCartImages(){
+    if(!state.storeProductsLoaded)return;
+    let changed=false;for(const item of state.cart){const product=state.products.find(product=>Number(product.id)===Number(item.productId)),image=product?productCardImages(product)[0]?.url||'':'';if(item.image!==image){item.image=image;changed=true;}}
+    if(changed)localStorage.setItem('salmos_cart',JSON.stringify(state.cart));
+  }
+  function handleStoreProductImageError(img){
+    const card=img.closest('.product-card'),cart=img.closest('[data-cart-product]');if(!card&&!cart)return false;
+    const url=img.currentSrc||img.src;if(!url)return true;
+    (state.failedProductMedia??=new Set()).add(productMediaKey(url));
+    const product=state.products.find(product=>Number(product.id)===Number(card?.dataset.productId||cart?.dataset.cartProduct)),images=product?productCardImages(product):[],next=images[0];
+    if(next){img.src=next.url;img.alt=next.alt_text||product.name;if(card){const host=qs('.product-media',card);if(host)host.dataset.mediaIndex='0';const count=qs('.product-photo-count',card);if(count)count.textContent=`1 / ${images.length}`;}}
+    else{img.removeAttribute('src');img.hidden=true;img.insertAdjacentHTML('afterend','<div class="product-placeholder">SALMOS</div>');}
+    if(cart)reconcileCartImages();return true;
+  }
   function cycleProductCardMedia(button){
     const card=button.closest('.product-card'),host=qs('.product-media',card),product=state.products.find(p=>Number(p.id)===Number(card.dataset.productId));
     if(!product||!host)return;const media=productCardImages(product);if(media.length<2)return;
@@ -875,7 +891,13 @@
   }
 
   function firstAvailableVariant(p, color) {
-    return (p.variants || []).find(v => (!color || v.color === color) && Number(v.available_stock) > 0) || null;
+    return (p.variants || []).find(v => v.active!==0&&(!color || v.color === color) && publicVariantStock(v) > 0) || null;
+  }
+
+  function publicVariantStock(variant){return Math.max(0,Number(variant?.virtual_stock??variant?.available_stock)||0);}
+  function publicSizeOrder(a,b){
+    const order=['XXS','XS','S','M','L','XL','XXL','XXXL','4XL','5XL','6XL'],key=value=>String(value).trim().toUpperCase().replace(/^2XL$/,'XXL').replace(/^3XL$/,'XXXL'),rank=value=>{const index=order.indexOf(key(value));return index<0?100:index;};
+    return rank(a)-rank(b)||String(a).localeCompare(String(b),'es',{numeric:true});
   }
 
   function detailMediaType(item) {
@@ -918,9 +940,10 @@
     const p = state.selectedProduct;
     if (!p) return;
     const media = p.images?.length ? productPhotoMedia(p) : [{ url: '', alt_text: p.name, media_type:'image' }];
-    const availableVariants = (p.variants || []).filter(v => Number(v.available_stock) > 0);
+    const catalogVariants = (p.variants || []).filter(v=>v.active!==0);
+    const availableVariants = catalogVariants.filter(v => publicVariantStock(v) > 0);
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
-    const colors = [...new Set(availableVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
+    const colors = [...new Set(catalogVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
     if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
     if (!activeVariant) {
       const fallback = firstAvailableVariant({ variants: availableVariants }, state.selectedColor);
@@ -928,9 +951,9 @@
     }
     const selected = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const usesSizes=productUsesSizes(p);
-    const sizes = usesSizes?[...new Set(availableVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))]:[];
+    const sizes = usesSizes?[...new Set(catalogVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))].sort(publicSizeOrder):[];
     const attributeCells=[];
-    if(usesSizes)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}">${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
+    if(usesSizes)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
     if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
     if(colors.length)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
     const modal = qs('#productModal');
@@ -968,10 +991,10 @@
   function addSelectedToCart(openCheckoutNow = false) {
     const p = state.selectedProduct;
     const v = p?.variants?.find(x => x.id === Number(state.selectedVariantId));
-    if (!p || !v || v.available_stock <= 0) return;
+    if (!p || !v || publicVariantStock(v) <= 0) return;
     const existing = state.cart.find(x => x.variantId === v.id);
-    if (existing) existing.qty = Math.min(existing.qty + 1, v.available_stock);
-    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, qty: 1, maxStock: v.available_stock, image: firstProductImage(p) });
+    if (existing){existing.maxStock=publicVariantStock(v);existing.qty = Math.min(existing.qty + 1, existing.maxStock);}
+    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, qty: 1, maxStock: publicVariantStock(v), image: firstProductImage(p) });
     saveCart();
     closeModal('#productModal');
     toast('Producto agregado al carrito', 'success');
@@ -1016,6 +1039,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd};
 }
   function renderCart() {
+    reconcileCartImages();
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
     const badge = qs('#cartBadge');
     badge.textContent = count;
@@ -1024,8 +1048,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     if (!state.cart.length) {
       items.innerHTML = '<div class="empty-state"><strong>Tu carrito está vacío.</strong>Agregá un producto para comenzar.</div>';
     } else {
-      items.innerHTML = state.cart.map((x,i) => `<div class="cart-item">
-        ${x.image ? `<img class="cart-thumb" src="${escapeHtml(x.image)}" alt="">` : '<div class="cart-thumb product-placeholder">S</div>'}
+      items.innerHTML = state.cart.map((x,i) => `<div class="cart-item" data-cart-product="${Number(x.productId)}">
+        ${state.storeProductsLoaded&&x.image ? `<img class="cart-thumb" src="${escapeHtml(x.image)}" alt="">` : '<div class="cart-thumb product-placeholder">S</div>'}
         <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
         <button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
       </div>`).join('');
@@ -1962,7 +1986,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qs('#searchInput').addEventListener('input', e => { state.query=e.target.value; renderProducts(); });
     if(qs('#year')) qs('#year').textContent = new Date().getFullYear();
     window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
-    document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&m.url!==img.src);const host=qs('#detailMainMedia');if(next&&host)host.innerHTML=renderDetailMedia(next,state.selectedProduct?.name||'SALMOS');}},true);
+    document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;if(handleStoreProductImageError(img))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){(state.failedProductMedia??=new Set()).add(productMediaKey(img.currentSrc||img.src));const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&productImageAvailable(m.url));const host=qs('#detailMainMedia');if(host)host.innerHTML=next?renderDetailMedia(next,state.selectedProduct?.name||'SALMOS'):'<div class="product-placeholder">SALMOS</div>';}},true);
 
     document.addEventListener('keydown',e=>{
       if(e.key==='Escape' && qs('#productImageViewer')?.classList.contains('open')){closeProductImageViewer();return;}
