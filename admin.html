@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.68">
+  <link rel="stylesheet" href="admin-v4.css?v=25.69">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -157,7 +157,7 @@
   <dialog class="admin-dialog mockup-assets-dialog" id="mockupAssetDialog">
     <div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">Biblioteca visual</div><h2 id="mockupAssetDialogTitle">Fotos de montaje</h2></div><button class="icon-btn" type="button" id="closeMockupAssetsBtn">×</button></div>
       <div class="dialog-body"><p class="muted">Subí las fotos ya preparadas para cada variante: persona, prenda, color, frente o espalda, gorra y fondo. Después elegís una miniatura en Producción; el sistema completa sus datos.</p>
-        <form id="mockupAssetForm"><label class="field"><span id="mockupAssetFileLabel">Fotos para clasificar</span><input class="input" id="mockupAssetFile" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><div id="mockupUploadQueue" class="mockup-upload-queue"></div><details class="mockup-catalog-panel"><summary>Administrar nombres, prendas, colores y variantes</summary><div id="mockupCatalogEditor"></div></details><div class="dialog-foot"><button type="button" class="btn btn-ghost" id="cancelMockupAssetBtn">Cerrar</button><button type="submit" class="btn btn-primary" id="saveMockupAssetBtn">Guardar fotos</button></div></form>
+        <form id="mockupAssetForm"><label class="field"><span id="mockupAssetFileLabel">Fotos para clasificar</span><input class="input" id="mockupAssetFile" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><div id="mockupUploadQueue" class="mockup-upload-queue"></div><details class="mockup-catalog-panel"><summary>Administrar nombres, prendas y colores</summary><div id="mockupCatalogEditor"></div></details><div class="dialog-foot"><button type="button" class="btn btn-ghost" id="cancelMockupAssetBtn">Cerrar</button><button type="submit" class="btn btn-primary" id="saveMockupAssetBtn">Guardar fotos</button></div></form>
       </div>
     </div>
   </dialog>
@@ -244,14 +244,14 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.46"></script>
+  <script src="colors.js?v=25.69"></script>
   <script src="montage-effects.js?v=25.64"></script>
   <script src="contacts-import.js?v=25.44" defer></script>
   <script src="sharing.js?v=25.44" defer></script>
   <script src="clients.js?v=25.50" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.68" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.68',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=25.69" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.69',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
