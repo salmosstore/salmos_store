@@ -1,4 +1,4 @@
-// SALMOS 25.68
+// SALMOS 25.70
 (() => {
   'use strict';
 
@@ -895,6 +895,7 @@
   }
 
   function publicVariantStock(variant){return Math.max(0,Number(variant?.virtual_stock??variant?.available_stock)||0);}
+  function normalizePublicSize(value){const text=String(value||'').trim(),key=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();return ['unico','unica','talle unico'].includes(key)?'Único':/^[a-z0-9]+$/i.test(text)?text.toUpperCase().replace(/^2XL$/,'XXL').replace(/^3XL$/,'XXXL'):text;}
   function publicSizeOrder(a,b){
     const order=['XXS','XS','S','M','L','XL','XXL','XXXL','4XL','5XL','6XL'],key=value=>String(value).trim().toUpperCase().replace(/^2XL$/,'XXL').replace(/^3XL$/,'XXXL'),rank=value=>{const index=order.indexOf(key(value));return index<0?100:index;};
     return rank(a)-rank(b)||String(a).localeCompare(String(b),'es',{numeric:true});
@@ -940,7 +941,7 @@
     const p = state.selectedProduct;
     if (!p) return;
     const media = p.images?.length ? productPhotoMedia(p) : [{ url: '', alt_text: p.name, media_type:'image' }];
-    const catalogVariants = (p.variants || []).filter(v=>v.active!==0);
+    const catalogVariants = (p.variants || []).filter(v=>v.active!==0).map(v=>({...v,size:normalizePublicSize(v.size)}));
     const availableVariants = catalogVariants.filter(v => publicVariantStock(v) > 0);
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(catalogVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];

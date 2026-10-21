@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
   <link rel="stylesheet" href="colors.css?v=25.47">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-v4.css?v=25.69">
+  <link rel="stylesheet" href="admin-v4.css?v=25.70">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
 </head>
@@ -43,7 +43,7 @@
       <header class="admin-topbar">
         <button class="icon-btn admin-menu-btn" id="adminMenuBtn" type="button">☰</button>
         <div class="admin-title-wrap"><img class="admin-title-seal" src="admin-sello-gloria-rosa-ui.png" alt="" aria-hidden="true"><h1 id="viewTitle">Productos</h1></div>
-        <div class="admin-topbar-actions"><button class="btn btn-ghost admin-list-toggle" id="collapseAdminListsBtn" type="button" title="Ocultar listados" aria-label="Ocultar listados"><i class="fa-solid fa-chevron-up"></i></button><button class="btn btn-ghost admin-list-toggle hidden" id="expandAdminListsBtn" type="button" title="Mostrar listados" aria-label="Mostrar listados"><i class="fa-solid fa-chevron-down"></i></button><button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button></div>
+        <div class="admin-topbar-actions"><button class="btn btn-primary" id="saveSettingsBtn" type="button" hidden>Guardar configuración</button><button class="btn btn-ghost admin-list-toggle" id="collapseAdminListsBtn" type="button" title="Ocultar listados" aria-label="Ocultar listados"><i class="fa-solid fa-chevron-up"></i></button><button class="btn btn-ghost admin-list-toggle hidden" id="expandAdminListsBtn" type="button" title="Mostrar listados" aria-label="Mostrar listados"><i class="fa-solid fa-chevron-down"></i></button><button class="icon-btn" id="adminThemeBtn" type="button" title="Cambiar tema">◐</button></div>
       </header>
       <section class="admin-content" id="adminContent"><div class="empty-state"><strong>Cargando panel...</strong></div></section>
     </main>
@@ -66,7 +66,7 @@
       <div class="dialog-body">
         <div class="form-grid purchase-header-grid">
           <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div>
-          <div class="field"><label>Proveedor</label><input class="input" name="supplier" list="supplierSuggestions" placeholder="Soari · remeras / Adrian · DTF"></div>
+          <div class="field"><label>Proveedor</label><select class="select" name="supplier" data-supplier-select><option value="">Elegir proveedor…</option><option value="__manage_suppliers__">Administrar proveedores…</option></select></div>
           <div class="field"><label>Comprobante / referencia</label><input class="input" name="reference" placeholder="Factura, ticket, número de operación..."></div>
         </div>
         <div class="purchase-items-head"><div><h3>Materia prima comprada</h3><p class="muted">Cargá cada variante una sola vez. Lo que escribas queda disponible como opción en próximas compras.</p></div><button class="btn btn-ghost" type="button" id="addPurchaseItemBtn">+ Agregar</button></div>
@@ -134,8 +134,10 @@
             <div class="field"><label for="productionPublicationVariant">Variante para el enlace (opcional)</label><input class="input" id="productionPublicationVariant" maxlength="80" placeholder="Ej.: oversize negra"></div>
             <div class="field"><label>Estado de publicación</label><select class="select" id="productionStatus"><option value="draft">Borrador</option><option value="published">Publicado</option><option value="hidden">Oculto</option></select></div>
             
-            <div class="field full"><label>Descripción</label><textarea class="textarea" id="productionDescription" rows="3"></textarea></div>
-            <div class="field full"><label>Notas / significado del diseño</label><textarea class="textarea" id="productionMeaning" rows="3"></textarea></div>
+            <div class="production-publication-copy full">
+            <div class="field production-publication-description"><label>Descripción</label><textarea class="textarea" id="productionDescription" rows="3"></textarea></div>
+            <div class="field production-publication-meaning"><label>Notas / significado del diseño</label><textarea class="textarea" id="productionMeaning" rows="3"></textarea></div>
+            </div>
             <div class="field full"><label>Versículo</label><textarea class="textarea" id="productionVerse" rows="3"></textarea></div>
             <div class="field full"><label>Cita</label><input class="input" id="productionVerseReference" placeholder="Ej.: Salmos 121:2"></div>
           </div></div>
@@ -167,9 +169,9 @@
       <div class="dialog-head"><div><div class="admin-eyebrow">Caja</div><h2 id="movementDialogTitle">Nuevo ingreso / egreso</h2></div><button class="icon-btn" value="cancel" formnovalidate>×</button></div>
       <div class="dialog-body">
         <div class="form-grid">
-          <div class="field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
-          <div class="field"><label>Fecha</label><input class="input" name="date" type="date" required></div><div class="field"><label>Hora</label><input class="input" name="time" type="time" step="60"></div>
-          <div class="field"><label>Motivo / etiqueta</label><select class="select" id="movementCategorySelect"><option value="">Elegir motivo...</option></select><input class="input hidden movement-category-other" name="category" id="movementCategoryOther" placeholder="Escribí el nuevo motivo" required></div>
+          <div class="field movement-kind-field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
+          <div class="field movement-date-field"><label>Fecha</label><input class="input" name="date" type="date" required></div><div class="field movement-time-field"><label>Hora</label><input class="input" name="time" type="time" step="60"></div>
+          <div class="field movement-reason-field"><label>Motivo / etiqueta</label><select class="select" id="movementCategorySelect"><option value="">Elegir motivo...</option></select><input class="input hidden movement-category-other" name="category" id="movementCategoryOther" placeholder="Escribí el nuevo motivo" required></div>
           <section class="full movement-sale-section" id="movementSaleSection"><label class="toggle-label"><input type="checkbox" id="movementSaleEnabled"> Vincular productos vendidos a este ingreso</label><div id="movementSaleDetails" class="hidden"><div id="movementSaleRows"></div><button type="button" class="btn btn-ghost" id="addMovementSaleBtn">+ Agregar producto vendido</button><p class="field-help">Descuenta el stock físico. Si falta, queda pendiente de preparar. La publicación de la tienda se conserva.</p></div></section><div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
           <div class="field"><label for="movementPaymentMethod">Forma del ingreso / egreso</label><select class="select" name="payment_method" id="movementPaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option></select></div>
           <div class="field"><label for="movementAmount">Importe base ($)</label><input class="input" name="amount" id="movementAmount" type="number" min="0.01" step="0.01" required></div>
@@ -244,14 +246,14 @@
   <div class="toast-stack" id="toastStack"></div>
   <script src="config.js"></script>
   <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.69"></script>
+  <script src="colors.js?v=25.70"></script>
   <script src="montage-effects.js?v=25.64"></script>
   <script src="contacts-import.js?v=25.44" defer></script>
   <script src="sharing.js?v=25.44" defer></script>
-  <script src="clients.js?v=25.50" defer></script>
+  <script src="clients.js?v=25.70" defer></script>
   <script src="production-text.js?v=25.44" defer></script>
-  <script src="admin.js?v=25.69" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.69',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=25.70" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.70',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
