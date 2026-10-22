@@ -1403,3 +1403,7 @@ body::before{pointer-events:none}
 .product-card[data-photo-background="none"] .product-body{background:var(--surface)}
 .product-card[data-photo-background="none"] .product-media,.detail-gallery-scroll[data-photo-background="none"] .detail-media-slide,.detail-gallery-scroll[data-photo-background="none"]{background-color:transparent;background-image:none}
 .store-loading-card{pointer-events:none;min-height:240px}.store-loading-card .product-media{min-height:190px;background:linear-gradient(90deg,#ad8f6130,#ad8f6155,#ad8f6130)}.store-loading-line{display:block;width:65%;height:16px;background:#ad8f6140;border-radius:6px}
+
+/* 25.72 · El versículo mantiene contraste sobre el fondo claro. */
+:root[data-theme="light"] :is(.detail-verse-text,.detail-verse-centered),.storefront-export[data-store-theme="light"] :is(.detail-verse-text,.detail-verse-centered){color:#44321b;font-weight:500}
+:root[data-theme="light"] .detail-verse-reference,.storefront-export[data-store-theme="light"] .detail-verse-reference{color:#69440e;font-weight:700}
