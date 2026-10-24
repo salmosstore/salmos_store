@@ -17,6 +17,7 @@
     ['polaroid','Foto de colección','Marco fotográfico con movimiento suave.'],
     ['countdown','Cuenta regresiva','3, 2, 1 y presentación del producto.'],
     ['mirror','Espejo doble','Frente y espalda con tus fotos originales.'],
+    ['fade','Fundido suave','Aparición gradual del producto.'],
     ['clean','Catálogo','Producto completo, mensaje y cierre.']
   ].map(([id,name,description])=>({id,name,description}));
   const palettes={slate:['#12171e','#3d4854','#9bb4c8','#f5f7fa'],navy:['#051425','#123e65','#63b9f0','#ffffff'],coal:['#080909','#2f251d','#e6a94f','#fff4df'],forest:['#101d17','#30483b','#a7bea4','#f0f5ee'],burgundy:['#1c080e','#541526','#cf627a','#fff3f5'],gold:['#101112','#29251b','#e6c47a','#fff8e8'],cream:['#f6f2ea','#e9dec9','#9b702e','#241f19'],pink:['#fff0f7','#ead8e5','#a74471','#34242f'],blue:['#111b2d','#253e5b','#87cfee','#ffffff'],white:['#ffffff','#e9edef','#3d6970','#19252a'],green:['#0f2725','#234d43','#bcd6a5','#ffffff'],lilac:['#f1edf9','#d6caec','#785598','#2d2340'],red:['#2e1017','#662333','#f2c4a5','#fff4ec']};
