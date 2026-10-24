@@ -286,7 +286,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
         if path == '/api/health':
-            return self.json_response({'name': 'SALMOS complemento local', 'version': 4, 'wan': wan_state(),
+            return self.json_response({'name': 'SALMOS complemento local', 'version': 5, 'wan': wan_state(),
                 'tts': bool(all_voices()), 'ffmpeg': ffmpeg_executable() is not None, 'voices': all_voices(), 'onlineVoice': has_edge()})
         if wan_get(self,path):return
         if path.startswith('/api/'):
