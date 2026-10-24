@@ -17,7 +17,7 @@ if not errorlevel 1 goto files
 "%SALMOS_ENV%\Scripts\python.exe" -m pip install edge-tts==7.3.1 imageio-ffmpeg==0.6.0
 if errorlevel 1 goto error
 :files
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; foreach($name in @('local_helper.py','wan_worker.py','wan-preset.json')){Invoke-WebRequest -UseBasicParsing -Uri ('https://salmos.com.ar/marketing/'+$name+'?v=5.0') -OutFile (Join-Path $env:SALMOS_PROGRAM $name)}"
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; foreach($name in @('local_helper.py','wan_worker.py','wan-preset.json')){Invoke-WebRequest -UseBasicParsing -Uri ('https://salmos.com.ar/marketing/'+$name+'?v=6.0') -OutFile (Join-Path $env:SALMOS_PROGRAM $name)}"
 if errorlevel 1 goto error
 "%SALMOS_ENV%\Scripts\python.exe" -c "import socket,sys;s=socket.socket();s.settimeout(1);sys.exit(0 if s.connect_ex(('127.0.0.1',8765))==0 else 1)"
 if errorlevel 1 goto start

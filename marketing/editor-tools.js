@@ -43,5 +43,22 @@
     else tone(520,0,.2,.65,105);
     return finishAudio(await c.startRendering(),.18);
   }
-  return{points,resize,effects,progress,gifAsset,makeMusic,makeSound};
+  async function makeLegacyMusic(style='piano'){
+    const Offline=globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext;if(!Offline)throw new Error('Este navegador no permite preparar la música.');
+    const rhythmic=['dance','latin','funk','urban','rock','disco','pulse','bright'].includes(style),bpm={dance:124,latin:108,funk:112,urban:92,rock:126,disco:118,pulse:110,bright:104,piano:80,hope:90,ambient:72,acoustic:100}[style]||100,beat=60/bpm,length=beat*32,rate=22050,c=new Offline(1,Math.ceil(length*rate),rate),master=c.createGain();master.gain.value=.65;master.connect(c.destination);
+    const midi=n=>440*Math.pow(2,(n-69)/12),chords=style==='hope'?[[53,57,60],[48,52,55],[43,47,50],[45,48,52]]:[[48,52,55],[45,48,52],[53,57,60],[43,47,50]];
+    function tone(n,t,d,v,type='triangle'){if(t>=length-.03)return;const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=midi(n);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+(style==='ambient'?.3:.008));g.gain.exponentialRampToValueAtTime(.0001,Math.min(length,t+d));o.connect(g);g.connect(master);o.start(t);o.stop(Math.min(length,t+d));}
+    const noise=c.createBuffer(1,rate*.25,rate),samples=noise.getChannelData(0);let seed=4147;for(let i=0;i<samples.length;i++){seed=(seed*1664525+1013904223)>>>0;samples[i]=seed/2147483648-1;}
+    function drum(t,kind,v=1){if(t>=length-.03)return;if(kind==='kick'){const o=c.createOscillator(),g=c.createGain();o.frequency.setValueAtTime(135,t);o.frequency.exponentialRampToValueAtTime(43,t+.13);g.gain.setValueAtTime(.75*v,t);g.gain.exponentialRampToValueAtTime(.0001,t+.22);o.connect(g);g.connect(master);o.start(t);o.stop(Math.min(length,t+.23));return;}const src=c.createBufferSource(),filter=c.createBiquadFilter(),g=c.createGain();src.buffer=noise;filter.type='highpass';filter.frequency.value=kind==='snare'?1600:6500;g.gain.setValueAtTime((kind==='snare'?.36:.11)*v,t);g.gain.exponentialRampToValueAtTime(.0001,t+(kind==='snare'?.14:.045));src.connect(filter);filter.connect(g);g.connect(master);src.start(t);src.stop(Math.min(length,t+.18));if(kind==='snare')tone(50,t,.08,.13,'triangle');}
+    for(let bar=0;bar<8;bar++){const chord=chords[bar%4],t=bar*beat*4;
+      if(!rhythmic){chord.forEach((n,i)=>tone(n,t+(style==='ambient'?0:i*.045),beat*3.9,.16,style==='ambient'?'sine':'triangle'));for(let j=0;j<8;j++)if(style!=='ambient')tone(chord[(j+bar)%3]+12,t+j*beat/2,style==='acoustic'?.5:1,.15,'sine');continue;}
+      for(let k=0;k<4;k++){const q=t+k*beat;if(['dance','disco','pulse'].includes(style)||k===0||k===2)drum(q,'kick');if(k===1||k===3)drum(q,'snare',style==='urban'?1.15:.8);drum(q,'hat',.7);drum(q+beat/2,'hat',1);if(['dance','disco','funk'].includes(style))drum(q+beat*.75,'hat',.4);
+        tone(chord[0]-12,q+(style==='funk'&&k%2?beat*.25:0),beat*.65,.32,style==='urban'?'sine':'triangle');if(['funk','latin','disco'].includes(style))tone(chord[k%3]-12,q+beat*.65,beat*.23,.23,'triangle');
+        if(style==='rock'){tone(chord[0],q,beat*.7,.1,'sawtooth');tone(chord[0]+7,q,beat*.7,.08,'sawtooth');}else if(style==='latin'){for(let j=0;j<2;j++)chord.forEach((n,i)=>tone(n+12,q+beat*(j?.75:.25)+i*.012,beat*.22,.13,'triangle'));}else if(k%2===0||['funk','disco'].includes(style))chord.forEach((n,i)=>tone(n+12,q+beat*.5+i*.01,beat*.3,.12,'triangle'));
+      }
+      const melody=[0,2,1,2,0,1,2,1];for(let j=0;j<8;j++)if(style!=='urban'||j%2===0)tone(chord[melody[(j+bar)%8]]+24,t+j*beat/2,beat*.38,.09,style==='dance'?'triangle':'sine');if(style==='urban')drum(t+beat*2.75,'kick',.7);
+    }
+    const buffer=await c.startRendering(),data=buffer.getChannelData(0);let peak=0,sum=0;for(let i=0;i<data.length;i++){const fade=Math.min(1,i/(rate*.02),(data.length-i)/(rate*.06));data[i]*=fade;peak=Math.max(peak,Math.abs(data[i]));sum+=data[i]*data[i];}const rms=Math.sqrt(sum/data.length),gain=Math.min(.93/Math.max(.0001,peak),.19/Math.max(.0001,rms));for(let i=0;i<data.length;i++)data[i]*=gain;return waveBlob(buffer);
+  }
+  return{points,resize,effects,progress,gifAsset,makeMusic,makeLegacyMusic,makeSound};
 });
