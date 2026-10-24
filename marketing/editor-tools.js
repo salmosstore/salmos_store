@@ -32,16 +32,16 @@
     }
     return finishAudio(await c.startRendering(),.23);
   }
-  async function makeSound(kind='whoosh'){
-    const rate=22050,duration={whoosh:.8,pop:.22,sparkle:1.2,pencil:1.1,click:.12,bell:1.5,impact:.7,shutter:.24}[kind]||.8,c=new OfflineAudioContext(1,Math.ceil(rate*duration),rate),out=c.createGain();out.connect(c.destination);let seed=137;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-    function tone(f,t,d,v,fall=f){const o=c.createOscillator(),g=c.createGain();o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(fall,t+d);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(out);o.start(t);o.stop(t+d);}
-    if(['whoosh','pencil','shutter'].includes(kind)){const b=c.createBuffer(1,Math.ceil(rate*duration),rate),a=b.getChannelData(0);for(let i=0;i<a.length;i++){const t=i/rate,envelope=kind==='whoosh'?Math.sin(Math.PI*t/duration)**2:kind==='pencil'?(.25+.75*Math.sin(t*35)**8)*Math.sin(Math.PI*t/duration):Math.exp(-t*20)*(.4+.6*Math.sin(t*110)**2);a[i]=(random()*2-1)*envelope;}const s=c.createBufferSource(),f=c.createBiquadFilter();s.buffer=b;f.type='bandpass';f.frequency.setValueAtTime(kind==='pencil'?2600:650,0);f.frequency.exponentialRampToValueAtTime(kind==='pencil'?1800:6500,duration);f.Q.value=.65;s.connect(f);f.connect(out);s.start();}
+  async function makeSound(kind='whoosh',seconds=0){
+    const rate=22050,natural={whoosh:.8,pop:.4,sparkle:1.2,pencil:1.1,click:.12,bell:1.5,impact:1,shutter:.65}[kind]||.8,duration=Math.max(.1,Math.min(10,Number(seconds)||natural)),stretch=duration/natural,c=new OfflineAudioContext(1,Math.ceil(rate*duration),rate),out=c.createGain();out.connect(c.destination);let seed=137;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+    function tone(f,t,d,v,fall=f){t*=stretch;d=Math.min(d*stretch,duration-t);if(d<=0)return;const o=c.createOscillator(),g=c.createGain();o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(fall,t+d);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(out);o.start(t);o.stop(t+d);}
+    if(['whoosh','pencil'].includes(kind)){const b=c.createBuffer(1,Math.ceil(rate*duration),rate),a=b.getChannelData(0);for(let i=0;i<a.length;i++){const t=i/rate,envelope=kind==='whoosh'?Math.sin(Math.PI*t/duration)**2:kind==='pencil'?(.25+.75*Math.sin(t*35)**8)*Math.sin(Math.PI*t/duration):Math.exp(-t*20)*(.4+.6*Math.sin(t*110)**2);a[i]=(random()*2-1)*envelope;}const s=c.createBufferSource(),f=c.createBiquadFilter();s.buffer=b;f.type='bandpass';f.frequency.setValueAtTime(kind==='pencil'?2600:650,0);f.frequency.exponentialRampToValueAtTime(kind==='pencil'?1800:6500,duration);f.Q.value=.65;s.connect(f);f.connect(out);s.start();}
     else if(kind==='sparkle'){[880,1318.5,1760,2093,2637].forEach((f,i)=>tone(f,i*.11,.65,.3));}
     else if(kind==='bell'){tone(784,0,1.5,.3);tone(1568,0,1.1,.16);tone(2352,0,.8,.08);}
-    else if(kind==='impact'){tone(100,0,.65,.7,32);tone(48,0,.65,.35,28);}
+    else if(kind==='impact'){tone(220,0,.22,.65,90);tone(125,0,.8,.8,58);tone(65,0,1,.4,38);tone(310,.01,.18,.15,110);}
     else if(kind==='click'){tone(1800,0,.04,.5,400);tone(100,.02,.06,.3,40);}
-    else tone(520,0,.2,.65,105);
-    return finishAudio(await c.startRendering(),.18);
+    else if(kind==='shutter'){tone(2100,0,.045,.65,260);tone(900,.075,.07,.55,180);tone(3700,.16,.22,.18,1200);tone(220,.22,.1,.35,80);}else{tone(930,0,.18,.8,260);tone(440,.025,.36,.4,140);tone(1500,0,.035,.28,600);}
+    return finishAudio(await c.startRendering(),.27);
   }
   async function makeLegacyMusic(style='piano'){
     const Offline=globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext;if(!Offline)throw new Error('Este navegador no permite preparar la música.');
