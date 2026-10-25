@@ -995,7 +995,7 @@
     if (!p || !v || publicVariantStock(v) <= 0) return;
     const existing = state.cart.find(x => x.variantId === v.id);
     if (existing){existing.maxStock=publicVariantStock(v);existing.qty = Math.min(existing.qty + 1, existing.maxStock);}
-    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, qty: 1, maxStock: publicVariantStock(v), image: firstProductImage(p) });
+    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, category_slug:p.category_slug||p.category_name||'',fit:p.fit||'',qty: 1, maxStock: publicVariantStock(v), image: firstProductImage(p) });
     saveCart();
     closeModal('#productModal');
     toast('Producto agregado al carrito', 'success');
@@ -1008,8 +1008,10 @@ function normalizePromotions(value){
   if(typeof value==='string'){try{value=JSON.parse(value)}catch{throw new Error('Revisá las promociones guardadas.')}}
   if(!Array.isArray(value)||value.length>50)throw new Error('Podés guardar hasta 50 promociones.');
   return value.map((r,i)=>{
-    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:r.active!==false,trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
+    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:![false,0,'false','0'].includes(r.active),trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
     if(!p.name||!['amount','quantity','combination'].includes(p.trigger)||!['products','shipping','order'].includes(p.target)||!['percent','fixed','unit_price'].includes(p.benefit)||!Number.isSafeInteger(p.threshold)||p.threshold<(p.trigger==='quantity'?1:0)||!Number.isFinite(p.value)||p.value<0||!Number.isSafeInteger(p.triggerProductId)||p.triggerProductId<0||!Number.isSafeInteger(p.targetProductId)||p.targetProductId<0)throw new Error(`Revisá los campos de la promoción ${i+1}.`);
+    p.requireCurve=r.requireCurve===true;p.curveMixed=r.curveMixed!==false;p.curveSizes=[...new Set((Array.isArray(r.curveSizes)?r.curveSizes:[]).map(promotionSize).filter(Boolean))];
+    if(p.requireCurve&&(!p.curveSizes.length||p.curveSizes.length>30))throw new Error('Elegí los talles de la curva mayorista.');
     if(p.trigger==='combination'){
       if(!Array.isArray(r.requirements)||!r.requirements.length||r.requirements.length>20)throw new Error('Agregá los tipos y cantidades de la combinación.');
       p.requirements=r.requirements.map(x=>({type:String(x.type||'').trim().slice(0,50),quantity:Number(x.quantity)}));
@@ -1023,42 +1025,51 @@ function normalizePromotions(value){
   });
 }
 function promotionProductType(category='',fit=''){const c=String(category).toLowerCase(),f=String(fit).toLowerCase();if(c.includes('remera')||c.includes('shirt'))return f.includes('over')?'shirt_oversize':f.includes('crop')?'shirt_crop':'shirt_classic';if(c.includes('gorra')||c.includes('cap'))return 'cap';if(c.includes('taza')||c.includes('mug'))return 'mug';if(c.includes('vaso')||c.includes('glass'))return 'glass';if(c.includes('termo')||c.includes('thermos'))return 'thermos';return c;}
+function promotionSize(value){return String(value??'').trim().toUpperCase().replace(/\s+/g,'');}
 function calculatePromotions(rules,items,shippingCostCents=0){
-  const lines=items.map(x=>({productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),quantity:Number(x.quantity??x.qty)||0,price:Number(x.priceCents??x.price_cents)||0})),subtotal=lines.reduce((s,x)=>s+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0));
-  const chosen=new Map();
-  for(const rule of rules||[]){if(!rule.active)continue;
-    const combined=rule.trigger==='combination',requirements=rule.requirements||[];
-    if(combined&&(!requirements.length||requirements.some(r=>lines.filter(x=>x.type===r.type).reduce((n,x)=>n+x.quantity,0)<r.quantity)))continue;
-    const condition=lines.filter(x=>(!rule.triggerProductId||x.productId===rule.triggerProductId)&&(!rule.triggerType||x.type===rule.triggerType)),threshold=condition.reduce((s,x)=>s+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0);
-    if(!combined&&(!condition.length||threshold<rule.threshold))continue;
-    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===rule.targetProductId)&&(!rule.targetType||(rule.targetType==='__combination__'?requirements.some(r=>r.type===x.type):x.type===rule.targetType))),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
-    const base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:productBase;
-    let discount=rule.benefit==='unit_price'?targets.reduce((s,x)=>s+Math.max(0,x.price-rule.value)*x.quantity,0):rule.benefit==='percent'?Math.round(base*rule.value/100):rule.value*(rule.target==='products'&&rule.basis==='unit'?quantity:1);
-    discount=Math.max(0,Math.min(base,Math.round(discount)));const key=combined?(rule.target==='products'?`products:${rule.targetType||'all'}`:rule.target):rule.target==='products'&&rule.targetType?`products:${rule.targetType}`:rule.targetType||rule.triggerType?rule.target:'legacy';const prior=chosen.get(key);if(prior&&prior.discount>=discount)continue;chosen.set(key,{rule,discount,productBase});
+  const lines=items.map((x,index)=>({index,variantId:x.variantId??x.variant_id,productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),size:promotionSize(x.size),quantity:Math.max(0,Math.floor(Number(x.quantity??x.qty)||0)),price:Math.max(0,Math.round(Number(x.priceCents??x.price_cents)||0))})),subtotal=lines.reduce((n,x)=>n+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0)),candidates=[];
+  const active=r=>![false,0,'false','0'].includes(r.active);
+  for(const rule of rules||[]){if(!active(rule))continue;const combined=rule.trigger==='combination',requirements=rule.requirements||[],condition=lines.filter(x=>(!rule.triggerProductId||x.productId===Number(rule.triggerProductId))&&(!rule.triggerType||x.type===rule.triggerType));
+    if(combined){if(!requirements.length||requirements.some(r=>lines.filter(x=>x.type===r.type).reduce((n,x)=>n+x.quantity,0)<Number(r.quantity)))continue;}
+    else if(!condition.length||condition.reduce((n,x)=>n+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0)<Number(rule.threshold))continue;
+    if(rule.requireCurve){const sizes=(rule.curveSizes||[]).map(promotionSize),complete=pool=>sizes.length>0&&sizes.every(size=>pool.filter(x=>x.size===size).reduce((n,x)=>n+x.quantity,0)>=1);if(rule.curveMixed===false){if(![...new Set(condition.map(x=>x.productId))].some(id=>complete(condition.filter(x=>x.productId===id))))continue;}else if(!complete(condition))continue;}
+    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===Number(rule.targetProductId))&&(!rule.targetType||(rule.targetType==='__combination__'?requirements.some(r=>r.type===x.type):x.type===rule.targetType))),base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:targets.reduce((n,x)=>n+x.quantity*x.price,0),quantity=targets.reduce((n,x)=>n+x.quantity,0);
+    let discount=rule.benefit==='unit_price'?targets.reduce((n,x)=>n+Math.max(0,x.price-Number(rule.value))*x.quantity,0):rule.benefit==='percent'?Math.round(base*Number(rule.value)/100):Number(rule.value)*(rule.target==='products'&&rule.basis==='unit'?quantity:1);discount=Math.max(0,Math.min(base,Math.round(discount)||0));if(!discount)continue;
+    candidates.push({rule,discount,targets:rule.target==='order'?lines:targets,shipping:rule.target!=='products',product:rule.target!=='shipping'});
   }
-  let pd=0,sd=0;const applied=[];for(const {rule,discount,productBase} of chosen.values()){const remainingProducts=Math.max(0,subtotal-pd),remainingShipping=Math.max(0,shipping-sd);const productPart=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?Math.min(productBase,remainingProducts):remainingProducts),shippingPart=rule.target==='products'?0:Math.min(remainingShipping,Math.max(0,discount-productPart));if(productPart+shippingPart>0){pd+=productPart;sd+=shippingPart;applied.push(rule)}}
-  return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd};
+  // Pick the largest compatible discount without applying two offers to the same item or shipping charge.
+  const masks=new Map();for(const c of candidates){let mask=c.shipping?1n<<BigInt(lines.length):0n;if(c.product)for(const x of c.targets)mask|=1n<<BigInt(x.index);const key=mask.toString(),old=masks.get(key);if(!old||c.discount>old.discount)masks.set(key,{...c,mask});}
+  const options=[...masks.values()].sort((a,b)=>b.discount-a.discount||String(a.rule.id).localeCompare(String(b.rule.id))),suffix=new Array(options.length+1).fill(0);for(let i=options.length-1;i>=0;i--)suffix[i]=suffix[i+1]+options[i].discount;
+  let best=0,chosen=[],used=0n;for(const c of options)if(!(used&c.mask)){used|=c.mask;best+=c.discount;chosen.push(c);}const memo=new Map();
+  const search=(i,mask,total,selected)=>{if(total+suffix[i]<=best)return;if(i===options.length){best=total;chosen=[...selected];return;}const key=i+':'+mask.toString(),prior=memo.get(key);if(prior!==undefined&&prior>=total)return;memo.set(key,total);const c=options[i];if(!(mask&c.mask)){selected.push(c);search(i+1,mask|c.mask,total+c.discount,selected);selected.pop();}search(i+1,mask,total,selected);};search(0,0n,0,[]);
+  const discounts=lines.map(()=>0);let pd=0,sd=0;const applied=[];
+  for(const c of chosen){const productBase=c.targets.reduce((n,x)=>n+x.quantity*x.price,0),productPart=c.product?Math.min(c.discount,productBase):0,shippingPart=c.shipping?Math.min(shipping-sd,c.discount-productPart):0;if(!productPart&&!shippingPart)continue;
+    let left=productPart;const eligible=c.targets.filter(x=>x.quantity*x.price>0);eligible.forEach((x,i)=>{const raw=c.rule.benefit==='unit_price'&&c.rule.target==='products'?Math.max(0,x.price-Number(c.rule.value))*x.quantity:Math.floor(productPart*x.quantity*x.price/Math.max(1,productBase));const amount=Math.min(left,x.quantity*x.price,i===eligible.length-1?left:raw);discounts[x.index]+=amount;left-=amount;});if(left)for(const x of eligible){const room=x.quantity*x.price-discounts[x.index],extra=Math.min(left,room);discounts[x.index]+=extra;left-=extra;if(!left)break;}pd+=productPart;sd+=shippingPart;applied.push(c.rule);}
+  return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd,lines:lines.map(x=>({index:x.index,variantId:x.variantId,quantity:x.quantity,originalUnitCents:x.price,originalTotalCents:x.price*x.quantity,discountCents:discounts[x.index],finalTotalCents:x.price*x.quantity-discounts[x.index],finalUnitCents:x.quantity?(x.price*x.quantity-discounts[x.index])/x.quantity:x.price}))};
 }
+
+  function cartPriceHtml15(line){if(!line)return '';return line.discountCents?`<div class="cart-price15"><span>Por unidad: <s>${money(line.originalUnitCents)}</s></span><span>Precio promo por descuento mayorista <strong>${money(line.finalUnitCents)} / u</strong></span><span>Total: <s>${money(line.originalTotalCents)}</s> <strong>${money(line.finalTotalCents)}</strong></span></div>`:`<div class="cart-price15"><span>${money(line.originalUnitCents)} / u</span><strong>Total: ${money(line.originalTotalCents)}</strong></div>`;}
   function renderCart() {
     reconcileCartImages();
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
     const badge = qs('#cartBadge');
     badge.textContent = count;
     badge.classList.toggle('hidden', count === 0);
-    const items = qs('#cartItems');
+    const items = qs('#cartItems'),prices15=cartPromotion(cartShippingAmount()).lines;
     if (!state.cart.length) {
       items.innerHTML = '<div class="empty-state"><strong>Tu carrito está vacío.</strong>Agregá un producto para comenzar.</div>';
     } else {
       items.innerHTML = state.cart.map((x,i) => `<div class="cart-item" data-cart-product="${Number(x.productId)}">
         ${state.storeProductsLoaded&&x.image ? `<img class="cart-thumb" src="${escapeHtml(x.image)}" alt="">` : '<div class="cart-thumb product-placeholder">S</div>'}
-        <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
+        <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}${cartPriceHtml15(prices15[i])}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
         <button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
       </div>`).join('');
     }
+    if(state.cart.length&&(state.config?.promotions||[]).some(p=>p.active&&p.requireCurve))items.insertAdjacentHTML('afterbegin','<p class="wholesale-note15">Precios mayoristas a partir de una curva completa (una de cada talle). Puede ser surtida según la promoción.</p>');
     renderCartShippingCarry();
     qs('#checkoutBtn').disabled = !state.cart.length;
   }
-  function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart.map(x=>{const product=state.products.find(p=>Number(p.id)===Number(x.productId));return {...x,category_slug:product?.category_slug||product?.category_name||'',fit:product?.fit||''}}),shipping)}
+  function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart.map(x=>{const product=state.products.find(p=>Number(p.id)===Number(x.productId));return {...x,category_slug:product?.category_slug||product?.category_name||x.category_slug||'',fit:product?.fit||x.fit||''}}),shipping)}
   function applyMotoBandDiscount(promotion){
     const quote=state.shippingQuotes?.moto,rule=quote?.bandDiscount,active=state.shipping.method==='moto'||state.shippingQuoteCarry;
     if(!active||!rule)return {...promotion,motoBandDiscountCents:0,motoBandDiscountLabel:'',totalAfterMotoCents:promotion.totalCents};
@@ -1075,9 +1086,9 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   function renderCartShippingCarry() {
     const shipping=cartShippingAmount(),basePromotion=cartPromotion(shipping),p=applyMotoBandDiscount(basePromotion),via=state.shipping.method==='via_cargo',pickup=state.shipping.method==='pickup';
     const subtotal=cartSubtotal(),discountCents=Math.min(subtotal+shipping,Math.max(0,Math.round(Number(basePromotion.totalDiscountCents)||0)+Number(p.motoBandDiscountCents||0))),totalCents=Math.max(0,subtotal+shipping-discountCents);
-    qs('#cartSubtotal').textContent=money(subtotal);
+    qs('#cartSubtotal').innerHTML=basePromotion.productDiscountCents?`<s>${money(subtotal)}</s><span>Precio promo por descuento mayorista <strong>${money(basePromotion.finalSubtotalCents)}</strong></span>`:money(subtotal);
     const cost=qs('#cartShippingCost');if(cost)cost.textContent=via?'A cotizar · pago separado':shipping?money(shipping):pickup?'Gratis':'A calcular';
-    const total=qs('#cartTotal');if(total)total.textContent=money(totalCents);
+    const total=qs('#cartTotal');if(total)total.innerHTML=discountCents?`<s>${money(subtotal+shipping)}</s><span>Precio promo por descuento mayorista <strong>${money(totalCents)}</strong></span>`:money(totalCents);
     const label=qs('#cartTotalLabel');if(label)label.textContent=via?'Total de productos':shipping||pickup?'Total de la compra':'Total sin envío';
     const discountRow=qs('#cartPromotion');if(discountRow){const rows=[];if(basePromotion.totalDiscountCents)rows.push(`<span>${escapeHtml(basePromotion.label)}</span><strong>− ${money(basePromotion.totalDiscountCents)}</strong>`);if(p.motoBandDiscountCents)rows.push(`<span>${escapeHtml(p.motoBandDiscountLabel)}</span><strong>− ${money(p.motoBandDiscountCents)}</strong>`);discountRow.hidden=!rows.length;discountRow.innerHTML=rows.join('');}
     const address=qs('#cartShippingAddress');if(address)address.textContent=shipping?state.shipping.address||'':'';
@@ -1889,7 +1900,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const total=state.coupon?.totalCents ?? promotion.totalAfterMotoCents;
     qs('#checkoutContent').innerHTML = `
       <h2>Revisá tu compra</h2><div class="checkout-sub">Antes de pagar, confirmá que esté todo correcto.</div>
-      <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${cartVariantLabel(x)?`${escapeHtml(cartVariantLabel(x))} · `:''}x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
+      <div class="summary-list">${state.cart.map((x,i)=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${cartVariantLabel(x)?`${escapeHtml(cartVariantLabel(x))} · `:''}x${x.qty}</small></div><div>${cartPriceHtml15(basePromotion.lines[i])}</div></div>`).join('')}</div>
 
       <div class="coupon-box">
         <div class="coupon-title"><strong>¿Tenés un cupón de descuento?</strong><small>Ingresalo antes de pagar.</small></div>
