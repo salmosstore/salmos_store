@@ -101,3 +101,6 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 .production-reels #backgroundGallery .my-gifs13 .file-button{min-height:32px;display:inline-flex;align-items:center;padding:6px 9px;background:#ffe7f2;color:#43182b;border:1px solid #ce8baa;border-radius:10px;position:relative;cursor:pointer}.my-gifs13 input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
 @media(max-width:650px){.production-reels #dockButtons{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
 .production-reels #dockButtons{grid-template-columns:repeat(6,minmax(0,1fr))!important}[data-background-panel14=framing]{width:100%}[data-background-panel14=framing]>.scene-duration{margin-top:14px;display:flex;gap:8px;align-items:center}@media(max-width:650px){.production-reels #dockButtons{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+
+/* SALMOS v16 */
+#musicResults .audio-tile{text-align:left;justify-content:flex-start}#musicResults .audio-tile span{text-align:left}
