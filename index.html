@@ -1,200 +1,35 @@
 <!doctype html>
-<html lang="es-AR" data-theme="dark">
+<html lang="es-AR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b0b0c">
-  <meta name="description" content="SALMOS · creer · amar · crear · remeras y más">
-
-  <!-- Vista previa al compartir la página principal -->
-  <meta property="og:site_name" content="SALMOS">
-  <meta property="og:locale" content="es_AR">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="SALMOS — Tienda">
-  <meta property="og:description" content="SALMOS · creer · amar · crear · remeras y más">
-  <meta property="og:url" content="https://salmos.com.ar/">
-  <meta property="og:image" content="https://salmos.com.ar/api/share/salmos/image?v=25.44">
-  <meta property="og:image:secure_url" content="https://salmos.com.ar/api/share/salmos/image?v=25.44">
-  <meta property="og:image:type" content="image/jpeg">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="SALMOS · creer · amar · crear · remeras y más">
-
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SALMOS — Tienda">
-  <meta name="twitter:description" content="SALMOS · creer · amar · crear · remeras y más">
-  <meta name="twitter:image" content="https://salmos.com.ar/api/share/salmos/image?v=25.44">
-  <link rel="canonical" href="https://salmos.com.ar/">
-
-  <title>SALMOS — Tienda</title>
-  <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=25.72">
-  <link rel="stylesheet" href="vendor/pickr/nano.min.css?v=1.9.1">
-  <link rel="stylesheet" href="colors.css?v=25.44">
-  <link rel="stylesheet" href="sharing.css?v=25.44">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SALMOS · Estudio de contenido</title>
+  <link rel="stylesheet" href="../production-fonts.css?v=14.0"><script src="../production-text.js?v=14.0" defer></script><link rel="stylesheet" href="studio.css?v=14.0"><script src="core.js?v=14.0" defer></script><script src="editor-tools.js?v=14.0" defer></script><script src="stories.js?v=14.0" defer></script><script src="studio.js?v=14.0" defer></script>
 </head>
-<body class="storefront store-pending">
-  <header class="site-header">
-    <div class="shell header-stack">
-      <div class="header-main-row">
-        <a class="brand brand-icon-only" href="/" aria-label="SALMOS inicio">
-          <img class="brand-icon brand-icon-dark" src="logo-mark.png" alt="SALMOS">
-          <img class="brand-icon brand-icon-light" src="logo-light.png" alt="SALMOS">
-        </a>
-
-        <nav class="desktop-category-nav hidden" id="desktopCategoryNav" aria-label="Categorías">
-          <div class="desktop-category-row" id="desktopCategoryRow"></div>
-        </nav>
-
-        <div class="header-actions compact-actions header-main-actions">
-          <button class="icon-btn" id="pageShareBtn" aria-label="Compartir SALMOS" title="Compartir SALMOS">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg>
-          </button>
-          <button class="icon-btn" id="searchBtn" aria-label="Buscar en SALMOS" title="Buscar">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          </button>
-          <button class="icon-btn account-btn" id="accountBtn" aria-label="Ingresar o ver mi cuenta" title="Mi cuenta">
-            <span id="accountButtonContent"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
-          </button>
-          <button class="icon-btn" id="cartBtn" aria-label="Carrito" title="Carrito">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg>
-            <span class="badge hidden" id="cartBadge">0</span>
-          </button>
-          <button class="icon-btn hidden" id="favoritesBtn" aria-label="Ver favoritos" title="Favoritos">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"/></svg>
-            <span class="badge hidden" id="favoritesBadge">0</span>
-          </button>
-          <button class="icon-btn" id="themeBtn" aria-label="Cambiar modo claro u oscuro" title="Modo claro / oscuro">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-          </button>
-          <button class="icon-btn hidden" id="pwaInstallBtn" aria-label="Instalar SALMOS" title="Instalar SALMOS">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="header-search-panel hidden" id="headerSearchPanel">
-        <label class="search-box" aria-label="Buscar en SALMOS">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input id="searchInput" type="search" autocomplete="off" placeholder="Buscar en SALMOS...">
-        </label>
-      </div>
-
-      <nav class="category-bar hidden" id="categoryBar" aria-label="Categorías">
-        <div class="category-row" id="categoryRow"></div>
-      </nav>
-    </div>
-
-  <div class="salmos-info-bar" aria-label="Información rápida de SALMOS">
-    <div class="shell salmos-info-shell">
-      <div class="salmos-info-marquee" id="salmosInfoRotator">
-        <div class="salmos-info-track" aria-label="Información de pagos y envíos">
-          <span class="salmos-info-message">Pagá de forma segura con Mercado Pago</span>
-          <span class="salmos-info-sep" aria-hidden="true">✦</span>
-          <span class="salmos-info-message">Envíos a todo el país por Correo Argentino</span>
-          <span class="salmos-info-sep" aria-hidden="true">✦</span>
-          <span class="salmos-info-message">Envíos en zonas seleccionadas por motomensajería</span>
-          <span class="salmos-info-sep" aria-hidden="true">✦</span>
-          <span class="salmos-info-message" aria-hidden="true">Pagá de forma segura con Mercado Pago</span>
-          <span class="salmos-info-sep" aria-hidden="true">✦</span>
-          <span class="salmos-info-message" aria-hidden="true">Envíos a todo el país por Correo Argentino</span>
-          <span class="salmos-info-sep" aria-hidden="true">✦</span>
-          <span class="salmos-info-message" aria-hidden="true">Envíos en zonas seleccionadas por motomensajería</span>
-          <span class="salmos-info-sep" aria-hidden="true">✦</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  </header>
-
-  <main>
-    <div class="shell">
-      <section class="hero hero-compact" aria-label="SALMOS">
-        <img class="hero-banner-dark" src="banner-salmos-header.png" alt="SALMOS · creer · amar · crear"><img class="hero-banner-light" src="banner-salmos-light.png" alt="SALMOS · creer · amar · crear">
-      </section>
-
-      <section class="section products-section hidden" id="productos">
-        <div class="products-meta-hidden" aria-hidden="true">
-          <h2 id="productsTitle">Productos</h2>
-          <p id="productsSubtitle"></p>
-          <button id="clearFiltersBtn" class="hidden" type="button">Limpiar</button>
-        </div>
-        <div class="product-grid" id="productGrid"></div>
-      </section>
-
-      <section class="section made-order-section hidden" id="porPedido">
-        <div class="made-order-compact-head">
-          <h2>Por pedido</h2>
-          <p class="made-order-categories">· Remeras · Chombas · Gorras · DTF · preparados especialmente para vos.</p>
-          <button class="made-order-request" type="button" data-custom-kind="choose">Solicitar por pedido</button>
-        </div>
-        <p class="made-order-note">Tiempo estimado: 24 a 72 hs, sujeto a cantidad y disponibilidad. El trabajo se confirma con una seña del 50%.</p>
-        <div class="product-grid order-product-grid" id="orderProductGrid"></div>
-      </section>
-
-      <section class="section hidden" id="featuredSection" aria-hidden="true"><div id="featuredGrid"></div></section>
-
-      <section class="store-bottom" aria-label="Información de envíos y SALMOS">
-        <article class="delivery-promo">
-          <div class="delivery-promo-kicker">Ezeiza y alrededores</div>
-          <h2>Envíos en el día</h2>
-          <button class="btn btn-secondary shipping-quote-launch" id="footerShippingQuoteBtn" type="button">Consultar costo de envío</button>
-          <a class="btn btn-whatsapp" id="footerWhatsapp" href="#" target="_blank" rel="noopener">
-            <span class="whatsapp-mark" aria-hidden="true"><svg viewBox="0 0 32 32" width="18" height="18" fill="currentColor"><path d="M16.04 3C9.4 3 4 8.3 4 14.82c0 2.29.68 4.52 1.96 6.43L4 28l6.96-1.82a12.2 12.2 0 0 0 5.07 1.1h.01C22.67 27.28 28 21.98 28 15.45 28 8.93 22.67 3 16.04 3Zm0 21.93h-.01a9.83 9.83 0 0 1-5.01-1.37l-.36-.21-4.13 1.08 1.1-4-.24-.41a9.67 9.67 0 0 1-1.5-5.2c0-5.3 4.5-9.6 10.03-9.6 5.52 0 9.98 4.83 9.98 10.23 0 5.3-4.43 9.48-9.96 9.48Zm5.47-7.1c-.3-.15-1.78-.86-2.05-.96-.28-.1-.48-.15-.68.15-.2.29-.78.96-.95 1.16-.18.2-.35.22-.65.07-.3-.15-1.26-.45-2.4-1.44a8.8 8.8 0 0 1-1.66-2.03c-.18-.29-.02-.45.13-.6.14-.13.3-.34.45-.51.15-.17.2-.29.3-.49.1-.19.05-.36-.03-.51-.07-.15-.67-1.58-.92-2.17-.24-.56-.49-.49-.68-.5h-.57c-.2 0-.52.07-.8.36-.27.29-1.05 1-1.05 2.45 0 1.44 1.08 2.84 1.23 3.04.15.19 2.12 3.17 5.14 4.45.72.3 1.28.48 1.72.62.72.22 1.38.19 1.9.11.58-.08 1.78-.71 2.03-1.39.25-.68.25-1.26.18-1.39-.08-.12-.28-.19-.58-.34Z"/></svg></span> Contactar por WhatsApp
-          </a>
-          <button class="btn btn-ghost flyers-launch hidden" id="flyersLaunchBtn" type="button">FLYERS</button>
-          <a class="btn btn-ghost admin-only-link hidden" id="adminOnlyLink" href="/admin.html">Administración</a>
-        </article>
-        <div class="bottom-seal-wrap"><img class="bottom-seal" src="sello-gloria.png" alt="Con toda su gloria"></div>
-      </section>
-
-      <section class="flyers-public hidden" id="flyersSection" aria-label="Flyers de SALMOS">
-        <div class="flyers-public-head"><h2>Flyers</h2><button class="btn btn-ghost" id="closeFlyersBtn" type="button">Cerrar</button></div>
-        <div class="flyer-scroll" id="flyerScroll"></div>
-      </section>
-    </div>
-  </main>
-
-  <div class="drawer-backdrop" id="drawerBackdrop"></div>
-  <aside class="drawer" id="cartDrawer" aria-label="Carrito">
-    <div class="drawer-head"><h3>Carrito</h3><button class="icon-btn" id="closeCartBtn" aria-label="Cerrar">×</button></div>
-    <div class="drawer-body" id="cartItems"></div>
-    <div class="drawer-foot"><div class="total-row"><span>Subtotal</span><strong id="cartSubtotal">$ 0</strong></div><div class="total-row"><span>Envío</span><strong id="cartShippingCost">A calcular</strong></div><small id="cartShippingAddress"></small><div class="total-row discount-row" id="cartPromotion" hidden></div><div class="total-row grand"><span id="cartTotalLabel">Total de la compra</span><strong id="cartTotal">$ 0</strong></div><button class="btn btn-primary full" id="checkoutBtn">Continuar compra</button></div>
-  </aside>
-
-  <div class="modal-backdrop" id="modalBackdrop"></div>
-  <section class="modal product-modal" id="productModal" aria-label="Detalle del producto"></section>
-  <section class="modal checkout-modal" id="checkoutModal" aria-label="Finalizar compra">
-    <div class="checkout-wrap">
-      <div class="checkout-progress" aria-hidden="true"><span class="step"></span><span class="step"></span><span class="step"></span></div>
-      <button class="icon-btn checkout-close" id="closeCheckoutBtn" aria-label="Cerrar">×</button>
-      <div id="checkoutContent"></div>
-    </div>
-  </section>
-
-  <section class="modal custom-order-modal" id="customOrderModal" aria-label="Pedido personalizado">
-    <div class="custom-order-shell">
-      <button class="icon-btn custom-order-close" id="closeCustomOrderBtn" aria-label="Cerrar">×</button>
-      <div id="customOrderContent"></div>
-    </div>
-  </section>
-
-  <button id="footerCartBtn" class="hidden" type="button" aria-hidden="true"></button>
-  <span id="year" class="hidden" aria-hidden="true"></span>
-  <div class="toast-stack" id="toastStack"></div>
-
-  <script src="config.js"></script>
-  <script src="vendor/pickr/pickr.min.js?v=1.9.1"></script>
-  <script src="colors.js?v=25.70"></script>
-  <script src="montage-effects.js?v=25.57"></script>
-  <script src="foreground.js?v=25.57"></script>
-  <script src="sharing.js?v=25.44" defer></script>
-  <script src="app.js?v=25.70" defer></script>
-  <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=25.77',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
-  </script>
-</body>
-</html>
+<body>
+<header class="topbar"><a class="wordmark" href="#">SALMOS<small>creer amar crear</small></a><div class="top-title"><strong>Estudio de contenido</strong><span>❀ Tu mesa de ideas y movimiento ♡</span></div><div class="head-actions"><button id="undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button><button id="redo" title="Rehacer (Ctrl+Shift+Z)" aria-label="Rehacer">↷</button><button id="saveProject">Guardar proyecto</button><button id="export" class="primary">Exportar video</button></div></header>
+<nav class="tabs" aria-label="Herramientas"><button data-tab="editor" class="active">Crear reel</button><button data-tab="ideas">Ideas visuales</button><button data-tab="audio">♫ Música y voz</button><button data-tab="projects">Mis proyectos</button><button data-tab="ai">Más · IA</button><button data-tab="help">Paso a paso</button></nav>
+<main class="workspace">
+<section class="preview-panel" aria-label="Vista previa"><div class="preview-top"><span id="projectName">Mi primer reel</span><span class="badge" id="sourceBadge">Demostración</span></div><div class="canvas-shell"><canvas id="preview" width="720" height="1280" aria-label="Vista previa del reel"></canvas><div id="busyOverlay" hidden><strong id="busyText">Preparando…</strong><progress id="exportProgress" value="0" max="1"></progress><button id="cancelExport">Cancelar</button></div></div><div class="transport"><button id="play" class="primary" aria-label="Reproducir">▶ Ver reel</button><button id="restart" aria-label="Volver al inicio">↤</button><input id="seek" type="range" min="0" max="12" value="0" step=".01" aria-label="Posición en el video"><output id="time">0:00 / 0:12</output></div><div class="stage-tools"><button id="editStamp" class="primary" aria-pressed="false">✥ Editar estampa</button><button id="centerX">Centrar ↔</button><button id="centerY">Centrar ↕</button><button id="straighten">Enderezar</button><button id="chooseFocus">⊙ Foco del zoom</button><output id="selectionReadout"></output></div><div class="preview-options"><label><input id="guides" type="checkbox" checked> Centro y guías</label><button id="poster">Descargar esta imagen</button></div><p class="hint" id="previewHint">Ejemplo ilustrado. Cargá tu producto o usá «Crear reel» desde Producción.</p><div class="scene-heading"><strong>Escenas</strong><button id="addScene">+ Escena</button></div><div id="scenes" class="scene-list"></div><div class="scene-order"><button id="previousScene">← Mover antes</button><button id="nextScene">Mover después →</button><button id="duplicateScene">Duplicar</button><button id="deleteScene" class="danger">Eliminar</button></div></section>
+<section class="controls-panel">
+<div data-panel="editor">
+  <div class="section-heading"><div><span class="eyebrow">TU PRODUCTO</span><h1>❀ Tu escena</h1></div><button id="importProduction">Traer de Producción</button></div>
+  <p class="intro">Cargá tus archivos. Mové el recuadro, tirá de sus esquinas para cambiar el tamaño y usá ↻ para girar.</p>
+  <div class="upload-grid"><label class="upload-card"><span>01</span><strong>Prenda o producto liso</strong><small id="baseName">Subir imagen</small><input id="baseFile" type="file" accept="image/png,image/jpeg,image/webp"></label><label class="upload-card"><span>02</span><strong>Estampa transparente</strong><small id="stampName">Subir PNG o WebP</small><input id="stampFile" type="file" accept="image/png,image/webp"></label></div>
+  <details><summary>Más imágenes y clips</summary><div class="details-body"><label>Nombre de esta toma<input id="shotTitle" data-scene="shotTitle" maxlength="80"></label><label>Qué pasa en esta toma (no sale en el video)<textarea id="sceneDirection" data-scene="direction" rows="2" maxlength="800" placeholder="Tu idea para esta escena…"></textarea></label><label>Producto ya estampado<input id="finalFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Para revelar el diseño, usá una base lisa con el mismo encuadre.</small></label><label>Varias fotos → varias escenas<input id="galleryFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Clip de video (hasta 80 MB)<input id="videoFile" type="file" accept="video/mp4,video/webm"></label><button id="removeVideo">Quitar clip de esta escena</button></div></details>
+  <div class="section-label">Efecto de esta escena</div><div id="templates" class="template-grid"></div>
+  <div class="form-grid"><label>Duración (segundos)<input id="duration" data-scene="duration" type="number" min="2" max="30" step="1"></label><label>Fondo<select id="palette" data-project="palette"><option value="pink">SALMOS · rosado</option><option value="gold">Negro y dorado</option><option value="cream">Crema</option><option value="white">Blanco</option><option value="blue">Azul noche</option><option value="green">Verde</option><option value="lilac">Lila</option><option value="red">Bordó</option></select></label><label>Formato<select id="ratio" data-project="ratio"><option value="9:16">Reel / historia · 9:16</option><option value="4:5">Publicación · 4:5</option><option value="1:1">Cuadrado · 1:1</option></select></label><label>Transición entre escenas<select id="transition" data-project="transition"><option value="fade">Fundido</option><option value="cut">Corte directo</option><option value="white">Destello claro</option></select></label></div>
+  <details><summary>Texto, marca y cierre</summary><div class="details-body"><label>Frase principal<input id="headline" data-scene="headline" maxlength="110"></label><button id="placeHeadline" type="button">Ubicar la frase con un clic en la escena</button><label>Detalle o precio<input id="detail" data-scene="detail" maxlength="140" placeholder="Podés dejarlo vacío"></label><label>Invitación final<input id="cta" data-scene="cta" maxlength="80"></label><div class="form-grid"><label>Letra<select id="font" data-project="font"><option value="Arial">Simple</option><option value="Georgia">Elegante</option><option value="Trebuchet MS">Suave</option><option value="Impact">Impacto</option><option value="cursive">Cursiva</option></select></label><label>Color del texto<input id="textColor" data-project="textColor" type="color"></label><label>Tamaño de la frase<input id="textSize" data-project="textSize" type="range" min="28" max="70"></label><label>Posición de la frase<select id="textPosition" data-project="textPosition"><option value="top">Arriba</option><option value="bottom">Abajo</option><option value="custom">En un punto de la escena</option><option value="none">Ocultar frase</option></select></label></div><div class="check-row"><label><input id="bold" data-project="bold" type="checkbox"> Negrita</label><label><input id="italic" data-project="italic" type="checkbox"> Cursiva</label><label><input id="outline" data-project="outline" type="checkbox"> Contorno</label><label><input id="showBrand" data-project="showBrand" type="checkbox"> Mostrar SALMOS</label></div><label>Logo propio (opcional)<input id="logoFile" type="file" accept="image/png,image/webp"></label><button id="removeLogo">Usar marca de texto</button></div></details>
+  <details class="effect-settings"><summary>✦ Ajustar este efecto</summary><div class="details-body"><p id="placementHelp" class="hint"></p><div class="form-grid compact"><label>Empieza en (seg.)<input id="effectStart" data-effect="start" type="number" min="0" max="29" step=".1"></label><label>Tarda en aparecer (seg.)<input id="effectLength" data-effect="length" type="number" min=".1" max="30" step=".1"></label><label>Aparición suave (seg.)<input id="effectSoft" data-effect="soft" type="number" min=".05" max="3" step=".05"></label><label>Acercamiento (×)<input id="effectZoom" data-effect="zoom" type="number" min="1" max="8" step=".1"></label><label>Cada número dura (seg.)<input id="effectCount" data-effect="count" type="number" min=".2" max="2" step=".1"></label><label>Pasadas de lápiz / pincel<input id="rows" data-scene="rows" type="number" min="6" max="32" step="1"></label></div><div class="check-row"><label><input type="checkbox" data-effect="enter"> Entrada suave</label><label><input type="checkbox" data-effect="exit"> Salida suave</label></div><div class="button-row"><button id="previewEffect" class="primary">▶ Probar efecto</button><button id="resetEffect">Restablecer efecto</button></div><label>Texto sobre el lápiz<input id="pencilText" data-project="pencilText" maxlength="18"></label></div></details>
+  <details><summary>❀ Fondo de la escena</summary><div class="details-body"><div class="button-row"><button id="salmosBackgrounds">Ver fondos de SALMOS</button><button id="localBackgrounds">Fondos incluidos</button></div><div id="backgroundShelf" class="background-shelf"></div><label>Subir imagen, GIF o clip de fondo<input id="backgroundFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"></label><p id="backgroundInfo" class="hint">Los clips de fondo se repiten sin audio. Los fondos guardados en SALMOS se consultan desde el panel publicado.</p><button id="removeBackground">Quitar fondo y usar color</button><label>Espalda para el efecto Espejo doble<input id="backFile" type="file" accept="image/png,image/jpeg,image/webp"></label></div></details>
+</div>
+<div data-panel="ideas" hidden><div class="section-heading"><h1>♡ Escenas que cuentan algo</h1></div><p class="intro">Elegí una idea visual, revisá sus tomas y cargala como guion. Cada escena indica si usa fotos, clips propios o IA.</p><div class="form-grid"><label>Buscar una escena<input id="storySearch" type="search" placeholder="Cabina, espejo, regalo…"></label><label>Cómo hacerla<select id="storyFilter"><option value="all">Todas</option><option value="noai">Sin IA</option><option value="ai">Con IA</option></select></label></div><div id="storyCards" class="story-grid"></div><details><summary>Textos y públicos (opcional)</summary><div class="details-body"><span class="eyebrow">LABORATORIO DE IDEAS</span><h1>Textos para acompañar</h1><p class="intro">Ayudas de texto para acompañar tus escenas.</p><div class="form-grid"><label>Público<select id="niche"></select></label><label>Producto<input id="ideaProduct" value="remera estampada" maxlength="80"></label><label>Enfoque<select id="ideaFormat"></select></label><label>Tu propio público<input id="customNiche" maxlength="80" placeholder="Ej.: enfermería, ciclismo, abuelos…"></label></div><div class="button-row"><button id="generateIdeas" class="primary">Crear propuestas</button><button id="nextIdeas">Otros enfoques</button></div><div id="ideaCards" class="idea-grid"></div><details><summary>Adaptar una idea para más públicos</summary><div class="details-body"><p>Elegí el público y el producto. Cambiá el mensaje, la ocasión y el cierre para que la propuesta tenga sentido para esa persona. Mostrá siempre el producto que realmente ofrecés.</p><p>No hay una plantilla que garantice alcance o ventas. Usá las variantes para probar mensajes y anotá qué publicaciones generan consultas.</p><button id="downloadIdeas">Descargar las 240 ideas en CSV</button></div></details></div></details></div>
+<div data-panel="audio" hidden><span class="eyebrow">SONIDO</span><h1>Tu música. Tu manera de contar.</h1><section class="audio-card"><h2>♫ Elegí música sin salir</h2><div class="form-grid"><label>Listado<select id="musicCatalog"><option value="original">Bases para el reel</option><option value="library">Mis canciones</option></select></label><label>Género<select id="musicGenre"><option value="all">Todos</option><option value="piano">Piano suave</option><option value="pop">Pop alegre</option><option value="ambient">Ambiental</option><option value="acoustic">Acústica</option><option value="dance">Dance</option><option value="latin">Latina</option><option value="funk">Funk</option><option value="urban">Urbana</option><option value="rock">Rock</option><option value="disco">Disco pop</option></select></label><label>Tipo<select id="musicVocals"><option value="all">Todos</option><option value="instrumental">Instrumental</option><option value="vocal">Con letra</option></select></label></div><div id="musicResults" class="music-results"></div><p class="hint" id="catalogHint">Tocá «Probar con mi video» para escuchar la pista mientras se reproduce la escena. «Usar esta música» la deja elegida.</p></section><section class="audio-card"><h2>Tu música elegida</h2><div class="button-row"><button type="button" id="playMix" class="primary">▶ Escuchar con mi video</button><button type="button" id="stopMix">■ Detener</button><button type="button" id="saveMusicLibrary">♡ Guardar en mis canciones</button></div><label>Subir tu archivo<input id="musicFile" type="file" accept="audio/*"></label><p id="musicName" class="hint">Sin música.</p><audio id="musicListen" controls hidden></audio><div class="form-grid"><label>Volumen de música (1 = 100%, 2 = 200%)<input id="musicVolume" data-audio="musicVolume" type="number" min="0" max="2" step=".05"></label><label>Empezar en el segundo<input id="musicStart" data-audio="musicStart" type="number" min="0" max="3600" step=".1"></label><label>Terminar fragmento en (0 = final)<input id="musicEnd" data-audio="musicEnd" type="number" min="0" max="7200" step=".1"></label></div><div class="check-row"><label><input id="musicLoop" data-audio="musicLoop" type="checkbox"> Repetir fragmento</label><label><input id="duck" data-audio="duck" type="checkbox"> Bajar música mientras habla la voz</label></div><button id="removeMusic">Quitar música</button><small>Usá música propia o con permiso para el destino de la publicación. La colección de sonido de Meta ofrece opciones para sus plataformas.</small></section>
+<section class="audio-card"><h2>Tu voz</h2><div class="button-row"><button id="record" class="primary">● Grabar mi voz</button><span id="recordState" role="status">Se usa el micrófono de tu equipo.</span></div><label>O subir una grabación<input id="voiceFile" type="file" accept="audio/*"></label><p id="voiceName" class="hint">Sin narración.</p><audio id="voiceListen" controls hidden></audio><div class="form-grid"><label>Volumen de voz<input id="voiceVolume" data-audio="voiceVolume" type="range" min="0" max="2" step=".01"></label><label>Velocidad de la voz (×)<input id="voiceRate" data-audio="voiceRate" type="number" min=".6" max="1.6" step=".05"></label><label>Graves (−12 a +12)<input id="voiceBass" data-audio="voiceBass" type="number" min="-12" max="12" step="1"></label><label>Agudos (−12 a +12)<input id="voiceTreble" data-audio="voiceTreble" type="number" min="-12" max="12" step="1"></label><label>La voz empieza en el segundo<input id="voiceOffset" data-audio="voiceOffset" type="number" min="0" max="360" step=".1"></label></div><p class="hint">La velocidad y los ajustes de graves/agudos se escuchan al reproducir el reel y quedan incluidos al exportar.</p><button id="removeVoice">Quitar narración</button></section>
+<section class="audio-card narrator-card"><h2>✦ Escribí y generá tu narración</h2><label>Lo que querés que diga<textarea id="narration" data-project="narration" rows="3" maxlength="3000"></textarea></label><div class="form-grid"><label>Voz<select id="ttsVoice"><option value="edge:es-AR-ElenaNeural">Elena · Argentina · con internet</option><option value="edge:es-AR-TomasNeural">Tomás · Argentina · con internet</option><option value="edge:es-MX-DaliaNeural">Dalia · México · con internet</option><option value="edge:es-MX-JorgeNeural">Jorge · México · con internet</option></select></label><label>Tono de generación (voz con internet)<select id="ttsPitch"><option value="0">Normal</option><option value="-10">Más grave</option><option value="10">Más agudo</option></select></label></div><div class="button-row"><button id="ttsExample">♫ Oír ejemplo de esta voz</button><button id="ttsSample">▶ Escuchar muestra</button><button id="tts" class="primary">Generar y agregar al reel</button><button id="downloadVoice">Descargar voz</button></div><audio id="ttsAudition" controls hidden></audio><p id="ttsStatus" class="hint" role="status">Abrí INICIAR_SALMOS_EN_E.bat del paquete y conectá el programa una vez. Después generás, escuchás y usás la voz acá.</p><details><summary>Conexión y otras voces</summary><div class="details-body"><button id="connectLocal">Conectar programa local</button><span id="localStatus" role="status">Sin comprobar.</span><p class="hint">Las voces «con internet» envían el texto al servicio de voz de Microsoft mediante edge-tts, un proyecto independiente. No necesitan modelos de WanGP ni cuenta; su disponibilidad depende del servicio. Las voces de Windows y Piper, si están instaladas, funcionan localmente y pueden sonar más sintéticas.</p><label>Dirección del programa<input id="helperUrl" value="http://127.0.0.1:8765" spellcheck="false"></label><button id="copyNarration">Copiar texto</button></div></details></section><label><input id="clipAudio" data-audio="clipAudio" type="checkbox"> Incluir el audio original de los clips que subas</label></div>
+<div data-panel="projects" hidden><span class="eyebrow">TU MESA DE TRABAJO</span><h1>Guardá, retomá y cambiá de idea.</h1><p class="intro">Los proyectos se guardan en este navegador. Descargá también el archivo de proyecto para conservar una copia con tus imágenes y audios.</p><label>Nombre del proyecto<input id="title" data-project="title" maxlength="80"></label><div class="button-row"><button id="saveLocal" class="primary">Guardar en este equipo</button><button id="newProject">Proyecto nuevo</button></div><label>Importar proyecto<input id="projectFile" type="file" accept=".json,application/json"></label><div id="savedProjects"></div><details open><summary>Registro de publicaciones</summary><div class="details-body"><div class="form-grid"><label>Fecha<input id="postDate" type="date"></label><label>Canal<select id="postChannel"><option>Instagram</option><option>WhatsApp</option><option>Facebook</option><option>TikTok</option><option>Otro</option></select></label><label>Enlace<input id="postUrl" type="url" placeholder="Opcional"></label><label>Consultas recibidas<input id="postInquiries" type="number" min="0" value="0"></label></div><label>Qué aprendiste<textarea id="postNotes" rows="2" maxlength="1000"></textarea></label><button id="savePost">Anotar publicación</button><button id="downloadLog">Descargar registro CSV</button><div id="postLog"></div></div></details></div>
+<div data-panel="ai" hidden><div class="note"><strong>La cabina y el espejo:</strong> abrí Escenas creativas → La cabina SALMOS. El guion separa entrada, transformación, salida, espalda y espejo. Generá los movimientos en clips cortos. Pedir todo de una vez puede cambiar la persona, inventar la estampa o hacer mal el reflejo. Espejo doble combina tus fotos reales de frente y espalda.</div><span class="eyebrow">OPCIONAL · EN TU COMPUTADORA</span><h1>Sumá movimiento con IA.</h1><p class="intro">Tu RTX 2060 tiene 6 GB de memoria. Empezá con un modelo liviano, resolución baja y un clip corto. La velocidad y la calidad se comprueban en tu equipo.</p><ol class="steps"><li>Instalá WanGP siguiendo la guía incluida.</li><li>Descargá la imagen del producto terminado desde este estudio.</li><li>Copiá una indicación de movimiento y generá el clip en WanGP.</li><li>Subí el video resultante a una escena y agregá tus textos y audios.</li></ol><label>Movimiento<select id="aiMotion"><option value="subtle">Movimiento suave del modelo</option><option value="camera">Acercamiento de cámara</option><option value="fabric">Brisa suave en la prenda</option><option value="product">Presentación de un producto</option></select></label><label>Indicación preparada<textarea id="aiPrompt" rows="6" readonly></textarea></label><div class="button-row"><button id="copyPrompt">Copiar indicación</button><button id="aiFrame">Descargar producto para IA</button><a class="button" href="http://127.0.0.1:7860" target="_blank" rel="noopener">Abrir WanGP instalado</a></div><div class="note">La generación con IA se hace en WanGP. Este estudio prepara la imagen y el texto e importa el clip terminado. Revisá cada resultado para comprobar que el diseño y la persona se conservan.</div><a href="https://github.com/deepbeepmeep/WanGP" target="_blank" rel="noopener">Proyecto oficial e instalación</a></div>
+<div data-panel="help" hidden><span class="eyebrow">EMPEZÁ ACÁ</span><h1>Tu primer reel, paso a paso.</h1><ol class="steps"><li><strong>Desde Producción:</strong> abrí el producto que ya armaste, elegí una vista y tocá «Crear reel». Se traen la base y el resultado con su estampa.</li><li><strong>Desde cero:</strong> cargá una foto lisa y el PNG transparente de la estampa. Tocá Editar estampa: arrastrá el recuadro, tirá de sus esquinas y usá el punto de giro. Las guías muestran el centro del producto.</li><li>Elegí «Lápiz SALMOS», escribí tu frase y ajustá la duración.</li><li>En «Música y voz» subí una canción o grabate. También podés dejar el reel sin sonido.</li><li>Tocá «Ver reel». Agregá escenas si querés mostrar frente, espalda u otros colores.</li><li>Tocá «Exportar video». Mantené esta pestaña visible hasta que termine.</li><li>Guardá una copia con «Guardar proyecto» para reutilizar el trabajo.</li></ol><h2>Qué funciona y qué requiere instalar</h2><table><thead><tr><th>Herramienta</th><th>Dónde funciona</th></tr></thead><tbody><tr><td>Lápiz, revelación, zoom, texto, música, micrófono, escenas y proyectos</td><td>En este editor</td></tr><tr><td>MP4 directo</td><td>En navegadores que lo admitan</td></tr><tr><td>Conversión a MP4 y narración desde tu texto</td><td>Con el programa local; las voces naturales requieren internet</td></tr><tr><td>Movimiento generado con IA</td><td>En WanGP; el clip se importa aquí</td></tr></tbody></table><p>Si tu navegador exporta WebM, el complemento incluido permite convertirlo a MP4. El relato queda dentro del archivo de video, no solamente en la vista previa.</p><p>El lápiz revela la estampa en pasadas. Dibujar exactamente cada contorno de cualquier imagen requiere preparar un recorrido específico para ese diseño.</p></div>
+</section></main>
+<dialog id="exportDialog"><form method="dialog"><h2>Tu video listo para compartir</h2><div class="form-grid"><label>Calidad<select id="quality"><option value="720">720 px · recomendada para empezar</option><option value="1080">1080 px · más detalle</option><option value="540">540 px · equipo más liviano</option></select></label><label>Archivo<select id="exportFormat"><option value="auto">Mejor formato disponible</option><option value="webm">WebM</option><option value="mp4">MP4 (directo o complemento local)</option></select></label></div><p class="hint">Mantené esta pestaña visible durante la exportación. Se incluyen música y narración si las cargaste.</p><div class="button-row"><button value="cancel">Volver</button><button id="startExport" type="button" class="primary">Crear y descargar video</button></div></form></dialog>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+</body></html>
