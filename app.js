@@ -954,9 +954,9 @@
     const usesSizes=productUsesSizes(p);
     const sizes = usesSizes?[...new Set(catalogVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))].sort(publicSizeOrder):[];
     const attributeCells=[];
-    if(usesSizes)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
-    if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
-    if(colors.length)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
+    if(usesSizes){const fitLabels={classic:'Clásico',clasico:'Clásico',oversize:'Oversize',over:'Oversize',polo:'Chomba'};attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(fitLabels[String(p.fit||'').toLowerCase()]||p.fit||'Clásico')}</span></div>`);
+      attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talles</span><div class="attribute-options">${sizes.map(size=>{const v=availableVariants.find(v=>(!state.selectedColor||(v.color||'')===state.selectedColor)&&String(v.size||'').trim()===size);return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`;}).join('')}</div></div>`);
+    }
     const modal = qs('#productModal');
     modal.innerHTML = `
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
@@ -970,7 +970,7 @@
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
-          ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}
+          ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}${usesSizes?'<p class="special-sizes16">Consultá por talles especiales</p>':''}${/remera|camiseta/i.test(`${p.category_name||''} ${p.category_slug||''}`)?'<p class="shirt-quality16">Algodón Peinado 24.1 - Tapas Costuras - Cuello en Rib - Calidad Premium</p>':''}
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
@@ -1048,7 +1048,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd,lines:lines.map(x=>({index:x.index,variantId:x.variantId,quantity:x.quantity,originalUnitCents:x.price,originalTotalCents:x.price*x.quantity,discountCents:discounts[x.index],finalTotalCents:x.price*x.quantity-discounts[x.index],finalUnitCents:x.quantity?(x.price*x.quantity-discounts[x.index])/x.quantity:x.price}))};
 }
 
-  function cartPriceHtml15(line){if(!line)return '';return line.discountCents?`<div class="cart-price15"><span>Por unidad: <s>${money(line.originalUnitCents)}</s></span><span>Precio promo por descuento mayorista <strong>${money(line.finalUnitCents)} / u</strong></span><span>Total: <s>${money(line.originalTotalCents)}</s> <strong>${money(line.finalTotalCents)}</strong></span></div>`:`<div class="cart-price15"><span>${money(line.originalUnitCents)} / u</span><strong>Total: ${money(line.originalTotalCents)}</strong></div>`;}
+  function cartPriceHtml15(line){if(!line)return '';return line.discountCents?`<div class="cart-price15"><s>${money(line.originalUnitCents)}</s><small>Precio promo por descuento mayorista</small><strong>${money(line.finalUnitCents)} / u</strong></div>`:`<div class="cart-price15"><strong>${money(line.originalUnitCents)} / u</strong></div>`;}
   function renderCart() {
     reconcileCartImages();
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
@@ -1061,11 +1061,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     } else {
       items.innerHTML = state.cart.map((x,i) => `<div class="cart-item" data-cart-product="${Number(x.productId)}">
         ${state.storeProductsLoaded&&x.image ? `<img class="cart-thumb" src="${escapeHtml(x.image)}" alt="">` : '<div class="cart-thumb product-placeholder">S</div>'}
-        <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}${cartPriceHtml15(prices15[i])}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
-        <button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
+        <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
+        ${cartPriceHtml15(prices15[i])}<button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
       </div>`).join('');
     }
-    if(state.cart.length&&(state.config?.promotions||[]).some(p=>p.active&&p.requireCurve))items.insertAdjacentHTML('afterbegin','<p class="wholesale-note15">Precios mayoristas a partir de una curva completa (una de cada talle). Puede ser surtida según la promoción.</p>');
+    const cartHead=qs('#cartDrawer .drawer-head');if(cartHead&&!qs('#wholesaleNote16'))cartHead.insertAdjacentHTML('afterend','<p id="wholesaleNote16" class="wholesale-note16">Compra mayorista a partir de 1 curva (5 talles diferentes en cada tipo de corte de remera)</p>');
     renderCartShippingCarry();
     qs('#checkoutBtn').disabled = !state.cart.length;
   }
