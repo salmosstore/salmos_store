@@ -771,7 +771,7 @@
       state.detailMediaIndex=0;
       state.selectedProduct = p;
       state.selectedColor = p.colors?.[0] || null;
-      state.selectedVariantId = firstAvailableVariant(p, state.selectedColor)?.id || null;
+      state.selectedVariantId = productUsesSizes(p)?null:firstAvailableVariant(p,state.selectedColor)?.id||null;
       renderProductModal();
       openModal('#productModal');
       if(options.updatePath!==false) setProductPath(p);
@@ -946,10 +946,7 @@
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(catalogVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
     if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
-    if (!activeVariant) {
-      const fallback = firstAvailableVariant({ variants: availableVariants }, state.selectedColor);
-      state.selectedVariantId = fallback?.id || null;
-    }
+    if (!activeVariant) state.selectedVariantId = productUsesSizes(p)?null:firstAvailableVariant({variants:availableVariants},state.selectedColor)?.id||null;
     const selected = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const usesSizes=productUsesSizes(p);
     const sizes = usesSizes?[...new Set(catalogVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))].sort(publicSizeOrder):[];
@@ -970,15 +967,15 @@
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
-          ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}${usesSizes?'<p class="special-sizes16">Consultá por talles especiales</p>':''}${/remera|camiseta/i.test(`${p.category_name||''} ${p.category_slug||''}`)?'<p class="shirt-quality16">Algodón Peinado 24.1 - Tapas Costuras - Cuello en Rib - Calidad Premium</p>':''}
+          ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}${usesSizes?'<p class="special-sizes16">Consultá por talles especiales</p>':''}${/remera|camiseta/i.test(`${p.category_name||''} ${p.category_slug||''}`)?'<p class="wholesale-product17">Para compra mayorista, agregá una remera de cada talle: S, M, L, XL y XXL. Podés combinar modelos. El descuento se aplica automáticamente.</p>':''}${/remera|camiseta/i.test(`${p.category_name||''} ${p.category_slug||''}`)?'<p class="shirt-quality16">Algodón Peinado 24.1 - Tapas Costuras - Cuello en Rib - Calidad Premium</p>':''}
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${!selected?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
+          ${!availableVariants.length?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
           <div class="detail-actions">
             <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
-            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>Agregar al carrito</span></button>
-            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>Comprar ahora</span></button>
+            <button class="btn btn-secondary" data-add-cart ${!availableVariants.length?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>Agregar al carrito</span></button>
+            <button class="btn btn-primary" data-buy-now ${!availableVariants.length?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>Comprar ahora</span></button>
           </div>
         </div>
       </div>`;
@@ -992,7 +989,7 @@
   function addSelectedToCart(openCheckoutNow = false) {
     const p = state.selectedProduct;
     const v = p?.variants?.find(x => x.id === Number(state.selectedVariantId));
-    if (!p || !v || publicVariantStock(v) <= 0) return;
+    if(!p)return;if(!v){const label=qs('#productModal .product-attribute-size');if(label){label.classList.add('size-required17');label.scrollIntoView({block:'nearest',behavior:'smooth'});qs('[data-variant]:not([disabled])',label)?.focus();}toast('Elegí un talle para continuar.','warning');return;}if(publicVariantStock(v)<=0)return;
     const existing = state.cart.find(x => x.variantId === v.id);
     if (existing){existing.maxStock=publicVariantStock(v);existing.qty = Math.min(existing.qty + 1, existing.maxStock);}
     else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, category_slug:p.category_slug||p.category_name||'',fit:p.fit||'',qty: 1, maxStock: publicVariantStock(v), image: firstProductImage(p) });
@@ -2031,7 +2028,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const card=e.target.closest('.product-card'); if(card){ if(card.dataset.saleMode==='order'){const p=state.products.find(x=>Number(x.id)===Number(card.dataset.productId));openCustomOrder('clothing',p||null);return;} openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }
-      const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=v?.id||null; renderProductModal(); return; }
+      const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=productUsesSizes(state.selectedProduct)?null:v?.id||null; renderProductModal(); return; }
       const variant=e.target.closest('[data-variant]'); if(variant){ state.selectedVariantId=Number(variant.dataset.variant); renderProductModal(); return; }
       if(e.target.closest('[data-add-cart]')) { addSelectedToCart(false); return; }
       if(e.target.closest('[data-buy-now]')) { addSelectedToCart(true); return; }
