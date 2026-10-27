@@ -104,3 +104,29 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 
 /* SALMOS v16 */
 #musicResults .audio-tile{text-align:left;justify-content:flex-start}#musicResults .audio-tile span{text-align:left}
+
+/* SALMOS v19: transparent motion beside the background gallery. */
+.production-reels [data-drawer=background]{height:100%;display:flex;flex-direction:column;min-height:0}
+.production-reels [data-background-panel14=background]{flex:1;min-height:0;width:100%}
+.production-reels .background-layout19{height:100%;min-height:240px;display:grid;grid-template-columns:76px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:8px}
+.production-reels .motion-rail19{grid-column:1;grid-row:1/3;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;padding-right:3px}
+.production-reels #dockDrawers .motion-rail19 button{flex:none;width:100%;aspect-ratio:1;min-height:0;padding:0;border-radius:10px;overflow:hidden;background:repeating-conic-gradient(#faf5f7 0% 25%,#c9bfc5 0% 50%) 0 0/14px 14px;border:2px solid transparent}
+.production-reels #dockDrawers .motion-rail19 button.active{border-color:var(--production-accent,#df7aa8);box-shadow:inset 0 0 0 1px var(--production-ink)}
+.production-reels .motion-rail19 canvas{display:block;width:100%;height:100%;aspect-ratio:1}
+.production-reels #dockDrawers .motion-rail19 .remove-motion19{aspect-ratio:auto;min-height:33px;background:var(--production-panel);color:var(--production-ink)}
+.remove-motion19 svg{width:20px;height:20px;display:block}
+.production-reels .background-body19{grid-column:2;grid-row:1;min-height:0;min-width:0;overflow:auto;padding-right:2px}
+.production-reels .background-layout19>.background-scope{grid-column:2;grid-row:2;margin:0;flex-wrap:wrap;align-self:end;gap:5px}
+.production-reels .background-body19 .background-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.production-reels .background-body19 #backgroundGallery{grid-template-columns:repeat(2,minmax(0,1fr))}
+.production-reels .background-body19 #backgroundGallery.giphy-gallery{display:flex}
+.production-reels #aiMusic19{display:flex;flex-direction:column;gap:9px;width:100%}
+.production-reels #aiMusic19[hidden]{display:none!important}
+.ai-music-options19,.ai-music-actions19{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ai-music-actions19 label{display:flex;flex-direction:row;align-items:center;gap:5px;margin:0}
+.ai-music-actions19 .number-stepper{max-width:100px}
+.ai-music-track19{display:flex;align-items:stretch;gap:5px;min-width:0}
+.ai-music-track19>.audio-tile{flex:1;justify-content:flex-start!important;text-align:left;min-width:0}
+.production-reels #aiMusicTracks19{grid-template-columns:1fr;gap:6px}
+.production-reels #aiMusicProgress19{width:100%}
+@media(max-width:650px){.production-reels .background-layout19{grid-template-columns:60px minmax(0,1fr);height:55vh}.production-reels .background-body19 #backgroundGallery{grid-template-columns:repeat(2,minmax(0,1fr))}}

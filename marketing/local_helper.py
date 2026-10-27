@@ -14,6 +14,8 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import music_bridge
+
 ROOT = Path(__file__).resolve().parent
 MODELS = ROOT / 'voces'
 ALLOWED_ORIGINS = {'https://salmos.com.ar', 'https://www.salmos.com.ar', 'https://salmosstore.github.io'}
@@ -161,6 +163,7 @@ def wan_state():
     return {'installed':bool(root),'compatible':bool(root and (root/'shared/api.py').is_file()),'job':status}
 
 def wan_start(data):
+    if music_bridge.busy():raise RuntimeError('Esperá a que termine la canción antes de generar movimiento.')
     global WAN_JOB
     import base64,re,uuid,socket
     root=wan_root()
@@ -286,8 +289,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
         if path == '/api/health':
-            return self.json_response({'name': 'SALMOS complemento local', 'version': 5, 'wan': wan_state(),
+            return self.json_response({'name': 'SALMOS complemento local', 'version': 7, 'wan': wan_state(), 'music': music_bridge.state(),
                 'tts': bool(all_voices()), 'ffmpeg': ffmpeg_executable() is not None, 'voices': all_voices(), 'onlineVoice': has_edge()})
+        if music_bridge.get(self,path):return
         if wan_get(self,path):return
         if path.startswith('/api/'):
             return self.json_response({'error': 'Acción no disponible.'}, 404)
@@ -303,6 +307,9 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.allowed_origin():
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
+        if path.startswith('/api/music/'):
+            wan_job=wan_state().get('job') or {}
+            if music_bridge.post(self,path,wan_job.get('state')=='running'):return
         if wan_post(self,path):return
         if path not in ('/api/tts', '/api/convert'):
             return self.json_response({'error': 'Acción no disponible.'}, 404)
@@ -372,7 +379,7 @@ def main():
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     url = f'http://127.0.0.1:{args.port}/'
     print('\nSALMOS: complemento abierto en', url)
-    print('Dejá esta ventana abierta mientras usás el relator o convertís a MP4.')
+    print('Dejá esta ventana abierta mientras generás música, usás el relator o convertís a MP4.')
     print('Para cerrar: Ctrl+C. La voz con internet envia el texto a Microsoft; la conversion de video es local.\n')
     if not args.no_browser:
         webbrowser.open(url)
@@ -381,6 +388,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        music_bridge.cancel()
         server.server_close()
 
 if __name__ == '__main__':
