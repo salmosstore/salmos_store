@@ -15,6 +15,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import music_bridge
+import project_storage
 
 ROOT = Path(__file__).resolve().parent
 MODELS = ROOT / 'voces'
@@ -205,13 +206,42 @@ def wan_clips():
                 for i,p in enumerate(folder.rglob('*.mp4')):
                     if i>1000:break
                     paths.append(p)
+    if WAN_DATA.is_dir():
+        paths.extend(p for p in WAN_DATA.glob('*/resultado.mp4') if p.is_file())
+    try:names=json.loads((WAN_DATA/'clip-names.json').read_text(encoding='utf-8'))
+    except (OSError,ValueError):names={}
     state=wan_state()
     if WAN_JOB and state['job']['state']=='done':paths.append(WAN_JOB['folder']/'resultado.mp4')
     result=[]
     for path in sorted(set(paths),key=lambda p:p.stat().st_mtime if p.exists() else 0,reverse=True)[:24]:
         if not path.is_file() or path.stat().st_size>MAX_VIDEO_BYTES:continue
-        key=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:24];WAN_CLIPS[key]=path.resolve();result.append({'id':key,'name':path.name,'size':path.stat().st_size})
+        key=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:24];WAN_CLIPS[key]=path.resolve();result.append({'id':key,'name':names.get(key,path.name),'size':path.stat().st_size,'createdAt':path.stat().st_mtime})
     return result
+
+def manage_wan_clip(data,action):
+    global WAN_JOB
+    wan_clips()
+    key=str(data.get('id',''));file=WAN_CLIPS.get(key)
+    if not file or not file.is_file():raise ValueError('No encuentro ese video.')
+    try:names=json.loads((WAN_DATA/'clip-names.json').read_text(encoding='utf-8'))
+    except (OSError,ValueError):names={}
+    if action=='delete':
+        with WAN_LOCK:
+            if WAN_JOB and WAN_JOB['folder']==file.parent and WAN_JOB['process'].poll() is None:raise RuntimeError('Esperá a que termine el video.')
+            if file.name=='resultado.mp4' and file.parent.parent.resolve()==WAN_DATA.resolve():
+                import re
+                if not re.fullmatch(r'[a-f0-9]{32}',file.parent.name):raise ValueError('Video no válido.')
+                shutil.rmtree(file.parent)
+                if WAN_JOB and WAN_JOB['folder']==file.parent:WAN_JOB=None
+            else:file.unlink()
+            WAN_CLIPS.pop(key,None);names.pop(key,None)
+    else:
+        name=str(data.get('name','')).strip()
+        if not 1<=len(name)<=100:raise ValueError('Escribí un nombre de hasta 100 caracteres.')
+        names[key]=name
+    WAN_DATA.mkdir(parents=True,exist_ok=True)
+    temp=WAN_DATA/'clip-names.tmp';temp.write_text(json.dumps(names,ensure_ascii=False),encoding='utf-8');temp.replace(WAN_DATA/'clip-names.json')
+    return {'id':key,'deleted':action=='delete','name':names.get(key,'')}
 
 def wan_get(handler,path):
     if path=='/api/wan':handler.json_response(wan_state());return True
@@ -226,8 +256,12 @@ def wan_get(handler,path):
     return False
 
 def wan_post(handler,path):
-    if path not in ('/api/wan/generate','/api/wan/cancel'):return False
+    if path not in ('/api/wan/generate','/api/wan/cancel','/api/wan/rename','/api/wan/delete'):return False
     try:
+        if path.endswith('/rename') or path.endswith('/delete'):
+            length=int(handler.headers.get('Content-Length','0'))
+            if not 0<length<2000 or not handler.headers.get('Content-Type','').startswith('application/json'):raise ValueError('Pedido no válido.')
+            handler.json_response(manage_wan_clip(json.loads(handler.rfile.read(length).decode('utf-8')),path.rsplit('/',1)[-1]));return True
         if path.endswith('/cancel'):
             with WAN_LOCK:
                 if WAN_JOB and WAN_JOB['process'].poll() is None:
@@ -289,8 +323,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
         if path == '/api/health':
-            return self.json_response({'name': 'SALMOS complemento local', 'version': 7, 'wan': wan_state(), 'music': music_bridge.state(),
+            return self.json_response({'name': 'SALMOS complemento local', 'version': 8, 'wan': wan_state(), 'music': music_bridge.state(),
                 'tts': bool(all_voices()), 'ffmpeg': ffmpeg_executable() is not None, 'voices': all_voices(), 'onlineVoice': has_edge()})
+        if project_storage.get(self,path):return
         if music_bridge.get(self,path):return
         if wan_get(self,path):return
         if path.startswith('/api/'):
@@ -307,6 +342,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.allowed_origin():
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
+        if project_storage.post(self,path):return
         if path.startswith('/api/music/'):
             wan_job=wan_state().get('job') or {}
             if music_bridge.post(self,path,wan_job.get('state')=='running'):return

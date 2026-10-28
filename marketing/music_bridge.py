@@ -72,7 +72,12 @@ def validate_request(data):
     seed = int(data.get('seed', -1))
     if not -1 <= seed <= 2147483647:
         raise ValueError('Semilla no válida.')
+    instruments = data.get('instruments', [])
+    if not isinstance(instruments, list) or len(instruments) > 16:
+        raise ValueError('Revisá los instrumentos elegidos.')
     return {'caption': caption, 'lyrics': lyrics, 'duration': duration, 'voice': voice,
+            'mood': str(data.get('mood', 'joyful'))[:30], 'rhythm': str(data.get('rhythm', 'medium'))[:30],
+            'instruments': [str(value)[:40] for value in instruments], 'saved': False,
             'instrumental': instrumental, 'style': str(data.get('style','house'))[:30], 'details': str(data.get('details',''))[:700], 'seed': seed, 'name': str(data.get('name', 'Mi canción'))[:100]}
 
 
@@ -167,8 +172,39 @@ def get(handler, path):
     return False
 
 
+def manage(data, action):
+    global JOB
+    track_id = str(data.get('id', ''))
+    if not re.fullmatch(r'[a-f0-9]{32}', track_id):
+        raise ValueError('Canción no válida.')
+    folder = DATA / track_id
+    if not (folder / 'request.json').is_file():
+        raise ValueError('No encuentro esa canción.')
+    with LOCK:
+        if JOB and JOB['id'] == track_id and JOB['process'].poll() is None:
+            raise RuntimeError('Esperá a que termine la generación.')
+        if action == 'delete':
+            import shutil
+            shutil.rmtree(folder)
+            if JOB and JOB['id'] == track_id:
+                JOB = None
+            return {'deleted': track_id}
+        request = json.loads((folder / 'request.json').read_text(encoding='utf-8'))
+        if action == 'rename':
+            name = str(data.get('name', '')).strip()
+            if not name or len(name) > 100:
+                raise ValueError('Escribí un nombre de hasta 100 caracteres.')
+            request['name'] = name
+        elif action == 'save':
+            request['saved'] = True
+        temp = folder / 'request.tmp'
+        temp.write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
+        temp.replace(folder / 'request.json')
+        return {'id': track_id, 'name': request.get('name'), 'saved': request.get('saved', False)}
+
+
 def post(handler, path, wan_running=False):
-    if path not in ('/api/music/generate', '/api/music/cancel'):
+    if path not in ('/api/music/generate', '/api/music/cancel', '/api/music/rename', '/api/music/save', '/api/music/delete'):
         return False
     try:
         if not handler.headers.get('Content-Type', '').startswith('application/json'):
@@ -177,7 +213,11 @@ def post(handler, path, wan_running=False):
         if not 0 < length <= 30000:
             raise ValueError('El pedido supera el tamaño permitido.')
         data = json.loads(handler.rfile.read(length).decode('utf-8'))
-        handler.json_response(cancel() if path.endswith('/cancel') else start(data, wan_running), 202)
+        action = path.rsplit('/', 1)[-1]
+        if action in ('rename', 'save', 'delete'):
+            handler.json_response(manage(data, action))
+        else:
+            handler.json_response(cancel() if action == 'cancel' else start(data, wan_running), 202)
     except (ValueError, TypeError, OverflowError) as exc:
         handler.json_response({'error': str(exc)}, 400)
     except (OSError, RuntimeError) as exc:
