@@ -161,3 +161,7 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 .production-reels #dockDrawers .reel-image-shelf20 button{display:flex;flex-direction:column;flex:0 0 88px;width:88px;padding:5px;gap:4px;border-radius:10px;min-width:0}
 .reel-image-shelf20 img{width:76px;height:76px;object-fit:contain;border-radius:7px;background:repeating-conic-gradient(#e5d9df 0% 25%,#fff7fb 0% 50%) 0 0/12px 12px}
 .reel-image-shelf20 small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+
+.production-reels .wan-scene-actions21{display:flex;justify-content:center;flex:none;padding:2px 0}
+.production-reels .wan-scene-actions21[hidden]{display:none!important}
+.production-reels .wan-scene-actions21 button{padding:5px 9px;min-height:27px;font-size:11px;border-radius:9px}
