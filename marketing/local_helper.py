@@ -181,7 +181,7 @@ def wan_start(data):
         if WAN_JOB and WAN_JOB['process'].poll() is None:raise RuntimeError('Ya hay una generación en marcha.')
         folder=WAN_DATA/uuid.uuid4().hex
         folder.mkdir(parents=True);(folder/'producto.png').write_bytes(raw)
-        (folder/'request.json').write_text(json.dumps({'prompt':prompt,'negative':str(data.get('negative',''))[:1500]}),encoding='utf-8')
+        (folder/'request.json').write_text(json.dumps({'prompt':prompt,'negative':str(data.get('negative',''))[:1500], 'foreground24':bool(data.get('foreground24'))}),encoding='utf-8')
         (folder/'status.json').write_text(json.dumps({'state':'running','message':'Iniciando WanGP instalado…','progress':0}),encoding='utf-8')
         log=(folder/'motor.log').open('wb')
         try:process=subprocess.Popen([str((root/'env_venv/Scripts/python.exe').resolve()),str(ROOT/'wan_worker.py'),str(root.resolve()),str(folder.resolve())],cwd=str(root),stdout=log,stderr=subprocess.STDOUT)
@@ -215,7 +215,11 @@ def wan_clips():
     result=[]
     for path in sorted(set(paths),key=lambda p:p.stat().st_mtime if p.exists() else 0,reverse=True)[:24]:
         if not path.is_file() or path.stat().st_size>MAX_VIDEO_BYTES:continue
-        key=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:24];WAN_CLIPS[key]=path.resolve();result.append({'id':key,'name':names.get(key,path.name),'size':path.stat().st_size,'createdAt':path.stat().st_mtime})
+        foreground24=False
+        try:
+            if path.name=='resultado.mp4' and path.parent.parent.resolve()==WAN_DATA.resolve():foreground24=bool(json.loads((path.parent/'request.json').read_text(encoding='utf-8')).get('foreground24'))
+        except (OSError,ValueError):pass
+        key=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:24];WAN_CLIPS[key]=path.resolve();result.append({'id':key,'name':names.get(key,path.name),'size':path.stat().st_size,'createdAt':path.stat().st_mtime,'foreground24':foreground24})
     return result
 
 def manage_wan_clip(data,action):
@@ -323,7 +327,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
         if path == '/api/health':
-            return self.json_response({'name': 'SALMOS complemento local', 'version': 8, 'wan': wan_state(), 'music': music_bridge.state(),
+            return self.json_response({'name': 'SALMOS complemento local', 'version': 9, 'wan': wan_state(), 'music': music_bridge.state(),
                 'tts': bool(all_voices()), 'ffmpeg': ffmpeg_executable() is not None, 'voices': all_voices(), 'onlineVoice': has_edge()})
         if project_storage.get(self,path):return
         if music_bridge.get(self,path):return

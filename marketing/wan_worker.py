@@ -27,6 +27,14 @@ def run(root,folder):
         request=json.loads((folder/'request.json').read_text(encoding='utf-8'))
         settings=json.loads((Path(__file__).parent/'wan-preset.json').read_text(encoding='utf-8'))
         settings.update(prompt=request['prompt'],negative_prompt=request.get('negative',''),image_refs=[str(folder/'producto.png')],frames_positions='1',video_prompt_type='FI',video_length=33,num_inference_steps=30,repeat_generation=1,output_filename='SALMOS-movimiento',overrides="attention_mode='sdpa', memory_profile=4")
+        if request.get('foreground24'):
+            from PIL import Image
+            import math
+            with Image.open(folder/'producto.png') as reference:iw,ih=reference.size
+            scale=math.sqrt((480*832)/(iw*ih))
+            width=max(32,int(iw*scale)//16*16);height=max(32,int(ih*scale)//16*16)
+            settings['resolution']=f'{width}x{height}'
+            settings['remove_background_images_ref']=0
         class Callbacks:
             def on_status(self,text):status('running',str(text)[:250])
             def on_progress(self,update):status('running',str(getattr(update,'status','Generando…'))[:250],max(0,min(100,float(getattr(update,'progress',0))))/100)

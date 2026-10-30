@@ -165,3 +165,5 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 .production-reels .wan-scene-actions21{display:flex;justify-content:center;flex:none;padding:2px 0}
 .production-reels .wan-scene-actions21[hidden]{display:none!important}
 .production-reels .wan-scene-actions21 button{padding:5px 9px;min-height:27px;font-size:11px;border-radius:9px}
+
+.trim-dialog24{width:min(620px,90vw);border-radius:16px;padding:16px;background:#442234;color:#ffedf6;border:1px solid #80506a}.trim-dialog24 video{display:block;max-height:45vh;max-width:100%;margin:10px auto}.trim-dialog24 audio{width:100%;margin:12px 0}.trim-fields24,.trim-dialog24 footer{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}.trim-fields24 label{display:flex;flex-direction:column;gap:4px}.trim-fields24 span{display:flex;gap:4px}.trim-fields24 input{width:84px}.trim-dialog24 button,.trim-dialog24 input{border-radius:10px}.trim-dialog24 output{display:block;margin-top:6px}
