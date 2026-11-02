@@ -1,4 +1,4 @@
-// SALMOS 25.70
+// SALMOS 27.0
 (() => {
   'use strict';
 
@@ -44,6 +44,8 @@
     categories: [],
     products: [],
     activeCategory: 'all',
+    storefrontCatalog: false,
+    homeCollection: null,
     query: '',
     cart: loadJSON('salmos_cart', []),
     auth: { ready:false, user:null, firebaseAuth:null, favoriteIds:new Set(), addresses:[], orders:[], profile:null, syncing:false },
@@ -205,6 +207,9 @@
     localStorage.setItem('salmos_theme', actual);
     const meta = qs('meta[name="theme-color"]');
     if (meta) meta.content = actual === 'light' ? '#f6f2e8' : '#0b0b0c';
+    window.SalmosHome?.render();
+    if(state.storeProductsLoaded)renderProducts();
+    if(state.selectedProduct)renderProductModal();
   }
   function initTheme() {
     // SALMOS siempre abre en oscuro. El usuario puede cambiar a claro durante la sesión.
@@ -547,7 +552,7 @@
     const refresh=()=>{if(!current()||!state.storeProductsLoaded)return;renderCategories();renderProducts();renderFeatured();renderCart();};
     // El catálogo se muestra apenas llega, sin esperar configuración, filtros ni flyers.
     const configLoad=api('/api/config/public').then(config=>{
-      if(!current())return;state.config=config;
+      if(!current())return;state.config={...config,shipping:{...config.shipping,correo:{...config.shipping?.correo,enabled:false,testMode:false}}};
       const wa=qs('#footerWhatsapp');if(wa)wa.href=`https://wa.me/${config?.whatsapp||cfg.STORE_WHATSAPP||'5491162691341'}`;
       refresh();
     }).catch(error=>console.warn('Configuración de tienda:',error.message));
@@ -583,7 +588,7 @@
     if(!rows.length) return;
     const visibleCategories = state.categories;
     const activeSlugs = new Set(visibleCategories.map(c => c.slug));
-    const showBar = visibleCategories.length > 1 || state.storeOrderEditor?.enabled;
+    const showBar = (state.storefrontCatalog || state.query || state.storeOrderEditor?.enabled) && (visibleCategories.length > 1 || state.storeOrderEditor?.enabled);
     if(mobileBar) mobileBar.classList.toggle('hidden', !showBar);
     if(desktopNav) desktopNav.classList.toggle('hidden', !showBar);
     if (!showBar || (state.activeCategory !== 'all' && !activeSlugs.has(state.activeCategory))) state.activeCategory = 'all';
@@ -595,6 +600,7 @@
       row.addEventListener('click', e => {
         const btn = e.target.closest('[data-category]');
         if (!btn) return;
+        state.storefrontCatalog=true;state.homeCollection=null;
         state.activeCategory = btn.dataset.category;
         qsa('[data-category]',document).forEach(x => x.classList.toggle('active', x.dataset.category===state.activeCategory));
         renderProducts();
@@ -678,7 +684,7 @@
     if(scope!=='all'&&!scope.startsWith('product-'))for(const product of state.products)if(product.category_slug===scope)delete editor.backgrounds.products[String(product.id)];
     editor.backgroundDirty=JSON.stringify(editor.backgrounds)!==JSON.stringify(editor.savedBackgrounds);state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);editor.foregroundError='';renderProducts();renderFeatured();const selected=state.products.filter(product=>window.SalmosColors.photoBackgroundFor(editor.backgrounds,product.category_slug,product.id)!==null).filter(product=>state.storeMontageProductIds?.has(Number(product.id))&&!state.storeForegroundPrepared.has(Number(product.id)));if(selected.length){editor.preparing=true;renderStoreOrderControls();try{await prepareStoreForegrounds(selected);}catch(error){editor.foregroundError=error.message;throw error;}finally{editor.preparing=false;renderProducts();renderFeatured();}}
   }
-  function productPhotoMedia(product){const override=window.SalmosColors.photoBackgroundFor(state.config?.productPhotoBackgrounds,product.category_slug,product.id);return (product.images||[]).map(image=>override!==null&&image.foreground_url?{...image,url:image.foreground_url}:image);}
+  function productPhotoMedia(product){const override=window.SalmosColors.photoBackgroundFor(state.config?.productPhotoBackgrounds,product.category_slug,product.id);return (product.images||[]).map(image=>(override!==null||productBackground(product))&&image.foreground_url?{...image,url:image.foreground_url}:image);}
   async function prepareStoreForegrounds(products){
     let catalogs=null;const remaining=[...products];
     const prepare=async()=>{while(remaining.length){const product=remaining.shift(),data=await api(`/api/admin/products/${Number(product.id)}`,{credentials:'include'}),detail=data.item,project=detail?.mount?.project;
@@ -691,14 +697,14 @@
     }};
     const results=await Promise.allSettled([prepare(),prepare()]);const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   }
-  function productBackground(p){const id=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id)||0;return (state.config?.productBackgroundAssets||[]).find(asset=>Number(asset.id)===id)||null;}
+  function productBackground(p){const id=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id)||0;const choice=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id),assets=state.config?.productBackgroundAssets||[];const selected=assets.find(asset=>Number(asset.id)===id)||(choice===null?assets.find(asset=>/alfombra|shag|carpet/i.test(asset.name||'')&&/marr[oó]n|brown|oscuro|dark/i.test(asset.name||'')):null)||null;return window.SalmosHome?.backgroundAsset(p,selected)||selected;}
   function productBackgroundAttrs(p){const asset=productBackground(p),choice=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id);return `data-photo-background="${choice===0?'none':asset?.id||'original'}" style="--product-photo-background:${asset?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none'}"`;}
   function filteredProducts() {
     const q = state.query.trim().toLowerCase();
     return orderedStoreProducts(state.products.filter(p => {
       const cat = state.activeCategory === 'all' || p.category_slug === state.activeCategory;
       const hay = !q || [p.name, p.short_description, p.category_name].some(x => String(x || '').toLowerCase().includes(q));
-      return cat && hay;
+      return cat && hay && (!window.SalmosHome || window.SalmosHome.matches(p,state.homeCollection));
     }));
   }
 
@@ -743,19 +749,24 @@
 
   function renderProducts() {
     if(!state.storeProductsLoaded)return;
+    window.SalmosHome?.render();
+    if(window.SalmosHome?.isHome()){qs('#productos')?.classList.add('hidden');qs('#porPedido')?.classList.add('hidden');return;}
     const items = filteredProducts();
     const stockItems=items.filter(p=>p.sale_mode!=='order');
     const orderItems=items.filter(p=>p.sale_mode==='order');
-    const title = state.activeCategory === 'all' ? 'Productos' : (state.categories.find(c => c.slug === state.activeCategory)?.name || 'Productos');
+    const title = window.SalmosHome?.selectedName() || (state.activeCategory === 'all' ? 'Todos los productos' : (state.categories.find(c => c.slug === state.activeCategory)?.name || 'Productos'));
+    if(qs('#catalogCollectionTitle'))qs('#catalogCollectionTitle').textContent=state.query?`Resultados para “${state.query}”`:title;
+    if(qs('#catalogCollectionCount'))qs('#catalogCollectionCount').textContent=items.length?`${items.length} ${items.length===1?'producto':'productos'}`:'Todavía no hay publicaciones en esta colección.';
     const t=qs('#productsTitle'),sub=qs('#productsSubtitle'),clear=qs('#clearFiltersBtn');
     if(t)t.textContent = state.query ? `Resultados para “${state.query}”` : title;
     if(sub)sub.textContent = items.length ? `${items.length} ${items.length === 1 ? 'producto' : 'productos'}` : 'No encontramos productos con ese filtro.';
-    if(clear)clear.classList.toggle('hidden', state.activeCategory === 'all' && !state.query);
+    if(clear)clear.classList.toggle('hidden', state.activeCategory === 'all' && !state.query && !state.homeCollection);
     const grid=qs('#productGrid'),orderGrid=qs('#orderProductGrid'),productsSection=qs('#productos');
-    const filtering=Boolean(state.query || state.activeCategory!=='all');
+    const filtering=Boolean(state.query || state.activeCategory!=='all' || state.homeCollection);
     if(grid)grid.innerHTML = stockItems.length ? stockItems.map(productCard).join('') : (filtering?`<div class="empty-state" style="grid-column:1/-1"><strong>No encontramos productos con ese filtro.</strong>Probá otra búsqueda.</div>`:'');
     if(productsSection)productsSection.classList.toggle('hidden',!stockItems.length&&!filtering);
     if(orderGrid)orderGrid.innerHTML=orderItems.map(productCard).join('');
+    qs('#porPedido')?.classList.toggle('hidden',!orderItems.length);
     renderStoreOrderControls();
   }
 
@@ -771,7 +782,7 @@
       state.detailMediaIndex=0;
       state.selectedProduct = p;
       state.selectedColor = p.colors?.[0] || null;
-      state.selectedVariantId = productUsesSizes(p)?null:firstAvailableVariant(p,state.selectedColor)?.id||null;
+      state.selectedVariantId = firstAvailableVariant(p, state.selectedColor)?.id || null;
       renderProductModal();
       openModal('#productModal');
       if(options.updatePath!==false) setProductPath(p);
@@ -934,7 +945,7 @@
 
   function productUsesSizes(product){
     const key=String(`${product?.category_slug||''} ${product?.category_name||''}`).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    return /(remera|camiseta|chomba|buzo|prenda)/.test(key);
+    return /(remera|camiseta|chomba|buzo|prenda|kids|infantil)/.test(key);
   }
 
   function renderProductModal() {
@@ -946,14 +957,17 @@
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(catalogVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
     if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
-    if (!activeVariant) state.selectedVariantId = productUsesSizes(p)?null:firstAvailableVariant({variants:availableVariants},state.selectedColor)?.id||null;
+    if (!activeVariant) {
+      const fallback = firstAvailableVariant({ variants: availableVariants }, state.selectedColor);
+      state.selectedVariantId = fallback?.id || null;
+    }
     const selected = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const usesSizes=productUsesSizes(p);
     const sizes = usesSizes?[...new Set(catalogVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))].sort(publicSizeOrder):[];
     const attributeCells=[];
-    if(usesSizes){const fitLabels={classic:'Clásico',clasico:'Clásico',oversize:'Oversize',over:'Oversize',polo:'Chomba'};attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(fitLabels[String(p.fit||'').toLowerCase()]||p.fit||'Clásico')}</span></div>`);
-      attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talles</span><div class="attribute-options">${sizes.map(size=>{const v=availableVariants.find(v=>(!state.selectedColor||(v.color||'')===state.selectedColor)&&String(v.size||'').trim()===size);return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`;}).join('')}</div></div>`);
-    }
+    if(usesSizes)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
+    if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
+    if(colors.length)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
     const modal = qs('#productModal');
     modal.innerHTML = `
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
@@ -967,15 +981,15 @@
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
-          ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}${usesSizes?'<p class="special-sizes16">Consultá por talles especiales</p>':''}${/remera|camiseta/i.test(`${p.category_name||''} ${p.category_slug||''}`)?'<p class="wholesale-product17">Para compra mayorista, agregá una remera de cada talle: S, M, L, XL y XXL. Podés combinar modelos. El descuento se aplica automáticamente.</p>':''}${/remera|camiseta/i.test(`${p.category_name||''} ${p.category_slug||''}`)?'<p class="shirt-quality16">Algodón Peinado 24.1 - Tapas Costuras - Cuello en Rib - Calidad Premium</p>':''}
+          ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${!availableVariants.length?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
+          ${!selected?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
           <div class="detail-actions">
             <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
-            <button class="btn btn-secondary" data-add-cart ${!availableVariants.length?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>Agregar al carrito</span></button>
-            <button class="btn btn-primary" data-buy-now ${!availableVariants.length?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>Comprar ahora</span></button>
+            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>Agregar al carrito</span></button>
+            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>Comprar ahora</span></button>
           </div>
         </div>
       </div>`;
@@ -989,10 +1003,10 @@
   function addSelectedToCart(openCheckoutNow = false) {
     const p = state.selectedProduct;
     const v = p?.variants?.find(x => x.id === Number(state.selectedVariantId));
-    if(!p)return;if(!v){const label=qs('#productModal .product-attribute-size');if(label){label.classList.add('size-required17');label.scrollIntoView({block:'nearest',behavior:'smooth'});qs('[data-variant]:not([disabled])',label)?.focus();}toast('Elegí un talle para continuar.','warning');return;}if(publicVariantStock(v)<=0)return;
+    if (!p || !v || publicVariantStock(v) <= 0) return;
     const existing = state.cart.find(x => x.variantId === v.id);
     if (existing){existing.maxStock=publicVariantStock(v);existing.qty = Math.min(existing.qty + 1, existing.maxStock);}
-    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, category_slug:p.category_slug||p.category_name||'',fit:p.fit||'',qty: 1, maxStock: publicVariantStock(v), image: firstProductImage(p) });
+    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, qty: 1, maxStock: publicVariantStock(v), image: firstProductImage(p) });
     saveCart();
     closeModal('#productModal');
     toast('Producto agregado al carrito', 'success');
@@ -1005,10 +1019,8 @@ function normalizePromotions(value){
   if(typeof value==='string'){try{value=JSON.parse(value)}catch{throw new Error('Revisá las promociones guardadas.')}}
   if(!Array.isArray(value)||value.length>50)throw new Error('Podés guardar hasta 50 promociones.');
   return value.map((r,i)=>{
-    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:![false,0,'false','0'].includes(r.active),trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
+    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:r.active!==false,trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
     if(!p.name||!['amount','quantity','combination'].includes(p.trigger)||!['products','shipping','order'].includes(p.target)||!['percent','fixed','unit_price'].includes(p.benefit)||!Number.isSafeInteger(p.threshold)||p.threshold<(p.trigger==='quantity'?1:0)||!Number.isFinite(p.value)||p.value<0||!Number.isSafeInteger(p.triggerProductId)||p.triggerProductId<0||!Number.isSafeInteger(p.targetProductId)||p.targetProductId<0)throw new Error(`Revisá los campos de la promoción ${i+1}.`);
-    p.requireCurve=r.requireCurve===true;p.curveMixed=r.curveMixed!==false;p.curveSizes=[...new Set((Array.isArray(r.curveSizes)?r.curveSizes:[]).map(promotionSize).filter(Boolean))];
-    if(p.requireCurve&&(!p.curveSizes.length||p.curveSizes.length>30))throw new Error('Elegí los talles de la curva mayorista.');
     if(p.trigger==='combination'){
       if(!Array.isArray(r.requirements)||!r.requirements.length||r.requirements.length>20)throw new Error('Agregá los tipos y cantidades de la combinación.');
       p.requirements=r.requirements.map(x=>({type:String(x.type||'').trim().slice(0,50),quantity:Number(x.quantity)}));
@@ -1022,51 +1034,43 @@ function normalizePromotions(value){
   });
 }
 function promotionProductType(category='',fit=''){const c=String(category).toLowerCase(),f=String(fit).toLowerCase();if(c.includes('remera')||c.includes('shirt'))return f.includes('over')?'shirt_oversize':f.includes('crop')?'shirt_crop':'shirt_classic';if(c.includes('gorra')||c.includes('cap'))return 'cap';if(c.includes('taza')||c.includes('mug'))return 'mug';if(c.includes('vaso')||c.includes('glass'))return 'glass';if(c.includes('termo')||c.includes('thermos'))return 'thermos';return c;}
-function promotionSize(value){return String(value??'').trim().toUpperCase().replace(/\s+/g,'');}
 function calculatePromotions(rules,items,shippingCostCents=0){
-  const lines=items.map((x,index)=>({index,variantId:x.variantId??x.variant_id,productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),size:promotionSize(x.size),quantity:Math.max(0,Math.floor(Number(x.quantity??x.qty)||0)),price:Math.max(0,Math.round(Number(x.priceCents??x.price_cents)||0))})),subtotal=lines.reduce((n,x)=>n+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0)),candidates=[];
-  const active=r=>![false,0,'false','0'].includes(r.active);
-  for(const rule of rules||[]){if(!active(rule))continue;const combined=rule.trigger==='combination',requirements=rule.requirements||[],condition=lines.filter(x=>(!rule.triggerProductId||x.productId===Number(rule.triggerProductId))&&(!rule.triggerType||x.type===rule.triggerType));
-    if(combined){if(!requirements.length||requirements.some(r=>lines.filter(x=>x.type===r.type).reduce((n,x)=>n+x.quantity,0)<Number(r.quantity)))continue;}
-    else if(!condition.length||condition.reduce((n,x)=>n+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0)<Number(rule.threshold))continue;
-    if(rule.requireCurve){const sizes=(rule.curveSizes||[]).map(promotionSize),complete=pool=>sizes.length>0&&sizes.every(size=>pool.filter(x=>x.size===size).reduce((n,x)=>n+x.quantity,0)>=1);if(rule.curveMixed===false){if(![...new Set(condition.map(x=>x.productId))].some(id=>complete(condition.filter(x=>x.productId===id))))continue;}else if(!complete(condition))continue;}
-    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===Number(rule.targetProductId))&&(!rule.targetType||(rule.targetType==='__combination__'?requirements.some(r=>r.type===x.type):x.type===rule.targetType))),base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:targets.reduce((n,x)=>n+x.quantity*x.price,0),quantity=targets.reduce((n,x)=>n+x.quantity,0);
-    let discount=rule.benefit==='unit_price'?targets.reduce((n,x)=>n+Math.max(0,x.price-Number(rule.value))*x.quantity,0):rule.benefit==='percent'?Math.round(base*Number(rule.value)/100):Number(rule.value)*(rule.target==='products'&&rule.basis==='unit'?quantity:1);discount=Math.max(0,Math.min(base,Math.round(discount)||0));if(!discount)continue;
-    candidates.push({rule,discount,targets:rule.target==='order'?lines:targets,shipping:rule.target!=='products',product:rule.target!=='shipping'});
+  const lines=items.map(x=>({productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),quantity:Number(x.quantity??x.qty)||0,price:Number(x.priceCents??x.price_cents)||0})),subtotal=lines.reduce((s,x)=>s+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0));
+  const chosen=new Map();
+  for(const rule of rules||[]){if(!rule.active)continue;
+    const combined=rule.trigger==='combination',requirements=rule.requirements||[];
+    if(combined&&(!requirements.length||requirements.some(r=>lines.filter(x=>x.type===r.type).reduce((n,x)=>n+x.quantity,0)<r.quantity)))continue;
+    const condition=lines.filter(x=>(!rule.triggerProductId||x.productId===rule.triggerProductId)&&(!rule.triggerType||x.type===rule.triggerType)),threshold=condition.reduce((s,x)=>s+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0);
+    if(!combined&&(!condition.length||threshold<rule.threshold))continue;
+    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===rule.targetProductId)&&(!rule.targetType||(rule.targetType==='__combination__'?requirements.some(r=>r.type===x.type):x.type===rule.targetType))),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
+    const base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:productBase;
+    let discount=rule.benefit==='unit_price'?targets.reduce((s,x)=>s+Math.max(0,x.price-rule.value)*x.quantity,0):rule.benefit==='percent'?Math.round(base*rule.value/100):rule.value*(rule.target==='products'&&rule.basis==='unit'?quantity:1);
+    discount=Math.max(0,Math.min(base,Math.round(discount)));const key=combined?(rule.target==='products'?`products:${rule.targetType||'all'}`:rule.target):rule.target==='products'&&rule.targetType?`products:${rule.targetType}`:rule.targetType||rule.triggerType?rule.target:'legacy';const prior=chosen.get(key);if(prior&&prior.discount>=discount)continue;chosen.set(key,{rule,discount,productBase});
   }
-  // Pick the largest compatible discount without applying two offers to the same item or shipping charge.
-  const masks=new Map();for(const c of candidates){let mask=c.shipping?1n<<BigInt(lines.length):0n;if(c.product)for(const x of c.targets)mask|=1n<<BigInt(x.index);const key=mask.toString(),old=masks.get(key);if(!old||c.discount>old.discount)masks.set(key,{...c,mask});}
-  const options=[...masks.values()].sort((a,b)=>b.discount-a.discount||String(a.rule.id).localeCompare(String(b.rule.id))),suffix=new Array(options.length+1).fill(0);for(let i=options.length-1;i>=0;i--)suffix[i]=suffix[i+1]+options[i].discount;
-  let best=0,chosen=[],used=0n;for(const c of options)if(!(used&c.mask)){used|=c.mask;best+=c.discount;chosen.push(c);}const memo=new Map();
-  const search=(i,mask,total,selected)=>{if(total+suffix[i]<=best)return;if(i===options.length){best=total;chosen=[...selected];return;}const key=i+':'+mask.toString(),prior=memo.get(key);if(prior!==undefined&&prior>=total)return;memo.set(key,total);const c=options[i];if(!(mask&c.mask)){selected.push(c);search(i+1,mask|c.mask,total+c.discount,selected);selected.pop();}search(i+1,mask,total,selected);};search(0,0n,0,[]);
-  const discounts=lines.map(()=>0);let pd=0,sd=0;const applied=[];
-  for(const c of chosen){const productBase=c.targets.reduce((n,x)=>n+x.quantity*x.price,0),productPart=c.product?Math.min(c.discount,productBase):0,shippingPart=c.shipping?Math.min(shipping-sd,c.discount-productPart):0;if(!productPart&&!shippingPart)continue;
-    let left=productPart;const eligible=c.targets.filter(x=>x.quantity*x.price>0);eligible.forEach((x,i)=>{const raw=c.rule.benefit==='unit_price'&&c.rule.target==='products'?Math.max(0,x.price-Number(c.rule.value))*x.quantity:Math.floor(productPart*x.quantity*x.price/Math.max(1,productBase));const amount=Math.min(left,x.quantity*x.price,i===eligible.length-1?left:raw);discounts[x.index]+=amount;left-=amount;});if(left)for(const x of eligible){const room=x.quantity*x.price-discounts[x.index],extra=Math.min(left,room);discounts[x.index]+=extra;left-=extra;if(!left)break;}pd+=productPart;sd+=shippingPart;applied.push(c.rule);}
-  return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd,lines:lines.map(x=>({index:x.index,variantId:x.variantId,quantity:x.quantity,originalUnitCents:x.price,originalTotalCents:x.price*x.quantity,discountCents:discounts[x.index],finalTotalCents:x.price*x.quantity-discounts[x.index],finalUnitCents:x.quantity?(x.price*x.quantity-discounts[x.index])/x.quantity:x.price}))};
+  let pd=0,sd=0;const applied=[];for(const {rule,discount,productBase} of chosen.values()){const remainingProducts=Math.max(0,subtotal-pd),remainingShipping=Math.max(0,shipping-sd);const productPart=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?Math.min(productBase,remainingProducts):remainingProducts),shippingPart=rule.target==='products'?0:Math.min(remainingShipping,Math.max(0,discount-productPart));if(productPart+shippingPart>0){pd+=productPart;sd+=shippingPart;applied.push(rule)}}
+  return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd};
 }
-
-  function cartPriceHtml15(line){if(!line)return '';return line.discountCents?`<div class="cart-price15"><s>${money(line.originalUnitCents)}</s><small>Precio promo por descuento mayorista</small><strong>${money(line.finalUnitCents)} / u</strong></div>`:`<div class="cart-price15"><strong>${money(line.originalUnitCents)} / u</strong></div>`;}
   function renderCart() {
     reconcileCartImages();
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
     const badge = qs('#cartBadge');
     badge.textContent = count;
     badge.classList.toggle('hidden', count === 0);
-    const items = qs('#cartItems'),prices15=cartPromotion(cartShippingAmount()).lines;
+    const items = qs('#cartItems');
     if (!state.cart.length) {
       items.innerHTML = '<div class="empty-state"><strong>Tu carrito está vacío.</strong>Agregá un producto para comenzar.</div>';
     } else {
       items.innerHTML = state.cart.map((x,i) => `<div class="cart-item" data-cart-product="${Number(x.productId)}">
         ${state.storeProductsLoaded&&x.image ? `<img class="cart-thumb" src="${escapeHtml(x.image)}" alt="">` : '<div class="cart-thumb product-placeholder">S</div>'}
         <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
-        ${cartPriceHtml15(prices15[i])}<button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
+        <button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
       </div>`).join('');
     }
-    const cartHead=qs('#cartDrawer .drawer-head');if(cartHead&&!qs('#wholesaleNote16'))cartHead.insertAdjacentHTML('afterend','<p id="wholesaleNote16" class="wholesale-note16">Compra mayorista a partir de 1 curva (5 talles diferentes en cada tipo de corte de remera)</p>');
     renderCartShippingCarry();
+    window.SalmosHome?.refreshContactLinks();
     qs('#checkoutBtn').disabled = !state.cart.length;
   }
-  function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart.map(x=>{const product=state.products.find(p=>Number(p.id)===Number(x.productId));return {...x,category_slug:product?.category_slug||product?.category_name||x.category_slug||'',fit:product?.fit||x.fit||''}}),shipping)}
+  function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart.map(x=>{const product=state.products.find(p=>Number(p.id)===Number(x.productId));return {...x,category_slug:product?.category_slug||product?.category_name||'',fit:product?.fit||''}}),shipping)}
   function applyMotoBandDiscount(promotion){
     const quote=state.shippingQuotes?.moto,rule=quote?.bandDiscount,active=state.shipping.method==='moto'||state.shippingQuoteCarry;
     if(!active||!rule)return {...promotion,motoBandDiscountCents:0,motoBandDiscountLabel:'',totalAfterMotoCents:promotion.totalCents};
@@ -1083,9 +1087,9 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   function renderCartShippingCarry() {
     const shipping=cartShippingAmount(),basePromotion=cartPromotion(shipping),p=applyMotoBandDiscount(basePromotion),via=state.shipping.method==='via_cargo',pickup=state.shipping.method==='pickup';
     const subtotal=cartSubtotal(),discountCents=Math.min(subtotal+shipping,Math.max(0,Math.round(Number(basePromotion.totalDiscountCents)||0)+Number(p.motoBandDiscountCents||0))),totalCents=Math.max(0,subtotal+shipping-discountCents);
-    qs('#cartSubtotal').innerHTML=basePromotion.productDiscountCents?`<s>${money(subtotal)}</s><span>Precio promo por descuento mayorista <strong>${money(basePromotion.finalSubtotalCents)}</strong></span>`:money(subtotal);
-    const cost=qs('#cartShippingCost');if(cost)cost.textContent=via?'A cotizar · pago separado':shipping?money(shipping):pickup?'Gratis':'A calcular';
-    const total=qs('#cartTotal');if(total)total.innerHTML=discountCents?`<s>${money(subtotal+shipping)}</s><span>Precio promo por descuento mayorista <strong>${money(totalCents)}</strong></span>`:money(totalCents);
+    qs('#cartSubtotal').textContent=money(subtotal);
+    const cost=qs('#cartShippingCost');if(cost)cost.textContent=state.shipping.method==='manual'?'A cotizar con SALMOS':via?'A cotizar · pago separado':shipping?money(shipping):pickup?'Gratis':'A coordinar';
+    const total=qs('#cartTotal');if(total)total.textContent=money(totalCents);
     const label=qs('#cartTotalLabel');if(label)label.textContent=via?'Total de productos':shipping||pickup?'Total de la compra':'Total sin envío';
     const discountRow=qs('#cartPromotion');if(discountRow){const rows=[];if(basePromotion.totalDiscountCents)rows.push(`<span>${escapeHtml(basePromotion.label)}</span><strong>− ${money(basePromotion.totalDiscountCents)}</strong>`);if(p.motoBandDiscountCents)rows.push(`<span>${escapeHtml(p.motoBandDiscountLabel)}</span><strong>− ${money(p.motoBandDiscountCents)}</strong>`);discountRow.hidden=!rows.length;discountRow.innerHTML=rows.join('');}
     const address=qs('#cartShippingAddress');if(address)address.textContent=shipping?state.shipping.address||'':'';
@@ -1110,6 +1114,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
 
   function startShippingQuote() {
+    if(window.SalmosHome?.manualCorreoShipping){window.SalmosHome.openShipping();return;}
     closeCart();
     state.checkoutQuoteOnly = true;
     state.checkoutStep = 2;
@@ -1311,7 +1316,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   function sharedDeliveryPanel(){
     const home=state.deliveryAddress||{},agency=activeCorreoAgency(),loc=agency?.location||{},d=agency?{...home,locality:loc.cityName||'',addressInput:[loc.streetName,loc.streetNumber].filter(Boolean).join(' '),postalCode:loc.zipCode||'',formattedAddress:correoAgencyAddress(agency)}:{...home,addressInput:home.selected&&home.correoAddress?.streetName?[home.correoAddress.streetName,home.correoAddress.streetNumber].filter(Boolean).join(' '):home.addressInput},conf=state.config?.shipping?.correo||{},provinces=Array.isArray(conf.provinces)?conf.provinces:[];
     const options=['<option value="">Provincia *</option>',...provinces.map(x=>`<option value="${escapeHtml(x.code)}" ${String(d.provinceCode||'')===String(x.code)?'selected':''}>${escapeHtml(x.name)}</option>`)].join('');
-    return `<section class="shared-delivery-panel"><div class="shared-delivery-head"><div><strong>${agency?'Sucursal elegida':'Tu domicilio de entrega'}</strong><small>${agency?'La dirección se completó con la sucursal. Al volver a domicilio recuperás tus datos.':'Lo ingresás una sola vez y lo usamos para comparar Motomensajería y Correo Argentino.'}</small></div>${deliveryReady()?'<span class="mini-pill success" id="deliveryConfirmedBadge">CONFIRMADO</span>':''}</div><div class="shared-delivery-workspace"><div class="shared-delivery-fields"><div class="delivery-field-grid">
+    return `<section class="shared-delivery-panel"><div class="shared-delivery-head"><div><strong>${agency?'Sucursal elegida':'Tu domicilio de entrega'}</strong><small>${agency?'La dirección se completó con la sucursal. Al volver a domicilio recuperás tus datos.':'Confirmá la dirección para consultar la motomensajería disponible en tu zona.'}</small></div>${deliveryReady()?'<span class="mini-pill success" id="deliveryConfirmedBadge">CONFIRMADO</span>':''}</div><div class="shared-delivery-workspace"><div class="shared-delivery-fields"><div class="delivery-field-grid">
       <div class="field"><label>Provincia *</label><select class="select" id="deliveryProvinceSelect" ${agency?'disabled':''}>${options}</select></div>
       <div class="field"><label>Localidad</label><input class="input" id="deliveryLocalityInput" ${agency?'readonly':''} autocomplete="off" value="${escapeHtml(d.locality||'')}" placeholder="Escribí la localidad"><div class="correo-suggestions locality-suggestions" id="deliveryLocalitySuggestions"></div></div>
       <div class="field full delivery-address-field"><label>Dirección *</label><div class="delivery-address-action"><input class="input" id="deliveryAddressInput" ${agency?'readonly':''} autocomplete="off" value="${escapeHtml(d.addressInput||'')}" placeholder="Calle y altura"><button class="btn btn-secondary" id="confirmDeliveryAddressBtn" type="button" ${agency?'disabled':''}>Confirmar</button></div><div class="correo-suggestions" id="deliveryAddressSuggestions"></div></div>
@@ -1320,25 +1325,31 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
 
   function renderCheckoutShipping() {
-    const pc=state.config||{},viaCargoEnabled=Boolean(pc.shipping?.viaCargo?.enabled),pickupEnabled=Boolean(pc.shipping?.pickup?.enabled),motoEnabled=pc.shipping?.moto?.enabled!==false,correoEnabled=Boolean(pc.shipping?.correo?.enabled);
-    const mq=state.shippingQuotes?.moto,cq=(state.shipping.correo?.deliveryType||'homeDelivery')==='agency'?state.shippingQuotes?.correoAgency:state.shippingQuotes?.correoHome;
-    qs('#checkoutContent').innerHTML=`
-      <h2>${state.checkoutQuoteOnly?'Consultá el costo de envío':'Entrega'}</h2><div class="checkout-sub">${state.checkoutQuoteOnly?'Simulá el envío sin producto. Cuando termines, podés agregar un producto y hacer la compra normalmente.':'Ingresá tu domicilio una sola vez y compará las opciones disponibles.'}</div>
-      ${state.checkoutQuoteOnly?'<div class="notice quote-only-notice"><strong>Simulación sin producto</strong><br>La cotización es solo para conocer el costo de entrega; no genera ningún pedido.</div>':''}
-      ${sharedDeliveryPanel()}
+    const pc=state.config||{},pickupEnabled=Boolean(pc.shipping?.pickup?.enabled),motoEnabled=pc.shipping?.moto?.enabled!==false;
+    if(!state.shipping.method||state.shipping.method==='correo')state.shipping={...state.shipping,method:'manual',costCents:0,quoteId:null};
+    const manual=state.shipping.method==='manual';
+    qs('#checkoutContent').innerHTML=`<h2>Entrega</h2><div class="checkout-sub">Elegí cómo querés recibir tu pedido.</div>
       <div class="shipping-options">
-        <button class="shipping-card ${state.shipping.method==='moto'?'active':''} ${motoEnabled?'':'disabled'}" data-shipping="moto" ${motoEnabled?'':'disabled'}><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Hasta ${pc.shipping?.moto?.maxKm||50} km · entrega coordinada</small></span><span class="shipping-price">${deliveryQuoteLabel(mq,motoEnabled)}</span></button>
-        <button class="shipping-card ${state.shipping.method==='correo'?'active':''} ${correoEnabled?'':'disabled'}" data-shipping="correo" ${correoEnabled?'':'disabled'}><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Correo Argentino</strong><small>${correoEnabled?`Domicilio o sucursal${pc.shipping?.correo?.testMode?' · entorno de prueba':''}`:'Integración pendiente'}</small></span><span class="shipping-price">${cq?.costCents?money(cq.costCents):(cq?.error?'No disponible':(correoEnabled?'—':'Próximamente'))}</span></button>
-        ${viaCargoEnabled?`<button class="shipping-card ${state.shipping.method==='via_cargo'?'active':''}" data-shipping="via_cargo"><span class="shipping-icon">🚚</span><span class="shipping-copy"><strong>Vía Cargo</strong><small>Envío a coordinar · se abona aparte</small></span><span class="shipping-price">A cotizar</span></button>`:''}
-        <button class="shipping-card ${state.shipping.method==='pickup'?'active':''} ${pickupEnabled?'':'disabled'}" data-shipping="pickup" ${pickupEnabled?'':'disabled'}><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${pickupEnabled?escapeHtml(pc.shipping.pickup.address||'Coordinar retiro'):'Se habilitará desde administración'}</small></span><span class="shipping-price">Gratis</span></button>
-      </div><div id="deliveryQuoteStatus"></div><div class="shipping-auto-note">Los importes se calculan automáticamente al confirmar el domicilio. ${state.checkoutQuoteOnly?'Simulación sobre un paquete simple de referencia.':'Para la compra usamos peso y medidas reales cargadas en cada producto.'}${state.shippingQuotes?.correoHome?.parcel?`<br><strong>Paquete:</strong> ${state.shippingQuotes.correoHome.parcel.weightGrams} g · ${state.shippingQuotes.correoHome.parcel.heightCm} × ${state.shippingQuotes.correoHome.parcel.widthCm} × ${state.shippingQuotes.correoHome.parcel.depthCm} cm`:''}</div>
-      <div id="shippingDetail"></div>
-      ${state.checkoutQuoteOnly?'<div class="checkout-actions quote-only-actions"><button class="btn btn-ghost" id="closeQuoteCheckoutBtn">Cerrar</button><button class="btn btn-primary" id="quoteAddProductBtn">Agregar un producto</button></div>':`<div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button><button class="btn btn-primary" id="toSummaryBtn" ${canContinueShipping()?'':'disabled'}>Continuar</button></div>`}`;
-    renderShippingDetail();renderDeliveryQuoteStatus();paintDeliverySuggestions();paintDeliveryLocalitySuggestions();setTimeout(()=>{resolveDeliveryArea().catch(()=>{}).finally(()=>renderDeliveryMap().catch(()=>{}))},0);
-    if(deliveryReady()&&!state.pendingDeliveryCorrection&&!state.deliveryQuotesPending&&((correoEnabled&&!state.shippingQuotes?.correoHome)||(motoEnabled&&!state.shippingQuotes?.moto)))setTimeout(()=>autoQuoteDeliveryOptions().catch(()=>{state.deliveryQuotesPending=false;}),0);
+        <button type="button" class="shipping-card ${manual?'active':''}" data-shipping="manual"><span class="shipping-icon">📦</span><span class="shipping-copy"><strong>Envío a coordinar</strong><small>Consultá el costo con SALMOS</small></span><span class="shipping-price">A cotizar</span></button>
+        ${motoEnabled?`<button type="button" class="shipping-card ${state.shipping.method==='moto'?'active':''}" data-shipping="moto"><span class="shipping-icon">🏍️</span><span class="shipping-copy"><strong>Motomensajería</strong><small>Según tu zona · entrega coordinada</small></span><span class="shipping-price">${deliveryQuoteLabel(state.shippingQuotes?.moto,true)}</span></button>`:''}
+        ${pickupEnabled?`<button type="button" class="shipping-card ${state.shipping.method==='pickup'?'active':''}" data-shipping="pickup"><span class="shipping-icon">📍</span><span class="shipping-copy"><strong>Retiro en SALMOS</strong><small>${escapeHtml(pc.shipping.pickup.address||'Coordinar retiro')}</small></span><span class="shipping-price">Gratis</span></button>`:''}
+        ${pc.shipping?.viaCargo?.enabled?`<button type="button" class="shipping-card ${state.shipping.method==='via_cargo'?'active':''}" data-shipping="via_cargo"><span class="shipping-icon">🚚</span><span class="shipping-copy"><strong>Vía Cargo</strong><small>A coordinar · envío separado</small></span><span class="shipping-price">A cotizar</span></button>`:''}
+      </div>
+      ${manual?window.SalmosHome.manualDeliveryForm():state.shipping.method==='moto'?sharedDeliveryPanel():''}
+      <div id="deliveryQuoteStatus"></div><div id="shippingDetail"></div>
+      <div class="checkout-actions"><button class="btn btn-ghost" id="backCustomerBtn">Atrás</button>${manual?'':`<button class="btn btn-primary" id="toSummaryBtn" ${canContinueShipping()?'':'disabled'}>Continuar</button>`}</div>`;
+    window.SalmosHome.refreshContactLinks();
+    renderShippingDetail();
+    if(state.shipping.method==='moto'){
+      renderDeliveryQuoteStatus();paintDeliverySuggestions();paintDeliveryLocalitySuggestions();
+      setTimeout(()=>{resolveDeliveryArea().catch(()=>{}).finally(()=>renderDeliveryMap().catch(()=>{}))},0);
+      if(deliveryReady()&&!state.pendingDeliveryCorrection&&!state.deliveryQuotesPending&&!state.shippingQuotes?.moto)setTimeout(()=>autoQuoteDeliveryOptions().catch(()=>{state.deliveryQuotesPending=false;}),0);
+    }
+    renderCartShippingCarry();
   }
 
   function canContinueShipping(){
+    if(state.shipping.method==='manual'||state.shipping.method==='correo')return false;
     if(state.shipping.method==='pickup')return true;
     if(state.shipping.method==='via_cargo'){const v=state.shipping.viaCargo;return Boolean(state.config?.shipping?.viaCargo?.enabled&&v?.destination?.trim().length>=3&&v.acceptSeparatePayment);}
     return Boolean(state.shipping.method&&Number(state.shipping.costCents)>0&&(state.shipping.method!=='correo'||state.shipping.correo?.deliveryType!=='agency'||state.shipping.correo?.agencyId));
@@ -1370,6 +1381,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
 
   async function quoteCorreoShipping(){
+    if(window.SalmosHome?.manualCorreoShipping)throw new Error('Consultá el envío con SALMOS por WhatsApp.');
     const ca=state.shipping.correo||{},deliveryType=ca.deliveryType||'homeDelivery',agencyId=ca.agencyId||'',addressKey=JSON.stringify(state.deliveryAddress);
     if(!deliveryReady())throw new Error('Primero confirmá el domicilio.');
     if(deliveryType==='agency'&&!agencyId)throw new Error('Elegí una sucursal o punto PAQ.AR.');
@@ -1897,7 +1909,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const total=state.coupon?.totalCents ?? promotion.totalAfterMotoCents;
     qs('#checkoutContent').innerHTML = `
       <h2>Revisá tu compra</h2><div class="checkout-sub">Antes de pagar, confirmá que esté todo correcto.</div>
-      <div class="summary-list">${state.cart.map((x,i)=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${cartVariantLabel(x)?`${escapeHtml(cartVariantLabel(x))} · `:''}x${x.qty}</small></div><div>${cartPriceHtml15(basePromotion.lines[i])}</div></div>`).join('')}</div>
+      <div class="summary-list">${state.cart.map(x=>`<div class="summary-item"><div><strong>${escapeHtml(x.name)}</strong><br><small>${cartVariantLabel(x)?`${escapeHtml(cartVariantLabel(x))} · `:''}x${x.qty}</small></div><strong>${money(x.priceCents*x.qty)}</strong></div>`).join('')}</div>
 
       <div class="coupon-box">
         <div class="coupon-title"><strong>¿Tenés un cupón de descuento?</strong><small>Ingresalo antes de pagar.</small></div>
@@ -1924,7 +1936,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       ${!state.config?.mercadopago?.enabled ? '<div class="stock-note" style="text-align:right">Mercado Pago quedará activo apenas soporte habilite la visualización de las credenciales.</div>' : ''}`;
   }
 
-  function shippingMethodLabel() { return state.shipping.method === 'moto' ? '🏍️ Motomensajería' : state.shipping.method === 'correo' ? '📦 Correo Argentino' : state.shipping.method==='via_cargo'?'🚚 Vía Cargo · costo de envío separado':'📍 Retiro en SALMOS'; }
+  function shippingMethodLabel() { return state.shipping.method === 'manual' ? 'Envío a coordinar con SALMOS' : state.shipping.method === 'moto' ? '🏍️ Motomensajería' : state.shipping.method === 'correo' ? '📦 Correo Argentino' : state.shipping.method==='via_cargo'?'🚚 Vía Cargo · costo de envío separado':'📍 Retiro en SALMOS'; }
 
   async function releaseOwnPendingReservation() {
     try { await api('/api/orders/release-reservation', { method:'POST' }); } catch (err) { console.error(err); }
@@ -1933,6 +1945,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
 
   async function createOrderAndPay() {
+    if(['manual','correo'].includes(state.shipping.method)){state.checkoutStep=2;renderCheckout();toast('Primero coordiná el costo del envío con SALMOS.','error');return;}
     const btn=qs('#payBtn'); if (btn) { btn.disabled=true; btn.textContent='Procesando...'; }
     try {
       const orderHeaders=new Headers();const customerToken=await currentIdToken().catch(()=> '');if(customerToken)orderHeaders.set('Authorization',`Bearer ${customerToken}`);
@@ -1991,8 +2004,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qs('#heroShopBtn')?.addEventListener('click', () => qs('#productos')?.scrollIntoView({behavior:'smooth'}));
     qs('#flyersLaunchBtn')?.addEventListener('click',()=>{const sec=qs('#flyersSection');if(sec){sec.classList.remove('hidden');sec.scrollIntoView({behavior:'smooth',block:'start'});}});
     qs('#closeFlyersBtn')?.addEventListener('click',()=>qs('#flyersSection')?.classList.add('hidden'));
-    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.activeCategory='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
-    qs('#searchInput').addEventListener('input', e => { state.query=e.target.value; renderProducts(); });
+    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.homeCollection=null;state.storefrontCatalog=true;state.activeCategory='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
+    qs('#searchInput').addEventListener('input', e => { state.storefrontCatalog=true;state.query=e.target.value; renderCategories();renderProducts(); });
     if(qs('#year')) qs('#year').textContent = new Date().getFullYear();
     window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
     document.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement))return;if(handleStoreProductImageError(img))return;const thumb=img.closest('.thumb');if(thumb)thumb.remove();if(img.classList.contains('detail-main-image')){(state.failedProductMedia??=new Set()).add(productMediaKey(img.currentSrc||img.src));const next=state.selectedProduct?.images?.find(m=>detailMediaType(m)==='image'&&productImageAvailable(m.url));const host=qs('#detailMainMedia');if(host)host.innerHTML=next?renderDetailMedia(next,state.selectedProduct?.name||'SALMOS'):'<div class="product-placeholder">SALMOS</div>';}},true);
@@ -2028,7 +2041,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const card=e.target.closest('.product-card'); if(card){ if(card.dataset.saleMode==='order'){const p=state.products.find(x=>Number(x.id)===Number(card.dataset.productId));openCustomOrder('clothing',p||null);return;} openProduct(Number(card.dataset.productId)); return; }
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }
-      const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=productUsesSizes(state.selectedProduct)?null:v?.id||null; renderProductModal(); return; }
+      const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=v?.id||null; renderProductModal(); return; }
       const variant=e.target.closest('[data-variant]'); if(variant){ state.selectedVariantId=Number(variant.dataset.variant); renderProductModal(); return; }
       if(e.target.closest('[data-add-cart]')) { addSelectedToCart(false); return; }
       if(e.target.closest('[data-buy-now]')) { addSelectedToCart(true); return; }
@@ -2424,5 +2437,6 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
   document.addEventListener('input',e=>{if(e.target.matches?.('#viaCargoDestination,#viaCargoAgency'))syncViaCargoFields();});
   document.addEventListener('change',e=>{if(e.target.matches?.('#viaCargoDeliveryType,#viaCargoAccept'))syncViaCargoFields();});
+  window.SalmosHome?.init({state,cfg,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart});
   boot();
 })();

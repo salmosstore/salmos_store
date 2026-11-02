@@ -436,10 +436,10 @@
   function productCategoryMode(categoryId){
     const c=productCategoryById(categoryId);if(!c)return '';
     const key=normalizeCategoryKey(`${c.slug||''} ${c.name||''}`);
-    return /(remera|camiseta|chomba|buzo|prenda)/.test(key)?'sized':'simple';
+    return /(remera|camiseta|chomba|buzo|prenda|kids|infantil)/.test(key)?'sized':'simple';
   }
   function defaultVariantsForMode(mode,color=''){
-    if(mode==='sized')return ['S','M','L','XL','XXL'].map(size=>({id:null,color,size,stock:0,stockKind:'untracked',sku:''}));
+    if(mode==='sized')return (/kids|infantil/.test(normalizeCategoryKey(productCategoryById(qs('#productForm')?.elements?.category_id?.value)?.name))?['1','2','3','4','5','6']:['S','M','L','XL','XXL']).map(size=>({id:null,color,size,stock:0,stockKind:'untracked',sku:''}));
     if(mode==='simple')return [{id:null,color:'',size:'',stock:0,stockKind:'untracked',sku:''}];
     return [];
   }
@@ -593,7 +593,28 @@
     for(const row of collectRecipeMaterials()){const m=state.materials.find(x=>Number(x.id)===Number(row.materialId));if(!m)continue;const line=(Number(m.average_cost_cents)||0)*row.quantity;materialsCost+=line;notes.push(`${m.name}: ${row.quantity.toLocaleString('es-AR',{maximumFractionDigits:3})} ${m.unit==='meter'?'m':'u'} · ${money(line)}`)}
     const total=Math.round(base+print+materialsCost+fixedExtra);costInput.value=(total/100).toFixed(0);const out=qs('#productCostBreakdown');if(out)out.innerHTML=`<strong>Costo estimado: ${money(total)}</strong><small>${notes.length?notes.map(escapeHtml).join(' · '):'Elegí materia prima y/o diseños para calcular automáticamente.'}${fixedExtra?` · Otros costos: ${money(fixedExtra)}`:''}</small>`;
   }
+  async function openProductionProductCopy(sourceId){
+    state.productCopiesPending??=new Map();
+    if(state.productCopiesPending.has(sourceId))return state.productCopiesPending.get(sourceId);
+    const task=(async()=>{
+      try{
+        toast('Preparando una copia independiente…');
+        const response=await api(`/api/admin/products/${Number(sourceId)}`),source=response.item;
+        if(!source)throw new Error('Producto no encontrado.');
+        const names=new Set(state.products.map(p=>String(p.name).toLocaleLowerCase('es')));let name=`${source.name} copia`,suffix=2;while(names.has(name.toLocaleLowerCase('es')))name=`${source.name} copia ${suffix++}`;
+        const file=async(url,label,type)=>{const response=await fetch(apiUrl(url),{credentials:'include'});if(!response.ok)throw new Error('No se pudo copiar una foto del producto.');const blob=await response.blob(),extension=blob.type.includes('webp')?'webp':blob.type.includes('jpeg')?'jpg':type==='video'?'mp4':'png';return new File([blob],`copia-${String(label).replace(/[^a-z0-9_-]+/gi,'-').slice(0,65)}.${extension}`,{type:blob.type||'application/octet-stream'});};
+        const copyId=await window.SalmosProductCopy.duplicate(source,{request:api,file,name});
+        await openProductionMount(copyId);
+        qs('#productionDialogTitle').textContent='Duplicar producto';
+        qs('#saveProductionBtn').textContent='Guardar copia';
+        qs('#productionStockNote').textContent='Estás trabajando sobre una copia. Podés cambiar la prenda o las estampas; el original se conserva.';
+        toast('Copia abierta en Producción y publicación.','success');
+      }catch(error){toast(error.duplicateProductId?`La copia #${error.duplicateProductId} quedó en borrador. ${error.message}`:error.message,'error');}
+      finally{state.productCopiesPending.delete(sourceId);}
+    })();state.productCopiesPending.set(sourceId,task);return task;
+  }
   async function openProductDuplicateDialog(id){
+    if(id)return openProductionProductCopy(Number(id));
     await Promise.all([ensureCategories(),ensureCostingData()]);
     ensureMediaAdminStyles();
     state.newFiles=[];state.mediaItems=[];state.mediaDragKey=null;state.mediaHostId='mediaOrderList';
@@ -615,7 +636,7 @@
         <div class="field"><label>Categoría</label><select class="select" name="category_id" required><option value="">Elegir...</option>${state.categories.map(c=>`<option value="${c.id}" ${Number(p.category_id)===Number(c.id)?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Estado de la publicación</label><select class="select" name="status"><option value="draft" ${p.status==='draft'?'selected':''}>Borrador</option><option value="published" ${p.status==='published'?'selected':''}>Publicado</option><option value="hidden" ${p.status==='hidden'?'selected':''}>Oculto</option></select></div>
         <div class="field ${initialVariantMode==='sized'?'':'hidden'}" id="productFitField"><label>Corte / fit</label><input class="input" name="fit" list="salmosFitOptions" placeholder="Elegí o escribí otro" value="${escapeHtml(p.fit||'')}"><datalist id="salmosFitOptions"><option value="Clásico"><option value="Oversize"><option value="Boxy fit"></datalist></div>
-        <div class="field ${initialVariantMode==='sized'?'':'hidden'}" id="productAudienceField"><label>Hombre / Mujer / Unisex</label><input class="input" name="audience" list="salmosAudienceOptions" placeholder="Elegí o escribí otro" value="${escapeHtml(p.audience||'')}"><datalist id="salmosAudienceOptions"><option value="Hombre"><option value="Mujer"><option value="Unisex"></datalist></div>
+        <div class="field ${initialVariantMode==='sized'?'':'hidden'}" id="productAudienceField"><label>Público</label><input class="input" name="audience" list="salmosAudienceOptions" placeholder="Elegí o escribí otro" value="${escapeHtml(p.audience||'')}"><datalist id="salmosAudienceOptions"><option value="Hombre"><option value="Mujer"><option value="Unisex"><option value="Kids"></datalist></div>
         <div class="field"><label>Estado del producto</label><select class="select" name="inventory_stage" id="inventoryStage"><option value="finished" ${p.inventory_stage==='finished'||!p.inventory_stage?'selected':''}>Terminado</option><option value="to_print" ${p.inventory_stage==='to_print'?'selected':''}>En producción</option><option value="outlet" ${p.inventory_stage==='outlet'?'selected':''}>Outlet</option></select></div>
         <div class="field full internal-prep-box ${p.inventory_stage==='to_print'?'':'hidden'}" id="internalPrepBox"><div class="internal-prep-title">Solo administración · control de producción</div><div class="toggle-row"><label class="toggle-label"><input type="checkbox" name="garment_ready" ${Number(p.garment_ready)!==0?'checked':''}><span id="productBaseReadyLabel">${initialVariantMode==='sized'?'Prenda disponible':'Producto base disponible'}</span></label><label class="toggle-label"><input type="checkbox" name="print_ready" ${Number(p.print_ready)!==0?'checked':''}> Estampa disponible</label></div><small class="field-help">En producción podés indicar si ya está disponible el producto base y la estampa.</small></div>
         <div class="field"><label>Precio</label><input class="input" name="price" type="number" min="0" value="${isNewProduct?'':centsToPesos(p.price_cents)}"></div>
@@ -663,7 +684,7 @@
   async function renderCategories(){
     const d=await api('/api/admin/categories');state.categories=d.items||[];await Promise.all([ensureAdminOptionSettings(),loadMockupAssets()]);
     qs('#adminContent').innerHTML=`${sizeCharts()?.gallery()||''}
-      <div class="admin-section-head"><div><h2 style="margin:0">Categorías</h2><p class="muted" style="margin:4px 0 0">Solo las categorías activas pueden aparecer en la tienda. Mientras solo esté activa Remeras, la barra pública de categorías queda oculta.</p></div><div class="admin-actions"><button type="button" class="icon-btn" data-panel-tab="products" title="Volver a productos" aria-label="Volver a productos"><i class="fa-solid fa-table-cells" aria-hidden="true"></i></button><button class="btn btn-primary" id="newCategoryBtn">+ Nueva categoría</button></div></div>
+      <div class="admin-section-head"><div><h2 style="margin:0">Categorías</h2><p class="muted" style="margin:4px 0 0">Solo las categorías activas pueden aparecer en la tienda. Las categorías de libros se muestran sin talles. Agregá portada y fotos interiores como fotos del producto.</p></div><div class="admin-actions"><button type="button" class="icon-btn" data-panel-tab="products" title="Volver a productos" aria-label="Volver a productos"><i class="fa-solid fa-table-cells" aria-hidden="true"></i></button><button class="btn btn-ghost" id="bookCategoriesBtn">+ Categorías de libros</button><button class="btn btn-primary" id="newCategoryBtn">+ Nueva categoría</button></div></div>
       <div class="admin-card admin-table-wrap"><table class="admin-table editable-category-table"><thead><tr><th>Nombre</th><th>Slug</th><th>Orden</th><th>Activa</th><th></th></tr></thead><tbody>${state.categories.map(c=>`<tr data-category-row="${c.id}"><td><input class="input" data-category-name value="${escapeHtml(c.name)}"></td><td>${escapeHtml(c.slug)}</td><td><input class="input small-number" data-category-sort type="number" value="${Number(c.sort_order)||0}"></td><td><label class="toggle-label"><input type="checkbox" data-category-active ${Number(c.active)?'checked':''}> Sí</label></td><td><button class="btn btn-ghost" data-save-category="${c.id}">Guardar</button></td></tr>`).join('')}</tbody></table></div>`;
   }
 
@@ -4110,6 +4131,10 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const rn=e.target.closest('[data-remove-new-image]');if(rn){state.newFiles.splice(Number(rn.dataset.removeNewImage),1);qs('#newImages').innerHTML=state.newFiles.map((f,i)=>`<div class="image-preview"><img src="${URL.createObjectURL(f)}" alt=""><button type="button" data-remove-new-image="${i}">×</button></div>`).join('');return}
       const di=e.target.closest('[data-delete-image]');if(di){if(confirm('¿Eliminar esta foto?')){await api(`/api/admin/images/${di.dataset.deleteImage}`,{method:'DELETE'});di.closest('.image-preview').remove();toast('Foto eliminada','success')}return}
       if(e.target.id==='saveProductBtn'){e.preventDefault();const btn=e.target;try{btn.disabled=true;await saveProduct()}catch(err){toast(err.message,'error')}finally{btn.disabled=false}return}
+      if(e.target.id==='bookCategoriesBtn'){
+        const button=e.target;button.disabled=true;
+        try{for(const name of ['Álbum de figuritas','Libros para colorear','Animales por tomos']){const key=normalizeCategoryKey(name);if(!state.categories.some(c=>normalizeCategoryKey(c.name)===key)){const result=await api('/api/admin/categories',{method:'POST',body:JSON.stringify({name})});if(result.item)state.categories.push(result.item);}}await renderCategories();toast('Categorías de libros preparadas','success');}catch(error){toast(error.message,'error');button.disabled=false;}return;
+      }
       if(e.target.id==='newCategoryBtn'){const name=prompt('Nombre de la categoría:');if(name){try{await api('/api/admin/categories',{method:'POST',body:JSON.stringify({name})});state.categories=[];await renderCategories();toast('Categoría creada','success')}catch(err){toast(err.message,'error')}}return}
       const sc=e.target.closest('[data-save-category]');if(sc){const row=sc.closest('[data-category-row]');try{await api(`/api/admin/categories/${sc.dataset.saveCategory}`,{method:'PUT',body:JSON.stringify({name:qs('[data-category-name]',row).value,sort_order:Number(qs('[data-category-sort]',row).value)||0,active:qs('[data-category-active]',row).checked})});state.categories=[];toast('Categoría guardada','success');await renderCategories()}catch(err){toast(err.message,'error')}return}
       if(e.target.id==='clearStockFiltersBtn'){state.productColorFilters={};state.stockFilters={category:'',stage:'',size:'',color:'',fit:'',audience:'',sort:'updated'};state.productPublication='';state.productSearch='';await renderProducts();return}
