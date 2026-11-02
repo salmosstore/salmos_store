@@ -19,6 +19,8 @@
   <link rel="stylesheet" href="design-editor.css?v=25.77">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
+  <link rel="stylesheet" href="admin-books.css?v=28.0">
+  <link rel="stylesheet" href="book-digital.css?v=28.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -103,7 +105,7 @@
       <div class="dialog-body production-builder-body">
         <section class="production-tab-panel" data-production-panel="1">
           <div class="production-top-grid">
-            <div class="field production-type-field"><label for="productionMaterialType">Tipo de producto</label><select class="select" id="productionMaterialType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="glass">Vaso</option><option value="thermos">Termo</option><option value="bag">Bolso</option><option value="other">Otro</option></select></div>
+            <div class="field production-type-field"><label for="productionMaterialType">Tipo de producto</label><select class="select" id="productionMaterialType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="glass">Vaso</option><option value="thermos">Termo</option><option value="bag">Bolso</option><option value="custom_libro">Libro / cuaderno</option><option value="other">Otro</option></select></div>
             <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock físico</option><option value="to_stock">Stock virtual</option></select></div>
             <div class="field production-qty-field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
             
@@ -129,9 +131,10 @@
         </section>
         <section class="production-tab-panel hidden" data-production-panel="2">
           <div class="form-section production-media-first"><div class="admin-section-head"><div><h3>Fotos y videos</h3></div></div><input class="input" id="productionImagesInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime,video/x-m4v" multiple><div class="salmos-media-list" id="productionMediaOrderList"></div></div>
-          <div class="form-section production-publication-section"><div class="admin-section-head"><div><h3>Datos para publicar</h3><p class="muted">Categoría, corte y género se toman de la materia prima elegida.</p></div></div><div class="form-grid production-publication-grid">
+          <div class="form-section production-publication-section"><div class="admin-section-head"><div><h3>Datos para publicar</h3><p class="muted">Elegí dónde se muestra el producto; podés marcar más de una opción.</p></div></div><div class="form-grid production-publication-grid">
             <div class="field"><label for="productionProductName">Nombre del producto</label><input class="input" id="productionProductName" required placeholder="Ej.: YESHUA"></div>
             <input type="hidden" id="productionCategory">
+            <div class="field full" id="productionAudienceField"></div>
             <div class="field"><label for="productionPublicationVariant">Variante para el enlace (opcional)</label><input class="input" id="productionPublicationVariant" maxlength="80" placeholder="Ej.: oversize negra"></div>
             <div class="field"><label>Estado de publicación</label><select class="select" id="productionStatus"><option value="draft">Borrador</option><option value="published">Publicado</option><option value="hidden">Oculto</option></select></div>
             
@@ -142,6 +145,7 @@
             <div class="field full"><label>Versículo</label><textarea class="textarea" id="productionVerse" rows="3"></textarea></div>
             <div class="field full"><label>Cita</label><input class="input" id="productionVerseReference" placeholder="Ej.: Salmos 121:2"></div>
           </div></div>
+          <section class="form-section" id="productionDigitalBook" hidden><div class="admin-section-head"><h3>Versión PDF</h3><button class="btn btn-ghost" type="button" data-pdf-sales>Ventas de PDF</button></div><label class="book-check"><input type="checkbox" id="bookPdfEnabled">Ofrecer también el PDF descargable</label><div class="book-pdf-settings" id="bookPdfSettings" hidden><label class="field">Precio del PDF ($)<input class="input" id="bookPdfPrice" type="number" min=".01" step=".01"></label><label class="field">Archivo que recibirá el cliente<input class="input" id="bookPdfFile" type="file" accept="application/pdf,.pdf"><small id="bookPdfFileStatus"></small></label></div><p class="field-help">Precio independiente del impreso. Hasta 20 MB. La descarga se habilita después del pago confirmado por Mercado Pago.</p></section>
           <div class="form-section shipping-suggestion-card"><div class="admin-section-head"><div><h3>Datos para envío</h3><p class="muted">Se sugieren según el artículo y su capacidad. Podés editar cualquier valor.</p></div><span class="status" id="productionShippingHint">Sugerido</span></div><div class="form-grid"><div class="field hidden"><label>Capacidad (ml)</label><input class="input" id="productionCapacity" type="number" min="0" step="10" placeholder="Si aplica"></div><div class="field"><label>Peso (g)</label><input class="input" id="productionWeight" type="number" min="0"></div><div class="field"><label>Alto (cm)</label><input class="input" id="productionHeight" type="number" min="0" step=".1"></div><div class="field"><label>Ancho (cm)</label><input class="input" id="productionWidth" type="number" min="0" step=".1"></div><div class="field"><label>Largo (cm)</label><input class="input" id="productionDepth" type="number" min="0" step=".1"></div></div></div>
           <div class="toggle-row"><label class="toggle-label"><input type="checkbox" id="productionIsNew"> Novedad</label><label class="toggle-label"><input type="checkbox" id="productionFeatured"> Destacado</label><label class="toggle-label"><input type="checkbox" id="productionBestseller"> Más vendido</label></div>
         </section>
@@ -259,9 +263,12 @@
   <script src="design-edit-engine.js?v=25.77" defer></script>
   <script src="design-editor-tools.js?v=25.76" defer></script>
   <script src="design-editor.js?v=25.77" defer></script>
+  <script src="audiences.js?v=28.0" defer></script>
+  <script src="book-production.js?v=28.0" defer></script>
+  <script src="book-digital-admin.js?v=28.0" defer></script>
   <script src="product-copy.js?v=27.0" defer></script>
-  <script src="admin.js?v=27.0&amp;mkt=26.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=27.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="admin.js?v=28.0&amp;mkt=26.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=28.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">

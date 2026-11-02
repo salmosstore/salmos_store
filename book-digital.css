@@ -1,0 +1,23 @@
+.book-editions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;text-align:left}
+.book-editions>div{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--surface)}
+.book-editions span{font-size:20px;font-weight:700;color:var(--gold)}
+.book-editions small{line-height:1.4;color:var(--muted)}
+.book-editions .btn{margin-top:5px}
+.book-pdf-dialog{width:min(560px,calc(100vw - 24px));max-height:90dvh;max-height:90vh;padding:0;border:1px solid var(--line);border-radius:20px;background:var(--bg);color:var(--text);overflow:auto;box-shadow:0 20px 80px #0008}
+.book-pdf-dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
+.pdf-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.pdf-dialog-head h2{font-size:23px;margin:0}
+.pdf-dialog-body{padding:20px}
+.pdf-dialog-body .field{display:grid;gap:6px;margin-bottom:12px}
+.pdf-price{font-size:28px;font-weight:700;color:var(--gold)}
+.pdf-account-hint{font-size:13px;color:var(--muted);line-height:1.5}
+.pdf-error{color:var(--danger,#d45e68);font-size:14px;min-height:1em}
+.pdf-order{display:grid;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)}
+.pdf-order strong{font-size:19px}.pdf-order p{margin:4px 0}
+.pdf-order small{color:var(--muted)}
+#productionDigitalBook[hidden],#bookPdfSettings[hidden]{display:none!important}
+#productionDigitalBook .book-pdf-settings{display:grid;grid-template-columns:minmax(140px,.65fr) minmax(200px,1.35fr);gap:14px;align-items:start;margin:12px 0}
+#productionDigitalBook .field{min-width:0;display:grid;gap:7px}
+#productionDigitalBook .input[type=file]{width:100%;height:auto;padding:10px;white-space:normal}
+.pdf-sale-row{display:grid;gap:8px;padding:16px 0;border-bottom:1px solid var(--line)}
+@media(max-width:600px){.book-editions,#productionDigitalBook .book-pdf-settings{grid-template-columns:1fr}.pdf-dialog-body{padding:16px}}

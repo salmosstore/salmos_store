@@ -10,14 +10,16 @@
     {key:'tazas',name:'Tazas y vasos',column:0,row:1},
     {key:'figuritas',name:'Álbum de figuritas',column:1,row:1},
     {key:'colorear',name:'Para colorear',column:2,row:1},
-    {key:'animales',name:'Animales por tomos',column:3,row:1}
+    {key:'animales',name:'Animales por tomos',column:3,row:1},
+    {key:'cuadernos',name:'Cuadernos'},
+    {key:'otros-libros',name:'Otros libros'}
   ];
   let context;
   const $ = selector => document.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function isBook(p) {
     const category=normalize(`${p.category_slug || ''} ${p.category_name || ''}`);
-    return /libro|album|figurita|colorear|tomo/.test(category);
+    return /libro|cuaderno|album|figurita|colorear|tomo/.test(category);
   }
   function isKids(p) {
     const text=normalize(`${p.category_slug||''} ${p.category_name||''} ${p.audience||''} ${p.material_class||''} ${p.production_catalog?.materialClass||''}`);
@@ -29,11 +31,15 @@
     const audience=normalize(p.audience||''),book=isBook(p),kids=isKids(p);
     const garment=/remera|camiseta|chomba|buzo|prenda|ropa|kids/.test(category) && !book;
     const text=normalize(`${p.category_slug||''} ${p.category_name||''} ${p.name||''} ${p.short_description||''}`);
-    if(key==='mujer') return garment && !kids && (!audience || /mujer|femenin|unisex|adult/.test(audience));
-    if(key==='hombre') return garment && !kids && (!audience || /hombre|varon|masculin|unisex|adult/.test(audience));
-    if(key==='kids') return garment && kids;
+    const audiences=window.SalmosAudience.parse(p.audience);
+    if(!audiences.length&&garment)audiences.push(...(kids?['Kids']:['Hombre','Mujer']));
+    if(key==='mujer')return audiences.includes('Mujer');
+    if(key==='hombre')return audiences.includes('Hombre');
+    if(key==='kids')return audiences.includes('Kids');
     if(key==='gorras') return /gorra|cap\b/.test(category);
     if(key==='tazas') return /taza|vaso|termo|mug|glass|tumbler/.test(category);
+    if(key==='cuadernos')return book&&/cuaderno/.test(category);
+    if(key==='otros-libros')return book&&!/cuaderno|album|figurita|colorear|coloreo|pintar|animal|tomo/.test(text);
     if(key==='figuritas') return book && /album|figurita/.test(text);
     if(key==='colorear') return book && /colorear|coloreo|pintar/.test(text);
     if(key==='animales') return book && /animal|creacion|tomo/.test(text) && !/colorear|coloreo|pintar|figurita|album/.test(text);
@@ -62,23 +68,18 @@
   function categoryPhoto(collection) {
     let candidates=context.state.products.filter(p=>matches(p,collection.key));
     // Una foto masculina unisex no representa la entrada Mujer.
-    if(collection.key==='mujer') candidates=candidates.filter(p=>/mujer|femenin/.test(normalize(p.audience)));
+    if(collection.key==='mujer') candidates.sort((a,b)=>Number(/mujer|femenin/.test(normalize(b.audience)))-Number(/mujer|femenin/.test(normalize(a.audience))));
     const product=candidates.find(p=>context.productCardImages(p).length);
     if(!product) return '';
     const image=context.productCardImages(product)[0];
     return `<span class="home-live-photo" ${context.productBackgroundAttrs(product)}><img src="${esc(image.url)}" alt="" loading="lazy" decoding="async"></span>`;
-  }
-  function illustration(collection) {
-    const left=[29,212,392,573][collection.column],right=[793,975,1157,1338][collection.column];
-    const top=collection.row===0?230:491;
-    return `<span class="home-category-illustration" aria-hidden="true" style="--category-x-dark:${left/1366*100}%;--category-x-light:${right/1366*100}%;--category-y:${top/814*100}%"></span>`;
   }
   function render() {
     if(!context) return;
     const home=isHome(),section=$('#storeHome'),heading=$('#catalogHeading');
     section?.classList.toggle('hidden',!home);heading?.classList.toggle('hidden',home);
     document.body.classList.toggle('store-home-view',home);
-    if(home && $('#homeCategoryGrid')) $('#homeCategoryGrid').innerHTML=collections.map(c=>`<button type="button" class="home-category" data-home-collection="${c.key}"><span class="home-category-media">${illustration(c)}${categoryPhoto(c)}</span><span class="home-category-label">${esc(c.name)}<span aria-hidden="true">→</span></span></button>`).join('');
+    if(home && $('#homeCategoryGrid')) $('#homeCategoryGrid').innerHTML=collections.filter(c=>context.state.products.some(p=>matches(p,c.key))).map(c=>`<button type="button" class="home-category" data-home-collection="${c.key}"><span class="home-category-media">${categoryPhoto(c)}</span><span class="home-category-label">${esc(c.name)}<span aria-hidden="true">→</span></span></button>`).join('');
     refreshContactLinks();
   }
   function whatsapp(message) {
@@ -136,6 +137,7 @@
   }
   function init(options) {
     context=options;
+    document.addEventListener('error',event=>{const image=event.target;if(image.matches?.('.home-live-photo img'))image.closest('.home-live-photo').remove();},true);
     document.addEventListener('click',event=>{
       const category=event.target.closest('[data-home-collection]');
       if(category){event.preventDefault();navigate(category.dataset.homeCollection);return;}

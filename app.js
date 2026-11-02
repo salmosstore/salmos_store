@@ -748,8 +748,8 @@
   }
 
   function renderProducts() {
-    if(!state.storeProductsLoaded)return;
     window.SalmosHome?.render();
+    if(!state.storeProductsLoaded)return;
     if(window.SalmosHome?.isHome()){qs('#productos')?.classList.add('hidden');qs('#porPedido')?.classList.add('hidden');return;}
     const items = filteredProducts();
     const stockItems=items.filter(p=>p.sale_mode!=='order');
@@ -980,7 +980,8 @@
         </div>
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
-          <div class="price-row detail-price-centered"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+          <div class="price-row detail-price-centered ${p.digitalBook?.enabled?'hidden':''}"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+          ${window.SalmosDigital?.editionHtml(p)||''}
           ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
@@ -988,8 +989,8 @@
           ${!selected?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
           <div class="detail-actions">
             <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
-            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>Agregar al carrito</span></button>
-            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>Comprar ahora</span></button>
+            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>${p.digitalBook?.enabled?'Agregar impreso':'Agregar al carrito'}</span></button>
+            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>${p.digitalBook?.enabled?'Comprar impreso':'Comprar ahora'}</span></button>
           </div>
         </div>
       </div>`;
@@ -1969,6 +1970,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
 
   async function handlePaymentReturn() {
     const p = new URLSearchParams(location.search);
+    if(p.has('pdf_order'))return;
     const status = p.get('status') || p.get('collection_status');
     const returnKind = p.get('mp_return');
     const ref = p.get('external_reference') || state.pendingCheckout?.code || '';
@@ -2434,9 +2436,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     restoreLastShipping({activateMoto:false,allowQuote:true,restoreCarry:true});
     ensureAccountUi(); bindEvents();
     await Promise.allSettled([loadStore(),initFirebaseAuth(),handlePaymentReturn()]);
+    await window.SalmosDigital?.resume();
   }
   document.addEventListener('input',e=>{if(e.target.matches?.('#viaCargoDestination,#viaCargoAgency'))syncViaCargoFields();});
   document.addEventListener('change',e=>{if(e.target.matches?.('#viaCargoDeliveryType,#viaCargoAccept'))syncViaCargoFields();});
   window.SalmosHome?.init({state,cfg,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart});
+  window.SalmosDigital?.init({state,api,apiUrl,money,toast,authToken:currentIdToken,signIn:signInGoogle});
   boot();
 })();
