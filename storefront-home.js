@@ -1,94 +1,50 @@
-/* SALMOS v27 · portada, colecciones y consultas. */
+/* SALMOS v30 · productos reales en galerías, portada y catálogo editables. */
 (() => {
   'use strict';
-  const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const collections = [
-    {key:'mujer',name:'Mujer',column:0,row:0},
-    {key:'hombre',name:'Hombre',column:1,row:0},
-    {key:'kids',name:'Kids',column:2,row:0},
-    {key:'gorras',name:'Gorras',column:3,row:0},
-    {key:'tazas',name:'Tazas y vasos',column:0,row:1},
-    {key:'figuritas',name:'Álbum de figuritas',column:1,row:1},
-    {key:'colorear',name:'Para colorear',column:2,row:1},
-    {key:'animales',name:'Animales por tomos',column:3,row:1},
-    {key:'cuadernos',name:'Cuadernos'},
-    {key:'otros-libros',name:'Otros libros'}
-  ];
-  let context;
-  const $ = selector => document.querySelector(selector);
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function isBook(p) {
-    if(p.is_book||p.production_catalog?.materialType==='custom_libro')return true;
-    const category=normalize(`${p.category_slug || ''} ${p.category_name || ''}`);
-    return /libro|cuaderno|album|figurita|colorear|tomo/.test(category);
+  const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const collections=[{key:'hombre',name:'Hombre'},{key:'mujer',name:'Mujer'},{key:'kids',name:'Kids'},{key:'gorras',name:'Gorras'},{key:'tazas',name:'Tazas y vasos'},{key:'libros',name:'Libros'},{key:'agendas',name:'Agendas'},{key:'actividades',name:'Actividades'},{key:'figuritas',name:'Álbum de figuritas'},{key:'colorear',name:'Para colorear'},{key:'animales',name:'Animales por tomos'},{key:'cuadernos',name:'Cuadernos'},{key:'otros-libros',name:'Otros libros'}];
+  let context,lastMarkup='',drag=null;
+  const $=selector=>document.querySelector(selector);
+  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const text=p=>normalize([p.category_slug,p.category_name,p.name,p.short_description,p.production_catalog?.bookKind].filter(Boolean).join(' '));
+  function isBook(p){return Boolean(p.is_book||p.production_catalog?.materialType==='custom_libro'||/libro|cuaderno|album|figurita|colorear|tomo|agenda/.test(text(p)));}
+  function isGarment(p){return !isBook(p)&&(['shirt','chomba','hoodie'].includes(p.production_catalog?.materialType)||/remera|camiseta|chomba|buzo|prenda|ropa|kids/.test(normalize(`${p.category_slug||''} ${p.category_name||''}`)));}
+  function audience(p){const saved=window.SalmosAudience.parse(p.audience);if(saved.length)return saved;const known=[...new Set((p.images||[]).map(image=>image.presentation_audience).filter(value=>['Hombre','Mujer','Kids'].includes(value)))];if(known.length)return known;return isGarment(p)?(/kids|ninos|ninas|infantil/.test(text(p))?['Kids']:['Hombre']):[];}
+  function matches(p,key){
+    if(!key||key==='all')return true;const category=normalize(`${p.category_slug||''} ${p.category_name||''}`),t=text(p),book=isBook(p);
+    if(['hombre','mujer','kids'].includes(key))return isGarment(p)&&audience(p).includes({hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]);
+    if(key==='gorras')return /gorra|cap\b/.test(category)||p.production_catalog?.materialType==='cap';
+    if(key==='tazas')return /taza|vaso|termo|mug|glass|tumbler/.test(category)||['mug','glass','thermos','tumbler'].includes(p.production_catalog?.materialType);
+    if(key==='agendas')return /agenda|planificador|planner/.test(t);
+    if(key==='actividades')return /actividades|actividad|colorear|coloreo|pintar|figurita/.test(t);
+    if(key==='libros')return book&&!/agenda|planificador|planner/.test(t);
+    if(key==='cuadernos')return /cuaderno/.test(t);
+    if(key==='figuritas')return book&&/album|figurita/.test(t);
+    if(key==='colorear')return book&&/colorear|coloreo|pintar/.test(t);
+    if(key==='animales')return book&&/animal|tomo/.test(t)&&!/colorear|figurita/.test(t);
+    if(key==='otros-libros')return book&&!/cuaderno|album|figurita|colorear|animal|tomo|agenda/.test(t);
+    return false;
   }
-  function isKids(p) {
-    const text=normalize(`${p.category_slug||''} ${p.category_name||''} ${p.audience||''} ${p.material_class||''} ${p.production_catalog?.materialClass||''}`);
-    return /kids|ninos|ninas|infantil/.test(text);
+  function isHome(){return !context.state.storefrontCatalog&&!context.state.query&&(!context.state.storeOrderEditor?.enabled||context.state.storeOrderEditor.view==='home');}
+  function selectedName(){return collections.find(row=>row.key===context.state.homeCollection)?.name||'';}
+  function navigate(key='all',scroll=true){const s=context.state;s.storefrontCatalog=true;s.homeCollection=key==='all'?null:key;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='catalog';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();if(scroll)$('#catalogHeading')?.scrollIntoView({behavior:'smooth',block:'start'});}
+  function goHome(){const s=context.state;s.storefrontCatalog=false;s.homeCollection=null;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='home';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();$('#storeHome')?.scrollIntoView({behavior:'smooth',block:'start'});}
+  function imageFor(p,key){
+    const photos=context.productCardImages(p).filter(image=>image.presentation_printed!==false),wanted={hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key];
+    if(!wanted)return photos.find(image=>image.presentation_pose!=='back')||photos[0]||null;
+    const rank=image=>image.presentation_audience===wanted?0:image.presentation_audience==='Producto'?1:!image.presentation_audience?2:5;
+    return [...photos].filter(image=>rank(image)<5).sort((a,b)=>rank(a)-rank(b)||(a.presentation_pose==='back'?1:0)-(b.presentation_pose==='back'?1:0))[0]||null;
   }
-  function matches(p,key) {
-    if(!key || key==='all') return true;
-    const category=normalize(`${p.category_slug||''} ${p.category_name||''}`);
-    const audience=normalize(p.audience||''),book=isBook(p),kids=isKids(p);
-    const garment=/remera|camiseta|chomba|buzo|prenda|ropa|kids/.test(category) && !book;
-    const text=normalize(`${p.category_slug||''} ${p.category_name||''} ${p.name||''} ${p.short_description||''}`);
-    const audiences=window.SalmosAudience.parse(p.audience);
-    if(!audiences.length&&garment)audiences.push(...(kids?['Kids']:['Hombre','Mujer']));
-    if(key==='mujer')return audiences.includes('Mujer');
-    if(key==='hombre')return audiences.includes('Hombre');
-    if(key==='kids')return audiences.includes('Kids');
-    if(key==='gorras') return /gorra|cap\b/.test(category);
-    if(key==='tazas') return /taza|vaso|termo|mug|glass|tumbler/.test(category);
-    if(key==='cuadernos')return book&&/cuaderno/.test(category);
-    if(key==='otros-libros')return book&&!/cuaderno|album|figurita|colorear|coloreo|pintar|animal|tomo/.test(text);
-    if(key==='figuritas') return book && /album|figurita/.test(text);
-    if(key==='colorear') return book && /colorear|coloreo|pintar/.test(text);
-    if(key==='animales') return book && /animal|creacion|tomo/.test(text) && !/colorear|coloreo|pintar|figurita|album/.test(text);
-    return true;
-  }
-  function isHome() {
-    return !context.state.storefrontCatalog && !context.state.query && !context.state.storeOrderEditor?.enabled;
-  }
-  function selectedName() {
-    return collections.find(c=>c.key===context.state.homeCollection)?.name || '';
-  }
-  function navigate(key='all',scroll=true) {
-    const s=context.state;
-    if(key!=='all'&&s.storeProductsLoaded&&!s.products.some(product=>matches(product,key))){const name=collections.find(c=>c.key===key)?.name||'esta colección';dialog('collectionContactDialog',name,`<p>Consultanos por los modelos de esta colección.</p><a class="btn btn-primary full" target="_blank" rel="noopener" href="${esc(whatsapp('Hola SALMOS, quiero consultar por '+name+'.'))}">Consultar por WhatsApp</a>`);return;}
-    s.storefrontCatalog=true;s.homeCollection=key==='all'?null:key;s.activeCategory='all';s.query='';
-    if($('#searchInput')) $('#searchInput').value='';
-    context.renderCategories();context.renderProducts();
-    if(scroll) $('#catalogHeading')?.scrollIntoView({behavior:'smooth',block:'start'});
-  }
-  function goHome() {
-    const s=context.state;
-    s.storefrontCatalog=false;s.homeCollection=null;s.activeCategory='all';s.query='';
-    if($('#searchInput')) $('#searchInput').value='';
-    context.renderCategories();context.renderProducts();
-    $('#storeHome')?.scrollIntoView({behavior:'smooth',block:'start'});
-  }
-  function coverPlaceholder(collection){return `<span class="home-category-placeholder"><svg viewBox="0 0 64 64" aria-hidden="true">${['figuritas','colorear','animales'].includes(collection.key)?'<path d="M12 9h31l9 7v39H12zM43 9v7h9M21 25h22M21 34h22M21 43h15"/>':collection.key==='gorras'?'<path d="M12 37c0-18 40-18 40 0M12 37h40l8 10H5zM31 21v16"/>':collection.key==='tazas'?'<path d="M13 15h31v28c0 14-31 14-31 0zM44 20h7c12 0 12 21-7 21"/>':'<path d="m21 9-15 9 8 14 7-4v28h23V28l7 4 8-14-15-9c-4 10-19 10-23 0z"/>'}</svg></span>`;}
-  function categoryPhoto(collection,used) {
-    const theme=document.documentElement.dataset.theme==='light'?'light':'dark',visual=context.state.config?.storefrontVisuals,c=visual?.covers?.[collection.key]?.[theme];
-    const urlFor=url=>context.apiUrl?context.apiUrl(url):url;
-    let candidates=context.state.products.filter(p=>matches(p,collection.key));
-    if(['mujer','hombre','kids'].includes(collection.key))candidates=candidates.filter(p=>!isBook(p)&&(/remera|camiseta|chomba|buzo|prenda|ropa|kids/.test(normalize(`${p.category_slug||''} ${p.category_name||''}`))||['shirt','chomba','hoodie'].includes(p.production_catalog?.materialType)));
-    if(collection.key==='mujer')candidates=candidates.filter(p=>/mujer|femenin/.test(normalize(p.audience))&&!/hombre|unisex/.test(normalize(p.audience)));
-    const product=candidates.find(p=>!used.has(Number(p.id))&&context.productCardImages(p).length),preferLibrary=Boolean(c?.selected)||['mujer','kids'].includes(collection.key),library=c?.url;
-    let source=preferLibrary&&library?{url:urlFor(library)}:product?context.productCardImages(product)[0]:library?{url:urlFor(library)}:null;
-    if(!source)return coverPlaceholder(collection);if(product&&(!preferLibrary||!library))used.add(Number(product.id));
-    const background=visual?.photoBackgrounds?.[theme];if(background&&source.foreground_url)source={...source,url:source.foreground_url};const style=background?.url?`style="--product-photo-background:url('${esc(urlFor(background.url))}')"`:context.productBackgroundAttrs(product||{id:0});
-    return `<span class="home-live-photo" ${style}><img src="${esc(source.url)}" alt="${esc(collection.name)}" loading="eager" decoding="async"></span>`;
-  }
-  function render() {
-    if(!context) return;
-    const home=isHome(),section=$('#storeHome'),heading=$('#catalogHeading'),theme=document.documentElement.dataset.theme==='light'?'light':'dark';
-    section?.classList.toggle('hidden',!home);heading?.classList.toggle('hidden',home);document.body.classList.toggle('store-home-view',home);
-    const background=context.state.config?.storefrontVisuals?.pageBackgrounds?.[theme];
-    if(background?.url)document.body.style.setProperty('--home-page-background',`url("${context.apiUrl?context.apiUrl(background.url):background.url}")`);else document.body.style.removeProperty('--home-page-background');
-    if(home&&$('#homeCategoryGrid')){const used=new Set();$('#homeCategoryGrid').innerHTML=collections.slice(0,8).map(c=>`<button type="button" class="home-category" data-home-collection="${c.key}"><span class="home-category-media">${categoryPhoto(c,used)}</span><span class="home-category-label">${esc(c.name)}<span aria-hidden="true">→</span></span></button>`).join('');}
+  function ordered(key){const orders=context.state.config?.storefrontHome?.orders||{},ids=context.state.storeOrderEditor?.homeDrafts?.get(key)||orders[key]||[],ranks=new Map(ids.map((id,index)=>[Number(id),index]));return context.state.products.filter(p=>p.status!=='draft'&&p.status!=='hidden'&&matches(p,key)).sort((a,b)=>(ranks.get(Number(a.id))??1e9)-(ranks.get(Number(b.id))??1e9)||(Number(a.display_order??999999)-Number(b.display_order??999999))).map(product=>({product,image:imageFor(product,key)})).filter(row=>row.image);}
+  function imageHtml(p,image,label){const attrs=context.productBackgroundAttrs(p),url=context.apiUrl(image.url);return `<span class="home-product-photo" ${attrs}><img src="${esc(url)}" alt="${esc(label||p.name)}" loading="lazy" decoding="async"></span>`;}
+  function card({product:p,image},key,editing){return `<article class="home-product" data-home-product-card="${p.id}" data-home-row="${key}" ${editing?'draggable="true"':''}><button class="home-product-open" type="button" data-home-product="${p.id}">${imageHtml(p,image)}<span class="home-product-info"><span class="home-product-name">${esc(p.name)}</span><strong>${esc(context.money(p.price_cents))}</strong><span class="home-product-action">Ver producto <span aria-hidden="true">↗</span></span></span></button>${editing?`<button class="home-product-edit" type="button" data-home-edit="${p.id}" data-home-media="${Number(image.id)||0}">Editar</button><div class="home-product-sort"><button type="button" data-home-move="-1" aria-label="Mover ${esc(p.name)} antes">←</button><button type="button" data-home-move="1" aria-label="Mover ${esc(p.name)} después">→</button></div>`:''}</article>`;}
+  function gallery(key,editing){const label=collections.find(c=>c.key===key).name,items=ordered(key);return `<section class="home-gallery" aria-label="${label}" data-home-gallery="${key}"><div class="home-gallery-head"><h2>${label}</h2><div class="home-gallery-actions">${editing?`<button type="button" class="home-new-product" data-home-new="${key}">+ Producto</button>`:''}<button type="button" class="home-see-all" data-home-collection="${key}">Ver colección <span aria-hidden="true">→</span></button><button type="button" class="home-scroll" data-home-scroll="${key}" data-home-direction="-1" aria-label="Ver productos anteriores de ${label}">‹</button><button type="button" class="home-scroll" data-home-scroll="${key}" data-home-direction="1" aria-label="Ver más productos de ${label}">›</button></div></div><div class="home-product-strip" data-home-strip="${key}">${items.length?items.map(item=>card(item,key,editing)).join(''):`<div class="home-gallery-empty"><span>${context.state.storeProductsLoaded?'Estamos preparando esta colección.':'Cargando productos…'}</span>${editing?`<button type="button" class="btn btn-ghost" data-home-new="${key}">Armar un producto para ${label}</button>`:`<a href="${esc(whatsapp('Hola SALMOS, quiero consultar por '+label+'.'))}" target="_blank" rel="noopener">Consultar modelos →</a>`}</div>`}</div></section>`;}
+  function sideCard(key,editing){const label=collections.find(c=>c.key===key).name,items=ordered(key),selected=context.state.config?.storefrontVisuals?.covers?.[key]?.[document.documentElement.dataset.theme==='light'?'light':'dark']?.productId,first=items.find(item=>Number(item.product.id)===Number(selected))||items[0];return `<section class="home-side-card"><button type="button" class="home-side-link" data-home-collection="${key}">${first?imageHtml(first.product,first.image,label):''}<span><strong>${label}</strong><small>${items.length?`${items.length} ${items.length===1?'producto':'productos'}`:'Consultar opciones'}</small></span><span class="home-side-arrow" aria-hidden="true">↗</span></button>${editing&&first?`<button class="home-side-edit" type="button" data-home-edit="${first.product.id}" data-home-media="${Number(first.image.id)||0}" aria-label="Editar portada de ${label}">Editar producto</button>`:''}</section>`;}
+  function render(){if(!context)return;const home=isHome(),s=context.state,editing=Boolean(s.storeOrderEditor?.enabled);$('#storeHome')?.classList.toggle('hidden',!home);$('#catalogHeading')?.classList.toggle('hidden',home);document.body.classList.toggle('store-home-view',home);const theme=document.documentElement.dataset.theme==='light'?'light':'dark',background=s.config?.storefrontVisuals?.pageBackgrounds?.[theme];if(background?.url)document.body.style.setProperty('--home-page-background',`url("${context.apiUrl(background.url)}")`);else document.body.style.removeProperty('--home-page-background');
+    if(home&&$('#homeCategoryGrid')){const html=`<div class="home-galleries">${['hombre','mujer','kids'].map(key=>gallery(key,editing)).join('')}</div><aside class="home-side-rail" aria-label="Más en SALMOS">${['gorras','tazas','libros','agendas','actividades'].map(key=>sideCard(key,editing)).join('')}</aside>`;if(html!==lastMarkup){const positions=new Map([...document.querySelectorAll('[data-home-strip]')].map(row=>[row.dataset.homeStrip,row.scrollLeft]));$('#homeCategoryGrid').innerHTML=html;for(const row of document.querySelectorAll('[data-home-strip]'))row.scrollLeft=positions.get(row.dataset.homeStrip)||0;lastMarkup=html;}}
     refreshContactLinks();
   }
+  function remember(key){const ids=[...document.querySelectorAll(`[data-home-strip="${key}"] [data-home-product-card]`)].map(card=>Number(card.dataset.homeProductCard));context.onHomeOrder?.(key,ids);lastMarkup='';}
   function whatsapp(message) {
     const phone=String(context.state.config?.whatsapp || context.cfg.STORE_WHATSAPP || '5491162691341').replace(/\D/g,'');
     return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
@@ -130,24 +86,20 @@
     context.closeCart();
     dialog('manualShippingDialog','Consultar envío',manualDeliveryForm());
   }
-  function backgroundAsset(product,chosen) {
-    if(!chosen) return null;
-    const theme=document.documentElement.dataset.theme||'dark';
-    const assets=context.state.config?.productBackgroundAssets||[];
-    const name=normalize(chosen.name||chosen.label||'');
-    const family=/alfombra|shag|carpet/.test(name)?'carpet':/marmol|marble/.test(name)?'marble':'';
-    if(!family) return chosen;
-    const desired=theme==='light'?/blanc|crema|claro|light|ivory/:/marron|oscuro|dark|brown|negro/;
-    if(desired.test(name)) return chosen;
-    const sameFamily=asset=>family==='carpet'?/alfombra|shag|carpet/.test(normalize(asset.name||asset.label)):/marmol|marble/.test(normalize(asset.name||asset.label));
-    return assets.find(asset=>sameFamily(asset)&&desired.test(normalize(asset.name||asset.label)))||chosen;
+  function backgroundAsset(product,chosen){
+    if(!chosen)return null;const theme=document.documentElement.dataset.theme==='light'?'light':'dark',visual=context.state.config?.storefrontVisuals,configured=isGarment(product)?visual?.peoplePhotoBackgrounds?.[theme]:visual?.objectPhotoBackgrounds?.[theme];
+    const name=normalize(chosen.name||''),family=/alfombra|carpet|shag/.test(name)?/alfombra|carpet|shag/:/marmol|marble|pizarra/.test(name)?/marmol|marble|pizarra/:null;if(!family)return chosen;
+    const desired=theme==='light'?/blanc|crema|claro|light|ivory/:/marron|oscuro|dark|brown|negro/;if(desired.test(name)&&(!isGarment(product)||!/tazas?|vasos?|mug|chop/.test(name)))return chosen;
+    if(configured?.url)return configured;return (context.state.config?.productBackgroundAssets||[]).find(asset=>family.test(normalize(asset.name))&&desired.test(normalize(asset.name))&&(!isGarment(product)||!/tazas?|vasos?|mug|chop/.test(normalize(asset.name))))||chosen;
   }
-  function init(options) {
-    context=options;
-    document.addEventListener('error',event=>{const image=event.target;if(image.matches?.('.home-live-photo img')){const host=image.closest('.home-category-media'),key=host?.closest('[data-home-collection]')?.dataset.homeCollection;if(host)host.innerHTML=coverPlaceholder(collections.find(c=>c.key===key)||{name:'SALMOS',key:''});}},true);
+  function init(options){context=options;
     document.addEventListener('click',event=>{
-      const category=event.target.closest('[data-home-collection]');
-      if(category){event.preventDefault();navigate(category.dataset.homeCollection);return;}
+      const edit=event.target.closest('[data-home-edit]');if(edit){event.preventDefault();context.editProduct?.(Number(edit.dataset.homeEdit),Number(edit.dataset.homeMedia));return;}
+      const add=event.target.closest('[data-home-new]');if(add){event.preventDefault();context.newProduct?.(add.dataset.homeNew);return;}
+      const move=event.target.closest('[data-home-move]');if(move){if(context.state.storeOrderEditor?.saving||context.state.storeOrderEditor?.preparing)return;const card=move.closest('[data-home-product-card]'),next=Number(move.dataset.homeMove)>0?card.nextElementSibling:card.previousElementSibling;if(next){card.parentElement.insertBefore(card,Number(move.dataset.homeMove)>0?next.nextSibling:next);remember(card.dataset.homeRow);}return;}
+      const scroll=event.target.closest('[data-home-scroll]');if(scroll){const strip=document.querySelector(`[data-home-strip="${scroll.dataset.homeScroll}"]`);strip?.scrollBy({left:Number(scroll.dataset.homeDirection)*strip.clientWidth*.8,behavior:'smooth'});return;}
+      const product=event.target.closest('[data-home-product]');if(product){event.preventDefault();context.openProduct(Number(product.dataset.homeProduct));return;}
+      const category=event.target.closest('[data-home-collection]');if(category){event.preventDefault();navigate(category.dataset.homeCollection);return;}
       if(event.target.closest('[data-store-home]')){event.preventDefault();goHome();return;}
       if(event.target.closest('[data-home-all]')){event.preventDefault();navigate();return;}
       if(event.target.closest('[data-home-wholesale]')){event.preventDefault();openWholesale();return;}
@@ -155,14 +107,12 @@
       if(event.target.closest('[data-home-dialog-close]')){event.target.closest('dialog')?.close();return;}
       if(event.target.closest('[data-home-wholesale-cart]')){event.target.closest('dialog')?.close();if(context.state.cart.length)context.openCart();else navigate();return;}
     });
-    const update=event=>{
-      const input=event.target.closest('[data-manual-delivery]');if(!input)return;
-      const draft=context.state.manualDelivery??={};draft[input.dataset.manualDelivery]=input.value.trim();refreshContactLinks();
-    };
-    document.addEventListener('input',update);document.addEventListener('change',update);
-    const previous=history.state?.salmosCollection;
-    if(previous)navigate(previous,false);
-    render();
+    document.addEventListener('dragstart',event=>{const card=event.target.closest('[data-home-product-card]');if(!context.state.storeOrderEditor?.enabled||context.state.storeOrderEditor.saving||context.state.storeOrderEditor.preparing||!card)return;drag=card;event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',card.dataset.homeProductCard);card.classList.add('sorting');});
+    document.addEventListener('dragover',event=>{const card=event.target.closest('[data-home-product-card]');if(drag&&card?.dataset.homeRow===drag.dataset.homeRow){event.preventDefault();event.dataTransfer.dropEffect='move';}});
+    document.addEventListener('drop',event=>{const card=event.target.closest('[data-home-product-card]');if(!drag||!card||card===drag||card.dataset.homeRow!==drag.dataset.homeRow)return;event.preventDefault();const rect=card.getBoundingClientRect();card.parentElement.insertBefore(drag,event.clientX>rect.x+rect.width/2?card.nextSibling:card);remember(drag.dataset.homeRow);});
+    document.addEventListener('dragend',()=>{drag?.classList.remove('sorting');drag=null;});
+    const update=event=>{const input=event.target.closest('[data-manual-delivery]');if(!input)return;(context.state.manualDelivery??={})[input.dataset.manualDelivery]=input.value.trim();refreshContactLinks();};
+    document.addEventListener('input',update);document.addEventListener('change',update);render();
   }
-  window.SalmosHome={init,render,matches,isHome,selectedName,navigate,goHome,openShipping,openWholesale,refreshContactLinks,manualDeliveryForm,backgroundAsset,whatsapp,manualCorreoShipping:true};
+  window.SalmosHome={init,render,matches,isHome,selectedName,navigate,goHome,openShipping,openWholesale,refreshContactLinks,manualDeliveryForm,backgroundAsset,whatsapp,manualCorreoShipping:true,isGarment};
 })();
