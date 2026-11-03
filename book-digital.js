@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  let context,dialog,activeRequest=null,pollTimer;
+  let context,dialog,activeRequest=null,pollTimer,libraryButton=null,librarySequence=0;
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const statusName={paid:'Pago confirmado',pending:'Esperando confirmación del pago',rejected:'Pago rechazado o cancelado',refunded:'Pago reintegrado'};
   function editionHtml(product){return product.digitalBook?.enabled?`<div class="book-editions"><div><strong>Libro impreso</strong><span>${context.money(product.price_cents)}</span><small>Elegilo con los botones de compra de abajo.</small></div><div><strong>PDF descargable</strong><span>${context.money(product.digitalBook.priceCents)}</span><small>Sin envío. Descarga después de confirmar el pago.</small><button class="btn btn-secondary" type="button" data-buy-book-pdf="${Number(product.id)}">Comprar PDF</button></div></div>`:'';}
@@ -27,11 +27,18 @@
   }
   function orderHtml(order){return `<article class="pdf-order"><strong>${esc(order.title)}</strong><small>${esc(order.code)} · ${context.money(order.priceCents)}</small><p>${esc(statusName[order.status]||'Pago pendiente')}</p>${order.canDownload?`<button class="btn btn-primary full" type="button" data-download-book-pdf="${esc(order.id)}">Descargar PDF</button>`:`<p>El archivo sigue bloqueado hasta que el servidor confirme el pago.</p>`}<button class="btn btn-ghost full" type="button" data-refresh-book-pdf="${esc(order.id)}">Actualizar estado</button><p class="pdf-error" role="alert"></p></article>`;}
   async function openOrder(id,attempt=0){
-    const result=await request('/api/books-digital/orders/'+encodeURIComponent(id));show('Tu PDF',orderHtml(result.order));
+    const result=await request('/api/books-digital/orders/'+encodeURIComponent(id));show('Tu PDF',orderHtml(result.order));if(result.order.status==='paid'&&result.order.canDownload)showLibraryButton(true);else if(['refunded','rejected'].includes(result.order.status))refreshPurchases();
     if(result.order.status==='pending'&&attempt<4)pollTimer=setTimeout(()=>{if(dialog?.open)openOrder(id,attempt+1).catch(error=>context.toast(error.message,'error'));},2500);
   }
+  function showLibraryButton(visible){if(!libraryButton)return;libraryButton.hidden=!visible;libraryButton.classList.toggle('hidden',!visible);}
+  async function refreshPurchases(){
+    const sequence=++librarySequence;showLibraryButton(false);
+    if(!context.state.auth.user&&!localStorage.getItem('salmos_pdf_last_order'))return false;
+    try{const result=await request('/api/books-digital/orders'),visible=(result.items||[]).some(order=>order.status==='paid'&&order.canDownload===true);if(sequence===librarySequence)showLibraryButton(visible);return visible;}
+    catch{if(sequence===librarySequence)showLibraryButton(false);return false;}
+  }
   async function purchases(){
-    const result=await request('/api/books-digital/orders');show('Mis PDF',result.items.length?result.items.map(orderHtml).join(''):'<p>Todavía no hay compras digitales en este navegador o cuenta.</p>');
+    const result=await request('/api/books-digital/orders');showLibraryButton((result.items||[]).some(order=>order.status==='paid'&&order.canDownload===true));show('Mis PDF',result.items.length?result.items.map(orderHtml).join(''):'<p>Todavía no hay compras digitales en este navegador o cuenta.</p>');
   }
   async function download(id,button){
     button.disabled=true;const original=button.textContent;button.textContent='Confirmando pago…';
@@ -42,9 +49,9 @@
     }catch(error){const el=button.closest('.pdf-order')?.querySelector('.pdf-error');if(el)el.textContent=error.message;else context.toast(error.message,'error');}
     finally{button.disabled=false;button.textContent=original;}
   }
-  async function resume(){const params=new URLSearchParams(location.search),id=params.get('pdf_order');if(!id)return;history.replaceState({},'',location.pathname+location.hash);try{await openOrder(id);}catch(error){show('Tu PDF',`<p>${esc(error.message)}</p><button class="btn btn-primary full" data-open-my-pdfs>Ver mis PDF</button>`);}}
+  async function resume(){const params=new URLSearchParams(location.search),id=params.get('pdf_order');if(!id){await refreshPurchases();return;}history.replaceState({},'',location.pathname+location.hash);try{await openOrder(id);}catch(error){show('Tu PDF',`<p>${esc(error.message)}</p><button class="btn btn-primary full" data-open-my-pdfs>Ver mis PDF</button>`);}}
   function init(options){context=options;
-    const account=document.querySelector('#accountBtn');if(account){const button=document.createElement('button');button.className='icon-btn';button.type='button';button.dataset.openMyPdfs='';button.title='Mis PDF';button.setAttribute('aria-label','Mis PDF');button.innerHTML='<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h8l4 4v14H6zM14 3v5h4M12 11v6m-3-3 3 3 3-3"/></svg>';account.after(button);}
+    const account=document.querySelector('#accountBtn');if(account){const button=document.createElement('button');button.className='icon-btn my-pdfs-button hidden';button.hidden=true;button.type='button';button.dataset.openMyPdfs='';button.title='Mis PDF comprados';button.setAttribute('aria-label','Mis PDF comprados');button.innerHTML='<i class="fa-solid fa-file-pdf" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2h9l5 5v15H5zM14 2v6h5"/><text x="5.7" y="17" fill="currentColor" stroke="none" font-family="Arial,sans-serif" font-size="6.2" font-weight="700">PDF</text></svg></i><span>Mis PDF</span>';libraryButton=button;account.after(button);}
     document.addEventListener('submit',event=>{if(event.target.id==='bookPdfCheckout'){event.preventDefault();checkout(event.target);}});
     document.addEventListener('click',async event=>{
       const button=event.target.closest('[data-buy-book-pdf],[data-open-my-pdfs],[data-close-book-pdf],[data-refresh-book-pdf],[data-download-book-pdf],[data-pdf-signin]');if(!button)return;
@@ -52,5 +59,5 @@
       catch(error){context.toast(error.message,'error');}
     });
   }
-  window.SalmosDigital={init,editionHtml,resume};
+  window.SalmosDigital={init,editionHtml,resume,refreshPurchases};
 })();
