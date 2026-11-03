@@ -637,9 +637,30 @@
     qs('#storeBackgroundGallery').addEventListener('click',event=>{const choice=event.target.closest('[data-store-background]');if(choice)applyStorePhotoBackground(state.activeCategory,Number(choice.dataset.storeBackground)).catch(error=>toast(error.message,'error'));});
     qs('#storeBackgroundScope').addEventListener('change',event=>{if(state.storeOrderEditor.saving)return;state.activeCategory=event.target.value;renderCategories();renderProducts();});
     document.addEventListener('salmos-color-error',event=>toast(event.detail,'error'));
-    document.addEventListener('click',e=>{if(!state.storeOrderEditor?.enabled)return;const card=e.target.closest('.product-card');if(!card)return;const background=e.target.closest('.store-product-background');if(background){e.stopImmediatePropagation();if(e.target.closest('summary')){e.preventDefault();background.open=!background.open;return;}const choice=e.target.closest('[data-store-background]');if(choice){e.preventDefault();applyStorePhotoBackground('product-'+card.dataset.productId,Number(choice.dataset.storeBackground)).catch(error=>toast(error.message,'error'));}return;}const photoStep=e.target.closest('[data-card-media-step]');if(photoStep){e.preventDefault();e.stopImmediatePropagation();cycleProductCardMedia(photoStep);return;}e.preventDefault();e.stopImmediatePropagation();const step=e.target.closest('[data-store-order-step]');if(step&&!state.storeOrderEditor.saving){const grid=card.parentElement,cards=[...grid.children],index=cards.indexOf(card),next=cards[index+Number(step.dataset.storeOrderStep)];if(next){if(Number(step.dataset.storeOrderStep)<0)grid.insertBefore(card,next);else grid.insertBefore(card,next.nextSibling);rememberStoreProductOrder();}}},true);
+    document.addEventListener('click',e=>{if(!state.storeOrderEditor?.enabled)return;const card=e.target.closest('.product-card');if(!card)return;const edit=e.target.closest('[data-edit-store-production]');if(edit){e.preventDefault();e.stopImmediatePropagation();openStoreProductProduction(card);return;}const background=e.target.closest('.store-product-background');if(background){e.stopImmediatePropagation();if(e.target.closest('summary')){e.preventDefault();background.open=!background.open;return;}const choice=e.target.closest('[data-store-background]');if(choice){e.preventDefault();applyStorePhotoBackground('product-'+card.dataset.productId,Number(choice.dataset.storeBackground)).catch(error=>toast(error.message,'error'));}return;}const photoStep=e.target.closest('[data-card-media-step]');if(photoStep){e.preventDefault();e.stopImmediatePropagation();cycleProductCardMedia(photoStep);return;}e.preventDefault();e.stopImmediatePropagation();const step=e.target.closest('[data-store-order-step]');if(step&&!state.storeOrderEditor.saving){const grid=card.parentElement,cards=[...grid.children],index=cards.indexOf(card),next=cards[index+Number(step.dataset.storeOrderStep)];if(next){if(Number(step.dataset.storeOrderStep)<0)grid.insertBefore(card,next);else grid.insertBefore(card,next.nextSibling);rememberStoreProductOrder();}}},true);
     window.addEventListener('beforeunload',e=>{if(state.storeOrderEditor?.drafts.size||state.storeOrderEditor?.backgroundDirty){e.preventDefault();e.returnValue='';}});
     for(const id of ['productGrid','orderProductGrid'])bindStoreOrderGrid(qs('#'+id));
+  }
+  async function openStoreProductProduction(card){
+    if(!card||document.querySelector('#storeProductionDialog'))return;
+    const productId=Number(card.dataset.productId),product=state.products.find(row=>Number(row.id)===productId),index=Number(qs('.product-media',card)?.dataset.mediaIndex)||0,mediaId=Number(productCardImages(product||{})[index]?.id)||0;
+    if(!productId)return;
+    const dialog=document.createElement('dialog');dialog.id='storeProductionDialog';dialog.className='store-production-dialog';dialog.setAttribute('aria-label','Producción y publicación');
+    dialog.innerHTML='<button type="button" class="icon-btn" aria-label="Cerrar producción y publicación">×</button><iframe title="Producción y publicación del producto"></iframe>';
+    const frame=dialog.querySelector('iframe'),url=new URL('admin.html',location.href);url.searchParams.set('embeddedProduction','1');url.searchParams.set('productionProduct',String(productId));if(mediaId)url.searchParams.set('productionMedia',String(mediaId));
+    frame.src=url.href;document.body.append(dialog);
+    const requestClose=()=>frame.contentWindow?.postMessage({type:'salmos-request-production-close'},location.origin);
+    dialog.querySelector('button').addEventListener('click',requestClose);dialog.addEventListener('cancel',event=>{event.preventDefault();requestClose();});
+    const receive=async event=>{
+      if(event.origin!==location.origin||event.source!==frame.contentWindow||event.data?.type!=='salmos-production-closed')return;
+      window.removeEventListener('message',receive);dialog.close();dialog.remove();
+      if(event.data.saved){
+        try{const data=await api(`/api/products/${productId}`,{cache:'no-store'});if(data.item){const index=state.products.findIndex(row=>Number(row.id)===productId);if(index>=0)state.products[index]={...state.products[index],...data.item};}}
+        catch(error){if(error.status===404)state.products=state.products.filter(row=>Number(row.id)!==productId);else toast('Guardado. Recargá para ver las nuevas fotos.','error');}
+        renderCategories();renderProducts();
+      }
+    };
+    window.addEventListener('message',receive);dialog.showModal();
   }
   function bindStoreOrderGrid(grid){
     if(!grid||grid.dataset.orderBound)return;grid.dataset.orderBound='1';let drag=null;
@@ -648,7 +669,7 @@
       const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.product-card');if(target&&target!==drag.card&&target.parentElement===grid){const cards=[...grid.children],forward=cards.indexOf(drag.card)<cards.indexOf(target);grid.insertBefore(drag.card,forward?target.nextSibling:target);}
       if(e.clientY>window.innerHeight-64)window.scrollBy(0,18);else if(e.clientY<140)window.scrollBy(0,-18);
     });
-    const finish=e=>{if(!drag||e.pointerId!==drag.id)return;const moved=drag.moved;drag.card.classList.remove('sorting');drag=null;if(moved)rememberStoreProductOrder();};grid.addEventListener('pointerup',finish);grid.addEventListener('pointercancel',finish);grid.addEventListener('lostpointercapture',finish);
+    const finish=e=>{if(!drag||e.pointerId!==drag.id)return;const {moved,card}=drag;card.classList.remove('sorting');drag=null;if(moved)rememberStoreProductOrder();else if(e.type==='pointerup')openStoreProductProduction(card);};grid.addEventListener('pointerup',finish);grid.addEventListener('pointercancel',finish);grid.addEventListener('lostpointercapture',finish);
     grid.addEventListener('dragstart',e=>e.preventDefault());
   }
   function rememberStoreProductOrder(){
@@ -657,7 +678,7 @@
   }
   function renderStoreOrderControls(){
     const editor=state.storeOrderEditor;if(!editor?.enabled)return;const title=state.activeCategory==='all'?'Todos':state.categories.find(c=>c.slug===state.activeCategory)?.name||state.activeCategory;
-    qs('#storeOrderTitle').textContent=`Ordenar: ${title}`;qs('#storeOrderStatus').textContent=editor.foregroundError?`No se pudieron preparar todas las fotos: ${editor.foregroundError} Elegí el fondo otra vez para reintentar.`:editor.preparing?'Preparando fotos sin fondo…':editor.saving?'Guardando…':`${editor.drafts.size?`${editor.drafts.size} pestaña(s) con cambios sin guardar. `:''}${editor.backgroundDirty?'Fondo sin guardar. ':''}Arrastrá las miniaturas o usá ← →. Cada pestaña conserva su propio orden.`;
+    qs('#storeOrderTitle').textContent=`Ordenar: ${title}`;qs('#storeOrderStatus').textContent=editor.foregroundError?`No se pudieron preparar todas las fotos: ${editor.foregroundError} Elegí el fondo otra vez para reintentar.`:editor.preparing?'Preparando fotos sin fondo…':editor.saving?'Guardando…':`${editor.drafts.size?`${editor.drafts.size} pestaña(s) con cambios sin guardar. `:''}${editor.backgroundDirty?'Fondo sin guardar. ':''}Tocá una foto para editar. Arrastrá las miniaturas o usá ← → para ordenarlas.`;
     qs('#saveStoreOrder').disabled=editor.saving||editor.preparing||editor.foregroundError||(!editor.drafts.size&&!editor.backgroundDirty);qs('#discardStoreOrder').disabled=editor.saving||editor.preparing||(!editor.drafts.size&&!editor.backgroundDirty);renderStoreBackgroundControls();
     let n=0;for(const id of ['productGrid','orderProductGrid'])for(const card of qsa('.product-card',qs('#'+id))){let controls=qs('.store-order-card-controls',card);if(!controls){controls=document.createElement('div');controls.className='store-order-card-controls';qs('.product-body',card).appendChild(controls);}controls.innerHTML=`<button type="button" data-store-order-step="-1" aria-label="Mover ${escapeHtml(qs('.product-name',card)?.textContent||'producto')} antes" ${editor.saving?'disabled':''}>←</button><span>#${++n}</span><button type="button" data-store-order-step="1" aria-label="Mover después" ${editor.saving?'disabled':''}>→</button>`;let backgrounds=qs('.store-product-background',card);if(!backgrounds){backgrounds=document.createElement('details');backgrounds.className='store-product-background';qs('.product-body',card).appendChild(backgrounds);}const product=state.products.find(item=>Number(item.id)===Number(card.dataset.productId)),own=Object.hasOwn(editor.backgrounds.products,String(card.dataset.productId));backgrounds.innerHTML=`<summary>Fondo de todas las fotos</summary><div class="store-background-gallery">${storeBackgroundChoices(own?editor.backgrounds.products[card.dataset.productId]:-1,true,editor.saving||editor.preparing)}</div>`;}
   }
@@ -697,7 +718,7 @@
     }};
     const results=await Promise.allSettled([prepare(),prepare()]);const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   }
-  function productBackground(p){const id=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id)||0;const choice=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id),assets=state.config?.productBackgroundAssets||[];const selected=assets.find(asset=>Number(asset.id)===id)||(choice===null?assets.find(asset=>/alfombra|shag|carpet/i.test(asset.name||'')&&/marr[oó]n|brown|oscuro|dark/i.test(asset.name||'')):null)||null;return window.SalmosHome?.backgroundAsset(p,selected)||selected;}
+  function productBackground(p){const id=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id)||0;const choice=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id),assets=state.config?.productBackgroundAssets||[];const theme=document.documentElement.dataset.theme==='light'?'light':'dark',themeBackground=state.config?.storefrontVisuals?.photoBackgrounds?.[theme];const selected=assets.find(asset=>Number(asset.id)===id)||(choice===null?themeBackground||assets.find(asset=>/alfombra|shag|carpet/i.test(asset.name||'')&&(theme==='light'?/blanc|crema|claro|light/i:/marr[oó]n|brown|oscuro|dark/i).test(asset.name||'')):null)||null;return window.SalmosHome?.backgroundAsset(p,selected)||selected;}
   function productBackgroundAttrs(p){const asset=productBackground(p),choice=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id);return `data-photo-background="${choice===0?'none':asset?.id||'original'}" style="--product-photo-background:${asset?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none'}"`;}
   function filteredProducts() {
     const q = state.query.trim().toLowerCase();
@@ -715,7 +736,7 @@
       : `<div class="product-placeholder">SALMOS</div>`;
     const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : '', Number(p.available_stock)<=0 ? '<span class="tag">AGOTADO</span>' : ''].join('');
     return `<article class="product-card" data-product-id="${p.id}" data-sale-mode="${escapeHtml(p.sale_mode||'stock')}" ${productBackgroundAttrs(p)}>
-      <div class="product-media" data-media-index="0">${image}${media.length>1?`<button type="button" class="product-photo-arrow previous" data-card-media-step="-1" aria-label="Foto anterior de ${escapeHtml(p.name)}">‹</button><button type="button" class="product-photo-arrow next" data-card-media-step="1" aria-label="Foto siguiente de ${escapeHtml(p.name)}">›</button><span class="product-photo-count" aria-live="polite">1 / ${media.length}</span>`:''}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
+      <div class="product-media" data-media-index="0">${image}${state.storeOrderEditor?.enabled?`<button type="button" class="product-edit-production" data-edit-store-production="${p.id}" aria-label="Editar producción y publicación de ${escapeHtml(p.name)}">Editar producción</button>`:''}${media.length>1?`<button type="button" class="product-photo-arrow previous" data-card-media-step="-1" aria-label="Foto anterior de ${escapeHtml(p.name)}">‹</button><button type="button" class="product-photo-arrow next" data-card-media-step="1" aria-label="Foto siguiente de ${escapeHtml(p.name)}">›</button><span class="product-photo-count" aria-live="polite">1 / ${media.length}</span>`:''}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
         <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
@@ -2440,7 +2461,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
   document.addEventListener('input',e=>{if(e.target.matches?.('#viaCargoDestination,#viaCargoAgency'))syncViaCargoFields();});
   document.addEventListener('change',e=>{if(e.target.matches?.('#viaCargoDeliveryType,#viaCargoAccept'))syncViaCargoFields();});
-  window.SalmosHome?.init({state,cfg,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart});
+  window.SalmosHome?.init({state,cfg,apiUrl,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart});
   window.SalmosDigital?.init({state,api,apiUrl,money,toast,authToken:currentIdToken,signIn:signInGoogle});
   boot();
 })();

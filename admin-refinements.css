@@ -1,0 +1,38 @@
+/* Controles uniformes, compactos y visibles también con estilos cargados al final. */
+html body #productionDialog .number-control15,html body #purchaseDialog .number-control15,html body .admin-dialog .number-control15{display:grid!important;grid-template-columns:30px minmax(44px,1fr) 30px!important;align-items:stretch!important;gap:0!important;height:40px!important;min-height:40px!important;min-width:104px;max-width:180px!important;width:100%!important;padding:0!important;border:1px solid var(--line)!important;border-radius:9px!important;overflow:hidden;background:var(--surface)!important;box-shadow:none!important}
+html body .admin-dialog .number-control15>button,html body #productionDialog .number-control15>button,html body #purchaseDialog .number-control15>button{display:grid!important;place-items:center!important;width:30px!important;min-width:30px!important;max-width:30px!important;height:38px!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;background:transparent!important;color:var(--text)!important;font:500 18px/1 sans-serif!important;box-shadow:none!important}
+html body .admin-dialog .number-control15>.input,html body #productionDialog .number-control15>.input,html body #purchaseDialog .number-control15>.input{width:100%!important;min-width:0!important;height:38px!important;min-height:0!important;padding:4px!important;border:0!important;border-radius:0!important;text-align:center!important;background:transparent!important;font-size:14px!important}
+html body .admin-dialog .number-control15>button:hover{background:color-mix(in srgb,var(--text) 8%,transparent)!important}
+html body #productionDialog .production-top-grid{display:flex!important;flex-wrap:wrap!important;justify-content:flex-start!important;align-items:end!important;gap:10px!important;max-width:none!important}
+html body #productionDialog .production-top-grid>.field{flex:0 1 170px!important;min-width:130px!important;max-width:240px!important;width:auto!important}
+html body #productionDialog .production-top-grid>.production-type-field{flex-basis:220px!important}
+html body #productionDialog .production-top-grid>.production-qty-field{flex-basis:120px!important;max-width:140px!important}
+html body #productionDialog .production-top-grid>.production-print-type-field{flex-basis:115px!important}
+html body #productionDialog .production-top-grid>.production-print-rate-field,html body #productionDialog .production-top-grid>.production-waste-field{flex-basis:170px!important}
+html body #productionDialog .production-top-grid label{font-size:12px!important;line-height:1.3!important}
+html body #productionDialog .production-top-grid .select{height:40px!important;min-height:40px!important;padding:6px 12px!important;border-radius:9px!important;font-size:14px!important}
+html body .admin-dialog .purchase-stepper{display:grid!important;grid-template-columns:30px minmax(44px,1fr) 30px!important;align-items:stretch!important;gap:0!important;max-width:180px!important;height:40px!important;border:1px solid var(--line)!important;border-radius:9px!important;overflow:hidden}
+html body .admin-dialog .purchase-stepper>button{width:30px!important;min-width:30px!important;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;font:500 18px/1 sans-serif!important;background:transparent!important;box-shadow:none!important}
+html body .admin-dialog .purchase-stepper>input{height:38px!important;min-height:0!important;width:100%!important;min-width:0!important;padding:4px!important;border:0!important;border-radius:0!important;text-align:center!important}
+html body #productionDialog [data-edit-production-material]{width:auto!important;max-width:100%!important;min-height:32px!important;height:32px!important;padding:6px 12px!important;border-radius:8px!important;font-size:12px!important;line-height:1!important;white-space:nowrap!important}
+#productionAudienceField{margin:12px 0!important}.product-audiences{padding:10px 14px!important;gap:10px 20px!important}.product-audiences legend{font-size:13px!important}.product-audiences label{font-size:14px!important}
+.purchase-pack-panel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;grid-column:1/-1!important;padding:12px 0 0}
+#purchaseItems .purchase-item-row>.purchase-pack-panel{grid-column:1/-1!important}
+.purchase-pack-panel .field{display:grid;gap:7px;min-width:0;margin:0}
+.purchase-pack-summary{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px 24px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.purchase-pack-summary span{display:flex;gap:8px;align-items:center;font-size:13px}
+#purchaseItems .purchase-item-pricing.is-pack-derived{grid-template-columns:1fr!important;padding:0!important}
+.is-pack-derived .purchase-quantity,.is-pack-derived .purchase-price{display:none!important}.is-pack-derived .purchase-row-actions{justify-self:end}
+.salmos-catalog-dialog{max-width:800px!important}.salmos-catalog-dialog .dialog-shell{max-width:100%!important}.salmos-catalog-rows{display:grid;gap:9px}
+.salmos-catalog-row{display:flex;gap:8px;align-items:end}.salmos-catalog-row>[data-catalog-label]{flex:1;min-width:100px}.salmos-catalog-row label{display:grid;gap:5px;max-width:115px;font-size:12px}.salmos-catalog-row label .input{min-width:0;width:100%}.salmos-catalog-row .icon-btn{flex:none;width:36px;height:36px;min-width:36px;min-height:36px;border-radius:9px}
+.salmos-catalog-status{color:var(--danger,#ee8ba9)}.salmos-catalog-dialog [data-catalog-add]{margin-top:14px}
+.book-cover-layers{display:grid;gap:10px;margin:12px 0}.book-cover-layer{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:10px}
+.book-cover-layer .field{min-width:0;display:grid;gap:6px}.book-cover-layer .icon-btn{width:36px;height:36px;min-height:36px}
+#purchaseFunding{border:1px solid var(--line);border-radius:12px;padding:14px;gap:12px!important}.purchase-funding [data-funding-new]{min-width:0}
+@media(max-width:760px){.purchase-pack-panel{grid-template-columns:repeat(2,minmax(0,1fr))}.book-cover-layer{grid-template-columns:1fr 1fr}.book-cover-layer>.field:first-child{grid-column:1/-1}.salmos-catalog-row{flex-wrap:wrap}.salmos-catalog-row>[data-catalog-label]{flex-basis:65%}html body #productionDialog .production-top-grid>.field{flex:1 1 140px!important}}
+@media(max-width:460px){.purchase-pack-panel{grid-template-columns:1fr}.purchase-pack-summary{display:grid;gap:7px}}
+
+html body #purchaseItems .is-pack-derived .purchase-row-actions{padding:0!important;min-height:0!important;height:auto!important;align-self:start!important}
+html body #productionDialog[data-book="true"] #productionSelectedDesigns .mockup-article-reference{display:none!important}
+
+html body #purchaseItems .purchase-item-pricing.is-pack-derived{padding:0!important;min-height:0!important}

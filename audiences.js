@@ -11,7 +11,7 @@
     return out;
   }
   const serialize=value=>names.filter(name=>parse(value).includes(name)).join(' | ');
-  function html(value,scope){const selected=parse(value);return `<fieldset class="product-audiences" data-audience-scope="${scope}"><legend>Mostrar en</legend>${names.map(name=>`<label><input type="checkbox" data-product-audience value="${name}" ${selected.includes(name)?'checked':''}>${name}</label>`).join('')}<button type="button" class="btn btn-ghost" data-audience-unisex>Unisex</button></fieldset>`;}
+  function html(value,scope){const selected=parse(value);return `<fieldset class="product-audiences" data-audience-scope="${scope}"><legend>Público del producto</legend>${names.map(name=>`<label><input type="checkbox" data-product-audience value="${name}" ${selected.includes(name)?'checked':''}>${name==='Kids'?'Niños / Kids':name}</label>`).join('')}<button type="button" class="btn btn-ghost" data-audience-unisex>Unisex</button></fieldset>`;}
   function read(root){return serialize([...root.querySelectorAll('[data-product-audience]:checked')].map(input=>input.value));}
   window.SalmosAudience={parse,serialize,html,read};
 })();

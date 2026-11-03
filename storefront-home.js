@@ -18,6 +18,7 @@
   const $ = selector => document.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function isBook(p) {
+    if(p.is_book||p.production_catalog?.materialType==='custom_libro')return true;
     const category=normalize(`${p.category_slug || ''} ${p.category_name || ''}`);
     return /libro|cuaderno|album|figurita|colorear|tomo/.test(category);
   }
@@ -53,6 +54,7 @@
   }
   function navigate(key='all',scroll=true) {
     const s=context.state;
+    if(key!=='all'&&s.storeProductsLoaded&&!s.products.some(product=>matches(product,key))){const name=collections.find(c=>c.key===key)?.name||'esta colección';dialog('collectionContactDialog',name,`<p>Consultanos por los modelos de esta colección.</p><a class="btn btn-primary full" target="_blank" rel="noopener" href="${esc(whatsapp('Hola SALMOS, quiero consultar por '+name+'.'))}">Consultar por WhatsApp</a>`);return;}
     s.storefrontCatalog=true;s.homeCollection=key==='all'?null:key;s.activeCategory='all';s.query='';
     if($('#searchInput')) $('#searchInput').value='';
     context.renderCategories();context.renderProducts();
@@ -65,21 +67,26 @@
     context.renderCategories();context.renderProducts();
     $('#storeHome')?.scrollIntoView({behavior:'smooth',block:'start'});
   }
-  function categoryPhoto(collection) {
+  function coverPlaceholder(collection){return `<span class="home-category-placeholder"><svg viewBox="0 0 64 64" aria-hidden="true">${['figuritas','colorear','animales'].includes(collection.key)?'<path d="M12 9h31l9 7v39H12zM43 9v7h9M21 25h22M21 34h22M21 43h15"/>':collection.key==='gorras'?'<path d="M12 37c0-18 40-18 40 0M12 37h40l8 10H5zM31 21v16"/>':collection.key==='tazas'?'<path d="M13 15h31v28c0 14-31 14-31 0zM44 20h7c12 0 12 21-7 21"/>':'<path d="m21 9-15 9 8 14 7-4v28h23V28l7 4 8-14-15-9c-4 10-19 10-23 0z"/>'}</svg></span>`;}
+  function categoryPhoto(collection,used) {
+    const theme=document.documentElement.dataset.theme==='light'?'light':'dark',visual=context.state.config?.storefrontVisuals,c=visual?.covers?.[collection.key]?.[theme];
+    const urlFor=url=>context.apiUrl?context.apiUrl(url):url;
     let candidates=context.state.products.filter(p=>matches(p,collection.key));
-    // Una foto masculina unisex no representa la entrada Mujer.
-    if(collection.key==='mujer') candidates.sort((a,b)=>Number(/mujer|femenin/.test(normalize(b.audience)))-Number(/mujer|femenin/.test(normalize(a.audience))));
-    const product=candidates.find(p=>context.productCardImages(p).length);
-    if(!product) return '';
-    const image=context.productCardImages(product)[0];
-    return `<span class="home-live-photo" ${context.productBackgroundAttrs(product)}><img src="${esc(image.url)}" alt="" loading="lazy" decoding="async"></span>`;
+    if(['mujer','hombre','kids'].includes(collection.key))candidates=candidates.filter(p=>!isBook(p)&&(/remera|camiseta|chomba|buzo|prenda|ropa|kids/.test(normalize(`${p.category_slug||''} ${p.category_name||''}`))||['shirt','chomba','hoodie'].includes(p.production_catalog?.materialType)));
+    if(collection.key==='mujer')candidates=candidates.filter(p=>/mujer|femenin/.test(normalize(p.audience))&&!/hombre|unisex/.test(normalize(p.audience)));
+    const product=candidates.find(p=>!used.has(Number(p.id))&&context.productCardImages(p).length),preferLibrary=Boolean(c?.selected)||['mujer','kids'].includes(collection.key),library=c?.url;
+    let source=preferLibrary&&library?{url:urlFor(library)}:product?context.productCardImages(product)[0]:library?{url:urlFor(library)}:null;
+    if(!source)return coverPlaceholder(collection);if(product&&(!preferLibrary||!library))used.add(Number(product.id));
+    const background=visual?.photoBackgrounds?.[theme];if(background&&source.foreground_url)source={...source,url:source.foreground_url};const style=background?.url?`style="--product-photo-background:url('${esc(urlFor(background.url))}')"`:context.productBackgroundAttrs(product||{id:0});
+    return `<span class="home-live-photo" ${style}><img src="${esc(source.url)}" alt="${esc(collection.name)}" loading="eager" decoding="async"></span>`;
   }
   function render() {
     if(!context) return;
-    const home=isHome(),section=$('#storeHome'),heading=$('#catalogHeading');
-    section?.classList.toggle('hidden',!home);heading?.classList.toggle('hidden',home);
-    document.body.classList.toggle('store-home-view',home);
-    if(home && $('#homeCategoryGrid')) $('#homeCategoryGrid').innerHTML=collections.filter(c=>context.state.products.some(p=>matches(p,c.key))).map(c=>`<button type="button" class="home-category" data-home-collection="${c.key}"><span class="home-category-media">${categoryPhoto(c)}</span><span class="home-category-label">${esc(c.name)}<span aria-hidden="true">→</span></span></button>`).join('');
+    const home=isHome(),section=$('#storeHome'),heading=$('#catalogHeading'),theme=document.documentElement.dataset.theme==='light'?'light':'dark';
+    section?.classList.toggle('hidden',!home);heading?.classList.toggle('hidden',home);document.body.classList.toggle('store-home-view',home);
+    const background=context.state.config?.storefrontVisuals?.pageBackgrounds?.[theme];
+    if(background?.url)document.body.style.setProperty('--home-page-background',`url("${context.apiUrl?context.apiUrl(background.url):background.url}")`);else document.body.style.removeProperty('--home-page-background');
+    if(home&&$('#homeCategoryGrid')){const used=new Set();$('#homeCategoryGrid').innerHTML=collections.slice(0,8).map(c=>`<button type="button" class="home-category" data-home-collection="${c.key}"><span class="home-category-media">${categoryPhoto(c,used)}</span><span class="home-category-label">${esc(c.name)}<span aria-hidden="true">→</span></span></button>`).join('');}
     refreshContactLinks();
   }
   function whatsapp(message) {
@@ -137,7 +144,7 @@
   }
   function init(options) {
     context=options;
-    document.addEventListener('error',event=>{const image=event.target;if(image.matches?.('.home-live-photo img'))image.closest('.home-live-photo').remove();},true);
+    document.addEventListener('error',event=>{const image=event.target;if(image.matches?.('.home-live-photo img')){const host=image.closest('.home-category-media'),key=host?.closest('[data-home-collection]')?.dataset.homeCollection;if(host)host.innerHTML=coverPlaceholder(collections.find(c=>c.key===key)||{name:'SALMOS',key:''});}},true);
     document.addEventListener('click',event=>{
       const category=event.target.closest('[data-home-collection]');
       if(category){event.preventDefault();navigate(category.dataset.homeCollection);return;}
