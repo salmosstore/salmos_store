@@ -657,7 +657,7 @@
       if(event.origin!==location.origin||event.source!==frame.contentWindow||event.data?.type!=='salmos-production-closed')return;
       window.removeEventListener('message',receive);dialog.close();dialog.remove();
       if(event.data.saved){
-        try{const savedId=Number(event.data.productId)||productId,data=await api(`/api/products/${savedId}`,{cache:'no-store'});if(data.item){const index=state.products.findIndex(row=>Number(row.id)===savedId);if(index>=0)state.products[index]={...state.products[index],...data.item};else state.products.push(data.item);}}
+        try{const savedId=Number(event.data.productId)||productId,data=await api(`/api/products/${savedId}`,{cache:'no-store'});if(data.item){productDetailCache.delete(String(savedId));const index=state.products.findIndex(row=>Number(row.id)===savedId);if(index>=0)state.products[index]={...state.products[index],...data.item};else state.products.push(data.item);}}
         catch(error){if(error.status===404)state.products=state.products.filter(row=>Number(row.id)!==productId);else toast('Guardado. Recargá para ver las nuevas fotos.','error');}
         renderCategories();renderProducts();
       }
@@ -830,20 +830,20 @@
     const grid=qs('#featuredGrid');if(grid)grid.innerHTML='';
   }
 
-  async function openProduct(id, options={}) {
-    try {
-      const data = await api(`/api/products/${id}`);
-      const p = data.item;
-      const preferredMediaId=Number(options.mediaId)||Number(window.SalmosHome?.imageFor(p,state.homeCollection)?.id)||0;
-      state.detailMediaIndex=Math.max(0,(p.images||[]).findIndex(image=>Number(image.id)===preferredMediaId));
-      state.selectedProduct = p;
-      state.selectedColor = p.colors?.[0] || null;
-      state.selectedVariantId = firstAvailableVariant(p, state.selectedColor)?.id || null;
-      renderProductModal();
-      openModal('#productModal');
-      if(options.updatePath!==false) setProductPath(p);
-      return p;
-    } catch (err) { toast(err.message, 'error'); return null; }
+  const productDetailCache=new Map(),productDetailRequests=new Map();let productOpenSequence=0;
+  function requestProductDetails(id){
+    const key=String(id);if(productDetailRequests.has(key))return productDetailRequests.get(key);
+    const request=api(`/api/products/${encodeURIComponent(key)}`).then(data=>{if(!data?.item)throw new Error('No se pudo cargar el producto.');productDetailCache.set(key,{item:data.item,at:Date.now()});productDetailCache.set(String(data.item.id),{item:data.item,at:Date.now()});return data.item;}).finally(()=>productDetailRequests.delete(key));productDetailRequests.set(key,request);return request;
+  }
+  function selectProductDetail(p,options){
+    const preferredMediaId=Number(options.mediaId)||Number(window.SalmosHome?.imageFor(p,state.homeCollection)?.id)||0;
+    state.detailMediaIndex=Math.max(0,(p.images||[]).findIndex(image=>Number(image.id)===preferredMediaId));state.selectedProduct=p;state.selectedColor=p.colors?.[0]||null;state.selectedVariantId=firstAvailableVariant(p,state.selectedColor)?.id||null;
+  }
+  async function openProduct(id,options={}){
+    const sequence=++productOpenSequence,cached=productDetailCache.get(String(id)),fresh=cached&&Date.now()-cached.at<20000,catalog=state.products.find(product=>Number(product.id)===Number(id)||product.slug===String(id)),initial=cached?.item||catalog||{id,name:'Producto',images:[]};
+    state.productDetailLoading=!fresh;state.productDetailError='';selectProductDetail(initial,options);renderProductModal();openModal('#productModal');if(options.updatePath!==false&&initial.slug)setProductPath(initial);if(fresh)return cached.item;
+    try{const product=await requestProductDetails(id);if(sequence!==productOpenSequence||!state.selectedProduct||!qs('#productModal').classList.contains('open'))return product;state.productDetailLoading=false;selectProductDetail(product,options);renderProductModal();if(options.updatePath!==false)setProductPath(product);return product;}
+    catch(error){if(sequence!==productOpenSequence||!state.selectedProduct||!qs('#productModal').classList.contains('open'))return null;state.productDetailLoading=false;state.productDetailError=error.message||'No se pudieron cargar las opciones.';renderProductModal();return null;}
   }
 
   async function openProductFromCurrentPath() {
@@ -1009,7 +1009,8 @@
     if (!p) return;
     const media = p.images?.length ? productPhotoMedia(p) : [{ url: '', alt_text: p.name, media_type:'image' }];
     const catalogVariants = (p.variants || []).filter(v=>v.active!==0).map(v=>({...v,size:normalizePublicSize(v.size)}));
-    const availableVariants = catalogVariants.filter(v => publicVariantStock(v) > 0);
+    const loading=Boolean(state.productDetailLoading),detailError=state.productDetailError||'';
+    const availableVariants = loading||detailError?[]:catalogVariants.filter(v => publicVariantStock(v) > 0);
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(catalogVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
     if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
@@ -1021,9 +1022,9 @@
     const usesSizes=productUsesSizes(p);
     const sizes = usesSizes?[...new Set(catalogVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))].sort(publicSizeOrder):[];
     const attributeCells=[];
-    if(usesSizes)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
+    if(usesSizes&&!loading&&!detailError)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
     if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
-    if(colors.length)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
+    if(colors.length&&!loading&&!detailError)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
     const modal = qs('#productModal'),previousContent=qs('.product-modal-content',modal),previousScroll=previousContent?.dataset.productId===String(p.id)?previousContent.scrollTop:0;
     modal.innerHTML = `
       <div class="product-modal-content" data-product-id="${p.id}">
@@ -1039,11 +1040,12 @@
           <h2>${escapeHtml(p.name)}</h2>
           <div class="price-row detail-price-centered ${p.digitalBook?.enabled?'hidden':''}"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
           ${window.SalmosDigital?.editionHtml(p)||''}
+          ${loading?'<div class="product-detail-status" role="status">Cargando opciones…</div>':detailError?`<div class="product-detail-status" role="alert">${escapeHtml(detailError)}<button type="button" class="btn btn-ghost" data-retry-product="${escapeHtml(p.id)}">Reintentar</button></div>`:''}
           ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${!selected?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
+          ${!selected&&!loading&&!detailError?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
         </div>
       </div>
       </div>
@@ -2100,6 +2102,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         if(strip&&count){const current=Math.round(strip.scrollLeft/Math.max(1,strip.clientWidth)),index=detailMedia.dataset.detailMediaIndex!==undefined?Number(detailMedia.dataset.detailMediaIndex):(current+Number(detailMedia.dataset.detailMediaStep)+count)%count;strip.scrollTo({left:index*strip.clientWidth,behavior:'smooth'});}return;
       }
       const card=e.target.closest('.product-card'); if(card){ if(card.dataset.saleMode==='order'){const p=state.products.find(x=>Number(x.id)===Number(card.dataset.productId));openCustomOrder('clothing',p||null);return;} openProduct(Number(card.dataset.productId)); return; }
+      const retryProduct=e.target.closest('[data-retry-product]');if(retryProduct){openProduct(retryProduct.dataset.retryProduct);return;}
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }
       const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=v?.id||null; renderProductModal(); return; }

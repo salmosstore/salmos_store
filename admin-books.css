@@ -82,3 +82,27 @@ body .unified-product-side .product-values17{display:grid;gap:5px;padding:4px 0;
 body .unified-product-side .product-cost-profit17{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:10px;line-height:1.4}
 body .unified-product-side .product-cost-profit17>span{display:inline-flex;gap:4px;align-items:baseline;white-space:nowrap}
 body .unified-product-side .product-price-button{width:100%;text-align:left;font-size:14px;line-height:1.4;padding:3px 0}
+body #productionDialog[data-book="true"] .production-top-grid{grid-template-columns:minmax(150px,1fr) minmax(180px,1.2fr) minmax(125px,.85fr) minmax(95px,.65fr)!important;max-width:920px}
+.production-book-variant-field>label{display:grid;gap:5px;margin:0}
+.storefront-settings{padding-bottom:20px;min-width:0}
+.storefront-background-section{margin-top:23px}
+.storefront-background-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.storefront-background-card{min-width:0;padding:13px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.storefront-background-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.storefront-background-heading h4{margin:0;font-size:15px}
+.storefront-background-heading .btn{padding:6px 11px;font-size:12px;min-height:32px}
+.storefront-background-preview{display:grid;place-items:center;height:132px;overflow:hidden;border-radius:8px;background:var(--surface-2);color:var(--muted);margin-bottom:10px}
+.storefront-background-preview img{width:100%;height:100%;min-height:0;object-fit:cover}
+.storefront-background-choices{display:flex;gap:8px;overflow-x:auto;padding:9px 0 4px;scrollbar-width:thin}
+.storefront-background-choice{flex:0 0 100px;display:grid;grid-template-rows:68px auto;gap:5px;padding:5px;border:1px solid var(--line);border-radius:9px;color:var(--text);background:var(--surface-2);cursor:pointer;text-align:left}
+.storefront-background-choice.active{border:2px solid var(--gold);padding:4px;background:color-mix(in srgb,var(--gold) 12%,var(--surface-2))}
+.storefront-background-choice img{width:100%;height:68px;object-fit:cover;border-radius:5px}
+.storefront-background-choice span{font-size:11px;line-height:1.3;overflow-wrap:anywhere}
+.storefront-settings-save{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:12px 0;background:var(--surface)}
+.storefront-settings-save p{margin:0;font-size:13px}
+body dialog.storefront-background-upload{width:min(540px,calc(100vw - 24px))}
+.storefront-upload-preview{display:grid;place-items:center;max-height:240px;overflow:hidden}
+.storefront-upload-preview img{width:100%;height:220px;object-fit:contain}
+@media(max-width:650px){.storefront-background-grid{grid-template-columns:1fr}body #productionDialog[data-book="true"] .production-top-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.storefront-settings-save{gap:10px;flex-wrap:wrap}.storefront-covers-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+body .admin-topbar #addPromotionBtn[hidden],body .admin-topbar #saveSettingsBtn[hidden]{display:none!important}
