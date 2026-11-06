@@ -25,10 +25,10 @@
     if(key==='otros-libros')return book&&!/cuaderno|album|figurita|colorear|animal|tomo|agenda/.test(t);
     return false;
   }
-  function isHome(){return !context.state.storefrontCatalog&&!context.state.query&&(!context.state.storeOrderEditor?.enabled||context.state.storeOrderEditor.view==='home');}
+  function isHome(){return !context.state.wholesaleMode&&!context.state.storefrontCatalog&&!context.state.query&&(!context.state.storeOrderEditor?.enabled||context.state.storeOrderEditor.view==='home');}
   function selectedName(){return collections.find(row=>row.key===context.state.homeCollection)?.name||'';}
-  function navigate(key='all',scroll=true){const s=context.state;s.storefrontCatalog=true;s.homeCollection=key==='all'?null:key;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='catalog';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();if(scroll)$('#catalogHeading')?.scrollIntoView({behavior:'smooth',block:'start'});}
-  function goHome(){const s=context.state;s.storefrontCatalog=false;s.homeCollection=null;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='home';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();$('#storeHome')?.scrollIntoView({behavior:'smooth',block:'start'});}
+  function navigate(key='all',scroll=true){const s=context.state;s.wholesaleMode=false;window.SalmosWholesale?.render();s.storefrontCatalog=true;s.homeCollection=key==='all'?null:key;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='catalog';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();if(scroll)$('#catalogHeading')?.scrollIntoView({behavior:'smooth',block:'start'});}
+  function goHome(){const s=context.state;s.wholesaleMode=false;window.SalmosWholesale?.render();s.storefrontCatalog=false;s.homeCollection=null;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='home';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();$('#storeHome')?.scrollIntoView({behavior:'smooth',block:'start'});}
   function imagesFor(p,key){
     if(!p)return [];
     const photos=context.productCardImages(p).filter(image=>!isGarment(p)||image.presentation_printed!==false),wanted={hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key];
@@ -85,9 +85,8 @@
     if(!el.open) el.showModal();
     refreshContactLinks();
   }
-  function openWholesale() {
-    dialog('wholesaleDialog','Cómo comprar por mayor',`<ol class="wholesale-steps"><li><strong>Armá tu pedido en el carrito.</strong> Elegí los productos y agregá las cantidades que necesitás.</li><li><strong>Remeras por curva de talles.</strong> Agregá la curva correspondiente al modelo. Si tenés dudas sobre qué talles incluir, consultanos.</li><li><strong>Gorras y tazas: desde 6 unidades.</strong> Completá la cantidad del tipo de producto que querés comprar por mayor.</li><li><strong>Confirmá el precio y las condiciones con SALMOS antes de pagar.</strong></li></ol><div class="home-dialog-actions"><button class="btn btn-primary" type="button" data-home-wholesale-cart>Armar pedido en el carrito</button><a class="btn btn-secondary" data-wholesale-whatsapp target="_blank" rel="noopener">Consultar mi pedido por WhatsApp</a></div>`);
-  }
+  function openWholesale(){context.closeCart();window.SalmosWholesale?.open();}
+
   function manualDeliveryForm() {
     const d=context.state.manualDelivery||{};
     return `<div class="manual-shipping"><p>Te cotizamos el envío personalmente. Envianos el destino y tu carrito por WhatsApp para confirmar el costo antes de pagar.</p><div class="form-grid"><label class="field">Localidad<input class="input" data-manual-delivery="locality" value="${esc(d.locality||'')}" autocomplete="address-level2"></label><label class="field">Provincia<input class="input" data-manual-delivery="province" value="${esc(d.province||'')}" autocomplete="address-level1"></label><label class="field">Código postal<input class="input" data-manual-delivery="postalCode" value="${esc(d.postalCode||'')}" autocomplete="postal-code" maxlength="12"></label><label class="field">Preferencia de entrega<select class="select" data-manual-delivery="type"><option value="">A coordinar</option><option value="home" ${d.type==='home'?'selected':''}>A domicilio</option><option value="agency" ${d.type==='agency'?'selected':''}>A sucursal</option></select></label></div><a class="btn btn-primary full" data-shipping-whatsapp href="${esc(shippingUrl())}" target="_blank" rel="noopener">Consultar envío por WhatsApp</a><p class="field-help">El costo del envío todavía no está incluido. Esta consulta no confirma ni cobra el pedido.</p></div>`;

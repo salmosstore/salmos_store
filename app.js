@@ -207,7 +207,7 @@
     localStorage.setItem('salmos_theme', actual);
     const meta = qs('meta[name="theme-color"]');
     if (meta) meta.content = actual === 'light' ? '#f6f2e8' : '#0b0b0c';
-    window.SalmosHome?.render();
+    window.SalmosHome?.render();window.SalmosWholesale?.render();
     if(state.storeProductsLoaded)renderProducts();
     if(state.selectedProduct)renderProductModal();
   }
@@ -837,7 +837,7 @@
   }
   function selectProductDetail(p,options){
     const preferredMediaId=Number(options.mediaId)||Number(window.SalmosHome?.imageFor(p,state.homeCollection)?.id)||0;
-    state.detailMediaIndex=Math.max(0,(p.images||[]).findIndex(image=>Number(image.id)===preferredMediaId));state.selectedProduct=p;state.selectedColor=p.colors?.[0]||null;state.selectedVariantId=firstAvailableVariant(p,state.selectedColor)?.id||null;
+    state.detailMediaIndex=Math.max(0,(p.images||[]).findIndex(image=>Number(image.id)===preferredMediaId));state.selectedProduct=p;state.selectedColor=p.colors?.[0]||null;state.selectedVariantId=productUsesSizes(p)?null:firstAvailableVariant(p,state.selectedColor)?.id||null;
   }
   async function openProduct(id,options={}){
     const sequence=++productOpenSequence,cached=productDetailCache.get(String(id)),fresh=cached&&Date.now()-cached.at<20000,catalog=state.products.find(product=>Number(product.id)===Number(id)||product.slug===String(id)),initial=cached?.item||catalog||{id,name:'Producto',images:[]};
@@ -1001,7 +1001,7 @@
 
   function productUsesSizes(product){
     const key=String(`${product?.category_slug||''} ${product?.category_name||''}`).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    return /(remera|camiseta|chomba|buzo|prenda|kids|infantil)/.test(key);
+    return Boolean(window.SalmosHome?.isGarment(product))||/(remera|camiseta|chomba|buzo|prenda|kids|infantil)/.test(key);
   }
 
   function renderProductModal() {
@@ -1014,7 +1014,7 @@
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(catalogVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
     if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
-    if (!activeVariant) {
+    if (!activeVariant && !productUsesSizes(p)) {
       const fallback = firstAvailableVariant({ variants: availableVariants }, state.selectedColor);
       state.selectedVariantId = fallback?.id || null;
     }
@@ -1022,7 +1022,7 @@
     const usesSizes=productUsesSizes(p);
     const sizes = usesSizes?[...new Set(catalogVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))].sort(publicSizeOrder):[];
     const attributeCells=[];
-    if(usesSizes&&!loading&&!detailError)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
+
     if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
     if(colors.length&&!loading&&!detailError)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
     const modal = qs('#productModal'),previousContent=qs('.product-modal-content',modal),previousScroll=previousContent?.dataset.productId===String(p.id)?previousContent.scrollTop:0;
@@ -1045,14 +1045,14 @@
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${!selected&&!loading&&!detailError?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
+          ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)&&!loading&&!detailError?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
         </div>
       </div>
       </div>
           <div class="detail-actions product-modal-actions">
             <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
-            <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>${p.digitalBook?.enabled?'Agregar impreso':'Agregar al carrito'}</span></button>
-            <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>${p.digitalBook?.enabled?'Comprar impreso':'Comprar ahora'}</span></button>
+            <button class="btn btn-secondary" data-add-cart ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>${p.digitalBook?.enabled?'Agregar impreso':'Agregar al carrito'}</span></button>
+            <button class="btn btn-primary" data-buy-now ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>${p.digitalBook?.enabled?'Comprar impreso':'Comprar ahora'}</span></button>
           </div>`;
     qs('.product-modal-content',modal).scrollTop=previousScroll;
     const strip=qs('#detailMediaStrip');
@@ -1062,17 +1062,32 @@
     }
   }
 
-  function addSelectedToCart(openCheckoutNow = false) {
-    const p = state.selectedProduct;
-    const v = p?.variants?.find(x => x.id === Number(state.selectedVariantId));
-    if (!p || !v || publicVariantStock(v) <= 0) return;
-    const existing = state.cart.find(x => x.variantId === v.id);
-    if (existing){existing.maxStock=publicVariantStock(v);existing.qty = Math.min(existing.qty + 1, existing.maxStock);}
-    else state.cart.push({ productId: p.id, variantId: v.id, name: p.name, color: v.color, size: v.size, priceCents: p.price_cents, qty: 1, maxStock: publicVariantStock(v), image: firstProductImage(p) });
-    saveCart();
-    closeModal('#productModal');
-    toast('Producto agregado al carrito', 'success');
-    if (openCheckoutNow) startCheckout(); else openCart();
+  let productChoiceContext=null;
+  function closeProductChoice(){document.getElementById('productChoiceDialog')?.close();productChoiceContext=null;}
+  function productChoice(title,body,onChoice){
+    let dialog=qs('#productChoiceDialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='productChoiceDialog';dialog.className='product-choice-dialog';document.body.append(dialog);dialog.addEventListener('click',event=>{const button=event.target.closest('[data-product-choice]');if(button)productChoiceContext?.(button.dataset.productChoice);if(event.target.closest('[data-close-product-choice]')||event.target===dialog)closeProductChoice();});dialog.addEventListener('close',()=>{if(!dialog.open)productChoiceContext=null;});}
+    dialog.innerHTML=`<div class="product-choice-head"><h3>${escapeHtml(title)}</h3><button type="button" class="icon-btn" data-close-product-choice aria-label="Cerrar">×</button></div>${body}`;productChoiceContext=onChoice;dialog.showModal();
+  }
+  function addProductVariants(product,rows,{checkout=false,wholesale=false}={}){
+    for(const {variant,quantity} of rows){const existing=state.cart.find(x=>Number(x.variantId)===Number(variant.id));if(!Number.isSafeInteger(quantity)||quantity<1||quantity+(existing?.qty||0)>Math.min(99,publicVariantStock(variant))){toast('No hay disponibilidad suficiente para esa cantidad.','error');return false;}}
+    for(const {variant:v,quantity} of rows){const existing=state.cart.find(x=>Number(x.variantId)===Number(v.id));if(existing){existing.maxStock=publicVariantStock(v);existing.qty+=quantity;}else state.cart.push({productId:product.id,variantId:v.id,name:product.name,color:v.color,size:v.size,priceCents:product.price_cents,qty:quantity,maxStock:publicVariantStock(v),image:firstProductImage(product)});}
+    closeProductChoice();saveCart();closeModal('#productModal');toast(rows.length>1?'Curva agregada al carrito':rows[0].quantity>1?`${rows[0].quantity} unidades agregadas al carrito`:'Producto agregado al carrito','success');window.SalmosWholesale?.render();
+    if(checkout)startCheckout();else if(!wholesale)openCart();return true;
+  }
+  function chooseProductSize(product,{checkout=false,wholesale=false}={}){
+    const variants=(product.variants||[]).filter(v=>v.active!==0&&(!state.selectedColor||v.color===state.selectedColor)),sizes=[...new Set(variants.map(v=>normalizePublicSize(v.size)).filter(Boolean))].sort(publicSizeOrder);
+    productChoice('¿En qué talle lo querés?',`${wholesale?'<p class="product-choice-note">Podés combinar diseños y colores. Desde 5 prendas se aplican los descuentos por cantidad configurados.</p>':''}<p class="product-choice-note">Tocá un talle para agregarlo al carrito.</p><div class="product-size-choices">${sizes.map(size=>{const variant=variants.find(v=>normalizePublicSize(v.size)===size&&publicVariantStock(v)>(state.cart.find(x=>Number(x.variantId)===Number(v.id))?.qty||0));return `<button type="button" class="option compact-option" data-product-choice="${variant?.id||''}" ${variant?'':'disabled'} aria-label="Talle ${escapeHtml(size)}${variant?'':', sin disponibilidad'}">${escapeHtml(size)}</button>`;}).join('')}</div>`,id=>{const variant=variants.find(v=>Number(v.id)===Number(id));if(variant)addProductVariants(product,[{variant,quantity:1}],{checkout,wholesale});});
+  }
+  function addSelectedToCart(openCheckoutNow=false){
+    const product=state.selectedProduct;if(!product||state.productDetailLoading||state.productDetailError)return;
+    const wholesale=Boolean(state.wholesaleMode),options={checkout:openCheckoutNow,wholesale},variants=(product.variants||[]).filter(v=>v.active!==0&&(!state.selectedColor||v.color===state.selectedColor));
+    if(productUsesSizes(product)){
+      if(!wholesale){chooseProductSize(product,options);return;}
+      const type=promotionProductType(product.category_slug||product.category_name,product.fit),rule=(state.config?.promotions||[]).find(r=>r.active!==false&&r.requireCurve&&(!r.triggerType||r.triggerType===type)&&(!r.triggerProductId||Number(r.triggerProductId)===Number(product.id))),sizes=rule?.curveSizes?.length?[...new Set(rule.curveSizes.map(normalizePublicSize))]:[...new Set(variants.map(v=>normalizePublicSize(v.size)).filter(Boolean))].sort(publicSizeOrder),curve=sizes.map(size=>({variant:variants.find(v=>normalizePublicSize(v.size)===size&&publicVariantStock(v)>(state.cart.find(x=>Number(x.variantId)===Number(v.id))?.qty||0)),quantity:1})),complete=curve.length>0&&curve.every(row=>row.variant);
+      productChoice('¿Curva entera del mismo diseño y color de remera?',`<p class="product-choice-note">${escapeHtml(product.name)} · ${escapeHtml(state.selectedColor||'')}<br>${sizes.map(escapeHtml).join(' · ')}</p>${complete?'':'<p class="product-choice-note" role="status">La curva completa no está disponible en este color. Podés elegir un surtido.</p>'}<div class="product-choice-actions"><button class="btn btn-primary" type="button" data-product-choice="curve" ${complete?'':'disabled'}>Sí, agregar curva</button><button class="btn btn-secondary" type="button" data-product-choice="mixed">No, elegir surtido</button></div><small>Los surtidos tienen descuentos desde 5 prendas, según las promociones vigentes.</small>`,choice=>{if(choice==='curve'&&complete)addProductVariants(product,curve,options);else if(choice==='mixed'){closeProductChoice();chooseProductSize(product,options);}});return;
+    }
+    const variant=variants.find(v=>Number(v.id)===Number(state.selectedVariantId))||variants.find(v=>publicVariantStock(v)>0);if(!variant)return;
+    const pack=wholesale&&['cap','mug','glass'].includes(promotionProductType(product.category_slug||product.category_name,product.fit));addProductVariants(product,[{variant,quantity:pack?6:1}],options);
   }
 
   function cartVariantLabel(item){return [item?.color,item?.size].map(v=>String(v||'').trim()).filter(Boolean).join(' · ')}
@@ -1081,8 +1096,10 @@ function normalizePromotions(value){
   if(typeof value==='string'){try{value=JSON.parse(value)}catch{throw new Error('Revisá las promociones guardadas.')}}
   if(!Array.isArray(value)||value.length>50)throw new Error('Podés guardar hasta 50 promociones.');
   return value.map((r,i)=>{
-    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:r.active!==false,trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
+    const p={id:String(r.id||`promo-${i+1}`).slice(0,80),name:String(r.name||'').trim().slice(0,100),active:![false,0,'false','0'].includes(r.active),trigger:r.trigger,threshold:Number(r.threshold),triggerProductId:Number(r.triggerProductId)||0,triggerType:String(r.triggerType||'').slice(0,50),target:r.target,targetProductId:Number(r.targetProductId)||0,targetType:String(r.targetType||'').slice(0,50),benefit:r.benefit,value:Number(r.value),basis:r.basis==='unit'?'unit':'total'};
     if(!p.name||!['amount','quantity','combination'].includes(p.trigger)||!['products','shipping','order'].includes(p.target)||!['percent','fixed','unit_price'].includes(p.benefit)||!Number.isSafeInteger(p.threshold)||p.threshold<(p.trigger==='quantity'?1:0)||!Number.isFinite(p.value)||p.value<0||!Number.isSafeInteger(p.triggerProductId)||p.triggerProductId<0||!Number.isSafeInteger(p.targetProductId)||p.targetProductId<0)throw new Error(`Revisá los campos de la promoción ${i+1}.`);
+    p.requireCurve=r.requireCurve===true;p.allowAssorted=r.allowAssorted!==false;p.curveMixed=r.curveMixed!==false;p.curveSizes=[...new Set((Array.isArray(r.curveSizes)?r.curveSizes:[]).map(promotionSize).filter(Boolean))];
+    if(p.requireCurve&&(!p.curveSizes.length||p.curveSizes.length>30))throw new Error('Elegí los talles de la curva mayorista.');
     if(p.trigger==='combination'){
       if(!Array.isArray(r.requirements)||!r.requirements.length||r.requirements.length>20)throw new Error('Agregá los tipos y cantidades de la combinación.');
       p.requirements=r.requirements.map(x=>({type:String(x.type||'').trim().slice(0,50),quantity:Number(x.quantity)}));
@@ -1096,22 +1113,35 @@ function normalizePromotions(value){
   });
 }
 function promotionProductType(category='',fit=''){const c=String(category).toLowerCase(),f=String(fit).toLowerCase();if(c.includes('remera')||c.includes('shirt'))return f.includes('over')?'shirt_oversize':f.includes('crop')?'shirt_crop':'shirt_classic';if(c.includes('gorra')||c.includes('cap'))return 'cap';if(c.includes('taza')||c.includes('mug'))return 'mug';if(c.includes('vaso')||c.includes('glass'))return 'glass';if(c.includes('termo')||c.includes('thermos'))return 'thermos';return c;}
+function promotionSize(value){return String(value??'').trim().toUpperCase().replace(/\s+/g,'').replace(/^2XL$/,'XXL').replace(/^3XL$/,'XXXL');}
 function calculatePromotions(rules,items,shippingCostCents=0){
-  const lines=items.map(x=>({productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),quantity:Number(x.quantity??x.qty)||0,price:Number(x.priceCents??x.price_cents)||0})),subtotal=lines.reduce((s,x)=>s+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0));
-  const chosen=new Map();
-  for(const rule of rules||[]){if(!rule.active)continue;
-    const combined=rule.trigger==='combination',requirements=rule.requirements||[];
-    if(combined&&(!requirements.length||requirements.some(r=>lines.filter(x=>x.type===r.type).reduce((n,x)=>n+x.quantity,0)<r.quantity)))continue;
-    const condition=lines.filter(x=>(!rule.triggerProductId||x.productId===rule.triggerProductId)&&(!rule.triggerType||x.type===rule.triggerType)),threshold=condition.reduce((s,x)=>s+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0);
-    if(!combined&&(!condition.length||threshold<rule.threshold))continue;
-    const targets=lines.filter(x=>(!rule.targetProductId||x.productId===rule.targetProductId)&&(!rule.targetType||(rule.targetType==='__combination__'?requirements.some(r=>r.type===x.type):x.type===rule.targetType))),productBase=targets.reduce((s,x)=>s+x.quantity*x.price,0),quantity=targets.reduce((s,x)=>s+x.quantity,0);
-    const base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:productBase;
-    let discount=rule.benefit==='unit_price'?targets.reduce((s,x)=>s+Math.max(0,x.price-rule.value)*x.quantity,0):rule.benefit==='percent'?Math.round(base*rule.value/100):rule.value*(rule.target==='products'&&rule.basis==='unit'?quantity:1);
-    discount=Math.max(0,Math.min(base,Math.round(discount)));const key=combined?(rule.target==='products'?`products:${rule.targetType||'all'}`:rule.target):rule.target==='products'&&rule.targetType?`products:${rule.targetType}`:rule.targetType||rule.triggerType?rule.target:'legacy';const prior=chosen.get(key);if(prior&&prior.discount>=discount)continue;chosen.set(key,{rule,discount,productBase});
+  const lines=items.map((x,index)=>({index,variantId:x.variantId??x.variant_id,productId:Number(x.productId??x.product_id),type:x.promotionType||promotionProductType(x.category_slug||x.category_name,x.fit),size:promotionSize(x.size),color:String(x.color||'').trim().toLowerCase(),quantity:Math.max(0,Math.floor(Number(x.quantity??x.qty)||0)),price:Math.max(0,Math.round(Number(x.priceCents??x.price_cents)||0))})),subtotal=lines.reduce((n,x)=>n+x.quantity*x.price,0),shipping=Math.max(0,Math.round(Number(shippingCostCents)||0)),candidates=[];
+  const active=r=>![false,0,'false','0'].includes(r.active),typeMatches=(expected,actual)=>expected==='__garments__'?/^(shirt_|remera|chomba|buzo|hoodie|ropa|prenda)/i.test(actual):actual===expected;
+  const effective=[...(rules||[])];
+  for(const rule of rules||[]){
+    const garment=/^(shirt_|remera|chomba|buzo|hoodie|ropa|prenda)/i.test(rule.triggerType||rule.targetType||'');
+    if(active(rule)&&rule.allowAssorted!==false&&garment&&rule.trigger==='quantity'&&rule.target==='products'&&(rule.requireCurve||Number(rule.threshold)>=5))effective.push({...rule,id:String(rule.id).slice(0,65)+'-surtido',name:String(rule.name)+' · surtidos',requireCurve:false,threshold:rule.requireCurve?5:Math.max(5,Number(rule.threshold)),triggerProductId:0,triggerType:'__garments__'});
   }
-  let pd=0,sd=0;const applied=[];for(const {rule,discount,productBase} of chosen.values()){const remainingProducts=Math.max(0,subtotal-pd),remainingShipping=Math.max(0,shipping-sd);const productPart=rule.target==='shipping'?0:Math.min(discount,rule.target==='products'?Math.min(productBase,remainingProducts):remainingProducts),shippingPart=rule.target==='products'?0:Math.min(remainingShipping,Math.max(0,discount-productPart));if(productPart+shippingPart>0){pd+=productPart;sd+=shippingPart;applied.push(rule)}}
-  return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd};
+  for(const rule of effective){if(!active(rule))continue;const combined=rule.trigger==='combination',requirements=rule.requirements||[],condition=lines.filter(x=>(!rule.triggerProductId||x.productId===Number(rule.triggerProductId))&&(!rule.triggerType||typeMatches(rule.triggerType,x.type)));
+    if(combined){if(!requirements.length||requirements.some(r=>lines.filter(x=>x.type===r.type).reduce((n,x)=>n+x.quantity,0)<Number(r.quantity)))continue;}
+    else if(!condition.length||condition.reduce((n,x)=>n+(rule.trigger==='quantity'?x.quantity:x.quantity*x.price),0)<Number(rule.threshold))continue;
+    if(rule.requireCurve){const sizes=(rule.curveSizes||[]).map(promotionSize),complete=pool=>sizes.length>0&&sizes.every(size=>pool.filter(x=>x.size===size).reduce((n,x)=>n+x.quantity,0)>=1);if(rule.curveMixed===false){if(![...new Set(condition.map(x=>x.productId+'|'+x.color))].some(key=>complete(condition.filter(x=>x.productId+'|'+x.color===key))))continue;}else if(!complete(condition))continue;}
+    let targets=lines.filter(x=>(!rule.targetProductId||x.productId===Number(rule.targetProductId))&&(!rule.targetType||(rule.targetType==='__combination__'?requirements.some(r=>r.type===x.type):typeMatches(rule.targetType,x.type))));if(rule.requireCurve&&rule.curveMixed===false&&rule.target==='products'){const sizes=rule.curveSizes.map(promotionSize),valid=new Set(condition.map(x=>x.productId+'|'+x.color).filter(key=>sizes.every(size=>condition.some(x=>x.productId+'|'+x.color===key&&x.size===size&&x.quantity>0))));targets=targets.filter(x=>valid.has(x.productId+'|'+x.color));}const base=rule.target==='shipping'?shipping:rule.target==='order'?subtotal+shipping:targets.reduce((n,x)=>n+x.quantity*x.price,0),quantity=targets.reduce((n,x)=>n+x.quantity,0);
+    let discount=rule.benefit==='unit_price'?targets.reduce((n,x)=>n+Math.max(0,x.price-Number(rule.value))*x.quantity,0):rule.benefit==='percent'?Math.round(base*Number(rule.value)/100):Number(rule.value)*(rule.target==='products'&&rule.basis==='unit'?quantity:1);discount=Math.max(0,Math.min(base,Math.round(discount)||0));if(!discount)continue;
+    candidates.push({rule,discount,targets:rule.target==='order'?lines:targets,shipping:rule.target!=='products',product:rule.target!=='shipping'});
+  }
+  // Pick the largest compatible discount without applying two offers to the same item or shipping charge.
+  const masks=new Map();for(const c of candidates){let mask=c.shipping?1n<<BigInt(lines.length):0n;if(c.product)for(const x of c.targets)mask|=1n<<BigInt(x.index);const key=mask.toString(),old=masks.get(key);if(!old||c.discount>old.discount)masks.set(key,{...c,mask});}
+  const options=[...masks.values()].sort((a,b)=>b.discount-a.discount||String(a.rule.id).localeCompare(String(b.rule.id))),suffix=new Array(options.length+1).fill(0);for(let i=options.length-1;i>=0;i--)suffix[i]=suffix[i+1]+options[i].discount;
+  let best=0,chosen=[],used=0n;for(const c of options)if(!(used&c.mask)){used|=c.mask;best+=c.discount;chosen.push(c);}const memo=new Map();
+  const search=(i,mask,total,selected)=>{if(total+suffix[i]<=best)return;if(i===options.length){best=total;chosen=[...selected];return;}const key=i+':'+mask.toString(),prior=memo.get(key);if(prior!==undefined&&prior>=total)return;memo.set(key,total);const c=options[i];if(!(mask&c.mask)){selected.push(c);search(i+1,mask|c.mask,total+c.discount,selected);selected.pop();}search(i+1,mask,total,selected);};search(0,0n,0,[]);
+  const discounts=lines.map(()=>0);let pd=0,sd=0;const applied=[];
+  for(const c of chosen){const productBase=c.targets.reduce((n,x)=>n+x.quantity*x.price,0),productPart=c.product?Math.min(c.discount,productBase):0,shippingPart=c.shipping?Math.min(shipping-sd,c.discount-productPart):0;if(!productPart&&!shippingPart)continue;
+    let left=productPart;const eligible=c.targets.filter(x=>x.quantity*x.price>0);eligible.forEach((x,i)=>{const raw=c.rule.benefit==='unit_price'&&c.rule.target==='products'?Math.max(0,x.price-Number(c.rule.value))*x.quantity:Math.floor(productPart*x.quantity*x.price/Math.max(1,productBase));const amount=Math.min(left,x.quantity*x.price,i===eligible.length-1?left:raw);discounts[x.index]+=amount;left-=amount;});if(left)for(const x of eligible){const room=x.quantity*x.price-discounts[x.index],extra=Math.min(left,room);discounts[x.index]+=extra;left-=extra;if(!left)break;}pd+=productPart;sd+=shippingPart;applied.push(c.rule);}
+  return {id:applied.map(x=>x.id).join(',')||null,label:applied.map(x=>x.name).join(' + '),applied:applied.map(x=>x.id),productDiscountCents:pd,shippingDiscountCents:sd,totalDiscountCents:pd+sd,subtotalCents:subtotal,finalSubtotalCents:subtotal-pd,finalShippingCostCents:shipping-sd,totalCents:subtotal+shipping-pd-sd,lines:lines.map(x=>({index:x.index,variantId:x.variantId,quantity:x.quantity,originalUnitCents:x.price,originalTotalCents:x.price*x.quantity,discountCents:discounts[x.index],finalTotalCents:x.price*x.quantity-discounts[x.index],finalUnitCents:x.quantity?(x.price*x.quantity-discounts[x.index])/x.quantity:x.price}))};
 }
+
+
   function renderCart() {
     reconcileCartImages();
     const count = state.cart.reduce((n, x) => n + x.qty, 0);
@@ -1119,17 +1149,19 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     badge.textContent = count;
     badge.classList.toggle('hidden', count === 0);
     const items = qs('#cartItems');
+    const linePrices=cartPromotion(0).lines||[];
     if (!state.cart.length) {
       items.innerHTML = '<div class="empty-state"><strong>Tu carrito está vacío.</strong>Agregá un producto para comenzar.</div>';
     } else {
       items.innerHTML = state.cart.map((x,i) => `<div class="cart-item" data-cart-product="${Number(x.productId)}">
         ${state.storeProductsLoaded&&x.image ? `<img class="cart-thumb" src="${escapeHtml(x.image)}" alt="">` : '<div class="cart-thumb product-placeholder">S</div>'}
         <div class="cart-meta"><strong>${escapeHtml(x.name)}</strong>${cartVariantLabel(x)?`<small>${escapeHtml(cartVariantLabel(x))}</small>`:''}<div class="qty"><button data-qty="-1" data-index="${i}">−</button><b>${x.qty}</b><button data-qty="1" data-index="${i}">+</button></div></div>
+        <div class="cart-price15"><strong>${money(linePrices[i]?.finalUnitCents??x.priceCents)} <span>/ u</span></strong>${(linePrices[i]?.discountCents||0)>0?`<del>${money(x.priceCents)} / u</del>`:''}<small>Subtotal (${x.qty}): ${money(linePrices[i]?.finalTotalCents??x.priceCents*x.qty)}</small></div>
         <button class="cart-remove" data-remove="${i}" aria-label="Eliminar">×</button>
       </div>`).join('');
     }
     renderCartShippingCarry();
-    window.SalmosHome?.refreshContactLinks();
+    window.SalmosHome?.refreshContactLinks();window.SalmosWholesale?.render();
     qs('#checkoutBtn').disabled = !state.cart.length;
   }
   function cartPromotion(shipping=0){return calculatePromotions(state.config?.promotions||[],state.cart.map(x=>{const product=state.products.find(p=>Number(p.id)===Number(x.productId));return {...x,category_slug:product?.category_slug||product?.category_name||'',fit:product?.fit||''}}),shipping)}
@@ -1161,7 +1193,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   function closeCart() { qs('#cartDrawer').classList.remove('open'); qs('#drawerBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); }
 
   function openModal(sel) { qs(sel).classList.add('open'); qs('#modalBackdrop').classList.add('open'); document.body.classList.add('no-scroll'); }
-  function closeModal(sel) { qs(sel).classList.remove('open'); if(sel==='#productModal'){state.selectedProduct=null;state.selectedColor=null;state.selectedVariantId=null;clearProductPath();} if (!qsa('.modal.open').length) { qs('#modalBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); } }
+  function closeModal(sel) { qs(sel).classList.remove('open'); if(sel==='#productModal'){closeProductChoice();state.selectedProduct=null;state.selectedColor=null;state.selectedVariantId=null;clearProductPath();} if (!qsa('.modal.open').length) { qs('#modalBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); } }
 
   function startCheckout() {
     if (!state.cart.length) return;
@@ -2105,7 +2137,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const retryProduct=e.target.closest('[data-retry-product]');if(retryProduct){openProduct(retryProduct.dataset.retryProduct);return;}
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
       const thumb=e.target.closest('[data-media-url]'); if(thumb){ qsa('.thumb',qs('#productModal')).forEach(x=>x.classList.remove('active')); thumb.classList.add('active'); const host=qs('#detailMainMedia'); if(host){ const item={url:thumb.dataset.mediaUrl,media_type:thumb.dataset.mediaType,alt_text:thumb.dataset.mediaAlt}; host.innerHTML=renderDetailMedia(item,state.selectedProduct?.name||'SALMOS'); } return; }
-      const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=v?.id||null; renderProductModal(); return; }
+      const color=e.target.closest('[data-color]'); if(color){ state.selectedColor=color.dataset.color; const v=firstAvailableVariant(state.selectedProduct,state.selectedColor); state.selectedVariantId=productUsesSizes(state.selectedProduct)?null:v?.id||null; renderProductModal(); return; }
       const variant=e.target.closest('[data-variant]'); if(variant){ state.selectedVariantId=Number(variant.dataset.variant); renderProductModal(); return; }
       if(e.target.closest('[data-add-cart]')) { addSelectedToCart(false); return; }
       if(e.target.closest('[data-buy-now]')) { addSelectedToCart(true); return; }
@@ -2210,11 +2242,6 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;qs('#pwaInstallBtn')?.classList.add('hidden');toast('SALMOS quedó instalada','success')});
     qs('#pwaInstallBtn')?.addEventListener('click',async()=>{if(!deferredInstallPrompt){toast('Usá la opción “Instalar aplicación” de tu navegador.');return;}deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;qs('#pwaInstallBtn')?.classList.add('hidden')});
   }
-  const DTF_SHEET_PRICE_PESOS=12000;
-  const DTF_CONFIG_PER_SHEET_PESOS=3000;
-  const DTF_INDIVIDUAL_READY_PESOS=3000;
-  const DTF_INDIVIDUAL_CONFIG_PESOS=4000;
-  const DTF_SHEET_AREA_CM2=58*100;
 
   async function loadSalmosDesignCatalog(){
     if(state.designCatalogLoaded)return state.designCatalog;
@@ -2287,14 +2314,12 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     });
   }
 
-  function customFileModeHint(kind,subtype,mode){
+  function customFileModeHint(kind,subtype,mode,material='textile'){
     if(kind!=='dtf')return 'Podés adjuntar imágenes o archivos de referencia. El original se guarda sin recomprimir.';
-    if(subtype==='sheet'&&mode==='ready')return 'Plancha 58 × 100 cm: $12.000. Listo para imprimir admite únicamente PNG a 300 DPI, máximo 58 × 100 cm por archivo. Podés cargar varios.';
-    if(subtype==='sheet'&&mode==='configure')return 'Plancha 58 × 100 cm: $12.000 + $3.000 de configuración por cada plancha. Podés subir el diseño como lo tengas.';
-    if(subtype==='individual'&&mode==='ready')return 'Diseño individual listo para imprimir: $3.000 por unidad. PNG a 300 DPI.';
-    if(subtype==='individual'&&mode==='configure')return 'Diseño individual a configurar: $4.000 por unidad.';
-    return 'Elegí las opciones para ver las condiciones.';
+    const policy=window.SalmosOrderPricing.normalize(state.config?.customPricing||{}),row=policy.dtf[material==='uv'?'uv':'textile'],price=subtype==='individual'?(mode==='configure'?row.individualConfigureCents:row.individualReadyCents):(mode==='configure'?row.configureCents:row.readyCents);
+    return `${material==='uv'?'DTF UV':'DTF Textil'} · ${subtype==='individual'?'por diseño':`${row.widthCm} × ${row.lengthCm} cm`}: ${money(price)}. ${mode==='ready'?`PNG a 300 DPI${subtype==='sheet'?`, máximo ${row.widthCm} × ${row.lengthCm} cm`:''}.`:'Podés subir el diseño como lo tengas.'}`;
   }
+
   async function readPngInfo(file){
     const buf=await file.arrayBuffer(),v=new DataView(buf);
     const sig=[137,80,78,71,13,10,26,10];for(let i=0;i<8;i++)if(v.getUint8(i)!==sig[i])throw new Error('No es un PNG válido.');
@@ -2302,13 +2327,14 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     while(off+12<=buf.byteLength){const len=v.getUint32(off),type=String.fromCharCode(v.getUint8(off+4),v.getUint8(off+5),v.getUint8(off+6),v.getUint8(off+7));if(type==='pHYs'&&len>=9){const x=v.getUint32(off+8),unit=v.getUint8(off+16);if(unit===1)dpi=x*0.0254;break;}off+=12+len;}
     return {width,height,dpi};
   }
-  async function validateReadyDtfFiles(files,subtype){
+  async function validateReadyDtfFiles(files,subtype,material='textile'){
+    const length=material==='uv'?50:100,maxHeight=Math.ceil(length/2.54*300);
     const results=[];for(const f of files){
       try{
         if(f.type!=='image/png'&&!/\.png$/i.test(f.name))throw new Error('Debe ser PNG');
         const inf=await readPngInfo(f);
         if(!inf.dpi||Math.abs(inf.dpi-300)>6)throw new Error(inf.dpi?`DPI detectados: ${Math.round(inf.dpi)} (se requieren 300)`:'El PNG no informa 300 DPI');
-        if(subtype==='sheet'&&(inf.width>6851||inf.height>11811))throw new Error(`Supera 58 × 100 cm a 300 DPI (${inf.width}×${inf.height}px)`);
+        if(subtype==='sheet'&&(inf.width>6851||inf.height>maxHeight))throw new Error(`Supera 58 × ${length} cm a 300 DPI (${inf.width}×${inf.height}px)`);
         results.push({file:f,ok:true,text:`${f.name}: ${inf.width}×${inf.height}px · ${Math.round(inf.dpi)} DPI`});
       }catch(e){results.push({file:f,ok:false,text:`${f.name}: ${e.message}`});}
     }return results;
@@ -2331,71 +2357,65 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       quantity:Math.max(1,Math.min(999,Math.trunc(Number(qs('[data-dtf-qty]',row)?.value)||1)))
     }));
   }
+  function customProductTypes(){return state.config?.customProductTypes||window.SalmosOrderPricing.productTypes();}
+  function customProductTypeFor(product){const type=product?.production_catalog?.materialType||'',promo=promotionProductType(product?.category_slug||product?.category_name,product?.fit);return customProductTypes().find(t=>t.code===promo)||customProductTypes().find(t=>t.code===type)||customProductTypes().find(t=>t.promotionType===promo);}
   function dtfEstimate(form){
-    const subtype=form.elements.subtype?.value||'sheet',mode=form.elements.fileMode?.value||'ready';
-    const designs=collectDtfDesigns(form);const totalQty=designs.reduce((n,d)=>n+d.quantity,0);
-    const totalArea=designs.reduce((n,d)=>n+(d.widthCm*d.heightCm*d.quantity),0);
-    const areaSheets=Math.max(1,Math.ceil(totalArea/DTF_SHEET_AREA_CM2));
-    const requested=Math.max(1,Math.trunc(Number(form.elements.requestedSheets?.value)||1));
-    const estimatedSheets=Math.max(requested,areaSheets);
-    if(subtype==='individual'){
-      const unit=mode==='configure'?DTF_INDIVIDUAL_CONFIG_PESOS:DTF_INDIVIDUAL_READY_PESOS;
-      return {designs,totalQty,totalArea,requestedSheets:0,areaSheets:0,estimatedSheets:0,approxPerSheet:0,totalPesos:totalQty*unit,unitPesos:unit};
-    }
-    const first=designs[0]||{widthCm:30,heightCm:30};
-    const approxPerSheet=Math.max(1,Math.floor(DTF_SHEET_AREA_CM2/Math.max(1,first.widthCm*first.heightCm)));
-    const unit=DTF_SHEET_PRICE_PESOS+(mode==='configure'?DTF_CONFIG_PER_SHEET_PESOS:0);
-    return {designs,totalQty,totalArea,requestedSheets:requested,areaSheets,estimatedSheets,approxPerSheet,totalPesos:estimatedSheets*unit,unitPesos:unit};
+    const designs=collectDtfDesigns(form),totalQty=designs.reduce((n,d)=>n+d.quantity,0),material=form.elements.dtfMaterial?.value||'textile',row=window.SalmosOrderPricing.normalize(state.config?.customPricing||{}).dtf[material];
+    const quote=window.SalmosOrderPricing.quote(state.config?.customPricing||{},{kind:'dtf',subtype:form.elements.subtype.value,dtfMaterial:material,fileMode:form.elements.fileMode.value,quantity:totalQty,requestedSheets:Number(form.elements.requestedSheets?.value)||1,designs,promotionType:'dtf_'+material},state.config?.promotions||[]);
+    return {...quote,designs,totalQty,totalArea:designs.reduce((n,d)=>n+d.widthCm*d.heightCm*d.quantity,0),requestedSheets:form.elements.subtype.value==='sheet'?Number(form.elements.requestedSheets?.value)||1:0,areaSheets:quote.areaUnits,estimatedSheets:form.elements.subtype.value==='sheet'?quote.units:0,totalPesos:quote.totalCents/100,unitPesos:quote.unitCents/100,row};
+  }
+  function quoteSummaryHtml(quote,unitLabel='unidad'){
+    if(quote.totalCents==null)return '<strong>Precio a cotizar.</strong> Te confirmamos el importe antes de producir.';
+    return `<div class="custom-quote-row"><span>${quote.units} × ${money(quote.unitCents)} / ${unitLabel}</span><span>${money(quote.subtotalCents)}</span></div>${quote.discountCents?`<div class="custom-quote-row custom-quote-saving"><span>${escapeHtml(quote.label)}</span><strong>− ${money(quote.discountCents)}</strong></div>`:''}<div class="custom-quote-row"><strong>Total estimado</strong><strong class="custom-dtf-price">${money(quote.totalCents)}</strong></div><small>Seña estimada del 50%: ${money(quote.depositCents)}. Envío a coordinar.</small>`;
   }
   function updateDtfEstimate(form){
     const box=qs('#customDtfEstimate',form);if(!box)return;
-    const e=dtfEstimate(form),subtype=form.elements.subtype?.value||'sheet',mode=form.elements.fileMode?.value||'ready';
-    if(subtype==='individual'){
-      box.innerHTML=`<strong>Estimación:</strong> ${e.totalQty} ${e.totalQty===1?'diseño':'diseños'} × $${e.unitPesos.toLocaleString('es-AR')} = <span class="custom-dtf-price">$${e.totalPesos.toLocaleString('es-AR')}</span>. Seña estimada 50%: $${Math.round(e.totalPesos/2).toLocaleString('es-AR')}.`;
-      return;
-    }
-    const standard=e.designs.length===1&&Math.abs(e.designs[0].widthCm-30)<.01&&Math.abs(e.designs[0].heightCm-30)<.01;
-    const designMode=form.elements.designMode?.value||'same';
-    const ref=designMode==='different'
-      ? `Diseños diferentes: por superficie total el mínimo teórico es ${e.areaSheets} ${e.areaSheets===1?'plancha':'planchas'}; el acomodo real puede requerir más.`
-      : designMode==='same_sizes'
-        ? `Mismo diseño en diferentes medidas: por superficie total el mínimo teórico es ${e.areaSheets} ${e.areaSheets===1?'plancha':'planchas'}; el acomodo real puede requerir más.`
-        : (standard?'Referencia: 30 × 30 cm ≈ 6 diseños por plancha por cálculo de superficie.':`Por superficie, ese tamaño da ≈ ${e.approxPerSheet} por plancha.`);
-    const warning=e.areaSheets>e.requestedSheets?` <span class="custom-dtf-warning">Elegiste ${e.requestedSheets} m/planchas, pero por superficie estimamos al menos ${e.areaSheets}.</span>`:'';
-    box.innerHTML=`<strong>Estimación:</strong> ${e.estimatedSheets} ${e.estimatedSheets===1?'plancha / metro':'planchas / metros'} × $${e.unitPesos.toLocaleString('es-AR')} = <span class="custom-dtf-price">$${e.totalPesos.toLocaleString('es-AR')}</span>. Seña estimada 50%: $${Math.round(e.totalPesos/2).toLocaleString('es-AR')}. ${ref}${warning}<br><small>La cantidad final de metros queda sujeta al acomodo real de los diseños y se confirma personalmente antes de producir.</small>`;
+    try{const quote=dtfEstimate(form),individual=form.elements.subtype.value==='individual',uv=form.elements.dtfMaterial?.value==='uv';box.innerHTML=quoteSummaryHtml(quote,individual?'diseño':uv?'medio metro':'metro')+(individual?'':`<p class="custom-file-hint">Plancha: ${quote.row.widthCm} × ${quote.row.lengthCm} cm. Mínimo por superficie: ${quote.areaSheets}. El acomodo final se confirma antes de producir.</p>`);}catch(error){box.textContent=error.message;}
+  }
+  function updateCustomProductEstimate(form,product){
+    const box=qs('#customProductEstimate',form);if(!box)return;const type=customProductTypes().find(t=>t.code===form.elements.subtype.value),reference=product&&customProductTypeFor(product)?.code===type?.code&&form.elements.finish?.value!=='lisa'?Number(product.price_cents):null;
+    try{const quote=window.SalmosOrderPricing.quote(state.config?.customPricing||{},{kind:'clothing',productType:type?.code,quantity:Number(form.elements.quantity.value),finish:form.elements.finish?.value,promotionType:type?.promotionType},state.config?.promotions||[],reference);box.innerHTML=quoteSummaryHtml(quote);}catch(error){box.textContent=error.message;}
   }
   function renderCustomDynamicFields(form,kind,product=null){
     const host=qs('#customDynamicFields',form);if(!host)return;
     const productName=product?.name||form.elements.productName?.value||'';
     if(kind==='clothing'){
       host.innerHTML=`
-        <div class="custom-order-section-title">Ropa por pedido</div>
-        <div class="field"><label>Prenda</label><select class="select" name="subtype"><option value="clasica">Remera corte clásico</option><option value="oversize">Remera oversize</option><option value="crop-over">Remera crop over</option><option value="chomba">Chomba clásica</option><option value="gorra">Gorra</option></select></div>
+        <div class="custom-order-section-title">PRODUCTOS por pedido</div>
+        <div class="field"><label>Producto</label><select class="select" name="subtype">${customProductTypes().map(t=>`<option value="${escapeHtml(t.code)}" ${t.code===customProductTypeFor(product)?.code?'selected':''}>${escapeHtml(t.label)}</option>`).join('')}</select></div>
         <div class="field"><label>Terminación</label><select class="select" name="finish"><option value="estampada">Estampada</option><option value="lisa">Lisa</option></select></div>
-        <div class="field"><label>Diseño</label><select class="select" name="designSource"><option value="salmos" ${productName?'selected':''}>Diseño SALMOS</option><option value="personalizado">Diseño personalizado</option></select></div>
+        <div class="field"><label>Diseño</label><select class="select" name="designSource"><option value="salmos" ${productName?'selected':''}>Diseño SALMOS</option><option value="personalizado" ${productName?'':'selected'}>Diseño personalizado</option></select></div>
         <div class="field"><label>Cantidad</label><input class="input" type="number" name="quantity" min="1" value="1"></div>
-        <div class="field full salmos-design-picker hidden" id="salmosDesignPicker"></div>
+        <div class="custom-dtf-estimate field full" id="customProductEstimate" aria-live="polite"></div><div class="field full salmos-design-picker hidden" id="salmosDesignPicker"></div>
         <div class="field full"><label>Archivos / referencias</label><input class="input" id="customOrderFiles" name="files" type="file" multiple accept="image/*,application/pdf,.psd,.ai,.eps,.svg"><div class="custom-file-hint" id="customFileHint">Podés adjuntar referencias. Guardamos el original sin recomprimir.</div></div>`;
       return;
     }
     host.innerHTML=`
-      <div class="custom-order-section-title">DTF</div>
-      <div class="field"><label>Modalidad</label><select class="select" name="subtype"><option value="sheet">Por plancha / metro (58 × 100 cm)</option><option value="individual">Diseño individual</option></select></div>
+      <div class="custom-order-section-title">DTF Textil / DTF UV</div>
+      <div class="field"><label>Material</label><select class="select" name="dtfMaterial"><option value="textile">DTF Textil</option><option value="uv">DTF UV</option></select></div>
+      <div class="field"><label>Modalidad</label><select class="select" name="subtype"><option value="sheet" data-dtf-sheet-option>Por plancha / metro (58 × 100 cm)</option><option value="individual">Diseño individual</option></select></div>
       <div class="field"><label>Preparación del archivo</label><select class="select" name="fileMode"><option value="ready">Listo para imprimir</option><option value="configure">A configurar</option></select></div>
       <div class="field"><label>Origen del diseño</label><select class="select" name="designSource"><option value="salmos">Diseño SALMOS</option><option value="personalizado" selected>Diseño personalizado</option></select></div>
       <div class="field"><label>Diseños</label><select class="select" name="designMode"><option value="same">Mismo diseño · misma medida</option><option value="same_sizes">Mismo diseño · diferentes medidas</option><option value="different">Diseños diferentes</option></select></div>
       <div class="field full salmos-design-picker hidden" id="salmosDesignPicker"></div>
-      <div class="field" data-sheet-request-field><label>Metros / planchas solicitadas</label><input class="input" type="number" name="requestedSheets" min="1" step="1" value="1"><div class="custom-file-hint">1 plancha = 58 × 100 cm = 1 metro.</div></div>
+      <div class="field" data-sheet-request-field><label data-dtf-quantity-label>Metros / planchas solicitadas</label><input class="input" type="number" name="requestedSheets" min="1" step="1" value="1"><div class="custom-file-hint" data-dtf-sheet-hint>1 plancha = 58 × 100 cm = 1 metro.</div></div>
       <div class="custom-dtf-builder">
         <div class="custom-dtf-builder-head"><strong>Tamaño y cantidad de cada diseño</strong><button class="btn btn-ghost hidden" type="button" id="addDtfDesignBtn">+ Agregar diseño</button></div>
         <div class="custom-dtf-design-list" id="customDtfDesignList">${dtfDesignRow(0)}</div>
-        <div class="custom-dtf-estimate" id="customDtfEstimate"></div>
+        <div class="custom-dtf-estimate" id="customDtfEstimate" aria-live="polite"></div>
       </div>
       <div class="field full"><label>Archivos</label><input class="input" id="customOrderFiles" name="files" type="file" multiple accept="image/png,image/*,application/pdf,.psd,.ai,.eps,.svg,.tif,.tiff"><div class="custom-file-hint" id="customFileHint"></div><div class="custom-file-checks" id="customFileChecks"></div></div>`;
     bindDtfBuilder(form);
   }
   function bindDtfBuilder(form){
+    form._dtfEvents?.abort();form._dtfEvents=new AbortController();const events={signal:form._dtfEvents.signal};
     const sync=()=>{
+      if(form.elements.kind.value!=='dtf')return;
+      const material=form.elements.dtfMaterial?.value||'textile',length=material==='uv'?50:100;
+      qs('[data-dtf-sheet-option]',form).textContent=material==='uv'?'Por medio metro (58 × 50 cm)':'Por plancha / metro (58 × 100 cm)';
+      qs('[data-dtf-quantity-label]',form).textContent=material==='uv'?'Medios metros / planchas solicitadas':'Metros / planchas solicitadas';
+      qs('[data-dtf-sheet-hint]',form).textContent=`1 plancha = 58 × ${length} cm = ${material==='uv'?'medio metro':'1 metro'}.`;
+      qsa('[data-dtf-height]',form).forEach(input=>input.max=String(length));
       const subtype=form.elements.subtype?.value||'sheet',mode=form.elements.fileMode?.value||'ready',designMode=form.elements.designMode?.value||'same';
       const sheetField=qs('[data-sheet-request-field]',form);if(sheetField)sheetField.classList.toggle('hidden',subtype!=='sheet');
       const designSource=form.elements.designSource?.value||'personalizado';
@@ -2408,36 +2428,38 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(designSource==='salmos')syncDtfRowsFromSelectedDesigns(form);
       const currentRows=qsa('[data-dtf-design-row]',form);
       qsa('[data-remove-dtf-design]',form).forEach((b,i)=>b.classList.toggle('hidden',designMode==='same'||(i===0&&currentRows.length===1)));
-      const hint=qs('#customFileHint',form);if(hint)hint.textContent=customFileModeHint('dtf',subtype,mode);
+      const hint=qs('#customFileHint',form);if(hint)hint.textContent=customFileModeHint('dtf',subtype,mode,material);
       updateDtfEstimate(form);
     };
-    form.addEventListener('input',e=>{if(e.target.closest('#customDynamicFields'))sync();});
+    form.addEventListener('input',e=>{if(e.target.closest('#customDynamicFields'))sync();},events);
     form.addEventListener('change',async e=>{
       if(e.target.closest('#customDynamicFields'))sync();
       if(e.target.id==='customOrderFiles'&&form.elements.fileMode?.value==='ready'){
-        const checks=qs('#customFileChecks',form),res=await validateReadyDtfFiles([...e.target.files],form.elements.subtype.value);
+        const checks=qs('#customFileChecks',form),res=await validateReadyDtfFiles([...e.target.files],form.elements.subtype.value,form.elements.dtfMaterial?.value);
         if(checks)checks.innerHTML=res.map(x=>`<div class="custom-file-check ${x.ok?'ok':'bad'}">${escapeHtml(x.ok?'✓ '+x.text:'✕ '+x.text)}</div>`).join('');
       }
-    });
+    },events);
     qs('#addDtfDesignBtn',form)?.addEventListener('click',()=>{const list=qs('#customDtfDesignList',form);if(!list)return;const mode=form.elements.designMode?.value||'same';const selected=selectedSalmosDesigns(form);const label=mode==='same_sizes'&&form.elements.designSource?.value==='salmos'&&selected[0]?selected[0].name:'';list.insertAdjacentHTML('beforeend',dtfDesignRow(qsa('[data-dtf-design-row]',form).length,{label}));sync();});
     qs('#customDtfDesignList',form)?.addEventListener('click',e=>{const b=e.target.closest('[data-remove-dtf-design]');if(!b)return;b.closest('[data-dtf-design-row]')?.remove();sync();});
     sync();
   }
   function setCustomKind(form,kind,product=null){
+    if(kind!=='dtf')form._dtfEvents?.abort();
     form.elements.kind.value=kind;
     qsa('[data-custom-type]',form).forEach(b=>b.classList.toggle('active',b.dataset.customType===kind));
     renderCustomDynamicFields(form,kind,product);
+    if(kind==='clothing')updateCustomProductEstimate(form,product);
     refreshSalmosDesignPicker(form);
   }
   function openCustomOrder(kind='choose',product=null){
     const host=qs('#customOrderContent');if(!host)return;openModal('#customOrderModal');
     const initialKind=kind==='dtf'?'dtf':'clothing',productName=product?.name||'';
-    host.innerHTML=`<div class="custom-order-head"><div class="eyebrow">SALMOS · Por pedido</div><h2>${productName?escapeHtml(productName):'Solicitar por pedido'}</h2><p>Completá una sola solicitud. Si es DTF, podés indicar medidas, cantidades y varios diseños.</p></div>
+    host.innerHTML=`<div class="custom-order-head"><div class="eyebrow">SALMOS · Por pedido</div><h2>${productName?escapeHtml(productName):'Solicitar por pedido'}</h2><p class="custom-discounts-notice">Aplicamos descuentos automáticos al alcanzar las cantidades de cada promoción.</p></div>
       <form class="custom-order-form" id="customOrderForm">
         <input type="hidden" name="kind" value="${initialKind}"><input type="hidden" name="productId" value="${product?.id||''}"><input type="hidden" name="productName" value="${escapeHtml(productName)}">
         <div class="custom-order-type-row">
-          <button class="custom-order-type-btn ${initialKind==='clothing'?'active':''}" type="button" data-custom-type="clothing"><strong>Ropa</strong><small>Remeras · Chombas · Gorras</small></button>
-          <button class="custom-order-type-btn ${initialKind==='dtf'?'active':''}" type="button" data-custom-type="dtf"><strong>DTF</strong><small>Por metro o individual</small></button>
+          <button class="custom-order-type-btn ${initialKind==='clothing'?'active':''}" type="button" data-custom-type="clothing"><strong>PRODUCTOS</strong><small>Elegí entre los tipos disponibles</small></button>
+          <button class="custom-order-type-btn ${initialKind==='dtf'?'active':''}" type="button" data-custom-type="dtf"><strong>DTF Textil / DTF UV</strong><small>Planchas o diseños individuales</small></button>
         </div>
         <div class="form-grid">
           <div id="customDynamicFields" class="form-grid-nested" style="display:contents"></div>
@@ -2452,6 +2474,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       </form>`;
     const form=qs('#customOrderForm',host);
     bindDesignPicker(form);
+    form.addEventListener('input',()=>{if(form.elements.kind.value==='clothing')updateCustomProductEstimate(form,product);});
+    form.addEventListener('change',()=>{if(form.elements.kind.value==='clothing')updateCustomProductEstimate(form,product);});
     qsa('[data-custom-type]',form).forEach(b=>b.addEventListener('click',()=>setCustomKind(form,b.dataset.customType,product)));
     setCustomKind(form,initialKind,product);
     form.addEventListener('submit',submitCustomOrder);
@@ -2460,7 +2484,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     e.preventDefault();const form=e.currentTarget,btn=qs('#submitCustomOrderBtn',form),fd=new FormData(form),kind=fd.get('kind'),subtype=fd.get('subtype'),fileMode=fd.get('fileMode')||'',files=[...(form.elements.files?.files||[])];
     try{
       btn.disabled=true;btn.textContent='Preparando pedido...';
-      if(kind==='dtf'&&fileMode==='ready'&&files.length){const res=await validateReadyDtfFiles(files,subtype);const bad=res.find(x=>!x.ok);if(bad)throw new Error(`Revisá el archivo: ${bad.text}`);}
+      if(kind==='dtf'&&fileMode==='ready'&&files.length){const res=await validateReadyDtfFiles(files,subtype,fd.get('dtfMaterial'));const bad=res.find(x=>!x.ok);if(bad)throw new Error(`Revisá el archivo: ${bad.text}`);}
       const notes=[fd.get('finish')?`Terminación: ${fd.get('finish')}`:'',fd.get('notes')||''].filter(Boolean).join('\n');
       const designSource=fd.get('designSource')||'personalizado';
       const selectedDesigns=designSource==='salmos'?selectedSalmosDesigns(form):[];
@@ -2473,18 +2497,18 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       }
       const firstSelected=selectedDesigns[0]||null;
       const selectedNames=selectedDesigns.map(d=>d.name).join(' · ');
-      const payload={customerName:fd.get('customerName'),customerPhone:fd.get('customerPhone'),customerEmail:fd.get('customerEmail'),kind,subtype,productId:firstSelected?.id||fd.get('productId'),productName:selectedNames||fd.get('productName'),designSource,fileMode,designMode:fd.get('designMode')||'',quantity,requestedSheets,sheets:requestedSheets,designs,selectedDesigns:selectedDesigns.map(d=>({id:d.id})),notes};
+      const payload={customerName:fd.get('customerName'),customerPhone:fd.get('customerPhone'),customerEmail:fd.get('customerEmail'),kind,subtype,dtfMaterial:fd.get('dtfMaterial')||'textile',finish:fd.get('finish')||'estampada',productId:fd.get('productId'),productName:selectedNames||fd.get('productName'),designSource,fileMode,designMode:fd.get('designMode')||'',quantity,requestedSheets,sheets:requestedSheets,designs,selectedDesigns:selectedDesigns.map(d=>({id:d.id})),notes};
       const created=await api('/api/custom-orders',{method:'POST',body:JSON.stringify(payload)});const order=created.item;
       if(files.length){btn.textContent='Subiendo archivos originales...';const up=new FormData();up.append('uploadToken',order.uploadToken);files.forEach(f=>up.append('files',f));await api(`/api/custom-orders/${order.id}/files`,{method:'POST',body:up});}
       const known=Number(order.knownExtraCents)||0,total=Number(order.quotedTotalCents)||0,deposit=Number(order.depositCents)||0,whatsapp=state.config?.whatsapp||'5491162691341';
       const dtfDetail=kind==='dtf'?[
-        `DTF: ${subtype==='sheet'?'por plancha/metro 58x100':'individual'} · ${fileMode==='ready'?'listo para imprimir':'a configurar'}`,
+        `${fd.get('dtfMaterial')==='uv'?'DTF UV':'DTF Textil'}: ${subtype==='sheet'?(fd.get('dtfMaterial')==='uv'?'por medio metro 58x50':'por plancha/metro 58x100'):'individual'} · ${fileMode==='ready'?'listo para imprimir':'a configurar'}`,
         `Diseños: ${(fd.get('designMode')||'same')==='different'?'diferentes':(fd.get('designMode')||'same')==='same_sizes'?'mismo diseño en diferentes medidas':'mismo diseño'}`,
         designs.map(d=>`${d.label}: ${d.widthCm}×${d.heightCm} cm × ${d.quantity}`).join(' | '),
         subtype==='sheet'?`Metros solicitados: ${requestedSheets} · estimados: ${Number(order.estimatedSheets)||estimated?.estimatedSheets||requestedSheets}`:''
       ].filter(Boolean):[];
       const selectedSummary=selectedDesigns.length?`Diseño(s) SALMOS: ${selectedDesigns.map(d=>d.name).join(' · ')}`:(fd.get('productName')?`Diseño: ${fd.get('productName')}`:'');
-      const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,...dtfDetail,kind==='clothing'?`Ropa: ${subtype}`:'',selectedSummary,`Cantidad total: ${quantity}`,total?`Total estimado: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total.`:`La seña será del 50% del total confirmado.`),kind==='dtf'&&subtype==='sheet'?'La cantidad final de metros queda sujeta al acomodo de los diseños.':''].filter(Boolean).join('\n');
+      const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,...dtfDetail,kind==='clothing'?`Producto: ${customProductTypes().find(t=>t.code===subtype)?.label||subtype}`:'',selectedSummary,`Cantidad total: ${quantity}`,total?`Total estimado: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total.`:`La seña será del 50% del total confirmado.`),kind==='dtf'&&subtype==='sheet'?'La cantidad final de metros queda sujeta al acomodo de los diseños.':''].filter(Boolean).join('\n');
       qs('#customOrderContent').innerHTML=`<div class="custom-order-result"><div class="eyebrow">Solicitud recibida</div><h2>Tu pedido quedó registrado</h2><div class="code">${escapeHtml(order.code)}</div><p>Guardamos los archivos originales. ${deposit?`Seña estimada: <strong>${money(deposit)}</strong>. El total se confirma antes de producir.`:''} Ahora podés enviarnos el resumen por WhatsApp para acordar los detalles finales.</p><a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${encodeURIComponent(whatsapp)}?text=${encodeURIComponent(summary)}">Continuar por WhatsApp</a><button class="btn btn-ghost" type="button" id="finishCustomOrderBtn">Cerrar</button></div>`;
     }catch(err){toast(err.message,'error');btn.disabled=false;btn.textContent='Enviar solicitud';}
   }
@@ -2502,6 +2526,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
   document.addEventListener('input',e=>{if(e.target.matches?.('#viaCargoDestination,#viaCargoAgency'))syncViaCargoFields();});
   document.addEventListener('change',e=>{if(e.target.matches?.('#viaCargoDeliveryType,#viaCargoAccept'))syncViaCargoFields();});
+  window.SalmosWholesale?.init({state,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts});
   window.SalmosHome?.init({state,cfg,apiUrl,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart,money,openProduct,editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();}});
   window.SalmosDigital?.init({state,api,apiUrl,money,toast,authToken:currentIdToken,signIn:signInGoogle});
   boot();

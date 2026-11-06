@@ -106,3 +106,18 @@ body dialog.storefront-background-upload{width:min(540px,calc(100vw - 24px))}
 @media(max-width:650px){.storefront-background-grid{grid-template-columns:1fr}body #productionDialog[data-book="true"] .production-top-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.storefront-settings-save{gap:10px;flex-wrap:wrap}.storefront-covers-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 body .admin-topbar #addPromotionBtn[hidden],body .admin-topbar #saveSettingsBtn[hidden]{display:none!important}
+
+.custom-pricing-settings{grid-column:1/-1}
+.custom-pricing-settings>p{font-size:.85rem;line-height:1.5;color:var(--muted)}
+.custom-pricing-settings h4{margin:20px 0 10px}
+.custom-price-table{display:grid;gap:8px}
+.custom-price-row{display:grid;grid-template-columns:minmax(120px,1.4fr) repeat(2,minmax(90px,1fr));gap:10px;align-items:center;padding:8px;border-bottom:1px solid var(--line);font-size:.86rem}
+.custom-price-row .input{width:100%;min-width:0}
+.custom-price-heading{font-size:.75rem;color:var(--muted);font-weight:700}
+.custom-price-individual{margin-top:12px}
+.custom-discount-row{border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
+.custom-discount-row legend{padding:0 6px;font-size:.85rem}
+.custom-discount-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.custom-discount-tools .select{flex:1;min-width:180px}
+.custom-price-row .number-control15{width:100%;grid-template-columns:28px minmax(0,1fr) 28px}
+@media(max-width:540px){.custom-price-row{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 0;gap:8px;font-size:.8rem}.custom-price-row>strong,.custom-price-heading>span:first-child{grid-column:1/-1}.custom-price-row .input{padding:8px 5px}.custom-price-heading{font-size:.7rem}}

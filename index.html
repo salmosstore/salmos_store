@@ -36,7 +36,7 @@
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="storefront-home.css?v=30.0">
   <link rel="stylesheet" href="book-digital.css?v=28.0">
-  <link rel="stylesheet" href="storefront-refinements.css?v=36.0">
+  <link rel="stylesheet" href="storefront-refinements.css?v=37.0">
 </head>
 <body class="storefront store-pending">
   <header class="site-header">
@@ -132,7 +132,7 @@
         </article>
         <article class="store-service">
           <svg class="store-service-icon" viewBox="0 0 36 36" aria-hidden="true"><path d="m3 12 15-8 15 8v17l-15 7-15-7zM3 12l15 8 15-8M18 20v16M10 8l15 8"/></svg>
-          <div><h2>Compras por mayor</h2><p>Remeras por curva de talles.<br>Gorras y tazas desde 6 unidades.</p><button class="btn btn-primary" type="button" data-home-wholesale>Cómo comprar por mayor</button></div>
+          <div><h2>Compras por mayor</h2><p>Prendas por curva o surtidas desde 5 unidades.<br>Tazas y gorras: agregamos 6 al carrito.<br>Descuentos automáticos según cantidad.</p><button class="btn btn-primary" type="button" data-home-wholesale>Comprar por mayor</button></div>
         </article>
       </section>
       <section class="home-buying" aria-label="Cómo comprar"><div class="home-buying-instructions"><h2>Cómo comprar</h2><ol><li><span>1</span>Elegí tus productos</li><li><span>2</span>Sumalos al carrito</li><li><span>3</span>Coordiná el envío y el pago</li></ol></div><img class="home-glory-seal" src="sello-gloria.png" alt="Con toda su gloria" width="1254" height="1254" loading="lazy" decoding="async"></section>
@@ -181,11 +181,13 @@
   <script src="foreground.js?v=25.57"></script>
   <script src="sharing.js?v=25.44" defer></script>
   <script src="audiences.js?v=28.0" defer></script>
-  <script src="storefront-home.js?v=36.0" defer></script>
+  <script src="storefront-home.js?v=37.0" defer></script>
   <script src="book-digital.js?v=31.0" defer></script>
-  <script src="app.js?v=36.0" defer></script>
+  <script src="order-pricing.js?v=37.0" defer></script>
+  <script src="storefront-wholesale.js?v=37.0" defer></script>
+  <script src="app.js?v=37.0" defer></script>
   <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=36.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=37.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
 </body>
 </html>
