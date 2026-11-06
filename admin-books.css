@@ -48,3 +48,12 @@ body #productionDialog[data-book="true"] #productionBuilderCost .production-cost
 .production-expanded-toolbar{flex-wrap:wrap}.production-expanded-toolbar>input{flex:1 1 180px;min-width:140px}.production-expanded-toolbar>.btn{flex:0 0 auto;min-height:38px;padding:7px 12px}
 @media(max-width:1000px){.book-row-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.book-row-fields>.field:first-child{grid-column:1/-1}}
 @media(max-width:500px){.book-row-fields{grid-template-columns:1fr}.book-row-fields>.field:first-child{grid-column:auto}.book-row-fields .book-check{padding:6px 0}.production-photo-edit{width:30px!important;height:30px!important;min-height:30px!important}}
+
+/* Fichas de producción con un ancho legible dentro de cada grupo. */
+#productionDialog #mockupVariantGallery .production-photo-tile{flex:0 0 184px;width:184px;min-width:184px;align-self:stretch}
+#productionDialog #mockupVariantGallery .production-photo-tile>.mockup-variant-card{flex:none;width:100%;min-width:0;padding:9px;display:grid;align-content:start;box-sizing:border-box}
+#productionDialog #mockupVariantGallery .production-photo-tile .mockup-variant-card img{width:100%;height:224px;object-fit:contain;object-position:center;border-radius:8px}
+#productionDialog #mockupVariantGallery .production-photo-edit{right:9px;bottom:9px}
+#productionDialog #productionMaterialGallery .production-picker-card{flex:0 0 215px;width:215px;min-width:215px}
+#productionDialog #productionMaterialGallery .production-material-thumb{width:100%;height:148px;max-width:none;object-fit:contain;object-position:center}
+@media(max-width:600px){#productionDialog #mockupVariantGallery .production-photo-tile{flex-basis:164px;width:164px;min-width:164px}#productionDialog #mockupVariantGallery .production-photo-tile .mockup-variant-card img{height:198px}#productionDialog #productionMaterialGallery .production-picker-card{flex-basis:200px;width:200px;min-width:200px}}
