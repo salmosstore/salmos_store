@@ -1024,8 +1024,9 @@
     if(usesSizes)attributeCells.push(`<div class="product-attribute-cell product-attribute-size"><span class="detail-label">Talle</span><div class="attribute-options">${sizes.length?sizes.map(size => { const v=availableVariants.find(v => (v.color||'') === (state.selectedColor||'') && String(v.size||'').trim()===size) || availableVariants.find(v => !state.selectedColor && String(v.size||'').trim()===size); return `<button class="option compact-option ${v?.id===Number(state.selectedVariantId)?'active':''}" data-variant="${v?.id||''}" ${v?'':'disabled aria-label="'+escapeHtml(size)+' sin disponibilidad virtual"'}>${escapeHtml(size)}</button>`; }).join(''):'<span class="attribute-static attribute-chip">—</span>'}</div></div>`);
     if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
     if(colors.length)attributeCells.push(`<div class="product-attribute-cell product-attribute-color"><span class="detail-label">Color</span><div class="attribute-options">${colors.map(c=>`<button class="option compact-option ${c===state.selectedColor?'active':''}" data-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`);
-    const modal = qs('#productModal');
+    const modal = qs('#productModal'),previousContent=qs('.product-modal-content',modal),previousScroll=previousContent?.dataset.productId===String(p.id)?previousContent.scrollTop:0;
     modal.innerHTML = `
+      <div class="product-modal-content" data-product-id="${p.id}">
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
       <div class="product-detail product-detail-v4">
         <div class="detail-gallery detail-gallery-scroll" ${productBackgroundAttrs(p)}>
@@ -1043,13 +1044,15 @@
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
           ${!selected?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
-          <div class="detail-actions">
+        </div>
+      </div>
+      </div>
+          <div class="detail-actions product-modal-actions">
             <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
             <button class="btn btn-secondary" data-add-cart ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>${p.digitalBook?.enabled?'Agregar impreso':'Agregar al carrito'}</span></button>
             <button class="btn btn-primary" data-buy-now ${!selected?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>${p.digitalBook?.enabled?'Comprar impreso':'Comprar ahora'}</span></button>
-          </div>
-        </div>
-      </div>`;
+          </div>`;
+    qs('.product-modal-content',modal).scrollTop=previousScroll;
     const strip=qs('#detailMediaStrip');
     if(strip && media.length>1){
       requestAnimationFrame(()=>{strip.scrollLeft=Math.min(media.length-1,state.detailMediaIndex||0)*strip.clientWidth;});
