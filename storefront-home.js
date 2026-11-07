@@ -28,7 +28,7 @@
   function isHome(){return !context.state.wholesaleMode&&!context.state.storefrontCatalog&&!context.state.query&&(!context.state.storeOrderEditor?.enabled||context.state.storeOrderEditor.view==='home');}
   function selectedName(){return collections.find(row=>row.key===context.state.homeCollection)?.name||'';}
   function navigate(key='all',scroll=true){const s=context.state;s.wholesaleMode=false;window.SalmosWholesale?.render();s.storefrontCatalog=true;s.homeCollection=key==='all'?null:key;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='catalog';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();if(scroll)$('#catalogHeading')?.scrollIntoView({behavior:'smooth',block:'start'});}
-  function goHome(){const s=context.state;s.wholesaleMode=false;window.SalmosWholesale?.render();s.storefrontCatalog=false;s.homeCollection=null;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='home';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();$('#storeHome')?.scrollIntoView({behavior:'smooth',block:'start'});}
+  function goHome(instant=false){const s=context.state;s.wholesaleMode=false;window.SalmosWholesale?.render();s.storefrontCatalog=false;s.homeCollection=null;s.activeCategory='all';s.query='';if(s.storeOrderEditor?.enabled)s.storeOrderEditor.view='home';if($('#searchInput'))$('#searchInput').value='';context.renderCategories();context.renderProducts();if(instant)window.scrollTo({top:0,behavior:'instant'});else $('#storeHome')?.scrollIntoView({behavior:'smooth',block:'start'});}
   function imagesFor(p,key){
     if(!p)return [];
     const photos=context.productCardImages(p).filter(image=>!isGarment(p)||image.presentation_printed!==false),wanted={hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key];
@@ -38,7 +38,7 @@
   function imageFor(p,key){return imagesFor(p,key)[0]||null;}
   function ordered(key){const orders=context.state.config?.storefrontHome?.orders||{},ids=context.state.storeOrderEditor?.homeDrafts?.get(key)||orders[key]||[],ranks=new Map(ids.map((id,index)=>[Number(id),index]));return context.state.products.filter(p=>p.status!=='draft'&&p.status!=='hidden'&&matches(p,key)).sort((a,b)=>(ranks.get(Number(a.id))??1e9)-(ranks.get(Number(b.id))??1e9)||(Number(a.display_order??999999)-Number(b.display_order??999999))).map(product=>({product,image:imageFor(product,key)})).filter(row=>row.image);}
   function imageHtml(p,image,label,key=''){const attrs=context.productBackgroundAttrs(p),url=context.apiUrl(['gorras','tazas'].includes(key)&&image.foreground_url?image.foreground_url:image.url),original=context.apiUrl(image.original_url||(p.images||[]).find(row=>Number(row.id)===Number(image.id))?.url||p.primary_image_url||image.url);return `<span class="home-product-photo" data-home-photo-product="${Number(p.id)}" ${attrs}><img src="${esc(url)}" ${['gorras','tazas'].includes(key)?'data-home-object-preview crossorigin="anonymous"':''} data-original-src="${esc(original)}" alt="${esc(label||p.name)}" loading="lazy" decoding="async"></span>`;}
-  function card({product:p,image},key,editing){return `<article class="home-product" data-home-product-card="${p.id}" data-home-row="${key}" ${editing?'draggable="true"':''}><button class="home-product-open" type="button" data-home-product="${p.id}" data-home-media="${Number(image.id)||0}">${imageHtml(p,image)}<span class="home-product-info"><span class="home-product-name">${esc(p.name)}</span><strong>${esc(context.money(p.price_cents))}</strong></span></button>${editing?`<button class="home-product-edit" type="button" data-home-edit="${p.id}" data-home-media="${Number(image.id)||0}">Editar</button><div class="home-product-sort"><button type="button" data-home-move="-1" aria-label="Mover ${esc(p.name)} antes">←</button><button type="button" data-home-move="1" aria-label="Mover ${esc(p.name)} después">→</button></div>`:''}</article>`;}
+  function card({product:p,image},key,editing){return `<article class="home-product" data-home-product-card="${p.id}" data-home-row="${key}" ${editing?'draggable="true"':''}><button class="home-product-open" type="button" data-home-product="${p.id}" data-home-media="${Number(image.id)||0}">${imageHtml(p,image)}<span class="home-product-info"><span class="home-product-name">${esc(p.name)}</span><strong>${esc(context.money(p.price_cents))}</strong></span></button>${editing?'':context.quickCartButton(p)}${editing?`<button class="home-product-edit" type="button" data-home-edit="${p.id}" data-home-media="${Number(image.id)||0}">Editar</button><div class="home-product-sort"><button type="button" data-home-move="-1" aria-label="Mover ${esc(p.name)} antes">←</button><button type="button" data-home-move="1" aria-label="Mover ${esc(p.name)} después">→</button></div>`:''}</article>`;}
   function gallery(key,editing){const label=collections.find(c=>c.key===key).name,items=ordered(key);return `<section class="home-gallery" aria-label="${label}" data-home-gallery="${key}"><div class="home-gallery-head"><h2>${label}</h2><div class="home-gallery-actions">${editing?`<button type="button" class="home-new-product" data-home-new="${key}">+ Producto</button>`:''}<button type="button" class="home-see-all" data-home-collection="${key}">Ver colección <span aria-hidden="true">→</span></button><button type="button" class="home-scroll" data-home-scroll="${key}" data-home-direction="-1" aria-label="Ver productos anteriores de ${label}">‹</button><button type="button" class="home-scroll" data-home-scroll="${key}" data-home-direction="1" aria-label="Ver más productos de ${label}">›</button></div></div><div class="home-product-strip" data-home-strip="${key}">${items.length?items.map(item=>card(item,key,editing)).join(''):`<div class="home-gallery-empty"><span>${context.state.storeProductsLoaded?'Estamos preparando esta colección.':'Cargando productos…'}</span>${editing?`<button type="button" class="btn btn-ghost" data-home-new="${key}">Armar un producto para ${label}</button>`:`<a href="${esc(whatsapp('Hola SALMOS, quiero consultar por '+label+'.'))}" target="_blank" rel="noopener">Consultar modelos →</a>`}</div>`}</div></section>`;}
   function sideCard(key,editing){const label=collections.find(c=>c.key===key).name,items=ordered(key),selected=context.state.config?.storefrontVisuals?.covers?.[key]?.[document.documentElement.dataset.theme==='light'?'light':'dark']?.productId,first=items.find(item=>Number(item.product.id)===Number(selected))||items[0];return `<section class="home-side-card"><button type="button" class="home-side-link" data-home-collection="${key}" data-home-object-kind="${key}">${first?imageHtml(first.product,first.image,label,key):''}<span><strong>${label}</strong></span><span class="home-side-arrow" aria-hidden="true">↗</span></button>${editing&&first?`<button class="home-side-edit" type="button" data-home-edit="${first.product.id}" data-home-media="${Number(first.image.id)||0}" aria-label="Editar portada de ${label}">Editar producto</button>`:''}</section>`;}
   const objectPreviewBounds=new Map();
@@ -63,18 +63,11 @@
     const lines=context.state.cart.map(item=>`${item.qty} × ${item.name}${[item.color,item.size].filter(Boolean).length?' · '+[item.color,item.size].filter(Boolean).join(' · '):''}`);
     return lines.length?'\n\nMi carrito:\n'+lines.join('\n'):'';
   }
-  function shippingUrl() {
-    const s=context.state,d=s.manualDelivery||{};
-    const location=[d.locality,d.province,d.postalCode?`CP ${d.postalCode}`:''].filter(Boolean).join(', ');
-    const delivery=d.type==='agency'?'A sucursal':d.type==='home'?'A domicilio':'';
-    return whatsapp(`Hola SALMOS, quisiera consultar el costo de envío.${s.customer?.name?'\nMi nombre es '+s.customer.name+'.':''}${location?'\nDestino: '+location:''}${delivery?'\nEntrega: '+delivery:''}${cartSummary()}`);
-  }
   function wholesaleUrl() {
     return whatsapp('Hola SALMOS, quisiera confirmar las condiciones y el precio por mayor de mi pedido.'+cartSummary());
   }
   function refreshContactLinks() {
     if(!context) return;
-    document.querySelectorAll('[data-shipping-whatsapp]').forEach(a=>a.href=shippingUrl());
     document.querySelectorAll('[data-wholesale-whatsapp]').forEach(a=>a.href=wholesaleUrl());
   }
   function dialog(id,label,body) {
@@ -88,8 +81,7 @@
   function openWholesale(){context.closeCart();window.SalmosWholesale?.open();}
 
   function manualDeliveryForm() {
-    const d=context.state.manualDelivery||{};
-    return `<div class="manual-shipping"><p>Te cotizamos el envío personalmente. Envianos el destino y tu carrito por WhatsApp para confirmar el costo antes de pagar.</p><div class="form-grid"><label class="field">Localidad<input class="input" data-manual-delivery="locality" value="${esc(d.locality||'')}" autocomplete="address-level2"></label><label class="field">Provincia<input class="input" data-manual-delivery="province" value="${esc(d.province||'')}" autocomplete="address-level1"></label><label class="field">Código postal<input class="input" data-manual-delivery="postalCode" value="${esc(d.postalCode||'')}" autocomplete="postal-code" maxlength="12"></label><label class="field">Preferencia de entrega<select class="select" data-manual-delivery="type"><option value="">A coordinar</option><option value="home" ${d.type==='home'?'selected':''}>A domicilio</option><option value="agency" ${d.type==='agency'?'selected':''}>A sucursal</option></select></label></div><a class="btn btn-primary full" data-shipping-whatsapp href="${esc(shippingUrl())}" target="_blank" rel="noopener">Consultar envío por WhatsApp</a><p class="field-help">El costo del envío todavía no está incluido. Esta consulta no confirma ni cobra el pedido.</p></div>`;
+    return window.SalmosStoreShipping.form();
   }
   function openShipping() {
     context.closeCart();
@@ -109,7 +101,7 @@
       const scroll=event.target.closest('[data-home-scroll]');if(scroll){const strip=document.querySelector(`[data-home-strip="${scroll.dataset.homeScroll}"]`);strip?.scrollBy({left:Number(scroll.dataset.homeDirection)*strip.clientWidth*.8,behavior:'smooth'});return;}
       const product=event.target.closest('[data-home-product]');if(product){event.preventDefault();context.openProduct(Number(product.dataset.homeProduct),{mediaId:Number(product.dataset.homeMedia)||0});return;}
       const category=event.target.closest('[data-home-collection]');if(category){event.preventDefault();navigate(category.dataset.homeCollection);return;}
-      if(event.target.closest('[data-store-home]')){event.preventDefault();goHome();return;}
+      if(event.target.closest('[data-store-home]')){event.preventDefault();goHome(Boolean(context.state.wholesaleMode));return;}
       if(event.target.closest('[data-home-all]')){event.preventDefault();navigate();return;}
       if(event.target.closest('[data-home-wholesale]')){event.preventDefault();openWholesale();return;}
       if(event.target.closest('[data-home-shipping]')){event.preventDefault();openShipping();return;}
@@ -120,10 +112,9 @@
     document.addEventListener('dragover',event=>{const card=event.target.closest('[data-home-product-card]');if(drag&&card?.dataset.homeRow===drag.dataset.homeRow){event.preventDefault();event.dataTransfer.dropEffect='move';}});
     document.addEventListener('drop',event=>{const card=event.target.closest('[data-home-product-card]');if(!drag||!card||card===drag||card.dataset.homeRow!==drag.dataset.homeRow)return;event.preventDefault();const rect=card.getBoundingClientRect();card.parentElement.insertBefore(drag,event.clientX>rect.x+rect.width/2?card.nextSibling:card);remember(drag.dataset.homeRow);});
     document.addEventListener('dragend',()=>{drag?.classList.remove('sorting');drag=null;});
-    const update=event=>{const input=event.target.closest('[data-manual-delivery]');if(!input)return;(context.state.manualDelivery??={})[input.dataset.manualDelivery]=input.value.trim();refreshContactLinks();};
-    document.addEventListener('input',update);document.addEventListener('change',update);render();
+    render();
   }
   document.addEventListener('load',event=>{if(event.target.matches?.('[data-home-object-preview]'))fitHomeObjectPreview(event.target);},true);
   window.addEventListener('resize',fitHomeObjectPreviews);
-  window.SalmosHome={init,render,matches,isHome,selectedName,navigate,goHome,openShipping,openWholesale,refreshContactLinks,manualDeliveryForm,backgroundAsset,whatsapp,manualCorreoShipping:true,isGarment,imageFor,imagesFor};
+  window.SalmosHome={init,render,matches,isHome,selectedName,navigate,goHome,openShipping,openWholesale,refreshContactLinks,manualDeliveryForm,dialog,backgroundAsset,whatsapp,manualCorreoShipping:true,isGarment,imageFor,imagesFor};
 })();

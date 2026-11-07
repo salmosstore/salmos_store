@@ -311,6 +311,7 @@
       auth.onAuthStateChanged(async user=>{
         state.auth.user=user||null;
         state.auth.ready=true;
+        window.SalmosStoreShipping?.refreshRequest();
         window.SalmosDigital?.refreshPurchases();
         if(user){
           try {
@@ -554,7 +555,6 @@
     // El catálogo se muestra apenas llega, sin esperar configuración, filtros ni flyers.
     const configLoad=api('/api/config/public').then(config=>{
       if(!current())return;state.config={...config,shipping:{...config.shipping,correo:{...config.shipping?.correo,enabled:false,testMode:false}}};
-      const wa=qs('#footerWhatsapp');if(wa)wa.href=`https://wa.me/${config?.whatsapp||cfg.STORE_WHATSAPP||'5491162691341'}`;
       refresh();
     }).catch(error=>console.warn('Configuración de tienda:',error.message));
     const categoriesLoad=api('/api/categories').then(data=>{if(!current())return;state.categories=data.items||[];refresh();}).catch(error=>console.warn('Categorías:',error.message));
@@ -567,8 +567,6 @@
       state.storeProductsLoaded=true;
       qs('#porPedido')?.classList.remove('hidden');
       refresh();
-      const whatsapp = state.config?.whatsapp || cfg.STORE_WHATSAPP || '5491162691341';
-      const wa=qs('#footerWhatsapp');if(wa)wa.href = `https://wa.me/${whatsapp}`;
       Promise.allSettled([configLoad,categoriesLoad]).then(async()=>{if(!current()||state.storeOrderEditor?.enabled)return;await initStoreOrderEditor();if(!current())return;refresh();}).catch(error=>console.warn('Editor de orden:',error.message));
       loadPublicFlyers().catch(error=>console.warn('Flyers:',error.message));
       openProductFromCurrentPath().catch(error=>console.warn('Producto compartido:',error.message));
@@ -763,6 +761,7 @@
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
         <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+        ${state.storeOrderEditor?.enabled?'':quickCartButton(p)}
       </div>
     </article>`;
   }
@@ -1000,14 +999,42 @@
   }
 
   function productUsesSizes(product){
-    const key=String(`${product?.category_slug||''} ${product?.category_name||''}`).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    return Boolean(window.SalmosHome?.isGarment(product))||/(remera|camiseta|chomba|buzo|prenda|kids|infantil)/.test(key);
+    return Boolean(product && window.SalmosHome?.isGarment(product));
+  }
+
+  function sizeGuideFor(product) {
+    return productUsesSizes(product) ? window.SalmosSizeGuides.matching(product, state.config?.sizeCharts) : null;
+  }
+
+  function showSizeGuide(product) {
+    const chart = sizeGuideFor(product);
+    if (!chart) return;
+    const dialog = document.createElement('dialog');
+    dialog.className = 'product-choice-dialog size-guide-dialog';
+    dialog.setAttribute('aria-label', 'Guía de talles');
+    dialog.innerHTML = `<div class="product-choice-head"><h3>Guía de talles</h3><button type="button" class="icon-btn" aria-label="Cerrar">×</button></div>
+      <img src="${window.SalmosSizeGuides.image(chart)}" alt="${escapeHtml(chart.title)}">
+      <table class="visually-hidden"><caption>${escapeHtml(chart.title)} · Medidas en centímetros</caption>
+        <thead><tr><th>Talle</th><th>Ancho</th><th>Largo</th></tr></thead>
+        <tbody>${chart.rows.map(row => `<tr><th>${escapeHtml(row.size)}</th><td>${row.width}</td><td>${row.height}</td></tr>`).join('')}</tbody>
+      </table>`;
+    dialog.querySelector('button').onclick = () => dialog.close();
+    dialog.addEventListener('close', () => dialog.remove(), {once:true});
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+
+  function quickCartButton(product) {
+    return `<button class="quick-cart-button" type="button" data-quick-cart="${Number(product.id)}"
+      title="Agregar al carrito" aria-label="Agregar ${escapeHtml(product.name)} al carrito"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i></button>`;
   }
 
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
     const media = p.images?.length ? productPhotoMedia(p) : [{ url: '', alt_text: p.name, media_type:'image' }];
+    const guide = sizeGuideFor(p);
+    if (guide) media.push({url:window.SalmosSizeGuides.image(guide), alt_text:'Guía de talles · '+guide.title, media_type:'image', isSizeGuide:true});
     const catalogVariants = (p.variants || []).filter(v=>v.active!==0).map(v=>({...v,size:normalizePublicSize(v.size)}));
     const loading=Boolean(state.productDetailLoading),detailError=state.productDetailError||'';
     const availableVariants = loading||detailError?[]:catalogVariants.filter(v => publicVariantStock(v) > 0);
@@ -1020,7 +1047,6 @@
     }
     const selected = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const usesSizes=productUsesSizes(p);
-    const sizes = usesSizes?[...new Set(catalogVariants.filter(v => !state.selectedColor || v.color === state.selectedColor).map(v => String(v.size||'').trim()).filter(Boolean))].sort(publicSizeOrder):[];
     const attributeCells=[];
 
     if(usesSizes&&p.fit)attributeCells.push(`<div class="product-attribute-cell product-attribute-fit"><span class="detail-label">Corte</span><span class="attribute-static attribute-chip">${escapeHtml(p.fit)}</span></div>`);
@@ -1031,10 +1057,10 @@
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
       <div class="product-detail product-detail-v4">
         <div class="detail-gallery detail-gallery-scroll" ${productBackgroundAttrs(p)}>
-          <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
+          <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide${im.isSizeGuide?' size-guide-slide':''}" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
           ${media.length>1?'<button type="button" class="product-photo-arrow previous" data-detail-media-step="-1" aria-label="Foto o video anterior">‹</button><button type="button" class="product-photo-arrow next" data-detail-media-step="1" aria-label="Foto o video siguiente">›</button>':''}
           <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button>
-          ${media.length>1?`<div class="media-dots">${media.map((_,i)=>`<button type="button" data-detail-media-index="${i}" class="${i===(state.detailMediaIndex||0)?'active':''}" aria-label="Ver imagen ${i+1}"></button>`).join('')}</div>`:''}
+          ${media.length>1?`<div class="media-dots">${media.map((item,i)=>`<button type="button" data-detail-media-index="${i}" class="${i===(state.detailMediaIndex||0)?'active':''}" aria-label="${item.isSizeGuide?'Ver guía de talles':'Ver imagen '+(i+1)}"></button>`).join('')}</div>`:''}
         </div>
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
@@ -1042,6 +1068,7 @@
           ${window.SalmosDigital?.editionHtml(p)||''}
           ${loading?'<div class="product-detail-status" role="status">Cargando opciones…</div>':detailError?`<div class="product-detail-status" role="alert">${escapeHtml(detailError)}<button type="button" class="btn btn-ghost" data-retry-product="${escapeHtml(p.id)}">Reintentar</button></div>`:''}
           ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}
+          ${guide?'<button type="button" class="product-size-guide-link" data-detail-size-guide>Ver guía de talles</button>':''}
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
@@ -1066,28 +1093,162 @@
   function closeProductChoice(){document.getElementById('productChoiceDialog')?.close();productChoiceContext=null;}
   function productChoice(title,body,onChoice){
     let dialog=qs('#productChoiceDialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='productChoiceDialog';dialog.className='product-choice-dialog';document.body.append(dialog);dialog.addEventListener('click',event=>{const button=event.target.closest('[data-product-choice]');if(button)productChoiceContext?.(button.dataset.productChoice);if(event.target.closest('[data-close-product-choice]')||event.target===dialog)closeProductChoice();});dialog.addEventListener('close',()=>{if(!dialog.open)productChoiceContext=null;});}
+    dialog.setAttribute('aria-label',title);
     dialog.innerHTML=`<div class="product-choice-head"><h3>${escapeHtml(title)}</h3><button type="button" class="icon-btn" data-close-product-choice aria-label="Cerrar">×</button></div>${body}`;productChoiceContext=onChoice;dialog.showModal();
   }
-  function addProductVariants(product,rows,{checkout=false,wholesale=false}={}){
-    for(const {variant,quantity} of rows){const existing=state.cart.find(x=>Number(x.variantId)===Number(variant.id));if(!Number.isSafeInteger(quantity)||quantity<1||quantity+(existing?.qty||0)>Math.min(99,publicVariantStock(variant))){toast('No hay disponibilidad suficiente para esa cantidad.','error');return false;}}
-    for(const {variant:v,quantity} of rows){const existing=state.cart.find(x=>Number(x.variantId)===Number(v.id));if(existing){existing.maxStock=publicVariantStock(v);existing.qty+=quantity;}else state.cart.push({productId:product.id,variantId:v.id,name:product.name,color:v.color,size:v.size,priceCents:product.price_cents,qty:quantity,maxStock:publicVariantStock(v),image:firstProductImage(product)});}
-    closeProductChoice();saveCart();closeModal('#productModal');toast(rows.length>1?'Curva agregada al carrito':rows[0].quantity>1?`${rows[0].quantity} unidades agregadas al carrito`:'Producto agregado al carrito','success');window.SalmosWholesale?.render();
-    if(checkout)startCheckout();else if(!wholesale)openCart();return true;
+  function remainingVariantStock(variant) {
+    const reserved = state.cart.find(item => Number(item.variantId) === Number(variant.id))?.qty || 0;
+    return Math.min(99, publicVariantStock(variant)) - reserved;
   }
-  function chooseProductSize(product,{checkout=false,wholesale=false}={}){
-    const variants=(product.variants||[]).filter(v=>v.active!==0&&(!state.selectedColor||v.color===state.selectedColor)),sizes=[...new Set(variants.map(v=>normalizePublicSize(v.size)).filter(Boolean))].sort(publicSizeOrder);
-    productChoice('¿En qué talle lo querés?',`${wholesale?'<p class="product-choice-note">Podés combinar diseños y colores. Desde 5 prendas se aplican los descuentos por cantidad configurados.</p>':''}<p class="product-choice-note">Tocá un talle para agregarlo al carrito.</p><div class="product-size-choices">${sizes.map(size=>{const variant=variants.find(v=>normalizePublicSize(v.size)===size&&publicVariantStock(v)>(state.cart.find(x=>Number(x.variantId)===Number(v.id))?.qty||0));return `<button type="button" class="option compact-option" data-product-choice="${variant?.id||''}" ${variant?'':'disabled'} aria-label="Talle ${escapeHtml(size)}${variant?'':', sin disponibilidad'}">${escapeHtml(size)}</button>`;}).join('')}</div>`,id=>{const variant=variants.find(v=>Number(v.id)===Number(id));if(variant)addProductVariants(product,[{variant,quantity:1}],{checkout,wholesale});});
-  }
-  function addSelectedToCart(openCheckoutNow=false){
-    const product=state.selectedProduct;if(!product||state.productDetailLoading||state.productDetailError)return;
-    const wholesale=Boolean(state.wholesaleMode),options={checkout:openCheckoutNow,wholesale},variants=(product.variants||[]).filter(v=>v.active!==0&&(!state.selectedColor||v.color===state.selectedColor));
-    if(productUsesSizes(product)){
-      if(!wholesale){chooseProductSize(product,options);return;}
-      const type=promotionProductType(product.category_slug||product.category_name,product.fit),rule=(state.config?.promotions||[]).find(r=>r.active!==false&&r.requireCurve&&(!r.triggerType||r.triggerType===type)&&(!r.triggerProductId||Number(r.triggerProductId)===Number(product.id))),sizes=rule?.curveSizes?.length?[...new Set(rule.curveSizes.map(normalizePublicSize))]:[...new Set(variants.map(v=>normalizePublicSize(v.size)).filter(Boolean))].sort(publicSizeOrder),curve=sizes.map(size=>({variant:variants.find(v=>normalizePublicSize(v.size)===size&&publicVariantStock(v)>(state.cart.find(x=>Number(x.variantId)===Number(v.id))?.qty||0)),quantity:1})),complete=curve.length>0&&curve.every(row=>row.variant);
-      productChoice('¿Curva entera del mismo diseño y color de remera?',`<p class="product-choice-note">${escapeHtml(product.name)} · ${escapeHtml(state.selectedColor||'')}<br>${sizes.map(escapeHtml).join(' · ')}</p>${complete?'':'<p class="product-choice-note" role="status">La curva completa no está disponible en este color. Podés elegir un surtido.</p>'}<div class="product-choice-actions"><button class="btn btn-primary" type="button" data-product-choice="curve" ${complete?'':'disabled'}>Sí, agregar curva</button><button class="btn btn-secondary" type="button" data-product-choice="mixed">No, elegir surtido</button></div><small>Los surtidos tienen descuentos desde 5 prendas, según las promociones vigentes.</small>`,choice=>{if(choice==='curve'&&complete)addProductVariants(product,curve,options);else if(choice==='mixed'){closeProductChoice();chooseProductSize(product,options);}});return;
+
+  function addProductVariants(product, rows, {checkout=false, wholesale=false, fromDetail=false}={}) {
+    if (rows.some(({variant, quantity}) => !Number.isSafeInteger(quantity) || quantity < 1 || quantity > remainingVariantStock(variant))) {
+      toast('No hay disponibilidad suficiente para esa cantidad.', 'error');
+      return false;
     }
-    const variant=variants.find(v=>Number(v.id)===Number(state.selectedVariantId))||variants.find(v=>publicVariantStock(v)>0);if(!variant)return;
-    const pack=wholesale&&['cap','mug','glass'].includes(promotionProductType(product.category_slug||product.category_name,product.fit));addProductVariants(product,[{variant,quantity:pack?6:1}],options);
+    let units = 0;
+    for (const {variant, quantity} of rows) {
+      const existing = state.cart.find(item => Number(item.variantId) === Number(variant.id));
+      units += quantity;
+      if (existing) {
+        existing.maxStock = publicVariantStock(variant);
+        existing.qty += quantity;
+      } else {
+        state.cart.push({
+          productId:product.id, variantId:variant.id, name:product.name,
+          color:variant.color, size:variant.size, priceCents:product.price_cents,
+          qty:quantity, maxStock:publicVariantStock(variant), image:firstProductImage(product)
+        });
+      }
+    }
+    closeProductChoice();
+    saveCart();
+    if (fromDetail) closeModal('#productModal');
+    toast(units === 1 ? 'Producto agregado al carrito' : `${units} unidades agregadas al carrito`, 'success');
+    if (checkout) startCheckout();
+    else if (fromDetail && !wholesale) openCart();
+    return true;
+  }
+
+  function chooseProductVariants(product, variants, quantity, options) {
+    const usesSizes = productUsesSizes(product);
+    const groups = [...new Set(variants.map(variant => variant.color || ''))];
+    const picked = new Set();
+    let currentGroup = Math.max(0, groups.indexOf(options.color || ''));
+    const guide = sizeGuideFor(product);
+    const type = promotionProductType(product.category_slug || product.category_name, product.fit);
+    const curveRule = (state.config?.promotions || []).find(rule => rule.active !== false && rule.requireCurve &&
+      (!rule.triggerType || rule.triggerType === type) &&
+      (!rule.triggerProductId || Number(rule.triggerProductId) === Number(product.id)));
+    const canChoose = variant => remainingVariantStock(variant) >= quantity;
+    const title = usesSizes ? '¿Qué talles querés?' : 'Elegí una opción';
+    const help = usesSizes ? '<small class="product-choice-wholesale-hint">Desde 5 unidades surtidas podés acceder a descuentos exclusivos. Si llevás una unidad de cada talle del mismo modelo y color, el carrito calcula el mejor descuento vigente.</small>' : '';
+    const colorSelect = usesSizes && groups.length > 1 ? `<label class="field product-choice-color">Color
+      <select class="select" data-size-choice-color>${groups.map((color, i) => `<option value="${i}" ${i===currentGroup?'selected':''}>${escapeHtml(color || 'Sin color')}${variants.some(v => (v.color||'')===color && canChoose(v))?'':' · sin stock'}</option>`).join('')}</select></label>` : '';
+    const renderChoices = () => {
+      const rows = usesSizes ? variants.filter(v => (v.color||'') === groups[currentGroup]).sort((a,b)=>publicSizeOrder(a.size,b.size)) : variants;
+      const curveSizes = curveRule?.curveSizes?.length ? curveRule.curveSizes.map(normalizePublicSize) : rows.map(row=>normalizePublicSize(row.size));
+      const curve = [...new Set(curveSizes)].map(size=>rows.find(variant=>normalizePublicSize(variant.size)===size && canChoose(variant)));
+      const canSelectCurve = usesSizes && options.wholesale && curve.length > 1 && curve.every(Boolean);
+      return `<div class="product-size-choices">${rows.map(variant => {
+        const label = usesSizes ? normalizePublicSize(variant.size) || 'Único' : cartVariantLabel(variant) || 'Único';
+        return `<button type="button" class="option compact-option${picked.has(variant.id)?' active':''}" data-product-choice="${Number(variant.id)}"
+          aria-pressed="${picked.has(variant.id)}" ${canChoose(variant)?'':'disabled'}>${escapeHtml(label)}</button>`;
+      }).join('')}</div>
+      ${guide?'<button type="button" class="product-size-guide-link" data-product-choice="guide">Ver guía de talles</button>':''}
+      ${canSelectCurve?'<button type="button" class="btn btn-ghost product-choose-curve" data-product-choice="curve">Elegir curva completa</button>':''}`;
+    };
+    const sync = dialog => {
+      for (const button of qsa('.product-size-choices [data-product-choice]', dialog)) {
+        const active = picked.has(Number(button.dataset.productChoice));
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      }
+      qs('[data-product-choice="confirm"]', dialog).disabled = !picked.size;
+      qs('[data-choice-count]', dialog).textContent = picked.size ? `${picked.size} ${picked.size === 1 ? 'seleccionado' : 'seleccionados'}` : '';
+    };
+    productChoice(title, `<p class="product-choice-note"><strong>${escapeHtml(product.name)}</strong><br>${usesSizes?'Tocá uno o varios talles y confirmá.':quantity > 1 ? `Agregamos ${quantity} unidades de la opción elegida.` : 'Seleccioná y confirmá.'}</p>
+      ${colorSelect}<div data-size-choice-options>${renderChoices()}</div>${help}
+      <div class="product-choice-confirm"><small data-choice-count role="status"></small><button type="button" class="btn btn-primary" data-product-choice="confirm" disabled>
+        <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Agregar al carrito</button></div>`, choice => {
+      const dialog = qs('#productChoiceDialog');
+      if (choice === 'guide') { showSizeGuide(product); return; }
+      if (choice === 'confirm') {
+        const rows = variants.filter(v=>picked.has(v.id)).map(variant=>({variant,quantity}));
+        if (rows.length) addProductVariants(product, rows, options);
+        return;
+      }
+      if (choice === 'curve') {
+        const current = variants.filter(v=>(v.color||'')===groups[currentGroup] && canChoose(v));
+        const sizes = curveRule?.curveSizes?.map(normalizePublicSize) || [];
+        for (const variant of current) {
+          if (!sizes.length || sizes.includes(normalizePublicSize(variant.size))) picked.add(variant.id);
+        }
+      } else {
+        const id = Number(choice);
+        const variant = variants.find(v=>v.id===id);
+        if (!variant || !canChoose(variant)) return;
+        if (picked.has(id)) picked.delete(id);
+        else {
+          if (!usesSizes) picked.clear();
+          picked.add(id);
+        }
+      }
+      sync(dialog);
+    });
+    const dialog = qs('#productChoiceDialog'), select = qs('[data-size-choice-color]', dialog);
+    select?.addEventListener('change', () => {
+      currentGroup = Number(select.value);
+      qs('[data-size-choice-options]', dialog).innerHTML = renderChoices();
+      sync(dialog);
+    });
+  }
+
+  function beginProductPurchase(product, options) {
+    const variants = (product.variants || []).filter(variant => variant.active !== 0).map(variant=>({...variant,id:Number(variant.id)}));
+    const category = product.category_slug || product.category_name;
+    const type = product.production_catalog?.materialType || promotionProductType(category, product.fit);
+    const quantity = options.wholesale && ['cap','gorra','mug','glass'].includes(type) ? 6 : 1;
+    const available = variants.filter(variant => remainingVariantStock(variant) >= quantity);
+    if (!available.length) {
+      toast(quantity > 1 ? 'No quedan 6 unidades disponibles del mismo producto y color.' : 'Este producto no tiene stock disponible.', 'error');
+      return;
+    }
+    if (productUsesSizes(product)) chooseProductVariants(product, variants, 1, options);
+    else if (options.fromDetail || variants.length === 1) {
+      const selected = available.find(v => v.id === Number(state.selectedVariantId));
+      const variant = selected || available.find(v => !options.color || v.color === options.color);
+      if (variant) addProductVariants(product, [{variant,quantity}], options);
+      else toast('No hay suficiente stock del color elegido.', 'error');
+    } else chooseProductVariants(product, variants, quantity, options);
+  }
+
+  function addSelectedToCart(checkout=false) {
+    if (!state.selectedProduct || state.productDetailLoading || state.productDetailError) return;
+    beginProductPurchase(state.selectedProduct, {checkout, wholesale:Boolean(state.wholesaleMode), fromDetail:true, color:state.selectedColor});
+  }
+
+  let quickCartLoading = false;
+  async function addCardToCart(button) {
+    if (quickCartLoading || qs('#productChoiceDialog')?.open) return;
+    const id = Number(button.dataset.quickCart);
+    const summary = state.products.find(product => Number(product.id) === id);
+    if (summary?.sale_mode === 'order') { openCustomOrder('clothing', summary); return; }
+    const wholesale = Boolean(state.wholesaleMode);
+    quickCartLoading = true;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    try {
+      const cached = productDetailCache.get(String(id));
+      const product = cached && Date.now()-cached.at < 20000 ? cached.item : await requestProductDetails(id);
+      if (button.isConnected && Boolean(state.wholesaleMode) === wholesale) beginProductPurchase(product, {wholesale});
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      quickCartLoading = false;
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
   }
 
   function cartVariantLabel(item){return [item?.color,item?.size].map(v=>String(v||'').trim()).filter(Boolean).join(' · ')}
@@ -1193,7 +1354,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   function closeCart() { qs('#cartDrawer').classList.remove('open'); qs('#drawerBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); }
 
   function openModal(sel) { qs(sel).classList.add('open'); qs('#modalBackdrop').classList.add('open'); document.body.classList.add('no-scroll'); }
-  function closeModal(sel) { qs(sel).classList.remove('open'); if(sel==='#productModal'){closeProductChoice();state.selectedProduct=null;state.selectedColor=null;state.selectedVariantId=null;clearProductPath();} if (!qsa('.modal.open').length) { qs('#modalBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); } }
+  function closeModal(sel) { qs(sel).classList.remove('open'); if(sel==='#customOrderModal') releaseCustomFilePreviews(); if(sel==='#productModal'){closeProductChoice();state.selectedProduct=null;state.selectedColor=null;state.selectedVariantId=null;clearProductPath();} if (!qsa('.modal.open').length) { qs('#modalBackdrop').classList.remove('open'); document.body.classList.remove('no-scroll'); } }
 
   function startCheckout() {
     if (!state.cart.length) return;
@@ -2133,6 +2294,9 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         e.preventDefault();const strip=qs('#detailMediaStrip'),count=qsa('.detail-media-slide',strip).length;
         if(strip&&count){const current=Math.round(strip.scrollLeft/Math.max(1,strip.clientWidth)),index=detailMedia.dataset.detailMediaIndex!==undefined?Number(detailMedia.dataset.detailMediaIndex):(current+Number(detailMedia.dataset.detailMediaStep)+count)%count;strip.scrollTo({left:index*strip.clientWidth,behavior:'smooth'});}return;
       }
+      const quickCart=e.target.closest('[data-quick-cart]');
+      if(quickCart){e.preventDefault();await addCardToCart(quickCart);return;}
+      if(e.target.closest('[data-detail-size-guide]')){showSizeGuide(state.selectedProduct);return;}
       const card=e.target.closest('.product-card'); if(card){ if(card.dataset.saleMode==='order'){const p=state.products.find(x=>Number(x.id)===Number(card.dataset.productId));openCustomOrder('clothing',p||null);return;} openProduct(Number(card.dataset.productId)); return; }
       const retryProduct=e.target.closest('[data-retry-product]');if(retryProduct){openProduct(retryProduct.dataset.retryProduct);return;}
       if(e.target.closest('[data-close-product]')) { closeModal('#productModal'); return; }
@@ -2339,6 +2503,61 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       }catch(e){results.push({file:f,ok:false,text:`${f.name}: ${e.message}`});}
     }return results;
   }
+  const customFileUrls = new Set();
+  function releaseCustomFilePreviews() {
+    for (const url of customFileUrls) URL.revokeObjectURL(url);
+    customFileUrls.clear();
+  }
+  function customAttachmentInput(accept, hint='') {
+    return `<div class="field full custom-attachments">
+      <span class="custom-attachments-title">Archivos / referencias</span>
+      <div class="custom-attachment-control">
+        <input class="visually-hidden" id="customOrderFiles" name="files" type="file" multiple accept="${accept}">
+        <label class="btn btn-secondary custom-attachment-button" for="customOrderFiles">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>
+          Adjuntar archivos
+        </label>
+      </div>
+      <div class="custom-file-hint" id="customFileHint">${escapeHtml(hint)}</div>
+      <div class="custom-attachment-previews" aria-live="polite"></div>
+      <div class="custom-file-checks" id="customFileChecks"></div>
+    </div>`;
+  }
+  function renderCustomFilePreviews(input) {
+    releaseCustomFilePreviews();
+    const host = qs('.custom-attachment-previews',input.form);
+    host.replaceChildren();
+    for (const file of input.files) {
+      const item = document.createElement('figure'), caption = document.createElement('figcaption');
+      item.className = 'custom-attachment-card';
+      caption.textContent = file.name;
+      caption.title = file.name;
+      const fallback = document.createElement('span');
+      fallback.className = 'custom-attachment-format';
+      fallback.textContent = (file.name.match(/\.([a-z0-9]{1,8})$/i)?.[1] || 'Archivo').toUpperCase();
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        const url = URL.createObjectURL(file);
+        customFileUrls.add(url);
+        if (file.type === 'application/pdf') {
+          const preview = document.createElement('object');
+          preview.className = 'custom-attachment-pdf';
+          preview.type = 'application/pdf';
+          preview.data = url+'#toolbar=0&navpanes=0&page=1';
+          preview.setAttribute('aria-label','Vista previa de '+file.name);
+          preview.append(fallback);
+          item.append(preview);
+        } else {
+          const img = new Image();
+          img.alt = 'Vista previa de '+file.name;
+          img.src = url;
+          img.addEventListener('error',()=>img.replaceWith(fallback),{once:true});
+          item.append(img);
+        }
+      } else item.append(fallback);
+      item.append(caption);
+      host.append(item);
+    }
+  }
   function closeCustomOrder(){closeModal('#customOrderModal');}
   function dtfDesignRow(index,{label='',widthCm=30,heightCm=30,quantity=1}={}){
     return `<div class="custom-dtf-design-row" data-dtf-design-row>
@@ -2387,7 +2606,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         <div class="field"><label>Diseño</label><select class="select" name="designSource"><option value="salmos" ${productName?'selected':''}>Diseño SALMOS</option><option value="personalizado" ${productName?'':'selected'}>Diseño personalizado</option></select></div>
         <div class="field"><label>Cantidad</label><input class="input" type="number" name="quantity" min="1" value="1"></div>
         <div class="custom-dtf-estimate field full" id="customProductEstimate" aria-live="polite"></div><div class="field full salmos-design-picker hidden" id="salmosDesignPicker"></div>
-        <div class="field full"><label>Archivos / referencias</label><input class="input" id="customOrderFiles" name="files" type="file" multiple accept="image/*,application/pdf,.psd,.ai,.eps,.svg"><div class="custom-file-hint" id="customFileHint">Podés adjuntar referencias. Guardamos el original sin recomprimir.</div></div>`;
+        ${customAttachmentInput('image/*,application/pdf,.psd,.ai,.eps,.svg','Podés adjuntar referencias. Guardamos el original sin recomprimir.')}`;
       return;
     }
     host.innerHTML=`
@@ -2404,7 +2623,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         <div class="custom-dtf-design-list" id="customDtfDesignList">${dtfDesignRow(0)}</div>
         <div class="custom-dtf-estimate" id="customDtfEstimate" aria-live="polite"></div>
       </div>
-      <div class="field full"><label>Archivos</label><input class="input" id="customOrderFiles" name="files" type="file" multiple accept="image/png,image/*,application/pdf,.psd,.ai,.eps,.svg,.tif,.tiff"><div class="custom-file-hint" id="customFileHint"></div><div class="custom-file-checks" id="customFileChecks"></div></div>`;
+      ${customAttachmentInput('image/*,application/pdf,.psd,.ai,.eps,.svg,.tif,.tiff')}`;
     bindDtfBuilder(form);
   }
   function bindDtfBuilder(form){
@@ -2434,9 +2653,13 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     form.addEventListener('input',e=>{if(e.target.closest('#customDynamicFields'))sync();},events);
     form.addEventListener('change',async e=>{
       if(e.target.closest('#customDynamicFields'))sync();
-      if(e.target.id==='customOrderFiles'&&form.elements.fileMode?.value==='ready'){
-        const checks=qs('#customFileChecks',form),res=await validateReadyDtfFiles([...e.target.files],form.elements.subtype.value,form.elements.dtfMaterial?.value);
-        if(checks)checks.innerHTML=res.map(x=>`<div class="custom-file-check ${x.ok?'ok':'bad'}">${escapeHtml(x.ok?'✓ '+x.text:'✕ '+x.text)}</div>`).join('');
+      if(e.target.id==='customOrderFiles'){
+        const checks=qs('#customFileChecks',form);
+        if(checks) checks.replaceChildren();
+        if(form.elements.fileMode?.value!=='ready') return;
+        const files=e.target.files;
+        const res=await validateReadyDtfFiles([...files],form.elements.subtype.value,form.elements.dtfMaterial?.value);
+        if(checks?.isConnected && files===e.target.files) checks.innerHTML=res.map(x=>`<div class="custom-file-check ${x.ok?'ok':'bad'}">${escapeHtml(x.ok?'✓ '+x.text:'✕ '+x.text)}</div>`).join('');
       }
     },events);
     qs('#addDtfDesignBtn',form)?.addEventListener('click',()=>{const list=qs('#customDtfDesignList',form);if(!list)return;const mode=form.elements.designMode?.value||'same';const selected=selectedSalmosDesigns(form);const label=mode==='same_sizes'&&form.elements.designSource?.value==='salmos'&&selected[0]?selected[0].name:'';list.insertAdjacentHTML('beforeend',dtfDesignRow(qsa('[data-dtf-design-row]',form).length,{label}));sync();});
@@ -2444,6 +2667,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     sync();
   }
   function setCustomKind(form,kind,product=null){
+    if(form.elements.kind.value===kind && form.elements.files) return;
+    releaseCustomFilePreviews();
     if(kind!=='dtf')form._dtfEvents?.abort();
     form.elements.kind.value=kind;
     qsa('[data-custom-type]',form).forEach(b=>b.classList.toggle('active',b.dataset.customType===kind));
@@ -2475,7 +2700,10 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const form=qs('#customOrderForm',host);
     bindDesignPicker(form);
     form.addEventListener('input',()=>{if(form.elements.kind.value==='clothing')updateCustomProductEstimate(form,product);});
-    form.addEventListener('change',()=>{if(form.elements.kind.value==='clothing')updateCustomProductEstimate(form,product);});
+    form.addEventListener('change',event=>{
+      if(event.target.id==='customOrderFiles')renderCustomFilePreviews(event.target);
+      if(form.elements.kind.value==='clothing')updateCustomProductEstimate(form,product);
+    });
     qsa('[data-custom-type]',form).forEach(b=>b.addEventListener('click',()=>setCustomKind(form,b.dataset.customType,product)));
     setCustomKind(form,initialKind,product);
     form.addEventListener('submit',submitCustomOrder);
@@ -2509,6 +2737,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       ].filter(Boolean):[];
       const selectedSummary=selectedDesigns.length?`Diseño(s) SALMOS: ${selectedDesigns.map(d=>d.name).join(' · ')}`:(fd.get('productName')?`Diseño: ${fd.get('productName')}`:'');
       const summary=[`Hola SALMOS, envié el pedido ${order.code}.`,...dtfDetail,kind==='clothing'?`Producto: ${customProductTypes().find(t=>t.code===subtype)?.label||subtype}`:'',selectedSummary,`Cantidad total: ${quantity}`,total?`Total estimado: ${money(total)} · Seña 50%: ${money(deposit)}`:(known?`Costo de configuración ya determinado: ${money(known)}. Falta confirmar el total.`:`La seña será del 50% del total confirmado.`),kind==='dtf'&&subtype==='sheet'?'La cantidad final de metros queda sujeta al acomodo de los diseños.':''].filter(Boolean).join('\n');
+      releaseCustomFilePreviews();
       qs('#customOrderContent').innerHTML=`<div class="custom-order-result"><div class="eyebrow">Solicitud recibida</div><h2>Tu pedido quedó registrado</h2><div class="code">${escapeHtml(order.code)}</div><p>Guardamos los archivos originales. ${deposit?`Seña estimada: <strong>${money(deposit)}</strong>. El total se confirma antes de producir.`:''} Ahora podés enviarnos el resumen por WhatsApp para acordar los detalles finales.</p><a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${encodeURIComponent(whatsapp)}?text=${encodeURIComponent(summary)}">Continuar por WhatsApp</a><button class="btn btn-ghost" type="button" id="finishCustomOrderBtn">Cerrar</button></div>`;
     }catch(err){toast(err.message,'error');btn.disabled=false;btn.textContent='Enviar solicitud';}
   }
@@ -2526,8 +2755,37 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
   document.addEventListener('input',e=>{if(e.target.matches?.('#viaCargoDestination,#viaCargoAgency'))syncViaCargoFields();});
   document.addEventListener('change',e=>{if(e.target.matches?.('#viaCargoDeliveryType,#viaCargoAccept'))syncViaCargoFields();});
-  window.SalmosWholesale?.init({state,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts});
-  window.SalmosHome?.init({state,cfg,apiUrl,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart,money,openProduct,editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();}});
+  function initBackToTop() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'store-back-top';
+    button.setAttribute('aria-label', 'Volver arriba');
+    button.title = 'Volver arriba';
+    button.innerHTML = '<i class="fa-solid fa-circle-up" aria-hidden="true"></i>';
+    document.body.append(button);
+    let started = 0, last = -Infinity, idle;
+    const hide = () => button.classList.remove('visible');
+    window.addEventListener('scroll', () => {
+      const now = performance.now();
+      if (now - last > 550) started = now;
+      last = now;
+      clearTimeout(idle);
+      if (window.scrollY < 280) hide();
+      else if (now - started > 1500) button.classList.add('visible');
+      idle = setTimeout(() => { if (document.activeElement !== button) hide(); }, 2400);
+    }, {passive:true});
+    button.addEventListener('blur', () => { if (performance.now() - last >= 2400) hide(); });
+    button.addEventListener('click', () => {
+      window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+    });
+  }
+  initBackToTop();
+  window.SalmosWholesale?.init({state,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts,quickCartButton});
+  window.SalmosHome?.init({state,cfg,apiUrl,quickCartButton,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart,money,openProduct,editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();}});
+  window.SalmosStoreShipping?.init({
+    state,api,apiUrl,authApi,currentIdToken,escapeHtml,signIn:signInGoogle,
+    whatsapp:window.SalmosHome.whatsapp,dialog:window.SalmosHome.dialog
+  });
   window.SalmosDigital?.init({state,api,apiUrl,money,toast,authToken:currentIdToken,signIn:signInGoogle});
   boot();
 })();

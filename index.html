@@ -37,6 +37,8 @@
   <link rel="stylesheet" href="storefront-home.css?v=30.0">
   <link rel="stylesheet" href="book-digital.css?v=28.0">
   <link rel="stylesheet" href="storefront-refinements.css?v=37.0">
+<link rel="stylesheet" href="storefront-actions.css?v=40.0">
+<link rel="stylesheet" href="shipping-requests.css?v=40.0">
 <link rel="stylesheet" href="disclosure-icons.css?v=39.0"><script src="disclosure-icons.js?v=39.0" defer></script>
 </head>
 <body class="storefront store-pending">
@@ -49,7 +51,7 @@
           <span class="brand-store-wordmark" role="img" aria-label="SALMOS · creer, amar, crear"></span>
         </a>
         <nav class="home-header-nav" aria-label="Navegación principal">
-          <button type="button" data-store-home>Tienda</button>
+          <button type="button" data-store-home aria-current="page">Tienda</button>
           <button type="button" data-home-shipping>Envíos</button>
           <button type="button" data-home-wholesale>Mayoristas</button>
         </nav>
@@ -129,7 +131,7 @@
       <section class="store-services" id="storeServices" aria-label="Envíos y compras por mayor">
         <article class="store-service">
           <svg class="store-service-icon" viewBox="0 0 36 36" aria-hidden="true"><path d="M2 7h20v19H2zM22 14h7l5 7v5H22M7 26a3 3 0 1 0 6 0M25 26a3 3 0 1 0 6 0"/></svg>
-          <div><h2>Envíos</h2><p>Te cotizamos el envío personalmente.</p><a class="btn btn-primary" id="footerWhatsapp" data-shipping-whatsapp href="#" target="_blank" rel="noopener">Consultar por WhatsApp</a></div>
+          <div><h2>Envíos</h2><p>Te cotizamos el envío personalmente.</p><button class="btn btn-primary" id="footerWhatsapp" type="button" data-home-shipping>Consultar envío</button></div>
         </article>
         <article class="store-service">
           <svg class="store-service-icon" viewBox="0 0 36 36" aria-hidden="true"><path d="m3 12 15-8 15 8v17l-15 7-15-7zM3 12l15 8 15-8M18 20v16M10 8l15 8"/></svg>
@@ -182,13 +184,16 @@
   <script src="foreground.js?v=25.57"></script>
   <script src="sharing.js?v=25.44" defer></script>
   <script src="audiences.js?v=28.0" defer></script>
-  <script src="storefront-home.js?v=37.0" defer></script>
+  <script src="size-guide-data.js?v=40.0" defer></script>
+  <script src="storefront-home.js?v=40.0" defer></script>
   <script src="book-digital.js?v=31.0" defer></script>
   <script src="order-pricing.js?v=37.0" defer></script>
-  <script src="storefront-wholesale.js?v=37.0" defer></script>
-  <script src="app.js?v=37.0" defer></script>
+  <script src="storefront-wholesale.js?v=40.0" defer></script>
+  <script src="shipping-request-view.js?v=40.0" defer></script>
+  <script src="storefront-shipping.js?v=40.0" defer></script>
+  <script src="app.js?v=40.0" defer></script>
   <script>
-    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=39.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+    if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=40.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
   </script>
 </body>
 </html>
