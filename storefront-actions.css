@@ -193,3 +193,7 @@
   font-size:.74rem;
   color:var(--muted);
 }
+
+.custom-order-form .order-conditions[hidden] { display:none; }
+.custom-order-form .order-conditions ul { margin:5px 0 0; padding-inline-start:1.2em; }
+.custom-order-form .order-conditions li { white-space:pre-line; overflow-wrap:anywhere; }

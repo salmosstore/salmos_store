@@ -121,3 +121,12 @@ body .admin-topbar #addPromotionBtn[hidden],body .admin-topbar #saveSettingsBtn[
 .custom-discount-tools .select{flex:1;min-width:180px}
 .custom-price-row .number-control15{width:100%;grid-template-columns:28px minmax(0,1fr) 28px}
 @media(max-width:540px){.custom-price-row{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 0;gap:8px;font-size:.8rem}.custom-price-row>strong,.custom-price-heading>span:first-child{grid-column:1/-1}.custom-price-row .input{padding:8px 5px}.custom-price-heading{font-size:.7rem}}
+
+.storefront-scope-switch{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 7px}
+.storefront-scope-note{margin:0 0 18px;font-size:.85rem}
+.storefront-settings [data-visual-panel][hidden],.custom-condition-fields[hidden]{display:none}
+.custom-price-tools{display:flex;justify-content:flex-end;flex-wrap:wrap;align-items:center;gap:8px}
+.custom-price-tools.settings-card-heading{justify-content:space-between;margin-top:14px}
+.custom-price-tools h4{margin:0}
+.custom-condition-fields{grid-column:1/-1}
+.custom-condition-copy{white-space:pre-line;overflow-wrap:anywhere}

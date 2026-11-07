@@ -1,16 +1,78 @@
 (() => {
   'use strict';
-  const labels={gorras:'Gorras',tazas:'Tazas y Vasos',libros:'Libros',agendas:'Agendas',actividades:'Actividades'},backgroundKinds={pageBackgrounds:'Fondo de la tienda',wholesalePageBackgrounds:'Fondo de Mayoristas',peoplePhotoBackgrounds:'Fondo para prendas y personas',objectPhotoBackgrounds:'Fondo para tazas y objetos'};
+  const labels={gorras:'Gorras',tazas:'Tazas y Vasos',libros:'Libros',agendas:'Agendas',actividades:'Actividades'};
+  const backgroundGroups={
+    store:[['pageBackgrounds','Fondo de la página'],['peoplePhotoBackgrounds','Fondo de fichas de prendas y personas'],
+      ['objectPhotoBackgrounds','Fondo de fichas de tazas y objetos']],
+    wholesale:[['wholesalePageBackgrounds','Fondo de la página'],['wholesalePeoplePhotoBackgrounds','Fondo de fichas de prendas y personas'],
+      ['wholesaleObjectPhotoBackgrounds','Fondo de fichas de tazas y objetos']]
+  };
+  const emptyLabel=kind=>kind==='wholesalePageBackgrounds'?'Fondo liso':kind.startsWith('wholesale')?'Sin fondo':'Automático';
   let context;const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   async function render(host,{onSaved=()=>{}}={}){
     const data=await context.load();if(!host.isConnected)return;let assets=data.assets,config={};const coverDirty=new Set();const products=data.products.filter(product=>product.status==='published'&&product.primary_image_url);try{config=JSON.parse(data.settings.storefront_visuals_v1||'{}');}catch{}
     const backgrounds=()=>assets.filter(asset=>asset.asset_type==='background');
     const background=(kind,theme)=>`<section class="storefront-background-card" data-background-panel="${kind}:${theme}"><div class="storefront-background-heading"><h4>${theme==='dark'?'Modo oscuro':'Modo claro'}</h4><button type="button" class="btn btn-ghost" data-add-home-background="${kind}:${theme}">+ Fondo</button></div><div class="storefront-background-preview" data-background-preview="${kind}:${theme}"></div><label class="field">Fondo<select class="select" data-home-background="${kind}" data-home-theme="${theme}"></select></label><div class="storefront-background-choices" data-background-choices="${kind}:${theme}" aria-label="Fondos disponibles"></div></section>`;
     const options=selection=>'<option value="">Primera publicación de la sección</option>'+products.map(product=>`<option value="${product.id}" ${selection?.kind==='product'&&Number(selection.id)===Number(product.id)?'selected':''}>${esc(product.name)}</option>`).join('');
-    host.innerHTML=`<section class="storefront-settings"><div class="admin-section-head"><h2>Portada de tienda</h2><a class="btn btn-ghost" href="index.html?ordenar=1">Editar galerías</a></div><h3>Accesos laterales</h3><div class="storefront-covers-grid">${Object.entries(labels).map(([key,label])=>`<section class="storefront-cover-edit"><h3>${label}</h3><div class="storefront-cover-edit-preview" data-cover-preview="${key}"></div><label class="field">Producto para la imagen<select class="select" data-home-cover="${key}">${options(config.covers?.[key]?.dark)}</select></label></section>`).join('')}</div>${Object.entries(backgroundKinds).map(([kind,label])=>`<section class="storefront-background-section"><h3>${label}</h3><div class="storefront-background-grid">${background(kind,'dark')}${background(kind,'light')}</div></section>`).join('')}<div class="storefront-settings-save"><p role="status" data-cover-save-status></p><button class="btn btn-primary" type="button" data-save-covers>Guardar portada</button></div></section>`;
-    const coverPreview=key=>{const id=Number(host.querySelector(`[data-home-cover="${key}"]`).value),product=products.find(row=>Number(row.id)===id),preview=host.querySelector(`[data-cover-preview="${key}"]`);preview.innerHTML=product?`<img src="${esc(product.primary_image_url)}" alt="${esc(product.name)}" loading="lazy">`:'Primera publicación de esta sección';};
-    const updateBackground=key=>{const panel=host.querySelector(`[data-background-panel="${key}"]`),select=panel.querySelector('select'),asset=backgrounds().find(item=>Number(item.id)===Number(select.value)),preview=panel.querySelector('[data-background-preview]');const plain=!asset&&select.dataset.homeBackground==='wholesalePageBackgrounds',light=select.dataset.homeTheme==='light';preview.style.backgroundColor=plain?(light?'#f6f2e8':'#0b0b0c'):'';preview.style.color=plain?(light?'#261b10':'#f6f2e8'):'';preview.innerHTML=asset?`<img src="${esc(context.assetUrl(asset))}" alt="${esc(asset.name)}">`:plain?'Fondo liso':'Automático';for(const button of panel.querySelectorAll('[data-background-choice]')){const active=button.dataset.backgroundChoice===select.value;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));}};
-    const fillBackgrounds=()=>{for(const select of host.querySelectorAll('[data-home-background]')){const key=select.dataset.homeBackground+':'+select.dataset.homeTheme,value=select.dataset.initialized?select.value:String(config[select.dataset.homeBackground]?.[select.dataset.homeTheme]||'');select.innerHTML='<option value="">'+(select.dataset.homeBackground==='wholesalePageBackgrounds'?'Fondo liso':'Automático')+'</option>'+backgrounds().map(asset=>`<option value="${asset.id}">${esc(asset.name)}</option>`).join('');select.value=value;select.dataset.initialized='true';host.querySelector(`[data-background-choices="${key}"]`).innerHTML=backgrounds().map(asset=>`<button type="button" class="storefront-background-choice" data-background-choice="${asset.id}" aria-pressed="false"><img src="${esc(context.assetUrl(asset))}" alt="" loading="lazy"><span>${esc(asset.name)}</span></button>`).join('');updateBackground(key);}};
+    const sections=scope=>backgroundGroups[scope].map(([kind,label])=>
+      `<section class="storefront-background-section"><h3>${label}</h3><div class="storefront-background-grid">${background(kind,'dark')}${background(kind,'light')}</div></section>`).join('');
+    host.innerHTML=`<section class="storefront-settings">
+      <div class="admin-section-head"><h2>Portada de tienda</h2><a class="btn btn-ghost" href="index.html?ordenar=1">Editar galerías</a></div>
+      <div class="storefront-scope-switch" role="group" aria-label="Sección a configurar">
+        <button type="button" class="btn btn-primary" data-visual-scope="store" aria-pressed="true">Tienda</button>
+        <button type="button" class="btn btn-ghost" data-visual-scope="wholesale" aria-pressed="false">Mayoristas</button>
+      </div>
+      <p class="muted storefront-scope-note">Cada sección tiene su propio fondo de página y de fichas.</p>
+      <div data-visual-panel="store">
+        <h3>Accesos laterales</h3><div class="storefront-covers-grid">${Object.entries(labels).map(([key,label])=>
+          `<section class="storefront-cover-edit"><h3>${label}</h3><div class="storefront-cover-edit-preview" data-cover-preview="${key}"></div>
+          <label class="field">Producto para la imagen<select class="select" data-home-cover="${key}">${options(config.covers?.[key]?.dark)}</select></label></section>`).join('')}</div>
+        ${sections('store')}
+      </div>
+      <div data-visual-panel="wholesale" hidden>${sections('wholesale')}</div>
+      <div class="storefront-settings-save"><p role="status" data-cover-save-status></p><button class="btn btn-primary" type="button" data-save-covers>Guardar cambios</button></div>
+    </section>`;
+    const selectScope=scope=>{
+      for(const button of host.querySelectorAll('[data-visual-scope]')){
+        const active=button.dataset.visualScope===scope;
+        button.setAttribute('aria-pressed',String(active));
+        button.classList.toggle('btn-primary',active);
+        button.classList.toggle('btn-ghost',!active);
+      }
+      for(const panel of host.querySelectorAll('[data-visual-panel]'))panel.hidden=panel.dataset.visualPanel!==scope;
+    };
+    const coverPreview=key=>{
+      const id=Number(host.querySelector(`[data-home-cover="${key}"]`).value);
+      const product=products.find(row=>Number(row.id)===id),preview=host.querySelector(`[data-cover-preview="${key}"]`);
+      preview.innerHTML=product?`<img src="${esc(product.primary_image_url)}" alt="${esc(product.name)}" loading="lazy">`:'Primera publicación de esta sección';
+    };
+    const updateBackground=key=>{
+      const panel=host.querySelector(`[data-background-panel="${key}"]`),select=panel.querySelector('select');
+      const asset=backgrounds().find(item=>Number(item.id)===Number(select.value)),preview=panel.querySelector('[data-background-preview]');
+      const plain=!asset&&select.dataset.homeBackground.startsWith('wholesale'),light=select.dataset.homeTheme==='light';
+      preview.style.backgroundColor=plain?(light?'#f6f2e8':'#0b0b0c'):'';
+      preview.style.color=plain?(light?'#261b10':'#f6f2e8'):'';
+      preview.innerHTML=asset?`<img src="${esc(context.assetUrl(asset))}" alt="${esc(asset.name)}">`:emptyLabel(select.dataset.homeBackground);
+      for(const button of panel.querySelectorAll('[data-background-choice]')){
+        const active=button.dataset.backgroundChoice===select.value;
+        button.classList.toggle('active',active);
+        button.setAttribute('aria-pressed',String(active));
+      }
+    };
+    const fillBackgrounds=()=>{
+      for(const select of host.querySelectorAll('[data-home-background]')){
+        const {homeBackground:kind,homeTheme:theme}=select.dataset,key=kind+':'+theme;
+        const legacy=kind==='peoplePhotoBackgrounds'?config.photoBackgrounds?.[theme]:null;
+        const value=select.dataset.initialized?select.value:String(config[kind]?.[theme]||legacy||'');
+        select.innerHTML=`<option value="">${emptyLabel(kind)}</option>`+backgrounds().map(asset=>`<option value="${asset.id}">${esc(asset.name)}</option>`).join('');
+        select.value=backgrounds().some(asset=>String(asset.id)===value)?value:'';
+        select.dataset.initialized='true';
+        host.querySelector(`[data-background-choices="${key}"]`).innerHTML=backgrounds().map(asset=>
+          `<button type="button" class="storefront-background-choice" data-background-choice="${asset.id}" aria-pressed="false">
+            <img src="${esc(context.assetUrl(asset))}" alt="" loading="lazy"><span>${esc(asset.name)}</span></button>`).join('');
+        updateBackground(key);
+      }
+    };
     async function addBackground(key){
       const dialog=document.createElement('dialog');dialog.className='admin-dialog storefront-background-upload';dialog.innerHTML=`<form class="dialog-shell"><div class="dialog-head"><h2>Agregar fondo</h2><button type="button" class="icon-btn" data-close-upload aria-label="Cerrar">×</button></div><div class="dialog-body"><label class="field">Imagen<input class="input" type="file" accept="image/png,image/jpeg,image/webp" name="file" required></label><label class="field">Nombre<input class="input" name="name" maxlength="120" required></label><div class="storefront-upload-preview"></div><p role="status" data-upload-status></p></div><div class="dialog-foot"><button type="button" class="btn btn-ghost" data-close-upload>Cancelar</button><button class="btn btn-primary" type="submit">Agregar fondo</button></div></form>`;document.body.append(dialog);const form=dialog.querySelector('form'),status=dialog.querySelector('[data-upload-status]'),submit=form.querySelector('[type="submit"]'),initialToken=crypto.randomUUID();let token=initialToken,localUrl='',busy=false;
       const close=()=>{if(!busy)dialog.close();};for(const button of dialog.querySelectorAll('[data-close-upload]'))button.onclick=close;dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});dialog.addEventListener('close',()=>{if(localUrl)URL.revokeObjectURL(localUrl);dialog.remove();});
@@ -19,8 +81,8 @@
       dialog.showModal();
     }
     host.onchange=event=>{if(event.target.matches('[data-home-cover]')){coverDirty.add(event.target.dataset.homeCover);coverPreview(event.target.dataset.homeCover);}if(event.target.matches('[data-home-background]'))updateBackground(event.target.dataset.homeBackground+':'+event.target.dataset.homeTheme);};
-    host.onclick=async event=>{const add=event.target.closest('[data-add-home-background]');if(add){addBackground(add.dataset.addHomeBackground);return;}const choice=event.target.closest('[data-background-choice]');if(choice){const panel=choice.closest('[data-background-panel]');panel.querySelector('select').value=choice.dataset.backgroundChoice;updateBackground(panel.dataset.backgroundPanel);return;}const save=event.target.closest('[data-save-covers]');if(!save)return;save.disabled=true;const status=host.querySelector('[data-cover-save-status]');status.textContent='Guardando…';
-      try{const next={...config,covers:{...config.covers},pageBackgrounds:{},wholesalePageBackgrounds:{},peoplePhotoBackgrounds:{},objectPhotoBackgrounds:{}};for(const select of host.querySelectorAll('[data-home-cover]')){if(!coverDirty.has(select.dataset.homeCover))continue;if(select.value)next.covers[select.dataset.homeCover]={dark:{kind:'product',id:Number(select.value)},light:{kind:'product',id:Number(select.value)}};else delete next.covers[select.dataset.homeCover];}for(const select of host.querySelectorAll('[data-home-background]'))if(select.value)next[select.dataset.homeBackground][select.dataset.homeTheme]=Number(select.value);delete next.photoBackgrounds;await context.save(next);config=next;coverDirty.clear();status.textContent='Portada guardada.';context.toast('Portada guardada','success');onSaved();}
+    host.onclick=async event=>{const scope=event.target.closest('[data-visual-scope]');if(scope){selectScope(scope.dataset.visualScope);return;}const add=event.target.closest('[data-add-home-background]');if(add){addBackground(add.dataset.addHomeBackground);return;}const choice=event.target.closest('[data-background-choice]');if(choice){const panel=choice.closest('[data-background-panel]');panel.querySelector('select').value=choice.dataset.backgroundChoice;updateBackground(panel.dataset.backgroundPanel);return;}const save=event.target.closest('[data-save-covers]');if(!save)return;save.disabled=true;const status=host.querySelector('[data-cover-save-status]');status.textContent='Guardando…';
+      try{const next={...config,covers:{...config.covers}};for(const [kind] of Object.values(backgroundGroups).flat())next[kind]={};for(const select of host.querySelectorAll('[data-home-cover]')){if(!coverDirty.has(select.dataset.homeCover))continue;if(select.value)next.covers[select.dataset.homeCover]={dark:{kind:'product',id:Number(select.value)},light:{kind:'product',id:Number(select.value)}};else delete next.covers[select.dataset.homeCover];}for(const select of host.querySelectorAll('[data-home-background]'))if(select.value)next[select.dataset.homeBackground][select.dataset.homeTheme]=Number(select.value);delete next.photoBackgrounds;await context.save(next);config=next;coverDirty.clear();status.textContent='Portada guardada.';context.toast('Portada guardada','success');onSaved();}
       catch(error){status.textContent=error.message;}finally{save.disabled=false;}};
     fillBackgrounds();for(const key of Object.keys(labels))coverPreview(key);
   }

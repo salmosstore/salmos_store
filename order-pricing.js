@@ -13,6 +13,36 @@
     }
     return result;
   }
+  function normalizeOrderConditions(rows = [
+    {id:'plazo',kind:'all',text:'Tiempo estimado de 24 a 72 horas, sujeto a cantidad y disponibilidad.'},
+    {id:'acomodo-dtf',kind:'dtf',dtfSubtype:'sheet',text:'El cálculo final depende del acomodo de los diseños en la plancha.'}
+  ]) {
+    if (!Array.isArray(rows) || rows.length > 50) throw new Error('Podés cargar hasta 50 condiciones de pedido.');
+    return rows.map((row,index)=>{
+      const kind=row?.kind, text=typeof row?.text==='string'?row.text.trim():'';
+      if (!['all','clothing','dtf'].includes(kind) || !text || text.length>600) {
+        throw new Error('Elegí dónde se aplica cada condición y escribí un texto de hasta 600 caracteres.');
+      }
+      const value=(key,allowed)=>{
+        const current=row[key]??'';
+        if (current!=='' && !allowed.includes(current)) throw new Error('Revisá las opciones de la condición.');
+        return current;
+      };
+      const result={id:String(row.id||'condicion-'+index).slice(0,80),kind,text,active:![false,0,'false','0'].includes(row.active)};
+      if (kind==='clothing') {
+        const productType=row.productType??'';
+        if (typeof productType!=='string' || !/^[a-zA-Z0-9_-]{0,80}$/.test(productType)) throw new Error('Revisá el tipo de producto de la condición.');
+        Object.assign(result,{productType,finish:value('finish',['estampada','lisa'])});
+      } else if (kind==='dtf') {
+        Object.assign(result,{
+          dtfMaterial:value('dtfMaterial',['textile','uv']),
+          dtfSubtype:value('dtfSubtype',['sheet','individual']),
+          fileMode:value('fileMode',['ready','configure'])
+        });
+      }
+      return result;
+    });
+  }
   function normalizeOrderPricing(raw = {}) {
     if (typeof raw === 'string') raw = JSON.parse(raw || '{}');
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Revisá los precios de personalizados.');
@@ -38,7 +68,7 @@
       if (!result.name || !Number.isSafeInteger(result.minimum) || result.minimum < 1 || result.minimum > 10000 || !['percent','fixed','unit_price'].includes(result.benefit) || !Number.isFinite(result.value) || result.value < 0 || (result.benefit === 'percent' ? result.value > 100 : !Number.isSafeInteger(result.value))) throw new Error('Revisá nombre, cantidad y beneficio del descuento de personalizados.');
       return result;
     });
-    return {dtf,products,discounts};
+    return {dtf,products,discounts,conditions:normalizeOrderConditions(raw.conditions)};
   }
   function quoteOrderPricing(config, request, rules = [], referencePriceCents = null) {
     const policy = normalizeOrderPricing(config),quantity = Number(request.quantity || 1);
@@ -73,5 +103,14 @@
     const best = candidates.sort((a,b)=>b.discount-a.discount)[0],discountCents = Math.min(subtotalCents,Math.max(0,Math.round(best?.discount||0))),totalCents = subtotalCents-discountCents;
     return {unitCents:Number(unitCents),units,areaUnits,subtotalCents,discountCents,totalCents,label:discountCents?best.name:'',depositCents:Math.round(totalCents/2),preparationCents};
   }
-  window.SalmosOrderPricing = {normalize:normalizeOrderPricing,quote:quoteOrderPricing,productTypes:customProductTypes};
+  function conditionsFor(config, request) {
+    const targets=request.kind==='dtf'?
+      {dtfMaterial:request.dtfMaterial,dtfSubtype:request.subtype,fileMode:request.fileMode}:
+      {productType:request.subtype,finish:request.finish};
+    return normalizeOrderConditions(config?.conditions).filter(rule=>rule.active && (
+      rule.kind==='all' || rule.kind===request.kind &&
+        Object.keys(targets).every(key=>!rule[key] || rule[key]===targets[key])
+    ));
+  }
+  window.SalmosOrderPricing = {normalize:normalizeOrderPricing,quote:quoteOrderPricing,productTypes:customProductTypes,conditionsFor};
 })();

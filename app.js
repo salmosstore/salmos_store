@@ -716,8 +716,8 @@
     if(scope!=='all'&&!scope.startsWith('product-'))for(const product of state.products)if(product.category_slug===scope)delete editor.backgrounds.products[String(product.id)];
     editor.backgroundDirty=JSON.stringify(editor.backgrounds)!==JSON.stringify(editor.savedBackgrounds);state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);editor.foregroundError='';renderProducts();renderFeatured();const selected=state.products.filter(product=>window.SalmosColors.photoBackgroundFor(editor.backgrounds,product.category_slug,product.id)!==null).filter(product=>state.storeMontageProductIds?.has(Number(product.id))&&!state.storeForegroundPrepared.has(Number(product.id)));if(selected.length){editor.preparing=true;renderStoreOrderControls();try{await prepareStoreForegrounds(selected);}catch(error){editor.foregroundError=error.message;throw error;}finally{editor.preparing=false;renderProducts();renderFeatured();}}
   }
-  function productPhotoMedia(product) {
-    const {asset,withoutBackground}=productPhotoBackground(product);
+  function productPhotoMedia(product,scope='store') {
+    const {asset,withoutBackground}=productPhotoBackground(product,scope);
     return (product.images||[]).map(image=>{
       const original=apiUrl(image.original_url||image.url||'');
       const foreground=image.foreground_url?apiUrl(image.foreground_url):'';
@@ -736,14 +736,18 @@
     }};
     const results=await Promise.allSettled([prepare(),prepare()]);const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   }
-  function productPhotoBackground(product) {
+  function productPhotoBackground(product,scope='store') {
+    const garment=window.SalmosHome.isGarment(product);
+    const theme=document.documentElement.dataset.theme==='light'?'light':'dark';
+    const visual=state.config?.storefrontVisuals;
+    if(scope==='wholesale'){
+      const asset=(garment?visual?.wholesalePeoplePhotoBackgrounds:visual?.wholesaleObjectPhotoBackgrounds)?.[theme]||null;
+      return {asset,withoutBackground:!asset};
+    }
     const settings=state.config?.productPhotoBackgrounds;
     const choice=window.SalmosColors.photoBackgroundFor(settings,product.category_slug,product.id);
     const scoped=Object.hasOwn(settings?.products||{},String(product.id))||
       Object.hasOwn(settings?.categories||{},String(product.category_slug));
-    const garment=window.SalmosHome.isGarment(product);
-    const theme=document.documentElement.dataset.theme==='light'?'light':'dark';
-    const visual=state.config?.storefrontVisuals;
     const themed=(garment?visual?.peoplePhotoBackgrounds:visual?.objectPhotoBackgrounds)?.[theme]||null;
     const selected=(state.config?.productBackgroundAssets||[]).find(asset=>Number(asset.id)===choice);
     if(scoped&&choice===0)return {asset:null,withoutBackground:true};
@@ -756,8 +760,8 @@
     return {asset:themed};
   }
 
-  function productBackgroundAttrs(product) {
-    const {asset,withoutBackground}=productPhotoBackground(product);
+  function productBackgroundAttrs(product,scope='store') {
+    const {asset,withoutBackground}=productPhotoBackground(product,scope);
     const image=asset?.url?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none';
     return `data-photo-background="${withoutBackground?'none':asset?.id||'original'}" style="--product-photo-background:${image}"`;
   }
@@ -788,7 +792,7 @@
   function productCollectionImages(product){return ['hombre','mujer','kids'].includes(state.homeCollection)?window.SalmosHome.imagesFor(product,state.homeCollection):productCardImages(product);}
   function productMediaKey(url){try{return new URL(apiUrl(url),location.origin).href;}catch{return String(url||'');}}
   function productImageAvailable(url){return url&&!state.failedProductMedia?.has(productMediaKey(url));}
-  function productCardImages(product){const images=productPhotoMedia(product).filter(im=>productImageAvailable(im.url)&&(!im.media_type||im.media_type==='image'));return images.length?images:productImageAvailable(product.primary_image_url)?[{url:apiUrl(product.primary_image_url),alt_text:product.name}]:[];}
+  function productCardImages(product,scope='store'){const images=productPhotoMedia(product,scope).filter(im=>productImageAvailable(im.url)&&(!im.media_type||im.media_type==='image'));return images.length?images:productImageAvailable(product.primary_image_url)?[{url:apiUrl(product.primary_image_url),alt_text:product.name}]:[];}
   function reconcileCartImages(){
     if(!state.storeProductsLoaded)return;
     let changed=false;for(const item of state.cart){const product=state.products.find(product=>Number(product.id)===Number(item.productId)),image=product?productCardImages(product)[0]?.url||'':'';if(item.image!==image){item.image=image;changed=true;}}
@@ -813,10 +817,10 @@
     (state.failedProductMedia??=new Set()).add(productMediaKey(url));
     const id=card?.dataset.productId||cart?.dataset.cartProduct||home?.dataset.homePhotoProduct||wholesale?.dataset.wholesalePhotoProduct;
     const product=state.products.find(product=>Number(product.id)===Number(id));
-    const images=product?(card?productCollectionImages(product):productCardImages(product)):[];
+    const images=product?(card?productCollectionImages(product):productCardImages(product,wholesale?'wholesale':'store')):[];
     const row=home?.closest('[data-home-row]')?.dataset.homeRow||wholesale?.dataset.wholesalePhotoCollection;
     const next=home?window.SalmosHome.imageFor(product,row):
-      (wholesale&&product?window.SalmosHome.imageFor(product,row):null)||images[0];
+      (wholesale&&product?window.SalmosHome.imageFor(product,row,'wholesale'):null)||images[0];
     if(next){
       img.src=apiUrl(next.url);
       img.alt=next.alt_text||product.name;
@@ -1075,7 +1079,8 @@
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
-    const media = p.images?.length ? productPhotoMedia(p) : [{ url: '', alt_text: p.name, media_type:'image' }];
+    const scope=state.wholesaleMode?'wholesale':'store';
+    const media = p.images?.length ? productPhotoMedia(p,scope) : [{ url: '', alt_text: p.name, media_type:'image' }];
     const guide = sizeGuideFor(p);
     if (guide) media.push({url:window.SalmosSizeGuides.image(guide), alt_text:'Guía de talles · '+guide.title, media_type:'image', isSizeGuide:true});
     const catalogVariants = (p.variants || []).filter(v=>v.active!==0).map(v=>({...v,size:normalizePublicSize(v.size)}));
@@ -1099,7 +1104,7 @@
       <div class="product-modal-content" data-product-id="${p.id}">
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
       <div class="product-detail product-detail-v4">
-        <div class="detail-gallery detail-gallery-scroll" ${productBackgroundAttrs(p)}>
+        <div class="detail-gallery detail-gallery-scroll" ${productBackgroundAttrs(p,scope)}>
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide${im.isSizeGuide?' size-guide-slide':''}" data-slide="${i}">${renderDetailMedia(im,p.name)}</div>`).join('')}</div>
           ${media.length>1?'<button type="button" class="product-photo-arrow previous" data-detail-media-step="-1" aria-label="Foto o video anterior">‹</button><button type="button" class="product-photo-arrow next" data-detail-media-step="1" aria-label="Foto o video siguiente">›</button>':''}
           <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button>
@@ -2627,7 +2632,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     return {...quote,designs,totalQty,totalArea:designs.reduce((n,d)=>n+d.widthCm*d.heightCm*d.quantity,0),requestedSheets:form.elements.subtype.value==='sheet'?Number(form.elements.requestedSheets?.value)||1:0,areaSheets:quote.areaUnits,estimatedSheets:form.elements.subtype.value==='sheet'?quote.units:0,totalPesos:quote.totalCents/100,unitPesos:quote.unitCents/100,row};
   }
   function quoteSummaryHtml(quote,unitLabel='unidad'){
-    if(quote.totalCents==null)return '<strong>Precio a cotizar.</strong> Te confirmamos el importe antes de producir.';
+    if(quote.totalCents==null)return '<strong>Precio a cotizar.</strong> Te confirmamos el importe y la seña del 50% antes de producir.';
     return `<div class="custom-quote-row"><span>${quote.units} × ${money(quote.unitCents)} / ${unitLabel}</span><span>${money(quote.subtotalCents)}</span></div>${quote.discountCents?`<div class="custom-quote-row custom-quote-saving"><span>${escapeHtml(quote.label)}</span><strong>− ${money(quote.discountCents)}</strong></div>`:''}<div class="custom-quote-row"><strong>Total estimado</strong><strong class="custom-dtf-price">${money(quote.totalCents)}</strong></div><small>Seña estimada del 50%: ${money(quote.depositCents)}. Envío a coordinar.</small>`;
   }
   function updateDtfEstimate(form){
@@ -2709,6 +2714,16 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qs('#customDtfDesignList',form)?.addEventListener('click',e=>{const b=e.target.closest('[data-remove-dtf-design]');if(!b)return;b.closest('[data-dtf-design-row]')?.remove();sync();});
     sync();
   }
+  function renderCustomConditions(form) {
+    const host=qs('[data-custom-order-conditions]',form);
+    const fields=form.elements;
+    const request={kind:fields.kind.value,subtype:fields.subtype?.value,finish:fields.finish?.value,
+      dtfMaterial:fields.dtfMaterial?.value,fileMode:fields.fileMode?.value};
+    const conditions=window.SalmosOrderPricing.conditionsFor(state.config?.customPricing,request);
+    host.hidden=!conditions.length;
+    const html=conditions.length?`<strong>Condiciones del pedido</strong><ul>${conditions.map(rule=>`<li>${escapeHtml(rule.text)}</li>`).join('')}</ul>`:'';
+    if(host.innerHTML!==html)host.innerHTML=html;
+  }
   function setCustomKind(form,kind,product=null){
     if(form.elements.kind.value===kind && form.elements.files) return;
     releaseCustomFilePreviews();
@@ -2718,6 +2733,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     renderCustomDynamicFields(form,kind,product);
     if(kind==='clothing')updateCustomProductEstimate(form,product);
     refreshSalmosDesignPicker(form);
+    renderCustomConditions(form);
   }
   function openCustomOrder(kind='choose',product=null){
     const host=qs('#customOrderContent');if(!host)return;openModal('#customOrderModal');
@@ -2737,7 +2753,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
           <div class="field"><label>WhatsApp</label><input class="input" name="customerPhone" required value="${escapeHtml(state.customer?.phone||'')}"></div>
           <div class="field full"><label>Email (opcional)</label><input class="input" type="email" name="customerEmail" value="${escapeHtml(state.auth.user?.email||state.customer?.email||'')}"></div>
         </div>
-        <div class="order-conditions"><strong>Condiciones:</strong> tiempo estimado de 24 a 72 hs, sujeto a cantidad y disponibilidad. El trabajo se confirma con una seña del 50%. En DTF por metro, el cálculo final queda sujeto al orden y acomodo real de los diseños.</div>
+        <div class="order-conditions" data-custom-order-conditions aria-live="polite" hidden></div>
         <button class="btn btn-primary full" type="submit" id="submitCustomOrderBtn">Enviar solicitud</button>
       </form>`;
     const form=qs('#customOrderForm',host);
@@ -2746,6 +2762,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     form.addEventListener('change',event=>{
       if(event.target.id==='customOrderFiles')renderCustomFilePreviews(event.target);
       if(form.elements.kind.value==='clothing')updateCustomProductEstimate(form,product);
+      if(event.target.matches('select'))renderCustomConditions(form);
     });
     qsa('[data-custom-type]',form).forEach(b=>b.addEventListener('click',()=>setCustomKind(form,b.dataset.customType,product)));
     setCustomKind(form,initialKind,product);
