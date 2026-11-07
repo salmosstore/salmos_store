@@ -38,7 +38,13 @@
 .wholesale-product-name { margin:0; }
 .wholesale-product-info strong { font-size:.8rem; color:var(--gold-2); }
 .wholesale-product-info small { font-weight:400; }
-.wholesale-product-image { width:100%; }
+.wholesale-product-image {
+  width:100%;
+  background-image:var(--product-photo-background,none);
+  background-position:center;
+  background-size:cover;
+  background-repeat:no-repeat;
+}
 .storefront .product-card:has(.quick-cart-button) .product-body,
 .storefront .home-product:has(.quick-cart-button) .home-product-info {
   position:relative;

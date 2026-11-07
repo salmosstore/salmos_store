@@ -29,13 +29,14 @@
   }
 
   function productCard(product, key) {
-    const {apiUrl, money, escapeHtml:esc, quickCartButton} = context;
-    const image = window.SalmosHome.imageFor(product,key) || product.images?.[0];
-    const url = image?.url || product.primary_image_url;
+    const {apiUrl, money, escapeHtml:esc, quickCartButton, productCardImages, productBackgroundAttrs} = context;
+    const image = window.SalmosHome.imageFor(product,key) || productCardImages(product)[0];
+    const url = image?.url;
     return `<article class="wholesale-product">
       <button class="wholesale-product-open" type="button" data-wholesale-product="${Number(product.id)}" data-wholesale-media="${Number(image?.id)||0}">
-        <span class="wholesale-product-image ${window.SalmosHome.isGarment(product)?'garment':'object'}">
-          ${url?`<img src="${esc(apiUrl(url))}" alt="" loading="lazy" decoding="async">`:''}
+        <span class="wholesale-product-image ${window.SalmosHome.isGarment(product)?'garment':'object'}"
+              data-wholesale-photo-product="${Number(product.id)}" data-wholesale-photo-collection="${esc(key)}" ${productBackgroundAttrs(product)}>
+          ${url?`<img src="${esc(apiUrl(url))}" data-original-src="${esc(image.original_url||'')}" alt="" loading="lazy" decoding="async">`:''}
         </span>
         <span class="wholesale-product-info"><span class="wholesale-product-name">${esc(product.name)}</span>
           <strong>${esc(money(product.price_cents))}<small> / u</small></strong></span>

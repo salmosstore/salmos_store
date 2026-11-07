@@ -708,7 +708,7 @@
     const editor=state.storeOrderEditor,select=qs('#storeBackgroundScope'),gallery=qs('#storeBackgroundGallery');if(!editor||!select||!gallery)return;
     select.innerHTML='<option value="all">Todos los productos</option>'+state.categories.map(category=>`<option value="${escapeHtml(category.slug)}">${escapeHtml(category.name)}</option>`).join('');select.value=state.activeCategory;select.disabled=editor.saving||editor.preparing;
     const scope=state.activeCategory,value=scope==='all'?(editor.backgrounds.all??-1):Object.hasOwn(editor.backgrounds.categories,scope)?editor.backgrounds.categories[scope]:-1;gallery.innerHTML=storeBackgroundChoices(value,true,editor.saving||editor.preparing,scope==='all');
-    qs('#storeBackgroundHint').textContent=scope==='all'?'Se aplica a todas las fotos de todos los productos. Guardá los cambios para publicarlo.':'Se aplica a todas las fotos de esta categoría. Cada ficha también permite elegir su propio fondo.';
+    qs('#storeBackgroundHint').textContent=scope==='all'?'Fondo general para los productos sin un fondo específico ni una selección en Portada de tienda. Guardá los cambios para publicarlo.':'Se aplica a todas las fotos de esta categoría. Cada ficha también permite elegir su propio fondo.';
   }
   async function applyStorePhotoBackground(scope,id){
     const editor=state.storeOrderEditor;if(!editor||editor.saving||editor.preparing)return;
@@ -716,9 +716,13 @@
     if(scope!=='all'&&!scope.startsWith('product-'))for(const product of state.products)if(product.category_slug===scope)delete editor.backgrounds.products[String(product.id)];
     editor.backgroundDirty=JSON.stringify(editor.backgrounds)!==JSON.stringify(editor.savedBackgrounds);state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);editor.foregroundError='';renderProducts();renderFeatured();const selected=state.products.filter(product=>window.SalmosColors.photoBackgroundFor(editor.backgrounds,product.category_slug,product.id)!==null).filter(product=>state.storeMontageProductIds?.has(Number(product.id))&&!state.storeForegroundPrepared.has(Number(product.id)));if(selected.length){editor.preparing=true;renderStoreOrderControls();try{await prepareStoreForegrounds(selected);}catch(error){editor.foregroundError=error.message;throw error;}finally{editor.preparing=false;renderProducts();renderFeatured();}}
   }
-  function productPhotoMedia(product){
-    const override=window.SalmosColors.photoBackgroundFor(state.config?.productPhotoBackgrounds,product.category_slug,product.id),replace=override!==null||productBackground(product);
-    return (product.images||[]).map(image=>{const original=apiUrl(image.original_url||image.url||''),foreground=image.foreground_url?apiUrl(image.foreground_url):'';return {...image,original_url:original,url:replace&&productImageAvailable(foreground)?foreground:original};});
+  function productPhotoMedia(product) {
+    const {asset,withoutBackground}=productPhotoBackground(product);
+    return (product.images||[]).map(image=>{
+      const original=apiUrl(image.original_url||image.url||'');
+      const foreground=image.foreground_url?apiUrl(image.foreground_url):'';
+      return {...image,original_url:original,url:(asset||withoutBackground)&&productImageAvailable(foreground)?foreground:original};
+    });
   }
   async function prepareStoreForegrounds(products){
     let catalogs=null;const remaining=[...products];
@@ -732,15 +736,31 @@
     }};
     const results=await Promise.allSettled([prepare(),prepare()]);const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   }
-  function productBackground(p){
-    const settings=state.config?.productPhotoBackgrounds,choice=window.SalmosColors?.photoBackgroundFor(settings,p.category_slug,p.id),assets=state.config?.productBackgroundAssets||[],theme=document.documentElement.dataset.theme==='light'?'light':'dark',garment=window.SalmosHome?.isGarment(p),visual=state.config?.storefrontVisuals;
-    if(choice===0)return null;let selected=assets.find(asset=>Number(asset.id)===Number(choice));
-    const specific=Object.hasOwn(settings?.products||{},String(p.id))||Object.hasOwn(settings?.categories||{},String(p.category_slug));if(garment&&selected&&!specific&&/tazas?|vasos?|mug|chop/i.test(selected.name||''))selected=null;
-    const themed=(garment?visual?.peoplePhotoBackgrounds:visual?.objectPhotoBackgrounds)?.[theme];selected??=themed||null;
-    return window.SalmosHome?.backgroundAsset(p,selected)||selected;
+  function productPhotoBackground(product) {
+    const settings=state.config?.productPhotoBackgrounds;
+    const choice=window.SalmosColors.photoBackgroundFor(settings,product.category_slug,product.id);
+    const scoped=Object.hasOwn(settings?.products||{},String(product.id))||
+      Object.hasOwn(settings?.categories||{},String(product.category_slug));
+    const garment=window.SalmosHome.isGarment(product);
+    const theme=document.documentElement.dataset.theme==='light'?'light':'dark';
+    const visual=state.config?.storefrontVisuals;
+    const themed=(garment?visual?.peoplePhotoBackgrounds:visual?.objectPhotoBackgrounds)?.[theme]||null;
+    const selected=(state.config?.productBackgroundAssets||[]).find(asset=>Number(asset.id)===choice);
+    if(scoped&&choice===0)return {asset:null,withoutBackground:true};
+    if(scoped&&selected)return {asset:selected};
+    if(themed?.configured)return {asset:themed};
+    if(choice===0)return {asset:null,withoutBackground:true};
+    if(selected&&(!garment||!/tazas?|vasos?|mug|chop/i.test(selected.name||''))){
+      return {asset:window.SalmosHome.backgroundAsset(product,selected)};
+    }
+    return {asset:themed};
   }
 
-  function productBackgroundAttrs(p){const asset=productBackground(p),choice=window.SalmosColors?.photoBackgroundFor(state.config?.productPhotoBackgrounds,p.category_slug,p.id);return `data-photo-background="${choice===0?'none':asset?.id||'original'}" style="--product-photo-background:${asset?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none'}"`;}
+  function productBackgroundAttrs(product) {
+    const {asset,withoutBackground}=productPhotoBackground(product);
+    const image=asset?.url?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none';
+    return `data-photo-background="${withoutBackground?'none':asset?.id||'original'}" style="--product-photo-background:${image}"`;
+  }
   function filteredProducts() {
     const q = state.query.trim().toLowerCase();
     return orderedStoreProducts(state.products.filter(p => {
@@ -781,17 +801,40 @@
     if(!original||productMediaKey(original)===key)return false;
     (state.failedProductMedia??=new Set()).add(key);if(!productImageAvailable(original))return false;
     img.src=apiUrl(original);img.hidden=false;
-    const host=img.closest('.home-product-photo,.product-media,.detail-media-slide,.cart-item');if(host)host.style.setProperty('--product-photo-background','none');
+    const host=img.closest('.home-product-photo,.wholesale-product-image,.product-media,.detail-media-slide,.cart-item');if(host)host.style.setProperty('--product-photo-background','none');
     return true;
   }
   function handleStoreProductImageError(img){
-    const card=img.closest('.product-card'),cart=img.closest('[data-cart-product]'),home=img.closest('[data-home-photo-product]');if(!card&&!cart&&!home)return false;
-    const url=img.currentSrc||img.src;if(!url)return true;
+    const card=img.closest('.product-card'),cart=img.closest('[data-cart-product]');
+    const home=img.closest('[data-home-photo-product]'),wholesale=img.closest('[data-wholesale-photo-product]');
+    if(!card&&!cart&&!home&&!wholesale)return false;
+    const url=img.currentSrc||img.src;
+    if(!url)return true;
     (state.failedProductMedia??=new Set()).add(productMediaKey(url));
-    const product=state.products.find(product=>Number(product.id)===Number(card?.dataset.productId||cart?.dataset.cartProduct||home?.dataset.homePhotoProduct)),images=product?(card?productCollectionImages(product):productCardImages(product)):[],row=home?.closest('[data-home-row]')?.dataset.homeRow;const next=home?window.SalmosHome?.imageFor(product,row):images[0];
-    if(next){img.src=apiUrl(next.url);img.alt=next.alt_text||product.name;img.dataset.originalSrc=next.original_url||'';const edit=home?.closest('[data-home-product-card]')?.querySelector('[data-home-edit]');if(edit&&next.id)edit.dataset.homeMedia=String(next.id);if(card){const host=qs('.product-media',card);if(host)host.dataset.mediaIndex='0';const count=qs('.product-photo-count',card);if(count)count.textContent=`1 / ${images.length}`;}}
-    else{img.removeAttribute('src');img.hidden=true;img.insertAdjacentHTML('afterend','<div class="product-placeholder" role="status">Foto no disponible</div>');}
-    if(cart)reconcileCartImages();return true;
+    const id=card?.dataset.productId||cart?.dataset.cartProduct||home?.dataset.homePhotoProduct||wholesale?.dataset.wholesalePhotoProduct;
+    const product=state.products.find(product=>Number(product.id)===Number(id));
+    const images=product?(card?productCollectionImages(product):productCardImages(product)):[];
+    const row=home?.closest('[data-home-row]')?.dataset.homeRow||wholesale?.dataset.wholesalePhotoCollection;
+    const next=home?window.SalmosHome.imageFor(product,row):
+      (wholesale&&product?window.SalmosHome.imageFor(product,row):null)||images[0];
+    if(next){
+      img.src=apiUrl(next.url);
+      img.alt=next.alt_text||product.name;
+      img.dataset.originalSrc=next.original_url||'';
+      const edit=home?.closest('[data-home-product-card]')?.querySelector('[data-home-edit]');
+      if(edit&&next.id)edit.dataset.homeMedia=String(next.id);
+      if(card){
+        const host=qs('.product-media',card),count=qs('.product-photo-count',card);
+        if(host)host.dataset.mediaIndex='0';
+        if(count)count.textContent=`1 / ${images.length}`;
+      }
+    }else{
+      img.removeAttribute('src');
+      img.hidden=true;
+      img.insertAdjacentHTML('afterend','<div class="product-placeholder" role="status">Foto no disponible</div>');
+    }
+    if(cart)reconcileCartImages();
+    return true;
   }
   function cycleProductCardMedia(button){
     const card=button.closest('.product-card'),host=qs('.product-media',card),product=state.products.find(p=>Number(p.id)===Number(card.dataset.productId));
@@ -2780,7 +2823,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     });
   }
   initBackToTop();
-  window.SalmosWholesale?.init({state,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts,quickCartButton});
+  window.SalmosWholesale?.init({state,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts,quickCartButton,productCardImages,productBackgroundAttrs});
   window.SalmosHome?.init({state,cfg,apiUrl,quickCartButton,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart,money,openProduct,editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();}});
   window.SalmosStoreShipping?.init({
     state,api,apiUrl,authApi,currentIdToken,escapeHtml,signIn:signInGoogle,
