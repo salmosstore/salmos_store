@@ -1,0 +1,22 @@
+html body #productionDialog:not(.production-editor-fullscreen)>.dialog-shell{grid-template-rows:auto auto minmax(0,1fr) auto!important}
+html body #productionDialog .production-top-grid>.field{grid-template-rows:16px 40px!important;min-height:0!important;align-content:end!important;gap:6px!important}
+html body #productionDialog .production-top-grid>.field[hidden]{display:none!important}
+html body #productionDialog .production-top-grid>.field>label{min-height:0!important;height:auto!important;margin:0!important;line-height:1.3!important}
+html body #productionDialog .production-top-grid>.production-book-variant-field{flex-basis:230px!important;max-width:260px!important;line-height:16px!important;font-size:12px!important}
+html body #productionDialog .production-top-grid>.production-book-variant-field>select{align-self:end!important;width:100%!important;margin:0!important}
+html body #productionVariantSection{grid-column:1/-1;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box}
+html body #productionVariantSection>.horizontal-gallery-shell{width:100%;max-width:none;min-width:0}
+html body #mockupVariantGallery{display:flex!important;flex-wrap:nowrap!important;gap:12px!important;width:100%!important;max-width:none!important;min-width:0!important;padding:8px 4px!important;overflow-x:auto!important;overflow-y:hidden!important;align-items:start!important;box-sizing:border-box;scrollbar-width:thin}
+html body #mockupVariantGallery>.gallery-layout-group{flex:0 0 100%!important;width:100%!important;max-width:none!important;box-sizing:border-box}
+html body #mockupVariantGallery .production-photo-tile{flex:0 0 170px!important;width:170px!important;min-width:170px!important;max-width:170px!important;position:relative}
+html body #mockupVariantGallery .mockup-variant-card{display:block!important;width:100%!important;min-width:0!important;height:228px!important;padding:5px!important;box-sizing:border-box!important}
+html body #mockupVariantGallery .mockup-variant-card>img{display:block!important;width:100%!important;height:100%!important;max-height:none!important;object-fit:contain!important}
+.production-photo-filters39{display:flex;align-items:end;flex-wrap:wrap;gap:8px 12px;margin:8px 0 3px;min-width:0}
+.production-photo-filters39>.field{display:grid;gap:5px;margin:0;flex:0 1 180px;min-width:130px;max-width:240px;font-size:12px;line-height:1.3}
+.production-photo-filters39 .select{width:100%;min-width:0;height:38px;min-height:38px;padding:6px 10px;font-size:13px}
+.production-photo-filters39>small{margin-left:auto;align-self:center;font-size:12px;color:var(--muted)}
+.production-photo-filters39>.btn{width:auto;min-height:36px;padding:6px 10px;font-size:12px}
+html body #mockupVariantGallery>.muted{flex:1 0 100%;margin:12px 5px;font-size:14px}
+@media(max-width:760px){.production-photo-filters39>.field{flex:1 1 140px;max-width:none}.production-photo-filters39>small{margin-left:0}html body #productionDialog .production-top-grid>.production-book-variant-field{flex:1 1 140px!important;max-width:100%!important}html body #mockupVariantGallery .production-photo-tile{flex-basis:150px!important;width:150px!important;min-width:150px!important;max-width:150px!important}html body #mockupVariantGallery .mockup-variant-card{height:204px!important}}
+
+html body #productionDialog #productionMockupStudio{padding:0!important;border:0!important;background:transparent!important;min-width:0!important;width:100%!important;box-sizing:border-box}

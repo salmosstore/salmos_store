@@ -1,0 +1,11 @@
+html body .fa-solid.fa-caret-down.salmos-caret-icon{display:block!important;position:static!important;inset:auto!important;flex:0 0 12px!important;width:12px!important;height:8px!important;min-width:12px!important;min-height:8px!important;max-width:12px!important;max-height:8px!important;padding:0!important;margin:0!important;border:0!important;background:currentColor!important;clip-path:polygon(0 0,100% 0,50% 100%)!important;mask:none!important;-webkit-mask:none!important;line-height:0!important;font-size:0!important;transform:none!important;transform-origin:center;pointer-events:none}
+html body .salmos-caret-icon::before,html body .salmos-caret-icon::after{display:none!important;content:none!important}
+html body .salmos-disclosure-icon,html body .montage-group-fold.salmos-disclosure-icon{display:inline-flex!important;position:static!important;inset:auto!important;box-sizing:border-box!important;align-items:center!important;justify-content:center!important;flex:0 0 24px!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;padding:0!important;margin:0!important;border:1px solid var(--line,#af819366)!important;border-radius:50%!important;color:inherit!important;background:transparent!important;line-height:0!important;transform:none!important;vertical-align:middle}
+html body .salmos-disclosure-icon::before,html body .salmos-disclosure-icon::after,html body summary.salmos-summary39::before,html body summary.salmos-summary39::after{content:none!important;display:none!important}
+html body summary.salmos-summary39{list-style:none!important;align-items:center!important}
+html body summary.salmos-summary39:not(:has(.montage-group-fold)){display:flex!important;gap:8px}
+html body summary.salmos-summary39::-webkit-details-marker{display:none!important}
+html body summary.salmos-summary39::marker{content:''}
+html body details[open]>summary .fa-caret-down.salmos-caret-icon,html body .fa-caret-down.salmos-caret-icon[data-caret-direction=up]{transform:rotate(180deg)!important}
+html body .salmos-fold-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;line-height:1!important}
+html body .salmos-fold-button[aria-expanded=true]>.salmos-caret-icon{transform:rotate(180deg)!important}

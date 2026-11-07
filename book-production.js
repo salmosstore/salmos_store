@@ -74,9 +74,9 @@
     if(!context)return;
     const enabled=isBookType($('#productionMaterialType')?.value),dialog=$('#productionDialog');if(dialog)dialog.dataset.book=String(enabled);
     let host=$('#bookProductionPanel');if(!host){host=document.createElement('section');host.id='bookProductionPanel';host.className='book-production-panel';$('#productionStockNote')?.after(host);}
-    let variant=$('#productionBookVariantField');if(!variant){variant=document.createElement('div');variant.id='productionBookVariantField';variant.className='field production-book-variant-field';$('.production-type-field')?.after(variant);}variant.hidden=!enabled;
+    let variant=$('#productionBookVariantField');if(!variant){variant=document.createElement('label');variant.id='productionBookVariantField';variant.className='field production-book-variant-field';$('.production-type-field')?.after(variant);}variant.hidden=!enabled;
     host.hidden=!enabled;window.SalmosBookDigitalAdmin?.render();if(!enabled)return;
-    const kind=current().kind;variant.innerHTML=select('Variante','kind',kind,BOOK_VARIANTS.map(value=>[value,value]));
+    const kind=current().kind,variantMarkup=document.createElement('template');variantMarkup.innerHTML=select('Variante','kind',kind,BOOK_VARIANTS.map(value=>[value,value]));variant.replaceChildren(...variantMarkup.content.firstElementChild.childNodes);
 
     const b=current(),materials=context.state.materials,options=types=>[['','Elegir…'],...materials.filter(m=>types.includes(m.material_type)).map(m=>[m.id,`${materialLabel(m)} · ${context.money(m.average_cost_cents)} / u`])];
     const rowField=(group,index,key,label,value,type='number',extra='')=>`<label class="field">${label}<input class="input" type="${type}" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="${key}" value="${escape(value)}" ${extra}></label>`;
@@ -119,7 +119,7 @@
     });
     document.addEventListener('change',event=>{if(event.target.matches('[data-book-row-field]')){if(event.target.tagName==='SELECT'||event.target.type==='checkbox'){updateRow(event.target);render();}return;}
       const input=event.target.closest('[data-book-field]');
-      if(input&&(input.type==='checkbox'||input.tagName==='SELECT')){const b=current(),key=input.dataset.bookField;b[key]=input.type==='checkbox'?input.checked:key==='duplex'?input.value==='true':['paperId','coverId','bindingId'].includes(key)?Number(input.value):input.value;if(key==='binding')b.bindingId=0;if(key==='paperId'){const paper=context.state.materials.find(m=>Number(m.id)===b.paperId);if(paper)b.duplex=materialInfo(paper).faces!=='simple';b.colorFaces=null;}render();context.recalculate();}
+      if(input&&(input.type==='checkbox'||input.tagName==='SELECT')){const b=current(),key=input.dataset.bookField;b[key]=input.type==='checkbox'?input.checked:key==='duplex'?input.value==='true':['paperId','coverId','bindingId'].includes(key)?Number(input.value):input.value;if(key==='binding')b.bindingId=0;if(key==='paperId'){const paper=context.state.materials.find(m=>Number(m.id)===b.paperId);if(paper)b.duplex=materialInfo(paper).faces!=='simple';b.colorFaces=null;}render();context.recalculate();if(key==='kind')context.galleryChanged?.();}
       const material=event.target.closest('[data-book-material]');if(material){const item=context.state.purchaseItems[Number(material.dataset.bookRow)];if(item)syncPurchase(item,material.closest('[data-purchase-row]'));}
     });
     document.addEventListener('click',async event=>{
