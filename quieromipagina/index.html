@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <title>Quiero mi página · SALMOS</title>
+  <link rel="icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/web-projects.css?v=46.0">
+  <script src="/config.js" defer></script>
+  <script src="/web-projects-shared.js?v=46.0" defer></script>
+  <script src="/quieromipagina/panel.js?v=46.0" defer></script>
+</head>
+<body class="web-project-page">
+  <header class="wp-top">
+    <div class="wp-wrap wp-top-inner">
+      <a class="wp-brand" href="/" aria-label="Volver a la tienda SALMOS"><img src="/logo-mark.png" alt="" width="36" height="36"><span>SALMOS<small>creer · amar · crear</small></span></a>
+      <a class="wp-back" href="/">Tienda SALMOS</a>
+    </div>
+  </header>
+
+  <main class="wp-wrap">
+    <section id="wp-landing" class="wp-hero">
+      <div class="wp-hero-copy">
+        <p class="wp-kicker">Páginas para negocios</p>
+        <h1>Tu negocio, en su propia página.</h1>
+        <p>Mostrá tus productos con tu marca. Tus clientes arman el carrito y te mandan el pedido por WhatsApp.</p>
+        <div class="wp-actions">
+          <a class="wp-button wp-primary" data-wp-contact target="_blank" rel="noopener noreferrer">Quiero mi página</a>
+          <a class="wp-button" href="#precios">Ver precios</a>
+        </div>
+        <p class="wp-hint">Si SALMOS ya preparó tu muestra, abrí el enlace privado que te enviamos.</p>
+      </div>
+      <div id="wp-demo" class="wp-preview-frame" aria-label="Ejemplo de un catálogo"></div>
+    </section>
+
+    <p id="wp-message" class="wp-message" role="status" hidden></p>
+
+    <section id="wp-project" hidden aria-labelledby="wp-project-name">
+      <div class="wp-project-head">
+        <div><p class="wp-kicker">Tu proyecto en SALMOS</p><h1 id="wp-project-name"></h1></div>
+        <div class="wp-actions"><span class="wp-badge" id="wp-status"></span><a class="wp-button" id="wp-see-preview" href="#wp-private-demo">Ver muestra</a></div>
+      </div>
+      <div class="wp-workspace">
+        <section class="wp-panel wp-editor" aria-labelledby="wp-products-title">
+          <div class="wp-panel-head">
+            <div><h2 id="wp-products-title">Tus productos</h2><p id="wp-count" class="wp-muted"></p></div>
+            <button class="wp-button wp-primary" id="wp-add" type="button">+ Producto</button>
+          </div>
+          <p class="wp-hint" id="wp-products-hint">Cargá nombre, precio y foto. Podés volver a este enlace para seguir.</p>
+          <div id="wp-products"></div>
+        </section>
+        <aside class="wp-project-aside">
+          <section class="wp-panel wp-pay" aria-labelledby="wp-pay-title">
+            <p class="wp-kicker">Resumen del catálogo</p>
+            <h2 id="wp-pay-title">Tu anticipo</h2>
+            <dl class="wp-totals">
+              <div><dt>Catálogo · hasta 15 productos</dt><dd id="wp-base"></dd></div>
+              <div id="wp-extras-row" hidden><dt id="wp-extras-label"></dt><dd id="wp-extras"></dd></div>
+              <div class="wp-total"><dt>Total del catálogo</dt><dd id="wp-total"></dd></div>
+              <div><dt id="wp-deposit-label">Anticipo</dt><dd id="wp-deposit"></dd></div>
+              <div><dt>Saldo al aprobar la vista final</dt><dd id="wp-balance"></dd></div>
+            </dl>
+            <p id="wp-pay-note" class="wp-hint"></p>
+            <button type="button" class="wp-button wp-primary wp-full" id="wp-pay">Pagar anticipo</button>
+            <button type="button" class="wp-button wp-full" id="wp-verify" hidden>Verificar pago</button>
+            <p id="wp-pay-status" class="wp-hint" role="status" hidden></p>
+          </section>
+          <div id="wp-private-demo" class="wp-preview-frame"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="precios" class="wp-prices" aria-labelledby="wp-prices-title">
+      <p class="wp-kicker">Valores en pesos argentinos</p>
+      <h2 id="wp-prices-title">Precios</h2>
+      <div class="wp-price-grid">
+        <article class="wp-panel"><h3>Catálogo por WhatsApp</h3><strong>$ 180.000</strong><p>Tu marca, carrito, hasta 15 productos y una ronda de ajustes. Anticipo de $ 90.000.</p></article>
+        <article class="wp-panel"><h3>Catálogo con panel propio</h3><strong>$ 420.000 aprox.</strong><p>Incluye un panel permanente en tu tienda para actualizar fotos, productos y precios.</p></article>
+        <article class="wp-panel"><h3>Puesta en marcha de MiCorreo</h3><strong>$ 75.000</strong><p>Configuración y prueba de carga de envíos por lote.</p></article>
+        <article class="wp-panel"><h3>Correo integrado a medida</h3><strong>A cotizar</strong><p>Según el acceso de Correo y los pasos que quieras automatizar.</p></article>
+      </div>
+      <p class="wp-extras-note"><strong>Productos adicionales</strong> · $ 30.000 por cada bloque de hasta 15. De 16 a 30 productos se suma un bloque al saldo.</p>
+    </section>
+  </main>
+
+  <footer class="wp-wrap wp-footer"><span>Páginas para negocios · SALMOS</span><a data-wp-contact target="_blank" rel="noopener noreferrer">Consultas por WhatsApp</a></footer>
+
+  <dialog id="wp-product-dialog" aria-labelledby="wp-product-title">
+    <form id="wp-product-form">
+      <div class="wp-panel-head"><h2 id="wp-product-title">Agregar producto</h2><button type="button" class="wp-button" id="wp-close-product" aria-label="Cerrar">×</button></div>
+      <div class="wp-fields">
+        <label class="wp-span">Nombre<input name="name" maxlength="90" required></label>
+        <label>Precio en ARS<input name="price" type="text" inputmode="decimal" maxlength="12" placeholder="8500" required></label>
+        <label>Categoría<input name="group" maxlength="60" placeholder="Ej. Hogar"></label>
+        <label class="wp-span">Descripción breve<textarea name="description" maxlength="220" rows="2"></textarea></label>
+        <div class="wp-photo-field wp-span">
+          <img data-photo-preview alt="Vista previa de la foto" width="72" height="72" hidden>
+          <label class="wp-button wp-file">Elegir foto<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <button type="button" class="wp-button" data-photo-remove hidden>Quitar</button>
+          <input name="removePhoto" type="hidden" value="0">
+          <small data-photo-hint class="wp-hint" role="status"></small>
+        </div>
+      </div>
+      <p id="wp-product-error" class="wp-hint" role="alert" hidden></p>
+      <div class="wp-dialog-actions">
+        <button type="button" class="wp-button" id="wp-delete-product" hidden>Eliminar producto</button>
+        <button type="submit" class="wp-button wp-primary">Guardar producto</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
