@@ -30,32 +30,29 @@
 
   function productCard(product, key) {
     const {apiUrl, money, escapeHtml:esc, quickCartButton, productCardImages, productBackgroundAttrs} = context;
-    const image = window.SalmosHome.imageFor(product,key,'wholesale') || productCardImages(product,'wholesale')[0];
+    const image = window.SalmosHome.imageFor(product,key,'wholesale') || productCardImages(product,'wholesale',key)[0];
     const url = image?.url;
     return `<article class="wholesale-product">
-      <button class="wholesale-product-open" type="button" data-wholesale-product="${Number(product.id)}" data-wholesale-media="${Number(image?.id)||0}">
+      <button class="wholesale-product-open" type="button" data-wholesale-product="${Number(product.id)}" data-wholesale-group="${esc(key)}" data-wholesale-media="${Number(image?.id)||0}">
         <span class="wholesale-product-image ${window.SalmosHome.isGarment(product)?'garment':'object'}"
-              data-wholesale-photo-product="${Number(product.id)}" data-wholesale-photo-collection="${esc(key)}" ${productBackgroundAttrs(product,'wholesale')}>
+              data-wholesale-photo-product="${Number(product.id)}" data-wholesale-photo-collection="${esc(key)}" ${productBackgroundAttrs(product,'wholesale',key)}>
           ${url?`<img src="${esc(apiUrl(url))}" data-original-src="${esc(image.original_url||'')}" alt="" loading="lazy" decoding="async">`:''}
         </span>
         <span class="wholesale-product-info"><span class="wholesale-product-name">${esc(product.name)}</span>
           <strong>${esc(money(product.price_cents))}<small> / u</small></strong></span>
       </button>
-      ${quickCartButton(product)}
+      ${context.state.storeOrderEditor?.enabled?'':quickCartButton(product)}
     </article>`;
   }
 
   function syncPage(active) {
-    const {apiUrl, state} = context;
     document.body.classList.toggle('wholesale-view', active);
     const nav = $('.home-header-nav');
     nav?.querySelector('[aria-current]')?.removeAttribute('aria-current');
     nav?.querySelector(active ? '[data-home-wholesale]' : '[data-store-home]')?.setAttribute('aria-current','page');
-    const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-    const background = state.config?.storefrontVisuals?.wholesalePageBackgrounds?.[theme];
-    if (active && background?.url) {
-      document.body.style.setProperty('--wholesale-page-background', `url("${apiUrl(background.url)}")`);
-    } else document.body.style.removeProperty('--wholesale-page-background');
+    const background=context.storefrontPageBackground('wholesale');
+    if(active&&background)document.body.style.setProperty('--wholesale-page-background',background);
+    else document.body.style.removeProperty('--wholesale-page-background');
   }
 
   let lastMarkup = '';
@@ -88,8 +85,8 @@
       <nav class="wholesale-sections" aria-label="Secciones mayoristas">${groups.map(g=>`<a href="#wholesale-${esc(g.key)}">${esc(g.label)}</a>`).join('')}</nav>
       ${groups.map(g=>`<section class="wholesale-group" id="wholesale-${esc(g.key)}"><h2>${esc(g.label)}</h2>
         <div class="wholesale-grid">${g.rows.map(p=>productCard(p,g.key)).join('')}</div></section>`).join('')||'<p>Cargando productos…</p>'}
-      <div class="wholesale-cart-bar"><div><strong>${count} ${count===1?'unidad':'unidades'} · ${money(promotion.finalSubtotalCents)}</strong>
-        <small>${esc(hint)}</small></div><button type="button" class="btn btn-primary" data-wholesale-cart>Ver carrito</button></div>`;
+      ${state.storeOrderEditor?.enabled?'':`<div class="wholesale-cart-bar"><div><strong>${count} ${count===1?'unidad':'unidades'} · ${money(promotion.finalSubtotalCents)}</strong>
+        <small>${esc(hint)}</small></div><button type="button" class="btn btn-primary" data-wholesale-cart>Ver carrito</button></div>`}`;
     if (lastMarkup !== html) {
       host.innerHTML = html;
       lastMarkup = html;
@@ -97,7 +94,7 @@
   }
 
   function open() {
-    Object.assign(context.state, {wholesaleMode:true,storefrontCatalog:true,query:'',homeCollection:null});
+    Object.assign(context.state, {wholesaleMode:true,storefrontCatalog:true,query:'',homeCollection:null,catalogType:'all'});
     context.renderCategories();
     context.renderProducts();
     render();
@@ -109,7 +106,7 @@
     document.addEventListener('click', event => {
       const product = event.target.closest('[data-wholesale-product]');
       if (product) {
-        context.openProduct(Number(product.dataset.wholesaleProduct), {mediaId:Number(product.dataset.wholesaleMedia)||0});
+        context.openProduct(Number(product.dataset.wholesaleProduct), {mediaId:Number(product.dataset.wholesaleMedia)||0,photoGroup:product.dataset.wholesaleGroup});
         return;
       }
       if (event.target.closest('[data-wholesale-back]')) window.SalmosHome.goHome(true);

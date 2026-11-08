@@ -1,92 +1,287 @@
 (() => {
   'use strict';
-  const labels={gorras:'Gorras',tazas:'Tazas y Vasos',libros:'Libros',agendas:'Agendas',actividades:'Actividades'};
-  const backgroundGroups={
-    store:[['pageBackgrounds','Fondo de la página'],['peoplePhotoBackgrounds','Fondo de fichas de prendas y personas'],
-      ['objectPhotoBackgrounds','Fondo de fichas de tazas y objetos']],
-    wholesale:[['wholesalePageBackgrounds','Fondo de la página'],['wholesalePeoplePhotoBackgrounds','Fondo de fichas de prendas y personas'],
-      ['wholesaleObjectPhotoBackgrounds','Fondo de fichas de tazas y objetos']]
+
+  const views = {home:'Portada',catalog:'Colecciones',wholesale:'Mayoristas'};
+  const groups = {
+    hombre:'Hombre',mujer:'Mujer',kids:'Kids',ropa:'Ropa',gorras:'Gorras',tazas:'Tazas y Vasos',
+    libros:'Libros',agendas:'Agendas',actividades:'Actividades',cuadernos:'Cuadernos'
   };
-  const emptyLabel=kind=>kind==='wholesalePageBackgrounds'?'Fondo liso':kind.startsWith('wholesale')?'Sin fondo':'Automático';
-  let context;const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  async function render(host,{onSaved=()=>{}}={}){
-    const data=await context.load();if(!host.isConnected)return;let assets=data.assets,config={};const coverDirty=new Set();const products=data.products.filter(product=>product.status==='published'&&product.primary_image_url);try{config=JSON.parse(data.settings.storefront_visuals_v1||'{}');}catch{}
-    const backgrounds=()=>assets.filter(asset=>asset.asset_type==='background');
-    const background=(kind,theme)=>`<section class="storefront-background-card" data-background-panel="${kind}:${theme}"><div class="storefront-background-heading"><h4>${theme==='dark'?'Modo oscuro':'Modo claro'}</h4><button type="button" class="btn btn-ghost" data-add-home-background="${kind}:${theme}">+ Fondo</button></div><div class="storefront-background-preview" data-background-preview="${kind}:${theme}"></div><label class="field">Fondo<select class="select" data-home-background="${kind}" data-home-theme="${theme}"></select></label><div class="storefront-background-choices" data-background-choices="${kind}:${theme}" aria-label="Fondos disponibles"></div></section>`;
-    const options=selection=>'<option value="">Primera publicación de la sección</option>'+products.map(product=>`<option value="${product.id}" ${selection?.kind==='product'&&Number(selection.id)===Number(product.id)?'selected':''}>${esc(product.name)}</option>`).join('');
-    const sections=scope=>backgroundGroups[scope].map(([kind,label])=>
-      `<section class="storefront-background-section"><h3>${label}</h3><div class="storefront-background-grid">${background(kind,'dark')}${background(kind,'light')}</div></section>`).join('');
-    host.innerHTML=`<section class="storefront-settings">
-      <div class="admin-section-head"><h2>Portada de tienda</h2><a class="btn btn-ghost" href="index.html?ordenar=1">Editar galerías</a></div>
-      <div class="storefront-scope-switch" role="group" aria-label="Sección a configurar">
-        <button type="button" class="btn btn-primary" data-visual-scope="store" aria-pressed="true">Tienda</button>
-        <button type="button" class="btn btn-ghost" data-visual-scope="wholesale" aria-pressed="false">Mayoristas</button>
-      </div>
-      <p class="muted storefront-scope-note">Cada sección tiene su propio fondo de página y de fichas.</p>
-      <div data-visual-panel="store">
-        <h3>Accesos laterales</h3><div class="storefront-covers-grid">${Object.entries(labels).map(([key,label])=>
-          `<section class="storefront-cover-edit"><h3>${label}</h3><div class="storefront-cover-edit-preview" data-cover-preview="${key}"></div>
-          <label class="field">Producto para la imagen<select class="select" data-home-cover="${key}">${options(config.covers?.[key]?.dark)}</select></label></section>`).join('')}</div>
-        ${sections('store')}
-      </div>
-      <div data-visual-panel="wholesale" hidden>${sections('wholesale')}</div>
-      <div class="storefront-settings-save"><p role="status" data-cover-save-status></p><button class="btn btn-primary" type="button" data-save-covers>Guardar cambios</button></div>
-    </section>`;
-    const selectScope=scope=>{
-      for(const button of host.querySelectorAll('[data-visual-scope]')){
-        const active=button.dataset.visualScope===scope;
-        button.setAttribute('aria-pressed',String(active));
-        button.classList.toggle('btn-primary',active);
-        button.classList.toggle('btn-ghost',!active);
+  const coverGroups = ['gorras','tazas','libros','agendas','actividades'];
+  const baseTargets = {page:'Fondo de la página',people:'Fichas de prendas y personas',objects:'Fichas de objetos'};
+  const modes = {dark:'Modo oscuro',light:'Modo claro'};
+  const esc = value => String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  let context;
+
+  function applyBackgroundPatch(saved, patch) {
+    const result = structuredClone(saved||{});
+    for (const [view, targets] of Object.entries(patch)) {
+      for (const [target, choices] of Object.entries(targets)) {
+        for (const [theme,id] of Object.entries(choices)) {
+          const row = ((result[view]??={})[target]??={});
+          if (id===null) delete row[theme];
+          else row[theme]=id;
+        }
       }
-      for(const panel of host.querySelectorAll('[data-visual-panel]'))panel.hidden=panel.dataset.visualPanel!==scope;
-    };
-    const coverPreview=key=>{
-      const id=Number(host.querySelector(`[data-home-cover="${key}"]`).value);
-      const product=products.find(row=>Number(row.id)===id),preview=host.querySelector(`[data-cover-preview="${key}"]`);
-      preview.innerHTML=product?`<img src="${esc(product.primary_image_url)}" alt="${esc(product.name)}" loading="lazy">`:'Primera publicación de esta sección';
-    };
-    const updateBackground=key=>{
-      const panel=host.querySelector(`[data-background-panel="${key}"]`),select=panel.querySelector('select');
-      const asset=backgrounds().find(item=>Number(item.id)===Number(select.value)),preview=panel.querySelector('[data-background-preview]');
-      const plain=!asset&&select.dataset.homeBackground.startsWith('wholesale'),light=select.dataset.homeTheme==='light';
-      preview.style.backgroundColor=plain?(light?'#f6f2e8':'#0b0b0c'):'';
-      preview.style.color=plain?(light?'#261b10':'#f6f2e8'):'';
-      preview.innerHTML=asset?`<img src="${esc(context.assetUrl(asset))}" alt="${esc(asset.name)}">`:emptyLabel(select.dataset.homeBackground);
-      for(const button of panel.querySelectorAll('[data-background-choice]')){
-        const active=button.dataset.backgroundChoice===select.value;
-        button.classList.toggle('active',active);
-        button.setAttribute('aria-pressed',String(active));
+    }
+    return result;
+  }
+
+  function legacyBackground(visuals,view,target,theme) {
+    const names = view==='wholesale'
+      ? {page:'wholesalePageBackgrounds',people:'wholesalePeoplePhotoBackgrounds',objects:'wholesaleObjectPhotoBackgrounds'}
+      : {page:'pageBackgrounds',people:'peoplePhotoBackgrounds',objects:'objectPhotoBackgrounds'};
+    return visuals?.[names[target]]?.[theme]||null;
+  }
+
+  function backgroundPanel(host, options) {
+    let saved=structuredClone(options.backgrounds||{}),assets=options.assets||[],pending=new Map();
+    let view=options.view||'home',target='page',busy=false;
+    const getId=(where,key,theme)=>saved[where]?.[key]?.[theme]??null;
+    const index=(where,key,theme)=>`${where}|${key}|${theme}`;
+    const keyFor=theme=>index(view,target,theme);
+    const categories=new Map((options.categories||[]).filter(item=>/^[a-z0-9][a-z0-9-]{0,99}$/.test(item.slug)).map(item=>[`category:${item.slug}`,item.name]));
+    const products=new Map((options.products||[]).map(item=>[`product:${Number(item.id)}`,item.name]));
+    const assetById=id=>assets.find(asset=>Number(asset.id)===id);
+    const option=(key,label)=>`<option value="${esc(key)}"${key===target?' selected':''}>${esc(label)}</option>`;
+    const targetChoices=(map)=>[...map].map(([key,label])=>option(key,label)).join('');
+    const available=()=>assets.filter(asset=>!Number(asset.duplicate_of));
+    const patch=()=>{
+      const result={};
+      for(const [key,id] of pending){
+        const [where,group,theme]=key.split('|');
+        ((result[where]??={})[group]??={})[theme]=id;
       }
+      return result;
     };
-    const fillBackgrounds=()=>{
-      for(const select of host.querySelectorAll('[data-home-background]')){
-        const {homeBackground:kind,homeTheme:theme}=select.dataset,key=kind+':'+theme;
-        const legacy=kind==='peoplePhotoBackgrounds'?config.photoBackgrounds?.[theme]:null;
-        const value=select.dataset.initialized?select.value:String(config[kind]?.[theme]||legacy||'');
-        select.innerHTML=`<option value="">${emptyLabel(kind)}</option>`+backgrounds().map(asset=>`<option value="${asset.id}">${esc(asset.name)}</option>`).join('');
-        select.value=backgrounds().some(asset=>String(asset.id)===value)?value:'';
-        select.dataset.initialized='true';
-        host.querySelector(`[data-background-choices="${key}"]`).innerHTML=backgrounds().map(asset=>
-          `<button type="button" class="storefront-background-choice" data-background-choice="${asset.id}" aria-pressed="false">
-            <img src="${esc(context.assetUrl(asset))}" alt="" loading="lazy"><span>${esc(asset.name)}</span></button>`).join('');
-        updateBackground(key);
+
+    function inherited(theme){
+      const broad=Object.hasOwn(baseTargets,target)?target:
+        ['hombre','mujer','kids','ropa'].includes(target)?'people':
+        Object.hasOwn(groups,target)?'objects':null;
+      if(!broad)return null;
+      if(broad!==target){
+        const key=index(view,broad,theme),general=pending.has(key)?pending.get(key):getId(view,broad,theme);
+        if(general===0)return {none:true};
+        const selected=assetById(general);
+        if(selected)return selected;
       }
-    };
-    async function addBackground(key){
-      const dialog=document.createElement('dialog');dialog.className='admin-dialog storefront-background-upload';dialog.innerHTML=`<form class="dialog-shell"><div class="dialog-head"><h2>Agregar fondo</h2><button type="button" class="icon-btn" data-close-upload aria-label="Cerrar">×</button></div><div class="dialog-body"><label class="field">Imagen<input class="input" type="file" accept="image/png,image/jpeg,image/webp" name="file" required></label><label class="field">Nombre<input class="input" name="name" maxlength="120" required></label><div class="storefront-upload-preview"></div><p role="status" data-upload-status></p></div><div class="dialog-foot"><button type="button" class="btn btn-ghost" data-close-upload>Cancelar</button><button class="btn btn-primary" type="submit">Agregar fondo</button></div></form>`;document.body.append(dialog);const form=dialog.querySelector('form'),status=dialog.querySelector('[data-upload-status]'),submit=form.querySelector('[type="submit"]'),initialToken=crypto.randomUUID();let token=initialToken,localUrl='',busy=false;
-      const close=()=>{if(!busy)dialog.close();};for(const button of dialog.querySelectorAll('[data-close-upload]'))button.onclick=close;dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});dialog.addEventListener('close',()=>{if(localUrl)URL.revokeObjectURL(localUrl);dialog.remove();});
-      form.elements.file.onchange=()=>{token=crypto.randomUUID();if(localUrl)URL.revokeObjectURL(localUrl);const file=form.elements.file.files[0];dialog.querySelector('.storefront-upload-preview').replaceChildren();if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>20*1024*1024){status.textContent='Elegí una imagen PNG, JPG o WEBP de hasta 20 MB.';form.elements.file.value='';return;}status.textContent='';localUrl=URL.createObjectURL(file);const img=new Image();img.src=localUrl;img.alt='Vista previa del fondo';dialog.querySelector('.storefront-upload-preview').append(img);if(!form.elements.name.value)form.elements.name.value=file.name.replace(/\.[^.]+$/,'');};
-      form.onsubmit=async event=>{event.preventDefault();if(busy||!form.reportValidity())return;const file=form.elements.file.files[0];if(!file)return;busy=true;submit.disabled=true;for(const button of dialog.querySelectorAll('[data-close-upload]'))button.disabled=true;status.textContent='Guardando fondo…';try{const asset=await context.uploadBackground(file,form.elements.name.value.trim(),token);assets=[...assets.filter(item=>Number(item.id)!==Number(asset.id)),asset];fillBackgrounds();const panel=host.querySelector(`[data-background-panel="${key}"]`);panel.querySelector('select').value=String(asset.id);updateBackground(key);busy=false;dialog.close();host.querySelector('[data-cover-save-status]').textContent='Fondo agregado. Guardá la portada para aplicarlo.';}catch(error){status.textContent=error.message;}finally{busy=false;submit.disabled=false;for(const button of dialog.querySelectorAll('[data-close-upload]'))button.disabled=false;}};
+      return legacyBackground(options.visuals,view,broad,theme);
+    }
+
+    function themeCard(theme,label){
+      const key=keyFor(theme),id=pending.has(key)?pending.get(key):getId(view,target,theme);
+      const asset=assetById(id),visibleId=asset?Number(asset.duplicate_of)||Number(asset.id):id;
+      const example=id===null?inherited(theme):asset;
+      const title=example?.name||(id===0||example?.none?'Sin fondo':'Fondo heredado');
+      const url=example&&!example.none&&(example.url||options.assetUrl(example));
+      return `<section class="visual-background-card" data-visual-theme="${theme}">
+        <div class="visual-background-head"><h4>${label}</h4><button type="button" class="btn btn-ghost" data-visual-upload="${theme}">+ Fondo</button></div>
+        <div class="visual-background-preview ${theme}">${url?`<img src="${esc(url)}" alt="${esc(title)}">`:`<span>${esc(title)}</span>`}</div>
+        <label class="visual-background-label">Fondo en ${label.toLowerCase()}
+          <select class="select" data-visual-theme-select="${theme}">
+            <option value="" ${id===null?'selected':''}>Heredar fondo</option>
+            <option value="0" ${id===0?'selected':''}>${target==='page'?'Fondo liso':'Sin fondo'}</option>
+            ${available().map(item=>`<option value="${Number(item.id)}" ${Number(item.id)===visibleId?'selected':''}>${esc(item.name)}</option>`).join('')}
+          </select>
+        </label>
+        <div class="visual-background-swatches" aria-label="Fondos de ${label.toLowerCase()}">
+          ${available().map(item=>`<button type="button" data-visual-asset="${Number(item.id)}" aria-pressed="${Number(item.id)===visibleId}">
+            <img src="${esc(options.assetUrl(item))}" alt="" loading="lazy" decoding="async"><span>${esc(item.name)}</span>
+          </button>`).join('')}
+        </div>
+      </section>`;
+    }
+    function render(focusTheme){
+      const scrollPositions=[...host.querySelectorAll('.visual-background-swatches')].map(list=>list.scrollLeft);
+      host.innerHTML=`<fieldset class="visual-background-editor" ${busy?'disabled':''}>
+        <div class="visual-background-tabs" role="group" aria-label="Dónde se verá el fondo">
+          ${Object.entries(views).map(([key,label])=>`<button type="button" class="btn ${key===view?'btn-primary':'btn-ghost'}" data-visual-view="${key}" aria-pressed="${key===view}">${label}</button>`).join('')}
+        </div>
+        <label class="visual-background-label">Aplicar fondo a
+          <select class="select" data-visual-target>
+            ${Object.entries(baseTargets).map(([key,label])=>option(key,label)).join('')}
+            <optgroup label="Fichas por colección y tipo">${Object.entries(groups).map(([key,label])=>option(key,label)).join('')}</optgroup>
+            ${categories.size?`<optgroup label="Fichas por categoría">${targetChoices(categories)}</optgroup>`:''}
+            ${products.size?`<optgroup label="Fichas individuales">${targetChoices(products)}</optgroup>`:''}
+          </select>
+        </label>
+        <div class="visual-background-grid">${Object.entries(modes).map(([theme,label])=>themeCard(theme,label)).join('')}</div>
+      </fieldset>`;
+      host.querySelectorAll('.visual-background-swatches').forEach((list,index)=>{list.scrollLeft=scrollPositions[index]||0;});
+      if(focusTheme)host.querySelector(`[data-visual-theme-select="${focusTheme}"]`)?.focus({preventScroll:true});
+    }
+    function change(where,key,theme,id){
+      const indexKey=index(where,key,theme);
+      if(getId(where,key,theme)===id)pending.delete(indexKey);
+      else pending.set(indexKey,id);
+      render(theme);
+      options.onChange?.(applyBackgroundPatch(saved,patch()),pending.size>0);
+    }
+
+    function addBackground(theme){
+      const where=view,key=target,dialog=document.createElement('dialog');
+      dialog.className='storefront-background-upload';
+      dialog.innerHTML=`<form>
+        <div class="visual-background-head"><h3>Agregar fondo</h3><button type="button" class="icon-btn" data-close-background aria-label="Cerrar">×</button></div>
+        <label class="visual-background-label">Imagen <input type="file" name="image" accept="image/png,image/jpeg,image/webp" required></label>
+        <label class="visual-background-label">Nombre <input class="input" name="name" maxlength="120" required></label>
+        <img class="visual-upload-preview" alt="Vista previa del fondo" hidden>
+        <p role="status"></p><button type="submit" class="btn btn-primary">Agregar fondo</button>
+      </form>`;
+      document.body.append(dialog);
+      const form=dialog.querySelector('form'),status=form.querySelector('[role=status]'),close=form.querySelector('[data-close-background]'),preview=form.querySelector('img'),submit=form.querySelector('[type=submit]');
+      let url='',uploading=false,token=crypto.randomUUID();
+      close.onclick=()=>{if(!uploading)dialog.close();};
+      dialog.addEventListener('cancel',event=>{if(uploading)event.preventDefault();});
+      dialog.addEventListener('close',()=>{if(url)URL.revokeObjectURL(url);dialog.remove();},{once:true});
+      form.elements.image.onchange=()=>{
+        if(url)URL.revokeObjectURL(url);
+        const file=form.elements.image.files[0];
+        url=file?URL.createObjectURL(file):'';
+        preview.hidden=!file;
+        if(url)preview.src=url;
+        token=crypto.randomUUID();
+      };
+      form.onsubmit=async event=>{
+        event.preventDefault();
+        if(uploading||!form.reportValidity())return;
+        const file=form.elements.image.files[0],name=form.elements.name.value.trim();
+        if(!file||!name||!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>20*1024*1024){
+          status.textContent='Elegí un PNG, JPG o WEBP de hasta 20 MB y escribí el nombre.';
+          return;
+        }
+        uploading=close.disabled=submit.disabled=true;
+        status.textContent='Agregando fondo…';
+        try{
+          const asset=await options.uploadBackground(file,name,token);
+          assets=[...assets.filter(item=>Number(item.id)!==Number(asset.id)),asset];
+          change(where,key,theme,Number(asset.id));
+          dialog.close();
+        }catch(error){status.textContent=error.message;}
+        finally{uploading=close.disabled=submit.disabled=false;}
+      };
       dialog.showModal();
     }
-    host.onchange=event=>{if(event.target.matches('[data-home-cover]')){coverDirty.add(event.target.dataset.homeCover);coverPreview(event.target.dataset.homeCover);}if(event.target.matches('[data-home-background]'))updateBackground(event.target.dataset.homeBackground+':'+event.target.dataset.homeTheme);};
-    host.onclick=async event=>{const scope=event.target.closest('[data-visual-scope]');if(scope){selectScope(scope.dataset.visualScope);return;}const add=event.target.closest('[data-add-home-background]');if(add){addBackground(add.dataset.addHomeBackground);return;}const choice=event.target.closest('[data-background-choice]');if(choice){const panel=choice.closest('[data-background-panel]');panel.querySelector('select').value=choice.dataset.backgroundChoice;updateBackground(panel.dataset.backgroundPanel);return;}const save=event.target.closest('[data-save-covers]');if(!save)return;save.disabled=true;const status=host.querySelector('[data-cover-save-status]');status.textContent='Guardando…';
-      try{const next={...config,covers:{...config.covers}};for(const [kind] of Object.values(backgroundGroups).flat())next[kind]={};for(const select of host.querySelectorAll('[data-home-cover]')){if(!coverDirty.has(select.dataset.homeCover))continue;if(select.value)next.covers[select.dataset.homeCover]={dark:{kind:'product',id:Number(select.value)},light:{kind:'product',id:Number(select.value)}};else delete next.covers[select.dataset.homeCover];}for(const select of host.querySelectorAll('[data-home-background]'))if(select.value)next[select.dataset.homeBackground][select.dataset.homeTheme]=Number(select.value);delete next.photoBackgrounds;await context.save(next);config=next;coverDirty.clear();status.textContent='Portada guardada.';context.toast('Portada guardada','success');onSaved();}
-      catch(error){status.textContent=error.message;}finally{save.disabled=false;}};
-    fillBackgrounds();for(const key of Object.keys(labels))coverPreview(key);
+
+    function setLocation(nextView,nextTarget='page'){
+      if(view===nextView&&target===nextTarget)return;
+      view=nextView;
+      target=Object.hasOwn(baseTargets,nextTarget)||Object.hasOwn(groups,nextTarget)||categories.has(nextTarget)||products.has(nextTarget)?nextTarget:'page';
+      render();
+    }
+    host.onclick=event=>{
+      const viewButton=event.target.closest('[data-visual-view]');
+      if(viewButton){
+        setLocation(viewButton.dataset.visualView);
+        options.onView?.(view);
+        host.querySelector(`[data-visual-view="${view}"]`)?.focus({preventScroll:true});
+        return;
+      }
+      const upload=event.target.closest('[data-visual-upload]');
+      if(upload){addBackground(upload.dataset.visualUpload);return;}
+      const swatch=event.target.closest('[data-visual-asset]');
+      if(swatch)change(view,target,swatch.closest('[data-visual-theme]').dataset.visualTheme,Number(swatch.dataset.visualAsset));
+    };
+    host.onchange=event=>{
+      const el=event.target;
+      if(el.matches('[data-visual-target]')){
+        target=el.value;
+        render();
+        host.querySelector('[data-visual-target]').focus({preventScroll:true});
+      }else if(el.matches('[data-visual-theme-select]')){
+        change(view,target,el.dataset.visualThemeSelect,el.value===''?null:Number(el.value));
+      }
+    };
+    render();
+    return {
+      patch,setLocation,
+      dirty:()=>pending.size>0,
+      setBusy:value=>{busy=value;host.querySelector('fieldset').disabled=value;},
+      commit:values=>{saved=structuredClone(values||{});pending.clear();render();},
+      reset:()=>{pending.clear();render();options.onChange?.(structuredClone(saved),false);}
+    };
   }
-  async function open(){const dialog=document.createElement('dialog');dialog.className='admin-dialog storefront-covers-editor';dialog.innerHTML='<div class="dialog-shell"><div class="dialog-head"><h2>Portada de tienda</h2><button type="button" class="icon-btn" aria-label="Cerrar portada">×</button></div><div class="dialog-body"></div></div>';document.body.append(dialog);dialog.querySelector('button').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();await render(dialog.querySelector('.dialog-body'));}
-  function init(options){context=options;document.addEventListener('click',event=>{if(event.target.closest('[data-open-storefront-visuals]'))open().catch(error=>context.toast(error.message,'error'));});}
-  window.SalmosStorefrontVisualsAdmin={init,open,render};
+
+  async function render(host) {
+    const data=await context.load();
+    if(!host.isConnected)return;
+    let config={};
+    try{config=JSON.parse(data.settings.storefront_visuals_v1||'{}');}catch{}
+    const products=data.products.filter(product=>product.status==='published');
+    const covers=products.filter(product=>product.primary_image_url);
+    const dirtyCovers=new Set();
+    host.innerHTML=`<section class="storefront-settings">
+      <div class="admin-section-head"><h2>Portada de tienda</h2><a class="btn btn-ghost" href="index.html?ordenar=1">Ordenar en la tienda</a></div>
+      <h3>Fondos de la tienda</h3><div data-visual-background-panel></div>
+      <details class="visual-cover-settings"><summary>Imágenes de los accesos de portada</summary>
+        <div class="storefront-covers-grid">${coverGroups.map(key=>{
+          const id=Number(config.covers?.[key]?.dark?.id)||0;
+          return `<section class="storefront-cover-edit"><h3>${groups[key]}</h3><div class="storefront-cover-edit-preview" data-cover-preview="${key}"></div>
+            <label class="field">Producto para la imagen<select class="select" data-home-cover="${key}"><option value="">Primera publicación</option>
+              ${covers.map(product=>`<option value="${Number(product.id)}" ${Number(product.id)===id?'selected':''}>${esc(product.name)}</option>`).join('')}</select></label></section>`;
+        }).join('')}</div>
+      </details>
+      <div class="storefront-settings-save"><p role="status" data-visual-status></p><button type="button" class="btn btn-primary" data-visual-save disabled>Guardar cambios</button></div>
+    </section>`;
+    const save=host.querySelector('[data-visual-save]'),status=host.querySelector('[data-visual-status]');
+    const panel=backgroundPanel(host.querySelector('[data-visual-background-panel]'),{
+      backgrounds:data.publicConfig.storefrontBackgrounds,
+      visuals:data.publicConfig.storefrontVisuals,
+      assets:data.assets.filter(asset=>asset.asset_type==='background'),
+      products,categories:data.categories,assetUrl:context.assetUrl,uploadBackground:context.uploadBackground,
+      onChange:()=>{save.disabled=!panel.dirty()&&!dirtyCovers.size;status.textContent='';}
+    });
+    function coverPreview(select){
+      const preview=host.querySelector(`[data-cover-preview="${select.dataset.homeCover}"]`),product=covers.find(item=>Number(item.id)===Number(select.value));
+      preview.innerHTML=product?`<img src="${esc(product.primary_image_url)}" alt="${esc(product.name)}" loading="lazy">`:'Primera publicación de esta sección';
+    }
+    for(const select of host.querySelectorAll('[data-home-cover]')){
+      coverPreview(select);
+      select.onchange=()=>{dirtyCovers.add(select.dataset.homeCover);coverPreview(select);save.disabled=false;};
+    }
+    save.onclick=async()=>{
+      save.disabled=true;panel.setBusy(true);
+      const selects=[...host.querySelectorAll('[data-home-cover]')];
+      for(const select of selects)select.disabled=true;
+      status.textContent='Guardando cambios…';
+      try{
+        if(panel.dirty()){
+          const result=await context.saveBackgrounds(panel.patch());
+          panel.commit(result.backgrounds);
+        }
+        if(dirtyCovers.size){
+          const selections={};
+          for(const select of selects){
+            const key=select.dataset.homeCover;
+            if(!dirtyCovers.has(key))continue;
+            const selected=select.value?{kind:'product',id:Number(select.value)}:null;
+            selections[key]=selected?{dark:selected,light:selected}:null;
+          }
+          await context.saveCovers(selections);
+          dirtyCovers.clear();
+        }
+        status.textContent='Cambios guardados.';
+      }catch(error){status.textContent=error.message;}
+      finally{
+        panel.setBusy(false);
+        for(const select of selects)select.disabled=false;
+        save.disabled=!panel.dirty()&&!dirtyCovers.size;
+      }
+    };
+  }
+  async function open(){
+    const dialog=document.createElement('dialog');
+    dialog.className='admin-dialog storefront-covers-editor';
+    dialog.innerHTML='<div class="dialog-shell"><div class="dialog-head"><h2>Fondos de la tienda</h2><button type="button" class="icon-btn" aria-label="Cerrar">×</button></div><div class="dialog-body"></div></div>';
+    document.body.append(dialog);
+    dialog.querySelector('button').onclick=()=>dialog.close();
+    dialog.onclose=()=>dialog.remove();
+    dialog.showModal();
+    await render(dialog.querySelector('.dialog-body'));
+  }
+  function init(options){
+    context=options;
+    document.addEventListener('click',event=>{if(event.target.closest('[data-open-storefront-visuals]'))open().catch(error=>context.toast(error.message,'error'));});
+  }
+  window.SalmosStorefrontVisualsAdmin={init,open,render,backgroundPanel,legacyBackground,groups};
 })();

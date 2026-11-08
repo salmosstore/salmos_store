@@ -1,0 +1,35 @@
+
+.visual-background-editor{min-inline-size:0;margin:0;padding:12px 0 3px;border:0;color:var(--text)}
+.visual-background-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.visual-background-label{display:grid;gap:5px;min-width:0;font-size:.84rem;color:var(--text)}
+.visual-background-editor>.visual-background-label{max-width:460px;margin-bottom:12px}
+.visual-background-label select,.visual-background-label input{width:100%;min-width:0}
+.visual-background-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.visual-background-card{min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface)}
+.visual-background-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
+.visual-background-head h3,.visual-background-head h4{margin:0}
+.visual-background-preview{display:grid;place-items:center;height:clamp(70px,12vw,115px);overflow:hidden;border-radius:8px;margin-bottom:8px;font-size:.85rem}
+.visual-background-preview.dark{color:#fff3d9;background:#151414}
+.visual-background-preview.light{color:#3c2d15;background:#fbf3e4}
+.visual-background-preview img{display:block;width:100%;height:100%;min-height:0;object-fit:cover}
+.visual-background-swatches{display:flex;overflow:auto;gap:6px;scrollbar-width:thin;padding:7px 1px 4px}
+.visual-background-swatches button{flex:0 0 83px;display:grid;align-content:start;gap:4px;padding:4px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2);color:var(--text);cursor:pointer;text-align:left}
+.visual-background-swatches button[aria-pressed=true]{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+.visual-background-swatches img{display:block;width:100%;height:44px;object-fit:cover;border-radius:4px}
+.visual-background-swatches span{font-size:10px;line-height:1.25;overflow-wrap:anywhere}
+.visual-cover-settings{margin:18px 0 0}
+.visual-cover-settings>summary{cursor:pointer}
+.store-order-backgrounds{flex-basis:100%;min-width:0}
+#storeOrderToolbar:has(.store-order-backgrounds[open] .visual-background-editor)>.store-order-mode{display:none}
+body dialog.storefront-background-upload{width:min(450px,calc(100vw - 24px));padding:16px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:14px}
+dialog.storefront-background-upload::backdrop{background:#0009}
+.storefront-background-upload form{display:grid;gap:12px}
+.storefront-background-upload p{margin:0;font-size:.84rem}
+.storefront-background-upload .visual-upload-preview{width:100%;max-height:160px;object-fit:contain}
+.storefront-page-offer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:20px 0 9px;padding:12px 16px;border:1px solid color-mix(in srgb,var(--gold) 32%,var(--line));border-radius:11px;background:var(--surface)}
+.storefront-page-offer h2{margin:0;font:600 clamp(.95rem,2vw,1.12rem)/1.2 Georgia,serif}
+.storefront-page-offer p{margin:4px 0 0;color:var(--muted);font-size:.82rem}
+.storefront-page-offer .btn{flex:none;font-size:.78rem}
+body:not(.store-home-view) .storefront-page-offer,.store-order-editing .storefront-page-offer{display:none}
+@media(max-width:650px){.visual-background-grid{grid-template-columns:1fr}.storefront-page-offer{align-items:flex-start;flex-direction:column;gap:8px}}
+

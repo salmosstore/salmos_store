@@ -4948,9 +4948,26 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   document.addEventListener('change',event=>{if(!event.target.matches('[data-product-audience]'))return;const scope=event.target.closest('[data-audience-scope]');if(scope?.dataset.audienceScope==='production'){state.productionAudiences=window.SalmosAudience.parse(window.SalmosAudience.read(scope));state.productionAudienceDirty=true;qs('#productionAudienceField').dataset.value=window.SalmosAudience.serialize(state.productionAudiences);}});
   document.addEventListener('click',event=>{const button=event.target.closest('[data-audience-unisex]');if(!button)return;event.preventDefault();const scope=button.closest('[data-audience-scope]');for(const input of qsa('[data-product-audience]',scope))if(['Hombre','Mujer'].includes(input.value))input.checked=true;if(scope.dataset.audienceScope==='production'){state.productionAudiences=window.SalmosAudience.parse(window.SalmosAudience.read(scope));state.productionAudienceDirty=true;qs('#productionAudienceField').dataset.value=window.SalmosAudience.serialize(state.productionAudiences);}});
   window.SalmosStorefrontVisualsAdmin.init({
-    load:async()=>{const [,settings,products]=await Promise.all([loadMockupAssets(true),api('/api/admin/settings'),api('/api/admin/products')]);state.settings={...state.settings,...settings.settings};return {assets:state.mockupAssets,products:products.items||[],settings:state.settings};},
+    load:async()=>{
+      const [,settings,products,publicConfig]=await Promise.all([loadMockupAssets(true),api('/api/admin/settings'),api('/api/admin/products'),api('/api/config/public'),ensureCategories()]);
+      state.settings={...state.settings,...settings.settings};
+      return {assets:state.mockupAssets,products:products.items||[],categories:state.categories,settings:state.settings,publicConfig};
+    },
     uploadBackground:async(file,name,token)=>{const form=new FormData();form.append('file',file);form.append('name',name);form.append('assetType','background');form.append('uploadToken',token);const data=await api('/api/admin/mockup-assets',{method:'POST',body:form});if(!data.item?.id)throw new Error('No se confirmó el fondo. Volvé a intentar.');state.mockupAssets=[...state.mockupAssets.filter(asset=>Number(asset.id)!==Number(data.item.id)),data.item];state.mockupAssetsRevision=(state.mockupAssetsRevision||0)+1;return data.item;},
-    assetUrl:mockupAssetUrl,toast,save:async value=>{const encoded=JSON.stringify(value);await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{storefront_visuals_v1:encoded}})});state.settings.storefront_visuals_v1=encoded;}
+    assetUrl:mockupAssetUrl,toast,
+    saveBackgrounds:backgrounds=>api('/api/admin/storefront/preferences',{method:'PATCH',body:JSON.stringify({backgrounds})}),
+    saveCovers:async changes=>{
+      const latest=await api('/api/admin/settings');
+      const value=JSON.parse(latest.settings?.storefront_visuals_v1||'{}');
+      value.covers??={};
+      for(const [key,choice] of Object.entries(changes)){
+        if(choice)value.covers[key]=choice;
+        else delete value.covers[key];
+      }
+      const encoded=JSON.stringify(value);
+      await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{storefront_visuals_v1:encoded}})});
+      state.settings.storefront_visuals_v1=encoded;
+    }
   });
   window.SalmosCatalog.init({state,save:persistAdminOptionSettings,toast,
     typeEntries:()=>[...MATERIAL_TYPES,...customTypeEntries().filter(row=>row.code!=='other').map(row=>[row.code,row.label])],

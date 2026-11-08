@@ -43,7 +43,6 @@
     config: null,
     categories: [],
     products: [],
-    activeCategory: 'all',
     storefrontCatalog: false,
     homeCollection: null,
     catalogType: 'all',
@@ -591,66 +590,55 @@
   }
 
   function renderCategories() {
-    const bar=qs('#categoryBar'), row=qs('#categoryRow');
-    const editing=state.storeOrderEditor?.enabled;
-    const showBar=!state.wholesaleMode && (state.storefrontCatalog || Boolean(state.query) || editing);
-    bar.classList.toggle('hidden', !showBar);
-    if (!showBar) return;
-    row.classList.toggle('catalog-filter-row', !editing);
-    if (editing) {
-      const categories=[{slug:'all',name:'Todo'}, ...state.categories];
-      if (!categories.some(category=>category.slug===state.activeCategory)) state.activeCategory='all';
-      row.innerHTML=categories.map(category=>categoryChip('data-category',category.slug,category.name,category.slug===state.activeCategory)).join('');
-    } else {
-      const typeScroll=qs('.catalog-type-chips',row)?.scrollLeft || 0;
-      const types=window.SalmosHome.catalogTypesFor(catalogAudienceProducts());
-      const resetType=state.storeProductsLoaded && state.catalogType!=='all' && !types.some(type=>type.key===state.catalogType);
-      if (resetType) state.catalogType='all';
-      const audienceChips=window.SalmosHome.catalogAudiences.map(({key,name})=>categoryChip('data-catalog-audience',key,name,key===(state.homeCollection||'all'))).join('');
-      const typeChips=types.length ? [{key:'all',name:'Todos los tipos'}, ...types].map(({key,name})=>categoryChip('data-catalog-type',key,name,key===state.catalogType)).join('') : '';
-      row.innerHTML=`<div class="catalog-audience-chips" role="group" aria-label="Colecciones">${audienceChips}</div>${typeChips?`<div class="catalog-type-chips" role="group" aria-label="Tipo de producto">${typeChips}</div>`:''}`;
-      if (typeChips) {
-        const group=qs('.catalog-type-chips',row);
-        group.scrollLeft=resetType?0:typeScroll;
-        const pressed=qs('.active',group);
-        if (pressed && group.scrollWidth>group.clientWidth) {
-          const chip=pressed.getBoundingClientRect(), strip=group.getBoundingClientRect();
-          group.scrollLeft+=Math.min(0,chip.left-strip.left)+Math.max(0,chip.right-strip.right);
-        }
+    const bar=qs('#categoryBar'),row=qs('#categoryRow');
+    const show=!state.wholesaleMode && (state.storefrontCatalog || Boolean(state.query));
+    bar.classList.toggle('hidden',!show);
+    if(!show)return;
+    row.classList.add('catalog-filter-row');
+    const previousScroll=qs('.catalog-type-chips',row)?.scrollLeft||0;
+    const types=window.SalmosHome.catalogTypesFor(catalogAudienceProducts());
+    const reset=state.storeProductsLoaded && state.catalogType!=='all' && !types.some(type=>type.key===state.catalogType);
+    if(reset)state.catalogType='all';
+    const audiences=window.SalmosHome.catalogAudiences.map(({key,name})=>categoryChip('data-catalog-audience',key,name,key===(state.homeCollection||'all'))).join('');
+    const typeChips=types.length?[{key:'all',name:'Todos los tipos'},...types].map(({key,name})=>categoryChip('data-catalog-type',key,name,key===state.catalogType)).join(''):'';
+    row.innerHTML=`<div class="catalog-audience-chips" role="group" aria-label="Colecciones">${audiences}</div>${typeChips?`<div class="catalog-type-chips" role="group" aria-label="Tipo de producto">${typeChips}</div>`:''}`;
+    if(typeChips){
+      const group=qs('.catalog-type-chips',row),active=qs('.active',group);
+      group.scrollLeft=reset?0:previousScroll;
+      if(active && group.scrollWidth>group.clientWidth){
+        const chip=active.getBoundingClientRect(),strip=group.getBoundingClientRect();
+        group.scrollLeft+=Math.min(0,chip.left-strip.left)+Math.max(0,chip.right-strip.right);
       }
     }
     row.onclick=event=>{
       const button=event.target.closest('button.chip');
-      if (!button) return;
-      const {category,catalogAudience,catalogType}=button.dataset;
-      if (category!==undefined) {
-        state.storefrontCatalog=true;
-        state.homeCollection=null;
-        state.activeCategory=category;
-      } else if (catalogAudience!==undefined) {
-        state.homeCollection=catalogAudience==='all'?null:catalogAudience;
-      } else {
-        state.catalogType=catalogType;
-      }
+      if(!button||state.storeOrderEditor?.saving)return;
+      const {catalogAudience,catalogType}=button.dataset;
+      if(catalogAudience!==undefined)state.homeCollection=catalogAudience==='all'?null:catalogAudience;
+      else state.catalogType=catalogType;
       renderCategories();
       renderProducts();
-      const attribute=category!==undefined?'data-category':catalogAudience!==undefined?'data-catalog-audience':'data-catalog-type';
-      row.querySelector(`[${attribute}].active`)?.focus({preventScroll:true});
+      row.querySelector(`[${catalogAudience!==undefined?'data-catalog-audience':'data-catalog-type'}].active`)?.focus({preventScroll:true});
       window.scrollTo({top:0,behavior:'instant'});
     };
   }
 
-  function orderedStoreProducts(items,scope=state.activeCategory){
-    const draft=state.storeOrderEditor?.drafts.get(scope),positions=draft&&new Map(draft.map((id,i)=>[Number(id),i]));
-    return [...items].sort((a,b)=>positions?(positions.get(Number(a.id))??1e9)-(positions.get(Number(b.id))??1e9):(scope==='all'?0:(Number(a.category_display_order??999999)-Number(b.category_display_order??999999)))||(Number(a.display_order??999999)-Number(b.display_order??999999)));
+  function orderedStoreProducts(items,scope=state.homeCollection||'all') {
+    const ids=state.storeOrderEditor?.drafts.get(scope)||
+      (scope==='all'?[]:state.config?.storefrontHome?.orders?.[`collection:${scope}`]||[]);
+    const ranks=new Map(ids.map((id,index)=>[Number(id),index]));
+    return [...items].sort((a,b)=>
+      (ranks.get(Number(a.id))??1e9)-(ranks.get(Number(b.id))??1e9)||
+      Number(a.display_order??999999)-Number(b.display_order??999999));
   }
+
   async function initStoreOrderEditor(){
     if(new URLSearchParams(location.search).get('ordenar')!=='1')return;
     const section=qs('#productos');if(!section)return;
-    const toolbar=document.createElement('div');toolbar.id='storeOrderToolbar';toolbar.className='store-order-toolbar';(qs('#storeHome')||section).before(toolbar);
+    const toolbar=document.createElement('div');toolbar.id='storeOrderToolbar';toolbar.className='store-order-toolbar';(qs('#wholesaleCatalog')||qs('#storeHome')||section).before(toolbar);
     toolbar.innerHTML='<strong>Abriendo el editor de orden…</strong>';
     let editableProducts=[];try{const data=await api('/api/admin/products',{credentials:'include',redirect:'manual'});editableProducts=data.items||[];}catch{toolbar.innerHTML='<strong>No se pudo abrir el editor. Entrá a Admin con tu sesión y tocá «Ordenar en la tienda».</strong><a class="btn btn-ghost" href="admin.html">Ir a Admin</a>';return;}
-    state.storeMontageProductIds=new Set(editableProducts.filter(product=>product.has_production_recipe).map(product=>Number(product.id)));state.storeForegroundPrepared=new Set();state.storeOrderEditor={enabled:true,view:'home',drafts:new Map(),orderBases:new Map(),homeDrafts:new Map(),saving:false,backgrounds:window.SalmosColors.photoBackgrounds(state.config?.productPhotoBackgrounds),savedBackgrounds:window.SalmosColors.photoBackgrounds(state.config?.productPhotoBackgrounds),backgroundDirty:false};state.storefrontCatalog=false;state.homeCollection=null;state.activeCategory='all';state.query='';const search=qs('#searchInput');if(search){search.value='';search.disabled=true;}
+    state.storeMontageProductIds=new Set(editableProducts.filter(product=>product.has_production_recipe).map(product=>Number(product.id)));state.storeForegroundPrepared=new Set();state.storeOrderEditor={enabled:true,view:'home',drafts:new Map(),orderBases:new Map(),homeDrafts:new Map(),saving:false,backgroundPanel:null};state.storefrontCatalog=false;state.homeCollection=null;state.query='';const search=qs('#searchInput');if(search){search.value='';search.disabled=true;}
     document.body.classList.add('store-order-editing');
     const style=document.createElement('style');style.textContent=`
       .store-order-toolbar{scroll-margin-top:110px;position:relative;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px;margin:12px 0;border:1px solid var(--gold,#e8b66e);border-radius:12px;background:var(--surface,#171318);color:var(--text,#fff);box-shadow:0 6px 22px #0004}
@@ -662,20 +650,83 @@
       .store-order-card-controls{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:8px}.store-order-card-controls button{border:1px solid var(--gold,#e8b66e);border-radius:8px;background:transparent;color:inherit;min-width:34px;min-height:32px;cursor:pointer}
       @media(max-width:700px){.store-order-toolbar{padding:9px}.store-order-actions .btn{font-size:.75rem}.store-order-toolbar small{font-size:.75rem}}
     `;document.head.appendChild(style);
-    toolbar.innerHTML='<div class="store-order-fixedbar"><div class="store-order-heading"><strong id="storeOrderTitle"></strong><small id="storeOrderStatus" role="status"></small></div><div class="store-order-actions"><button class="btn btn-primary" type="button" id="saveStoreOrder">Guardar cambios</button><button class="btn btn-ghost" type="button" id="discardStoreOrder">Descartar cambios</button><a class="btn btn-ghost" href="admin.html">Volver a Admin</a></div></div><div class="store-order-mode"><button type="button" data-store-edit-view="home">Portada</button><button type="button" data-store-edit-view="catalog">Catálogo completo</button></div><details class="store-order-backgrounds"><summary>Fondos del catálogo</summary><div class="store-background-controls"><label class="field">Aplicar fondo a<select class="select" id="storeBackgroundScope"></select></label><div class="field"><label>Fondos cargados en Fotos de montaje</label><div class="store-background-gallery" id="storeBackgroundGallery"></div></div><small id="storeBackgroundHint"></small></div></details>';
+    toolbar.innerHTML='<div class="store-order-fixedbar"><div class="store-order-heading"><strong id="storeOrderTitle"></strong><small id="storeOrderStatus" role="status"></small></div><div class="store-order-actions"><button class="btn btn-primary" type="button" id="saveStoreOrder">Guardar cambios</button><button class="btn btn-ghost" type="button" id="discardStoreOrder">Descartar cambios</button><a class="btn btn-ghost" href="admin.html">Volver a Admin</a></div></div><div class="store-order-mode"><button type="button" data-store-edit-view="home">Portada</button><button type="button" data-store-edit-view="catalog">Colecciones</button><button type="button" data-store-edit-view="wholesale">Mayoristas</button></div><details class="store-order-backgrounds"><summary>Fondos de la tienda</summary><div id="storeBackgroundPanel"></div></details>';
     const actionBar=qs('.store-order-fixedbar',toolbar),syncActionBarSpace=()=>document.body.style.setProperty('--store-order-bar-height',Math.ceil(actionBar.getBoundingClientRect().height)+'px');new ResizeObserver(syncActionBarSpace).observe(actionBar);syncActionBarSpace();
-    qs('#saveStoreOrder').addEventListener('click',saveStoreProductOrders);qs('#discardStoreOrder').addEventListener('click',()=>{if(state.storeOrderEditor.saving)return;state.storeOrderEditor.drafts.clear();state.storeOrderEditor.orderBases.clear();state.storeOrderEditor.homeDrafts.clear();state.storeOrderEditor.foregroundError='';state.storeOrderEditor.backgrounds=structuredClone(state.storeOrderEditor.savedBackgrounds);state.storeOrderEditor.backgroundDirty=false;state.config.productPhotoBackgrounds=structuredClone(state.storeOrderEditor.backgrounds);renderProducts();});
-    toolbar.addEventListener('click',event=>{const button=event.target.closest('[data-store-edit-view]');if(!button)return;if(button.dataset.storeEditView==='home')window.SalmosHome.goHome();else window.SalmosHome.navigate('all',false);});
-    qs('#storeBackgroundGallery').addEventListener('click',event=>{const choice=event.target.closest('[data-store-background]');if(choice)applyStorePhotoBackground(state.activeCategory,Number(choice.dataset.storeBackground)).catch(error=>toast(error.message,'error'));});
-    qs('#storeBackgroundScope').addEventListener('change',event=>{if(state.storeOrderEditor.saving)return;state.activeCategory=event.target.value;renderCategories();renderProducts();});
+    const editor=state.storeOrderEditor;
+    function preview(view){
+      if(editor.saving)return;
+      if(view==='home')window.SalmosHome.goHome();
+      else if(view==='wholesale')window.SalmosWholesale.open();
+      else window.SalmosHome.navigate('all',false);
+    }
+    qs('#saveStoreOrder').addEventListener('click',saveStoreProductOrders);
+    qs('#discardStoreOrder').addEventListener('click',()=>{
+      if(editor.saving)return;
+      editor.drafts.clear();
+      editor.orderBases.clear();
+      editor.homeDrafts.clear();
+      if(editor.backgroundPanel)editor.backgroundPanel.reset();
+      else renderProducts();
+    });
+    toolbar.addEventListener('click',event=>{
+      const button=event.target.closest('[data-store-edit-view]');
+      if(button)preview(button.dataset.storeEditView);
+    });
+    const backgroundHost=qs('#storeBackgroundPanel');
+    backgroundHost.textContent='Cargando fondos…';
+    api('/api/admin/mockup-assets',{credentials:'include'}).then(({items=[]})=>{
+      editor.backgroundPanel=window.SalmosStorefrontVisualsAdmin.backgroundPanel(backgroundHost,{
+        backgrounds:state.config?.storefrontBackgrounds,visuals:state.config?.storefrontVisuals,
+        assets:items.filter(asset=>asset.asset_type==='background'),categories:state.categories,products:state.products,
+        assetUrl:asset=>apiUrl(asset.source_url||asset.url||'/api/admin/mockup-assets/'+asset.id+'/file'),
+        uploadBackground:async(file,name,token)=>{
+          const form=new FormData();
+          form.append('file',file);
+          form.append('name',name);
+          form.append('assetType','background');
+          form.append('uploadToken',token);
+          const data=await api('/api/admin/mockup-assets',{method:'POST',credentials:'include',body:form});
+          const asset=data.item;
+          if(!asset?.id)throw new Error('No se confirmó el fondo. Volvé a intentar.');
+          const library=state.config.productBackgroundAssets??=[];
+          if(!library.some(item=>Number(item.id)===Number(asset.id)))library.push({id:Number(asset.id),name:asset.name,url:'/api/product-backgrounds/'+asset.id+'/file'});
+          return asset;
+        },
+        onView:preview,
+        onChange:value=>{state.config.storefrontBackgrounds=value;renderProducts();}
+      });
+      renderStoreOrderControls();
+    }).catch(error=>{backgroundHost.textContent=error.message;});
     document.addEventListener('salmos-color-error',event=>toast(event.detail,'error'));
-    document.addEventListener('click',e=>{if(!state.storeOrderEditor?.enabled)return;const card=e.target.closest('.product-card');if(!card)return;const edit=e.target.closest('[data-edit-store-production]');if(edit){e.preventDefault();e.stopImmediatePropagation();openStoreProductProduction(card);return;}const background=e.target.closest('.store-product-background');if(background){e.stopImmediatePropagation();if(e.target.closest('summary')){e.preventDefault();background.open=!background.open;return;}const choice=e.target.closest('[data-store-background]');if(choice){e.preventDefault();applyStorePhotoBackground('product-'+card.dataset.productId,Number(choice.dataset.storeBackground)).catch(error=>toast(error.message,'error'));}return;}const photoStep=e.target.closest('[data-card-media-step]');if(photoStep){e.preventDefault();e.stopImmediatePropagation();cycleProductCardMedia(photoStep);return;}e.preventDefault();e.stopImmediatePropagation();const step=e.target.closest('[data-store-order-step]');if(step&&!state.storeOrderEditor.saving){const grid=card.parentElement,cards=[...grid.children],index=cards.indexOf(card),next=cards[index+Number(step.dataset.storeOrderStep)];if(next){if(Number(step.dataset.storeOrderStep)<0)grid.insertBefore(card,next);else grid.insertBefore(card,next.nextSibling);rememberStoreProductOrder();}}},true);
-    window.addEventListener('beforeunload',e=>{if(state.storeOrderEditor?.drafts.size||state.storeOrderEditor?.homeDrafts?.size||state.storeOrderEditor?.backgroundDirty){e.preventDefault();e.returnValue='';}});
+    document.addEventListener('click',event=>{
+      const card=event.target.closest('.product-card');
+      if(!card||!editor.enabled)return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if(editor.saving)return;
+      if(event.target.closest('[data-edit-store-production]')){openStoreProductProduction(card);return;}
+      if(event.target.closest('[data-store-product-background]')){
+        qs('.store-order-backgrounds',toolbar).open=true;
+        editor.backgroundPanel?.setLocation('catalog','product:'+card.dataset.productId);
+        toolbar.scrollIntoView({block:'start',behavior:'smooth'});
+        return;
+      }
+      const photo=event.target.closest('[data-card-media-step]');
+      if(photo){cycleProductCardMedia(photo);return;}
+      const step=event.target.closest('[data-store-order-step]');
+      if(!step)return;
+      const grid=card.parentElement,cards=[...grid.children],direction=Number(step.dataset.storeOrderStep);
+      const next=cards[cards.indexOf(card)+direction];
+      if(next){grid.insertBefore(card,direction<0?next:next.nextSibling);rememberStoreProductOrder();}
+    },true);
+    window.addEventListener('beforeunload',event=>{
+      if(editor.drafts.size||editor.homeDrafts.size||editor.backgroundPanel?.dirty()){event.preventDefault();event.returnValue='';}
+    });
     for(const id of ['productGrid','orderProductGrid'])bindStoreOrderGrid(qs('#'+id));
   }
   async function openStoreProductProduction(card,options={}){
     if((!card&&!options.create)||document.querySelector('#storeProductionDialog'))return;
-    const productId=Number(card?.dataset.productId)||0,product=state.products.find(row=>Number(row.id)===productId),index=Number(card?.querySelector?.('.product-media')?.dataset.mediaIndex)||0,mediaId=Number(options.mediaId||productCardImages(product||{})[index]?.id)||0;
+    const productId=Number(card?.dataset.productId)||0,product=state.products.find(row=>Number(row.id)===productId),index=Number(card?.querySelector?.('.product-media')?.dataset.mediaIndex)||0,mediaId=Number(options.mediaId||(product?productCollectionImages(product)[index]?.id:0))||0;
     if(!productId&&!options.create)return;
     const dialog=document.createElement('dialog');dialog.id='storeProductionDialog';dialog.className='store-production-dialog';dialog.setAttribute('aria-label','Producción y publicación');
     dialog.innerHTML='<button type="button" class="icon-btn" aria-label="Cerrar producción y publicación">×</button><iframe title="Producción y publicación del producto"></iframe>';
@@ -708,48 +759,133 @@
     const visible=new Set(visibleIds.map(Number)),sequence=visibleIds.map(Number);let index=0;
     return fullIds.map(Number).map(id=>visible.has(id)?sequence[index++]:id);
   }
-  function rememberStoreProductOrder(){
-    const editor=state.storeOrderEditor;if(!editor)return;
-    const scope=state.activeCategory,fullIds=orderedStoreProducts(state.products.filter(product=>scope==='all'||product.category_slug===scope),scope).map(product=>Number(product.id));
-    const visibleIds=['productGrid','orderProductGrid'].flatMap(id=>qsa('.product-card',qs('#'+id)).map(card=>Number(card.dataset.productId)));
-    editor.orderBases??=new Map();editor.orderBases.set(scope,[...fullIds]);
-    editor.drafts.set(scope,mergeVisibleProductOrder(fullIds,visibleIds));renderStoreOrderControls();
-  }
-  function renderStoreOrderControls(){
-    const editor=state.storeOrderEditor;if(!editor?.enabled)return;const title=window.SalmosHome?.selectedName()||(state.activeCategory==='all'?'Todos':state.categories.find(c=>c.slug===state.activeCategory)?.name||state.activeCategory);
-    const home=window.SalmosHome.isHome();qsa('[data-store-edit-view]').forEach(button=>button.classList.toggle('active',button.dataset.storeEditView===(home?'home':'catalog')));qs('#storeOrderTitle').textContent=home?'Editar portada':`Ordenar: ${title}`;qs('#storeOrderStatus').textContent=editor.foregroundError?`No se pudieron preparar todas las fotos: ${editor.foregroundError} Elegí el fondo otra vez para reintentar.`:editor.preparing?'Preparando fotos sin fondo…':editor.saving?'Guardando…':`${editor.homeDrafts.size?`${editor.homeDrafts.size} galería(s) con cambios. `:''}${editor.drafts.size?`${editor.drafts.size} pestaña(s) con cambios sin guardar. `:''}${editor.backgroundDirty?'Fondo sin guardar. ':''}Tocá una foto para editar. Arrastrá las miniaturas o usá ← → para ordenarlas.`;
-    qs('#saveStoreOrder').disabled=editor.saving||editor.preparing||editor.foregroundError||(!editor.drafts.size&&!editor.homeDrafts.size&&!editor.backgroundDirty);qs('#discardStoreOrder').disabled=editor.saving||editor.preparing||(!editor.drafts.size&&!editor.homeDrafts.size&&!editor.backgroundDirty);renderStoreBackgroundControls();
-    let n=0;for(const id of ['productGrid','orderProductGrid'])for(const card of qsa('.product-card',qs('#'+id))){let controls=qs('.store-order-card-controls',card);if(!controls){controls=document.createElement('div');controls.className='store-order-card-controls';qs('.product-body',card).appendChild(controls);}controls.innerHTML=`<button type="button" data-store-order-step="-1" aria-label="Mover ${escapeHtml(qs('.product-name',card)?.textContent||'producto')} antes" ${editor.saving?'disabled':''}>←</button><span>#${++n}</span><button type="button" data-store-order-step="1" aria-label="Mover después" ${editor.saving?'disabled':''}>→</button>`;let backgrounds=qs('.store-product-background',card);if(!backgrounds){backgrounds=document.createElement('details');backgrounds.className='store-product-background';qs('.product-body',card).appendChild(backgrounds);}const product=state.products.find(item=>Number(item.id)===Number(card.dataset.productId)),own=Object.hasOwn(editor.backgrounds.products,String(card.dataset.productId));backgrounds.innerHTML=`<summary>Fondo de todas las fotos</summary><div class="store-background-gallery">${storeBackgroundChoices(own?editor.backgrounds.products[card.dataset.productId]:-1,true,editor.saving||editor.preparing)}</div>`;}
-  }
-  async function saveStoreProductOrders(){
-    const editor=state.storeOrderEditor;if(!editor||editor.saving||editor.preparing||(!editor.drafts.size&&!editor.homeDrafts.size&&!editor.backgroundDirty))return;editor.saving=true;renderStoreOrderControls();
-    try{for(const [category,ids] of [...editor.drafts]){
-      const saved=await api('/api/admin/products/order',{method:'PATCH',credentials:'include',redirect:'manual',body:JSON.stringify({category,ids,baseIds:editor.orderBases?.get(category)||ids})});
-      const ranks=new Map((saved.ids||ids).map((id,i)=>[Number(id),i]));for(const p of state.products)if(ranks.has(Number(p.id)))p[category==='all'?'display_order':'category_display_order']=ranks.get(Number(p.id));
-      editor.drafts.delete(category);editor.orderBases?.delete(category);
-    }if(editor.backgroundDirty){await api('/api/admin/settings',{method:'PUT',credentials:'include',body:JSON.stringify({settings:{product_photo_backgrounds:JSON.stringify(editor.backgrounds)}})});editor.savedBackgrounds=structuredClone(editor.backgrounds);editor.backgroundDirty=false;state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);}if(editor.homeDrafts.size){const home={...(state.config.storefrontHome||{}),orders:{...(state.config.storefrontHome?.orders||{})}};for(const [key,ids] of editor.homeDrafts)home.orders[key]=ids;await api('/api/admin/settings',{method:'PUT',credentials:'include',body:JSON.stringify({settings:{storefront_home_v2:JSON.stringify(home)}})});state.config.storefrontHome=home;editor.homeDrafts.clear();}toast('Orden y fondos guardados en la tienda','success');}
-    catch(err){toast(`No se guardaron todos los cambios: ${err.message}`,'error');}
-    finally{editor.saving=false;renderProducts();}
+  function rememberStoreProductOrder() {
+    const editor=state.storeOrderEditor,scope=state.homeCollection||'all';
+    let ids=orderedStoreProducts(catalogAudienceProducts(),scope).map(product=>Number(product.id));
+    const base=editor.orderBases.get(scope)||ids;
+    for(const id of ['productGrid','orderProductGrid']){
+      const visible=qsa('.product-card',qs('#'+id)).map(card=>Number(card.dataset.productId));
+      ids=mergeVisibleProductOrder(ids,visible);
+    }
+    if(ids.every((id,index)=>id===base[index])){
+      editor.drafts.delete(scope);
+      editor.orderBases.delete(scope);
+    }else{
+      editor.orderBases.set(scope,base);
+      editor.drafts.set(scope,ids);
+    }
+    renderStoreOrderControls();
   }
 
-  function storeBackgroundChoices(value,inherit=false,disabled=false,globalScope=false){
-    const button=(id,label,url='')=>`<button type="button" class="store-background-choice ${Number(value)===id?'selected':''}" data-store-background="${id}" aria-pressed="${Number(value)===id}" ${disabled?'disabled':''}>${url?`<img src="${escapeHtml(apiUrl(url))}" alt="" loading="lazy">`:`<span class="store-no-background">${id<0?'↩':'∅'}</span>`}<small>${escapeHtml(label)}</small></button>`;
-    return (inherit?button(-1,globalScope?'Conservar montaje':'Usar fondo general'):'')+button(0,'Sin fondo')+(state.config?.productBackgroundAssets||[]).map(asset=>button(Number(asset.id),asset.name,asset.url)).join('');
+  function renderStoreOrderControls() {
+    const editor=state.storeOrderEditor;
+    if(!editor?.enabled)return;
+    const view=state.wholesaleMode?'wholesale':window.SalmosHome.isHome()?'home':'catalog';
+    const target=view==='catalog'?(state.catalogType!=='all'?state.catalogType:state.homeCollection||'page'):'page';
+    const position=`${view}:${target}`;
+    if(position!==editor.backgroundLocation && editor.backgroundPanel){
+      editor.backgroundLocation=position;
+      editor.backgroundPanel.setLocation(view,target);
+    }
+    const dirty=editor.drafts.size+editor.homeDrafts.size+Number(editor.backgroundPanel?.dirty()||false);
+    qs('#saveStoreOrder').disabled=editor.saving||!dirty;
+    qs('#discardStoreOrder').disabled=editor.saving||!dirty;
+    editor.backgroundPanel?.setBusy(editor.saving);
+    qsa('[data-store-edit-view]').forEach(button=>{
+      const active=button.dataset.storeEditView===view;
+      button.classList.toggle('active',active);
+      button.setAttribute('aria-pressed',String(active));
+    });
+    const title=qs('#catalogCollectionTitle')?.textContent||'Todos los productos';
+    qs('#storeOrderTitle').textContent=view==='home'?'Editar portada':view==='wholesale'?'Fondos de Mayoristas':`Ordenar: ${title}`;
+    qs('#storeOrderStatus').textContent=editor.saving?(editor.preparing?'Preparando las fotos…':'Guardando…'):
+      `${dirty?'Tenés cambios sin guardar. ':''}${view==='wholesale'?'Elegí el fondo de página o de las fichas.':'Arrastrá las fichas o usá las flechas para moverlas.'}`;
+    if(view!=='catalog')return;
+    let number=0;
+    for(const id of ['productGrid','orderProductGrid']){
+      const cards=qsa('.product-card',qs('#'+id));
+      cards.forEach((card,index)=>{
+        let controls=qs('.store-order-card-controls',card);
+        if(!controls){
+          controls=document.createElement('div');
+          controls.className='store-order-card-controls';
+          qs('.product-body',card).appendChild(controls);
+        }
+        const name=escapeHtml(qs('.product-name',card)?.textContent||'producto');
+        controls.innerHTML=`<button type="button" data-store-order-step="-1" aria-label="Mover ${name} antes" ${editor.saving||index===0?'disabled':''}>←</button>
+          <span>#${++number}</span><button type="button" data-store-order-step="1" aria-label="Mover ${name} después" ${editor.saving||index===cards.length-1?'disabled':''}>→</button>
+          <button type="button" class="store-order-product-background" data-store-product-background aria-label="Fondo de ${name}">Fondo</button>`;
+      });
+    }
   }
-  function renderStoreBackgroundControls(){
-    const editor=state.storeOrderEditor,select=qs('#storeBackgroundScope'),gallery=qs('#storeBackgroundGallery');if(!editor||!select||!gallery)return;
-    select.innerHTML='<option value="all">Todos los productos</option>'+state.categories.map(category=>`<option value="${escapeHtml(category.slug)}">${escapeHtml(category.name)}</option>`).join('');select.value=state.activeCategory;select.disabled=editor.saving||editor.preparing;
-    const scope=state.activeCategory,value=scope==='all'?(editor.backgrounds.all??-1):Object.hasOwn(editor.backgrounds.categories,scope)?editor.backgrounds.categories[scope]:-1;gallery.innerHTML=storeBackgroundChoices(value,true,editor.saving||editor.preparing,scope==='all');
-    qs('#storeBackgroundHint').textContent=scope==='all'?'Fondo general para los productos sin un fondo específico ni una selección en Portada de tienda. Guardá los cambios para publicarlo.':'Se aplica a todas las fotos de esta categoría. Cada ficha también permite elegir su propio fondo.';
+
+  async function saveStoreProductOrders() {
+    const editor=state.storeOrderEditor;
+    if(!editor||editor.saving)return;
+    const panel=editor.backgroundPanel,backgrounds=panel?.patch()||{};
+    const hasBackgrounds=panel?.dirty()||false;
+    const orders=Object.fromEntries([...editor.homeDrafts,...[...editor.drafts].filter(([key])=>key!=='all').map(([key,ids])=>[`collection:${key}`,ids])]);
+    if(!editor.drafts.size&&!editor.homeDrafts.size&&!hasBackgrounds)return;
+    editor.saving=true;
+    renderStoreOrderControls();
+    try{
+      if(editor.drafts.has('all')){
+        const ids=editor.drafts.get('all'),baseIds=editor.orderBases.get('all')||ids;
+        const saved=await api('/api/admin/products/order',{method:'PATCH',credentials:'include',redirect:'manual',body:JSON.stringify({category:'all',ids,baseIds})});
+        const ranks=new Map((saved.ids||ids).map((id,index)=>[Number(id),index]));
+        for(const product of state.products)if(ranks.has(Number(product.id)))product.display_order=ranks.get(Number(product.id));
+        editor.drafts.delete('all');
+        editor.orderBases.delete('all');
+      }
+      if(hasBackgrounds&&Object.values(backgrounds).some(targets=>Object.entries(targets).some(([key,modes])=>key!=='page'&&Object.values(modes).some(id=>id!==null)))){
+        const legacy=state.products.filter(product=>state.storeMontageProductIds.has(Number(product.id))&&!state.storeForegroundPrepared.has(Number(product.id))&&
+          product.images?.some(image=>!image.foreground_url));
+        if(legacy.length){
+          editor.preparing=true;
+          renderStoreOrderControls();
+          await prepareStoreForegrounds(legacy);
+          editor.preparing=false;
+        }
+      }
+      if(hasBackgrounds||Object.keys(orders).length){
+        const saved=await api('/api/admin/storefront/preferences',{method:'PATCH',credentials:'include',body:JSON.stringify({orders,...(hasBackgrounds?{backgrounds}:{})})});
+        state.config.storefrontHome=saved.home;
+        if(hasBackgrounds){
+          state.config.storefrontBackgrounds=saved.backgrounds;
+          panel.commit(saved.backgrounds);
+        }
+        editor.drafts.clear();
+        editor.orderBases.clear();
+        editor.homeDrafts.clear();
+      }
+      toast('Cambios guardados en la tienda','success');
+    }catch(error){toast(`No se guardaron todos los cambios. ${error.message}`,'error');}
+    finally{editor.preparing=editor.saving=false;renderProducts();}
   }
-  async function applyStorePhotoBackground(scope,id){
-    const editor=state.storeOrderEditor;if(!editor||editor.saving||editor.preparing)return;
-    editor.backgrounds=window.SalmosColors.withPhotoBackground(editor.backgrounds,scope,id);
-    if(scope!=='all'&&!scope.startsWith('product-'))for(const product of state.products)if(product.category_slug===scope)delete editor.backgrounds.products[String(product.id)];
-    editor.backgroundDirty=JSON.stringify(editor.backgrounds)!==JSON.stringify(editor.savedBackgrounds);state.config.productPhotoBackgrounds=structuredClone(editor.backgrounds);editor.foregroundError='';renderProducts();renderFeatured();const selected=state.products.filter(product=>window.SalmosColors.photoBackgroundFor(editor.backgrounds,product.category_slug,product.id)!==null).filter(product=>state.storeMontageProductIds?.has(Number(product.id))&&!state.storeForegroundPrepared.has(Number(product.id)));if(selected.length){editor.preparing=true;renderStoreOrderControls();try{await prepareStoreForegrounds(selected);}catch(error){editor.foregroundError=error.message;throw error;}finally{editor.preparing=false;renderProducts();renderFeatured();}}
+
+  function scopedStorefrontBackground(view,targets,theme) {
+    const choices=state.config?.storefrontBackgrounds?.[view];
+    for(const target of targets){
+      const id=choices?.[target]?.[theme];
+      if(id===0)return {asset:null,withoutBackground:true};
+      if(id){
+        const asset=state.config?.productBackgroundAssets?.find(item=>Number(item.id)===id);
+        if(asset)return {asset};
+      }
+    }
+    return null;
   }
-  function productPhotoMedia(product,scope='store') {
-    const {asset,withoutBackground}=productPhotoBackground(product,scope);
+
+  function storefrontPageBackground(view) {
+    const theme=document.documentElement.dataset.theme==='light'?'light':'dark';
+    const scoped=scopedStorefrontBackground(view,['page'],theme);
+    if(scoped?.withoutBackground)return 'none';
+    const asset=scoped?.asset||window.SalmosStorefrontVisualsAdmin.legacyBackground(state.config?.storefrontVisuals,view,'page',theme);
+    return asset?.url?`url("${apiUrl(asset.url)}")`:'';
+  }
+
+  function productPhotoMedia(product,scope='catalog',group) {
+    const {asset,withoutBackground}=productPhotoBackground(product,scope,group);
     return (product.images||[]).map(image=>{
       const original=apiUrl(image.original_url||image.url||'');
       const foreground=image.foreground_url?apiUrl(image.foreground_url):'';
@@ -768,49 +904,55 @@
     }};
     const results=await Promise.allSettled([prepare(),prepare()]);const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   }
-  function productPhotoBackground(product,scope='store') {
-    const garment=window.SalmosHome.isGarment(product);
+  function productPhotoBackground(product,scope='catalog',group) {
+    const home=window.SalmosHome,garment=home.isGarment(product);
     const theme=document.documentElement.dataset.theme==='light'?'light':'dark';
-    const visual=state.config?.storefrontVisuals;
+    const visual=state.config?.storefrontVisuals,category=`category:${product.category_slug||''}`;
+    if(state.config?.storefrontBackgrounds?.[scope]){
+      const selectedGroup=group||(scope==='catalog'?state.homeCollection:null);
+      const audiences={hombre:'Hombre',mujer:'Mujer',kids:'Kids'};
+      const productAudiences=home.audience(product);
+      const audience=Object.hasOwn(audiences,selectedGroup)?selectedGroup:Object.keys(audiences).find(key=>productAudiences.includes(audiences[key]));
+      const kinds=Object.keys(window.SalmosStorefrontVisualsAdmin.groups).filter(key=>!Object.hasOwn(audiences,key)&&key!=='ropa'&&home.matchesCatalogType(product,key));
+      const type=scope==='catalog'&&state.catalogType!=='all'&&state.catalogType!=='ropa'&&home.matchesCatalogType(product,state.catalogType)?state.catalogType:
+        selectedGroup&&!Object.hasOwn(audiences,selectedGroup)?selectedGroup.replace(/^category-/,'category:'):null;
+      const targets=[`product:${product.id}`,type,category,...(garment?[audience,'ropa','people']:[...kinds,audience,'objects'])].filter(Boolean);
+      const scopedChoice=scopedStorefrontBackground(scope,targets,theme);
+      if(scopedChoice)return scopedChoice;
+    }
     if(scope==='wholesale'){
       const asset=(garment?visual?.wholesalePeoplePhotoBackgrounds:visual?.wholesaleObjectPhotoBackgrounds)?.[theme]||null;
       return {asset,withoutBackground:!asset};
     }
     const settings=state.config?.productPhotoBackgrounds;
     const choice=window.SalmosColors.photoBackgroundFor(settings,product.category_slug,product.id);
-    const scoped=Object.hasOwn(settings?.products||{},String(product.id))||
-      Object.hasOwn(settings?.categories||{},String(product.category_slug));
+    const specific=Object.hasOwn(settings?.products||{},String(product.id))||Object.hasOwn(settings?.categories||{},String(product.category_slug));
     const themed=(garment?visual?.peoplePhotoBackgrounds:visual?.objectPhotoBackgrounds)?.[theme]||null;
     const selected=(state.config?.productBackgroundAssets||[]).find(asset=>Number(asset.id)===choice);
-    if(scoped&&choice===0)return {asset:null,withoutBackground:true};
-    if(scoped&&selected)return {asset:selected};
+    if(specific&&choice===0)return {asset:null,withoutBackground:true};
+    if(specific&&selected)return {asset:selected};
     if(themed?.configured)return {asset:themed};
     if(choice===0)return {asset:null,withoutBackground:true};
-    if(selected&&(!garment||!/tazas?|vasos?|mug|chop/i.test(selected.name||''))){
-      return {asset:window.SalmosHome.backgroundAsset(product,selected)};
-    }
+    if(selected&&(!garment||!/tazas?|vasos?|mug|chop/i.test(selected.name||'')))return {asset:home.backgroundAsset(product,selected)};
     return {asset:themed};
   }
 
-  function productBackgroundAttrs(product,scope='store') {
-    const {asset,withoutBackground}=productPhotoBackground(product,scope);
+  function productBackgroundAttrs(product,scope='catalog',group) {
+    const {asset,withoutBackground}=productPhotoBackground(product,scope,group);
     const image=asset?.url?`url(&quot;${escapeHtml(apiUrl(asset.url))}&quot;)`:'none';
     return `data-photo-background="${withoutBackground?'none':asset?.id||'original'}" style="--product-photo-background:${image}"`;
   }
   function filteredProducts() {
-    const q = state.query.trim().toLowerCase();
+    const query=state.query.trim().toLowerCase();
     const home=window.SalmosHome;
-    const items=state.storeOrderEditor?.enabled ? state.products.filter(product=>
-      (state.activeCategory==='all' || product.category_slug===state.activeCategory) &&
-      home.matches(product,state.homeCollection) &&
-      (!['hombre','mujer','kids'].includes(state.homeCollection) || Boolean(home.imageFor(product,state.homeCollection)))
-    ) : catalogAudienceProducts().filter(product=>home.matchesCatalogType(product,state.catalogType));
-    return orderedStoreProducts(items.filter(product=>!q || [product.name,product.short_description,product.category_name].some(value=>String(value||'').toLowerCase().includes(q))));
+    const items=catalogAudienceProducts().filter(product=>home.matchesCatalogType(product,state.catalogType)&&
+      (!query||[product.name,product.short_description,product.category_name].some(value=>String(value||'').toLowerCase().includes(query))));
+    return orderedStoreProducts(items);
   }
 
   function productCard(p) {
     const media=productCollectionImages(p),first=media[0];
-    const catalogKind=state.storeOrderEditor?.enabled ? '' : window.SalmosHome.isGarment(p) ? 'garment' : 'object';
+    const catalogKind=window.SalmosHome.isGarment(p) ? 'garment' : 'object';
     const image = first?.url
       ? `<img loading="lazy" src="${escapeHtml(first.url)}" alt="${escapeHtml(first.alt_text||p.name)}" data-catalog-framing="${catalogPhotoFraming(first)}" draggable="false">`
       : `<div class="product-placeholder">SALMOS</div>`;
@@ -832,12 +974,12 @@
     const key=state.homeCollection,home=window.SalmosHome;
     if (!['hombre','mujer','kids'].includes(key) || !home.isGarment(product)) return productCardImages(product);
     const images=home.imagesFor(product,key);
-    if (images.length || state.storeOrderEditor?.enabled || window.SalmosAudience.parse(product.audience).length!==1) return images;
+    if (images.length || window.SalmosAudience.parse(product.audience).length!==1) return images;
     return productCardImages(product).filter(image=>!image.presentation_audience && image.presentation_printed!==false);
   }
   function productMediaKey(url){try{return new URL(apiUrl(url),location.origin).href;}catch{return String(url||'');}}
   function productImageAvailable(url){return url&&!state.failedProductMedia?.has(productMediaKey(url));}
-  function productCardImages(product,scope='store'){const images=productPhotoMedia(product,scope).filter(im=>productImageAvailable(im.url)&&(!im.media_type||im.media_type==='image'));return images.length?images:productImageAvailable(product.primary_image_url)?[{url:apiUrl(product.primary_image_url),alt_text:product.name}]:[];}
+  function productCardImages(product,scope='catalog',group){const images=productPhotoMedia(product,scope,group).filter(im=>productImageAvailable(im.url)&&(!im.media_type||im.media_type==='image'));return images.length?images:productImageAvailable(product.primary_image_url)?[{url:apiUrl(product.primary_image_url),alt_text:product.name}]:[];}
   function reconcileCartImages(){
     if(!state.storeProductsLoaded)return;
     let changed=false;for(const item of state.cart){const product=state.products.find(product=>Number(product.id)===Number(item.productId)),image=product?productCardImages(product)[0]?.url||'':'';if(item.image!==image){item.image=image;changed=true;}}
@@ -862,9 +1004,9 @@
     (state.failedProductMedia??=new Set()).add(productMediaKey(url));
     const id=card?.dataset.productId||cart?.dataset.cartProduct||home?.dataset.homePhotoProduct||wholesale?.dataset.wholesalePhotoProduct;
     const product=state.products.find(product=>Number(product.id)===Number(id));
-    const images=product?(card?productCollectionImages(product):productCardImages(product,wholesale?'wholesale':'store')):[];
+    const images=product?(card?productCollectionImages(product):productCardImages(product,wholesale?'wholesale':home?'home':'catalog')):[];
     const row=home?.closest('[data-home-row]')?.dataset.homeRow||wholesale?.dataset.wholesalePhotoCollection;
-    const next=home?window.SalmosHome.imageFor(product,row):
+    const next=home?window.SalmosHome.imageFor(product,row,'home'):
       (wholesale&&product?window.SalmosHome.imageFor(product,row,'wholesale'):null)||images[0];
     if(next){
       img.src=apiUrl(next.url);
@@ -898,21 +1040,21 @@
     window.SalmosHome?.render();
     if(!state.storeProductsLoaded)return;
     if(window.SalmosHome?.isHome()){qs('#productos')?.classList.add('hidden');qs('#porPedido')?.classList.add('hidden');renderStoreOrderControls();return;}
+    if(state.wholesaleMode){window.SalmosWholesale.render();renderStoreOrderControls();return;}
     const items = filteredProducts();
     const stockItems=items.filter(p=>p.sale_mode!=='order');
     const orderItems=items.filter(p=>p.sale_mode==='order');
     const collection=window.SalmosHome.selectedName();
-    const type=state.storeOrderEditor?.enabled ? state.categories.find(category=>category.slug===state.activeCategory)?.name :
-      qs('#categoryRow [data-catalog-type].active:not([data-catalog-type="all"])')?.textContent;
+    const type=qs('#categoryRow [data-catalog-type].active:not([data-catalog-type="all"])')?.textContent;
     const title = [collection,type].filter(Boolean).join(' · ') || 'Todos los productos';
     if(qs('#catalogCollectionTitle'))qs('#catalogCollectionTitle').textContent=state.query?`Resultados para “${state.query}”`:title;
     if(qs('#catalogCollectionCount'))qs('#catalogCollectionCount').textContent=items.length?`${items.length} ${items.length===1?'producto':'productos'}`:'Todavía no hay publicaciones en esta colección.';
     const t=qs('#productsTitle'),sub=qs('#productsSubtitle'),clear=qs('#clearFiltersBtn');
     if(t)t.textContent = state.query ? `Resultados para “${state.query}”` : title;
     if(sub)sub.textContent = items.length ? `${items.length} ${items.length === 1 ? 'producto' : 'productos'}` : 'No encontramos productos con ese filtro.';
-    if(clear)clear.classList.toggle('hidden', state.activeCategory === 'all' && state.catalogType==='all' && !state.query && !state.homeCollection);
+    if(clear)clear.classList.toggle('hidden', state.catalogType==='all' && !state.query && !state.homeCollection);
     const grid=qs('#productGrid'),orderGrid=qs('#orderProductGrid'),productsSection=qs('#productos');
-    const filtering=Boolean(state.query || state.activeCategory!=='all' || state.homeCollection || state.catalogType!=='all');
+    const filtering=Boolean(state.query || state.homeCollection || state.catalogType!=='all');
     if(grid)grid.innerHTML = stockItems.length ? stockItems.map(productCard).join('') : (filtering?`<div class="empty-state" style="grid-column:1/-1"><strong>No encontramos productos con ese filtro.</strong>Probá otra búsqueda.</div>`:'');
     if(productsSection)productsSection.classList.toggle('hidden',!stockItems.length&&!filtering);
     if(orderGrid)orderGrid.innerHTML=orderItems.map(productCard).join('');
@@ -935,6 +1077,7 @@
     state.detailMediaIndex=Math.max(0,(p.images||[]).findIndex(image=>Number(image.id)===preferredMediaId));state.selectedProduct=p;state.selectedColor=p.colors?.[0]||null;state.selectedVariantId=productUsesSizes(p)?null:firstAvailableVariant(p,state.selectedColor)?.id||null;
   }
   async function openProduct(id,options={}){
+    state.selectedProductPhotoGroup=options.photoGroup||null;
     const sequence=++productOpenSequence,cached=productDetailCache.get(String(id)),fresh=cached&&Date.now()-cached.at<20000,catalog=state.products.find(product=>Number(product.id)===Number(id)||product.slug===String(id)),initial=cached?.item||catalog||{id,name:'Producto',images:[]};
     state.productDetailLoading=!fresh;state.productDetailError='';selectProductDetail(initial,options);renderProductModal();openModal('#productModal');if(options.updatePath!==false&&initial.slug)setProductPath(initial);if(fresh)return cached.item;
     try{const product=await requestProductDetails(id);if(sequence!==productOpenSequence||!state.selectedProduct||!qs('#productModal').classList.contains('open'))return product;state.productDetailLoading=false;selectProductDetail(product,options);renderProductModal();if(options.updatePath!==false)setProductPath(product);return product;}
@@ -1137,8 +1280,8 @@
   function renderProductModal() {
     const p = state.selectedProduct;
     if (!p) return;
-    const scope=state.wholesaleMode?'wholesale':'store';
-    const media = p.images?.length ? productPhotoMedia(p,scope) : [{ url: '', alt_text: p.name, media_type:'image' }];
+    const scope=state.wholesaleMode?'wholesale':window.SalmosHome.isHome()?'home':'catalog',group=state.selectedProductPhotoGroup;
+    const media = p.images?.length ? productPhotoMedia(p,scope,group) : [{ url: '', alt_text: p.name, media_type:'image' }];
     const guide = sizeGuideFor(p);
     if (guide) media.push({sizeGuide:guide});
     const catalogVariants = (p.variants || []).filter(v=>v.active!==0).map(v=>({...v,size:normalizePublicSize(v.size)}));
@@ -1162,7 +1305,7 @@
       <div class="product-modal-content" data-product-id="${p.id}">
       <div class="product-modal-topbar"><button class="icon-btn modal-close product-modal-close" data-close-product aria-label="Cerrar">×</button></div>
       <div class="product-detail product-detail-v4">
-        <div class="detail-gallery detail-gallery-scroll" ${productBackgroundAttrs(p,scope)}>
+        <div class="detail-gallery detail-gallery-scroll" ${productBackgroundAttrs(p,scope,group)}>
           <div class="detail-media-strip" id="detailMediaStrip">${media.map((im,i)=>`<div class="detail-media-slide${im.sizeGuide?' size-guide-slide':''}" data-slide="${i}">${im.sizeGuide?`${sizeGuideMarkup(im.sizeGuide)}<button type="button" class="btn btn-ghost" data-detail-size-guide>Ampliar guía</button>`:renderDetailMedia(im,p.name)}</div>`).join('')}</div>
           ${media.length>1?'<button type="button" class="product-photo-arrow previous" data-detail-media-step="-1" aria-label="Foto o video anterior">‹</button><button type="button" class="product-photo-arrow next" data-detail-media-step="1" aria-label="Foto o video siguiente">›</button>':''}
           <button class="favorite-btn detail-favorite ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button>
@@ -2366,7 +2509,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qs('#heroShopBtn')?.addEventListener('click', () => qs('#productos')?.scrollIntoView({behavior:'smooth'}));
     qs('#flyersLaunchBtn')?.addEventListener('click',()=>{const sec=qs('#flyersSection');if(sec){sec.classList.remove('hidden');sec.scrollIntoView({behavior:'smooth',block:'start'});}});
     qs('#closeFlyersBtn')?.addEventListener('click',()=>qs('#flyersSection')?.classList.add('hidden'));
-    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.homeCollection=null;state.storefrontCatalog=true;state.activeCategory='all';state.catalogType='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
+    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.homeCollection=null;state.storefrontCatalog=true;state.catalogType='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
     qs('#searchInput').addEventListener('input', e => { state.storefrontCatalog=true;state.query=e.target.value; renderCategories();renderProducts(); });
     if(qs('#year')) qs('#year').textContent = new Date().getFullYear();
     window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
@@ -2898,8 +3041,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     });
   }
   initBackToTop();
-  window.SalmosWholesale?.init({state,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts,quickCartButton,productCardImages,productBackgroundAttrs});
-  window.SalmosHome?.init({state,cfg,apiUrl,quickCartButton,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart,money,openProduct,editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();}});
+  window.SalmosWholesale?.init({state,storefrontPageBackground,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts,quickCartButton,productCardImages,productBackgroundAttrs});
+  window.SalmosHome?.init({state,storefrontPageBackground,cfg,apiUrl,quickCartButton,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart,money,openProduct,editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();}});
   window.SalmosStoreShipping?.init({
     state,api,apiUrl,authApi,currentIdToken,escapeHtml,signIn:signInGoogle,
     whatsapp:window.SalmosHome.whatsapp,dialog:window.SalmosHome.dialog
