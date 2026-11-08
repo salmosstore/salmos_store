@@ -44,30 +44,12 @@
     return sameType.find(chart => chart.id === catalog.sizeChartId) ||
       sameType.find(chart => fit(chart.fit) === cut) || null;
   }
-  const xml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
-    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;'
-  })[c]);
-  function image(chart) {
-    const rowHeight = 40;
-    const height = 174 + chart.rows.length * rowHeight;
-    const rows = chart.rows.map((row, index) => {
-      const y = 114 + rowHeight * index;
-      return `<rect x="24" y="${y}" width="432" height="${rowHeight}" fill="${index % 2 ? '#f8efdc' : '#fffaf0'}"/>
-        <text x="96" y="${y+26}" font-weight="bold">${xml(row.size)}</text>
-        <text x="240" y="${y+26}">${xml(row.width)} cm</text><text x="384" y="${y+26}">${xml(row.height)} cm</text>`;
-    }).join('');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="${height}" viewBox="0 0 480 ${height}">
-      <rect width="480" height="${height}" rx="18" fill="#f5e9d0"/><rect x="7" y="7" width="466" height="${height-14}" rx="13" fill="none" stroke="#9e751f"/>
-      <g font-family="Georgia, serif" text-anchor="middle" fill="#30220e" font-size="17">
-        <text x="240" y="36" font-size="24" font-weight="bold">SALMOS</text>
-        <text x="240" y="65" textLength="${Math.min(410, Math.max(75, chart.title.length * 10))}" lengthAdjust="spacingAndGlyphs" font-size="20">${xml(chart.title)}</text>
-        <rect x="24" y="82" width="432" height="32" rx="5" fill="#d7b86f"/>
-        <text x="96" y="104">Talle</text><text x="240" y="104">Ancho</text><text x="384" y="104">Largo</text>
-        ${rows}
-        <text x="240" y="${height-33}" font-size="14">Ancho de axila a axila · Largo desde el hombro</text>
-        <text x="240" y="${height-16}" font-size="13" font-style="italic">Medidas aproximadas</text>
-      </g></svg>`;
-    return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  function illustration(chart) {
+    const type = normalize(`${chart.productType} ${chart.title}`);
+    const special = /especial/.test(normalize(`${chart.materialClass} ${chart.title}`));
+    const oversize = /over/.test(normalize(`${chart.fit} ${chart.title}`));
+    const asset = /chomba|polo/.test(type) ? 'chomba' : oversize && !special ? 'oversize' : 'clasica';
+    return `/size-chart-images/${asset}.png`;
   }
-  window.SalmosSizeGuides = {defaults, matching, image};
+  window.SalmosSizeGuides = {defaults, matching, illustration};
 })();

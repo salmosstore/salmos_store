@@ -72,9 +72,13 @@ html body.storefront::before{background-image:linear-gradient(rgba(0,0,0,.12),rg
 /* Fotos grandes, encuadre cercano y accesos con el producto como protagonista. */
 .storefront .home-category-grid{grid-template-columns:minmax(0,1fr) 268px!important}
 .storefront .home-product{flex-basis:230px;border-radius:13px}
-.storefront .home-product[data-home-row] .home-product-photo{aspect-ratio:4/5.25}
-.storefront .home-product[data-home-row] .home-product-photo>img{object-fit:cover;object-position:center top;transform:scale(1.12);transform-origin:50% 12%}
-.storefront .home-product[data-home-row="kids"] .home-product-photo>img{transform:scale(1.08)}
+.storefront .home-product[data-home-row] .home-product-photo,
+.storefront .product-card[data-catalog-kind] .product-media{aspect-ratio:4/5.25}
+.storefront .home-product[data-home-row] .home-product-photo>img,
+.storefront .product-card[data-catalog-kind="garment"] .product-media>img:not([data-catalog-framing="object"]){object-fit:cover;object-position:center top;transform:scale(1.12);transform-origin:50% 12%}
+.storefront .home-product[data-home-row="kids"] .home-product-photo>img,
+.storefront .product-card[data-catalog-kind="garment"] .product-media>img[data-catalog-framing="kids"]{transform:scale(1.08)}
+.storefront .product-card[data-catalog-kind="object"] .product-media>img{object-fit:contain}
 .storefront .home-product-name{font-size:14px;min-height:38px}.storefront .home-product-info{padding:12px 12px 10px;gap:8px}.storefront .home-product-info strong{font-size:19px}.storefront .home-product-action{font-size:12px}
 .storefront .home-side-rail{position:static;gap:14px;padding-top:42px}
 .storefront .home-side-link{display:grid;grid-template-columns:minmax(0,1fr) 25px;gap:0;padding:0;min-height:0;align-items:center}
