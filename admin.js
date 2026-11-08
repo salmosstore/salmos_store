@@ -1508,7 +1508,55 @@
     const dialog=ensureAdminDialog('productionDraftRestoreDialog','Edición pendiente');dialog.classList.add('tiny-dialog');qs('.dialog-body',dialog).innerHTML=`<p>Hay un borrador de <strong>${escapeHtml(draft.fields.find(field=>field.id==='productionProductName')?.value||'este producto')}</strong> del ${escapeHtml(new Date(draft.savedAt).toLocaleString('es-AR'))}, con sus imágenes y posiciones.</p><div class="admin-actions"><button type="button" class="btn btn-primary" data-restore-production-draft>Restaurar edición</button><button type="button" class="btn btn-ghost" data-discard-production-draft>Descartar borrador</button><button type="button" class="btn btn-ghost" data-later-production-draft>Ahora no</button></div><p role="status"></p>`;
     const close=()=>{productionDraftOfferPending=false;dialog.close();};qs('[data-later-production-draft]',dialog).onclick=close;dialog.onclose=()=>productionDraftOfferPending=false;
     qs('[data-discard-production-draft]',dialog).onclick=async()=>{await window.SalmosProductionDrafts.remove(draft.key);close();};
-    qs('[data-restore-production-draft]',dialog).onclick=async event=>{event.currentTarget.disabled=true;productionDraftRestoring=true;try{for(const [key,value] of Object.entries(draft.state))state[key]=structuredClone(value);state.productionDraftKey=draft.key;state.mockupVisibleLayerIds=draft.visible?new Set(draft.visible):null;state.mediaItems=draft.media.map(item=>({...item,url:item.file?URL.createObjectURL(item.file):item.url,foreground_url:item.foregroundFile?URL.createObjectURL(item.foregroundFile):item.foreground_url}));state.mediaHostId='productionMediaOrderList';state.mockupPreferredBaseId=draft.activeBase;state.mockupPreferredBackgroundId=draft.activeBackground;const fields=()=>{for(const saved of draft.fields){const input=qs('#'+saved.id);if(!input||input.type==='file')continue;input.value=saved.value;if(input.type==='checkbox')input.checked=saved.checked;}};fields();renderProductionMaterialGallery();renderProductionSelectedMaterials();renderProductionDesignGallery();renderMockupStudioOptions();renderProductionSelectedDesigns();renderMediaManager('productionMediaOrderList');renderProductionVariantStock();fields();for(const value of draft.variants){const input=qs(`[data-production-variant-stock="${value.id}"]`);if(input)input.value=value.value;}state.productionBaselineFingerprint=draft.baseline;state.mockupHistory=[];state.mockupFuture=[];applyMockupZoom();await refreshMockupPreview();close();toast('Borrador restaurado. Podés seguir editando o guardar.','success');}catch(error){qs('[role=status]',dialog).textContent=error.message;}finally{productionDraftRestoring=false;event.currentTarget.disabled=false;}};dialog.showModal();
+    const restoreButton=qs('[data-restore-production-draft]',dialog);
+    restoreButton.onclick=async()=>{
+      restoreButton.disabled=true;
+      productionDraftRestoring=true;
+      try{
+        for(const [key,value] of Object.entries(draft.state))state[key]=structuredClone(value);
+        state.productionDraftKey=draft.key;
+        state.mockupVisibleLayerIds=draft.visible?new Set(draft.visible):null;
+        state.mediaItems=draft.media.map(item=>({...item,url:item.file?URL.createObjectURL(item.file):item.url,foreground_url:item.foregroundFile?URL.createObjectURL(item.foregroundFile):item.foreground_url}));
+        state.mediaHostId='productionMediaOrderList';
+        state.mockupPreferredBaseId=draft.activeBase;
+        state.mockupPreferredBackgroundId=draft.activeBackground;
+        const restoreFields=()=>{
+          for(const saved of draft.fields){
+            const input=qs('#'+saved.id);
+            if(!input||input.type==='file')continue;
+            input.value=saved.value;
+            if(input.type==='checkbox')input.checked=saved.checked;
+          }
+        };
+        restoreFields();
+        renderProductionMaterialGallery();
+        renderProductionSelectedMaterials();
+        renderProductionDesignGallery();
+        renderMockupStudioOptions();
+        renderProductionSelectedDesigns();
+        renderMediaManager('productionMediaOrderList');
+        renderProductionVariantStock();
+        restoreFields();
+        renderProductionAudiences();
+        for(const value of draft.variants){
+          const input=qs(`[data-production-variant-stock="${value.id}"]`);
+          if(input)input.value=value.value;
+        }
+        state.productionBaselineFingerprint=draft.baseline;
+        state.mockupHistory=[];
+        state.mockupFuture=[];
+        applyMockupZoom();
+        await refreshMockupPreview();
+        close();
+        toast('Borrador restaurado. Podés seguir editando o guardar.','success');
+      }catch(error){
+        qs('[role=status]',dialog).textContent=error.message;
+      }finally{
+        productionDraftRestoring=false;
+        restoreButton.disabled=false;
+      }
+    };
+    dialog.showModal();
   }
   function productionEditorFingerprint(){
     snapshotActiveMockupView();
