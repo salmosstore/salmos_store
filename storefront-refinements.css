@@ -235,3 +235,13 @@ html body.storefront::before{background-image:linear-gradient(rgba(0,0,0,.12),rg
  .storefront .home-side-link:not(:has(.home-product-photo)){min-height:0;grid-template-rows:1fr}
  .storefront .home-side-rail{align-items:stretch;gap:8px}
 }
+
+.storefront-page-offer-actions{display:flex;flex-wrap:wrap;gap:7px}
+.storefront .home-side-card:has(.quick-cart-button) .home-side-link{grid-template-columns:minmax(0,1fr) 44px}
+.storefront .home-side-card:has(.quick-cart-button) .home-side-link>span:not(.home-product-photo){min-height:47px;display:flex;align-items:center;padding-inline-end:0}
+.storefront .home-side-card .quick-cart-button{width:32px;height:32px;right:7px;bottom:7px}
+@media(max-width:760px){
+ .storefront .home-side-card:has(.quick-cart-button) .home-side-link{grid-template-columns:minmax(0,1fr) 38px}
+ .storefront .home-side-card:has(.quick-cart-button) .home-side-link>span:not(.home-product-photo){min-height:41px}
+ .storefront .home-side-card .quick-cart-button{width:28px;height:28px;right:5px;bottom:6px}
+}

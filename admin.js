@@ -286,7 +286,7 @@
   }
   function closeProductDialog(){const dialog=qs('#productDialog');if(dialog?.open)dialog.close();}
 
-  const titles={dashboard:'DASH',products:'Productos',orders:'Órdenes',customOrders:'Pedidos',clients:'Clientes',purchases:'Compras',production:'Producción',stock:'Stock',coupons:'Cupones',categories:'Categorías',expenses:'Caja',flyers:'Flyers',designs:'Diseños',settings:'Configuraciones',shipping:'Envíos',promos:'Promos'};
+  const titles={dashboard:'DASH',products:'Productos',orders:'Órdenes',customOrders:'Pedidos',clients:'Clientes',purchases:'Compras',production:'Producción',stock:'Stock',coupons:'Cupones',categories:'Categorías',expenses:'Caja',flyers:'Flyers',webProjects:'Páginas web',designs:'Diseños',settings:'Configuraciones',shipping:'Envíos',promos:'Promos'};
 
   function clientDirectory(){return window.SalmosClients.init({api,apiUrl,money,escapeHtml,toast,navigate});}
 
@@ -295,7 +295,7 @@
     if(view==='production')state.productionSection='jobs';syncAdminNavigation();qs('#adminSidebar').classList.remove('open');
     qs('#adminContent').innerHTML='<div class="empty-state"><strong>Cargando...</strong></div>';
     try{
-      const renderers={dashboard:renderDashboard,products:renderProducts,orders:renderOrders,customOrders:renderCustomOrders,clients:()=>clientDirectory().render(),purchases:renderPurchases,production:renderProduction,coupons:renderCoupons,categories:renderCategories,expenses:renderExpenses,sales:renderExpenses,flyers:renderFlyers,designs:renderDesigns,settings:renderSettings,shipping:renderSettings,promos:renderSettings,storefront:renderStorefrontSettings,photos:async()=>{await loadMockupAssets();renderProductionPhotosPage();}};
+      const renderers={dashboard:renderDashboard,products:renderProducts,orders:renderOrders,customOrders:renderCustomOrders,clients:()=>clientDirectory().render(),purchases:renderPurchases,production:renderProduction,coupons:renderCoupons,categories:renderCategories,expenses:renderExpenses,sales:renderExpenses,flyers:renderFlyers,webProjects:()=>window.SalmosWebProjectsAdmin.render(qs('#adminContent'),{api,apiUrl,toast}),designs:renderDesigns,settings:renderSettings,shipping:renderSettings,promos:renderSettings,storefront:renderStorefrontSettings,photos:async()=>{await loadMockupAssets();renderProductionPhotosPage();}};
       if(renderers[view])await renderers[view]();syncAdminNavigation();applyAdminListState();prepareProductionTables();
     }catch(error){renderAccessError(error)}
   }

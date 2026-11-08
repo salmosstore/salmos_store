@@ -28,6 +28,7 @@
 <link rel="stylesheet" href="disclosure-icons.css?v=39.0"><script src="disclosure-icons.js?v=39.0" defer></script>
 <link rel="stylesheet" href="shipping-requests.css?v=40.0">
   <link rel="stylesheet" href="storefront-backgrounds.css?v=45.0">
+  <link rel="stylesheet" href="web-projects.css?v=46.0">
 </head>
 <body>
   <div class="admin-layout">
@@ -38,6 +39,7 @@
         <button class="admin-nav-btn" data-view="clients" aria-label="Clientes" title="Clientes"><i class="fa-solid fa-user-tag" aria-hidden="true"></i><span>Clientes</span></button>
         <button class="admin-nav-btn" data-view="expenses" aria-label="Caja" title="Caja"><i class="fa-solid fa-landmark" aria-hidden="true"></i><span>Caja</span></button>
         <button class="admin-nav-btn" data-view="flyers" aria-label="Flyers" title="Flyers"><i class="fa-solid fa-image" aria-hidden="true"></i><span>Flyers</span></button>
+        <button class="admin-nav-btn" data-view="webProjects" aria-label="Páginas web" title="Páginas web"><i class="fa-solid fa-globe" aria-hidden="true"></i><span>Páginas web</span></button>
         <button class="admin-nav-btn" data-view="settings" aria-label="Configuraciones" title="Configuraciones">⚙ <span>Configuraciones</span></button>
       </nav>
       <figure class="admin-daily-passage" id="adminDailyPassage" aria-label="Pasaje del día" hidden>
@@ -285,8 +287,10 @@
   <script src="admin-promotions.js?v=38.0" defer></script>
   <script src="shipping-request-view.js?v=40.0" defer></script>
   <script src="admin-shipping-request.js?v=40.0" defer></script>
-  <script src="admin.js?v=45.0&amp;mkt=26.0" defer></script>
-  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=45.0',{updateViaCache:'none'}).catch(()=>{}));</script>
+  <script src="web-projects-shared.js?v=46.0" defer></script>
+  <script src="web-projects-admin.js?v=46.0" defer></script>
+  <script src="admin.js?v=46.0&amp;mkt=26.0" defer></script>
+  <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=46.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
   <dialog class="admin-dialog" id="productionMeasureDialog">
