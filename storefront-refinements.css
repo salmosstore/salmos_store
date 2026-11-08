@@ -236,7 +236,26 @@ html body.storefront::before{background-image:linear-gradient(rgba(0,0,0,.12),rg
  .storefront .home-side-rail{align-items:stretch;gap:8px}
 }
 
-.storefront-page-offer-actions{display:flex;flex-wrap:wrap;gap:7px}
+.home-footer + .storefront-page-offer {
+  margin-top: 0;
+}
+.storefront-page-offer-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.storefront-page-offer-actions > .btn {
+  min-width: 0;
+  padding: 8px 10px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+@media (max-width: 650px) {
+  .storefront-page-offer-actions {
+    width: 100%;
+  }
+}
 .storefront .home-side-card:has(.quick-cart-button) .home-side-link{grid-template-columns:minmax(0,1fr) 44px}
 .storefront .home-side-card:has(.quick-cart-button) .home-side-link>span:not(.home-product-photo){min-height:47px;display:flex;align-items:center;padding-inline-end:0}
 .storefront .home-side-card .quick-cart-button{width:32px;height:32px;right:7px;bottom:7px}
