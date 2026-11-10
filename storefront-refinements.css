@@ -239,6 +239,30 @@ html body.storefront::before{background-image:linear-gradient(rgba(0,0,0,.12),rg
 .home-footer + .storefront-page-offer {
   margin-top: 0;
 }
+.fa-solid.fa-globe {
+  --globe-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cellipse cx='12' cy='12' rx='4' ry='10'/%3E%3Cpath d='M3 8h18M3 16h18'/%3E%3C/svg%3E");
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: var(--globe-icon) center / contain no-repeat;
+  mask: var(--globe-icon) center / contain no-repeat;
+}
+.storefront-page-offer-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.storefront-page-offer-copy > .fa-globe {
+  width: 22px;
+  height: 22px;
+  color: var(--gold-2);
+}
+.storefront-page-offer-actions .storefront-page-offer-start {
+  color: var(--gold-2);
+}
 .storefront-page-offer-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

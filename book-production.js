@@ -32,43 +32,88 @@
     b.covers=Array.isArray(value.covers)?value.covers.map(row=>({...row})):[{materialId:Number(b.coverId)||0,quantity:2,unit:'final',printFaces:b.printCovers?1:0,color:true},...(b.coverLayers||[]).map(row=>({...row,unit:'source'}))];
     b.version=2;b.coverLayers=[];return b;
   }
+  function materialUsageCost(material,units){
+    const unitCents=Number(material?.average_cost_cents)||0;
+    return unitCents>0?units*unitCents:null;
+  }
   function calculate(book,materials,quantity=1,stockKind='physical',reserved=[]){
     const b=normalizeBook(book),count=Math.max(1,Math.floor(Number(quantity)||1)),missing=[],warnings=[],needs=new Map(),colorRate=Math.max(0,Math.round(Number(b.colorRateCents)||0)),bwRate=Math.max(0,Math.round(Number(b.bwRateCents)||0));
     const find=id=>materials.find(m=>Number(m.id)===Number(id));
     const add=(m,qty,label)=>{if(!m){missing.push(`Elegí ${label}.`);return;}if(!(Number(m.average_cost_cents)>0))missing.push(`Cargá el costo de ${m.name} en Compras.`);needs.set(Number(m.id),(needs.get(Number(m.id))||0)+qty);};
     const usage=(row,cover=false)=>{
       const material=find(row.materialId),meta=materialInfo(material),amount=Number(row.quantity),cut=yieldPerSheet(meta.format,b.format,meta.widthMm,meta.heightMm),label=cover?'el material de las tapas':'el papel interior';
-      if(!(amount>0)||!Number.isFinite(amount)||row.unit!=='source'&&!Number.isSafeInteger(amount))missing.push(`Revisá la cantidad de ${cover?'las tapas':'papel'}.`);
+      const validQuantity=amount>0&&Number.isFinite(amount)&&(row.unit==='source'||Number.isSafeInteger(amount));
+      if(!validQuantity)missing.push(`Revisá la cantidad de ${cover?'las tapas':'papel'}.`);
       if(!cut)missing.push(`El formato de ${cover?'las tapas':'ese papel'} es menor que el del libro.`);
-      const sheets=amount>0&&cut?(row.unit==='source'?amount:Math.ceil(amount/cut)):0,leaves=row.unit==='source'?amount*cut:Math.max(0,amount)||0;
+      const sheets=validQuantity&&cut?(row.unit==='source'?amount:Math.ceil(amount/cut)):0;
+      const leaves=validQuantity?(row.unit==='source'?amount*cut:amount):0;
       add(material,sheets,label);
-      let faces=cover?sheets*Math.max(0,Math.min(2,Number(row.printFaces)||0)):(row.printMode==='none'?0:sheets*(row.duplex?2:1));
-      if(!cover&&row.duplex&&faces>0&&meta.faces==='simple'&&material)missing.push(`El papel ${material.name} está cargado como simple faz.`);
+      const faces=cover?sheets*Math.max(0,Math.min(2,Number(row.printFaces)||0)):(row.printMode==='none'?0:sheets*(row.duplex?2:1));
+      const incompatiblePrint=Boolean(!cover&&row.duplex&&faces>0&&meta.faces==='simple'&&material);
+      if(incompatiblePrint)missing.push(`El papel ${material.name} está cargado como simple faz.`);
       const colorFaces=cover?(row.color===false?0:faces):row.printMode==='bw'?0:row.printMode==='mixed'?Math.max(0,Math.min(faces,Math.floor(Number(row.colorFaces)||0))):faces,bwFaces=faces-colorFaces;
       const inkCents=Math.round((colorFaces*colorRate+bwFaces*bwRate)*formatFactor(meta.format,meta.widthMm,meta.heightMm));
-      return {...row,materialName:material?materialLabel(material):'',format:meta.format,sheets,leaves,faces,colorFaces,bwFaces,inkCents,equivalentLeaves:leaves*meta.gsm/70};
+      return {...row,materialName:material?materialLabel(material):'',format:meta.format,sheets,leaves,faces,colorFaces,bwFaces,inkCents,equivalentLeaves:leaves*meta.gsm/70,
+        materialCents:sheets>0?materialUsageCost(material,sheets):null,ready:Boolean(material&&validQuantity&&cut&&!incompatiblePrint)};
     };
     if(!b.papers.length)missing.push('Agregá al menos un papel interior.');
     const paperRows=b.papers.map(row=>usage(row)),coverRows=b.useCovers?b.covers.map(row=>usage(row,true)):[];
     if(b.useCovers&&!b.covers.length)missing.push('Agregá el material de las tapas o desmarcá «Con tapas».');
     const sum=(rows,key)=>rows.reduce((total,row)=>total+(Number(row[key])||0),0),leaves=sum(paperRows,'leaves'),sheets=sum(paperRows,'sheets'),faces=sum(paperRows,'faces'),colorFaces=sum(paperRows,'colorFaces'),bwFaces=sum(paperRows,'bwFaces'),coverSheets=sum(coverRows,'sheets'),interiorInk=sum(paperRows,'inkCents'),coverInk=sum(coverRows,'inkCents'),inkCents=interiorInk+coverInk,equivalentLeaves=sum([...paperRows,...coverRows],'equivalentLeaves');
-    const binding=find(b.bindingId);if(b.binding!=='none')add(binding,b.binding==='staples'?Math.max(1,Math.floor(Number(b.staples)||2)):1,b.binding==='staples'?'las grampas':'el espiral / gancho');
+    const binding=find(b.bindingId),stapled=b.binding==='staples',bindingQuantity=stapled?Math.max(1,Math.floor(Number(b.staples)||2)):1;
+    const bindingRow=b.binding==='none'?null:{materialName:binding?(stapled?materialLabel(binding):`Espiral / gancho · ${materialLabel(binding)}`):'',quantity:bindingQuantity,materialCents:materialUsageCost(binding,bindingQuantity),ready:Boolean(binding)};
+    if(bindingRow)add(binding,bindingQuantity,stapled?'las grampas':'el espiral / gancho');
     if(b.binding==='spiral'&&binding&&equivalentLeaves>materialInfo(binding).capacity)warnings.push(`Capacidad orientativa del gancho: ${materialInfo(binding).capacity} hojas de 70 g. Este armado equivale aproximadamente a ${Math.ceil(equivalentLeaves)} hojas, incluidas las tapas.`);
     let materialCents=0;const recipeMaterials=[];
     for(const [id,perUnit] of needs){const material=find(id);materialCents+=perUnit*(Number(material.average_cost_cents)||0);recipeMaterials.push({materialId:id,quantity:perUnit});const available=Number(material.stock_qty||0)+Number(reserved.find(row=>Number(row.material_id)===id)?.quantity_used||0);if(stockKind==='physical'&&available+1e-8<perUnit*count)missing.push(`No alcanza ${material.name}: necesitás ${perUnit*count} y hay ${available}.`);}
     b.leaves=leaves;b.paperId=Number(b.papers[0]?.materialId)||0;b.coverId=Number(b.covers[0]?.materialId)||0;
-    return {book:b,paperRows,coverRows,totalLeaves:leaves,sheets,faces,colorFaces,bwFaces,coverSheets,equivalentLeaves,inkCents,interiorInk,coverInk,materialCents:Math.round(materialCents),unitCents:Math.round(materialCents+inkCents),recipeMaterials,missing:[...new Set(missing)],warnings,quantity:count,paperFormat:paperRows[0]?.format||'A4'};
+    return {book:b,paperRows,coverRows,bindingRow,totalLeaves:leaves,sheets,faces,colorFaces,bwFaces,coverSheets,equivalentLeaves,inkCents,interiorInk,coverInk,materialCents:Math.round(materialCents),unitCents:Math.round(materialCents+inkCents),recipeMaterials,missing:[...new Set(missing)],warnings,quantity:count,paperFormat:paperRows[0]?.format||'A4'};
   }
   function materialLabel(item){const type=item.material_type||item.materialType,meta=item.bookMaterial||materialInfo(item);if(type===SPIRAL)return `${meta.capacity} hojas de 70 g`;if(type===STAPLE)return 'Grampas';if([PAPER,COVER].includes(type))return [meta.kind,`${meta.gsm} g`,window.SalmosCatalog?.label('paperFormats',meta.format)||meta.format,meta.finish].filter(Boolean).join(' · ');return item.name||'';}
   function field(label,key,value,type='number',extra=''){return `<label class="field">${label}<input class="input" data-book-field="${key}" type="${type}" value="${escape(value)}" ${extra}></label>`;}
   function select(label,key,value,options){const catalog={kind:'bookKinds',format:'paperFormats',binding:'bindingKinds'}[key];return `<label class="field">${label}<select class="select" data-book-field="${key}" ${catalog?`data-managed-list="${catalog}"`:''}>${catalog&&window.SalmosCatalog?window.SalmosCatalog.options(catalog,value,options):options.map(([id,name])=>`<option value="${escape(id)}" ${String(value)===String(id)?'selected':''}>${escape(name)}</option>`).join('')}</select></label>`;}
   const $=selector=>document.querySelector(selector);
+  const confirmedRows=new WeakSet();
+  const countLabel=new Intl.NumberFormat('es-AR',{maximumFractionDigits:3});
   function current(){const saved=context.state.productionBook??defaults(context.state.purchaseOptions.bookInk);if(!Array.isArray(saved.papers)||!Array.isArray(saved.covers))context.state.productionBook=normalizeBook(saved);else context.state.productionBook=saved;return context.state.productionBook;}
   function plan(){return calculate(current(),context.state.materials,context.virtual()?1:Number($('#productionQuantity')?.value)||1,$('#productionStockKind')?.value,context.state.productionEditingJob?.materials);}
-  function refreshSummary(){
+  function usageLabel(row,group){
+    const name=row?.materialName||'Material pendiente';
+    if(!row)return name;
+    if(group==='binding')return `${name} · ${countLabel.format(row.quantity)} u`;
+    return `${name} · ${countLabel.format(row.sheets)} ${row.sheets===1?'hoja':'hojas'} ${row.format} · ${countLabel.format(row.faces)} ${row.faces===1?'cara impresa':'caras impresas'}`;
+  }
+  function usageCostLabel(row,quantity,compact=false){
+    if(row?.materialCents==null)return 'Costo pendiente';
+    const perCopy=context.money(Math.round(row.materialCents));
+    if(quantity===1)return `${perCopy} / ej.`;
+    const total=`${context.money(Math.round(row.materialCents*quantity))} total`;
+    return compact?total:`${total} · ${perCopy} / ej.`;
+  }
+  function refreshSummary(p){
     if(!context||!isBookType($('#productionMaterialType')?.value))return;
-    const p=plan();context.state.productionMaterialsSelected=p.recipeMaterials;
-    const el=$('#bookUsageSummary');if(el)el.innerHTML=`<strong>Por ejemplar:</strong> ${p.totalLeaves} hojas interiores · ${p.sheets} hojas de compra para el interior${p.book.useCovers?` · ${p.coverSheets} hoja(s) de compra para las tapas`:''}.<ul>${[...p.paperRows,...p.coverRows].map(row=>`<li>${escape(row.materialName||'Material pendiente')} · ${row.sheets} hoja(s) ${escape(row.format)} · ${row.faces} cara(s) impresas</li>`).join('')}</ul><strong>Tinta estimada:</strong> ${context.money(p.inkCents)}${p.warnings.length?`<p class="book-capacity-note">${p.warnings.map(escape).join('<br>')}</p>`:''}`;
+    p??=plan();context.state.productionMaterialsSelected=p.recipeMaterials;
+    const groups={papers:p.paperRows,covers:p.coverRows,binding:p.bindingRow?[p.bindingRow]:[]};
+    for(const card of $('#bookProductionPanel')?.querySelectorAll('[data-book-material-group]')||[]){
+      const group=card.dataset.bookMaterialGroup,row=groups[group][Number(card.dataset.bookMaterialIndex)];
+      const summary=card.querySelector('[data-book-row-summary]'),ok=card.querySelector('[data-book-confirm-row]');
+      card.querySelector('[data-book-row-cost]').textContent=usageCostLabel(row,p.quantity,Boolean(summary));
+      if(summary)summary.title=summary.textContent=usageLabel(row,group);
+      if(ok)ok.disabled=!row?.ready;
+    }
+    const el=$('#bookUsageSummary');if(el)el.innerHTML=`<strong>Por ejemplar:</strong> ${countLabel.format(p.totalLeaves)} hojas interiores · ${countLabel.format(p.sheets)} hojas de compra para el interior${p.book.useCovers?` · ${countLabel.format(p.coverSheets)} hoja(s) de compra para las tapas`:''}.<ul>${Object.entries(groups).flatMap(([group,rows])=>rows.map(row=>`<li>${escape(usageLabel(row,group))} · <strong>${escape(usageCostLabel(row,p.quantity))}</strong></li>`)).join('')}</ul><strong>Tinta estimada:</strong> ${context.money(p.inkCents)}${p.warnings.length?`<p class="book-capacity-note">${p.warnings.map(escape).join('<br>')}</p>`:''}`;
+  }
+  function materialRow(group,index,item,title,fields){
+    const attrs=`data-book-material-group="${group}" data-book-material-index="${index}"`;
+    const cost='<strong class="book-row-cost" data-book-row-cost></strong>',label=escape(title);
+    if(confirmedRows.has(item))return `<div class="book-material-row is-confirmed" ${attrs}>
+      <div class="book-row-compact"><span class="book-row-compact-info" data-book-row-summary></span>${cost}<button type="button" class="icon-btn" data-book-edit-row aria-label="Editar ${label}" title="Editar ${label}"><i class="fa-solid fa-pen" aria-hidden="true"></i></button></div>
+    </div>`;
+    const remove=group==='binding'?'':`<button type="button" class="icon-btn" data-book-remove-row="${group}" data-book-row-index="${index}" aria-label="Quitar ${label}" title="Quitar ${label}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>`;
+    return `<div class="book-material-row" ${attrs}>
+      <div class="book-row-heading"><strong>${label}</strong><div class="book-row-actions">${cost}<button type="button" class="btn btn-primary" data-book-confirm-row aria-label="OK · ${label}" disabled>OK</button>${remove}</div></div>
+      ${fields}
+    </div>`;
   }
   function render(){
     if(!context)return;
@@ -79,11 +124,39 @@
     const kind=current().kind,variantMarkup=document.createElement('template');variantMarkup.innerHTML=select('Variante','kind',kind,BOOK_VARIANTS.map(value=>[value,value]));variant.replaceChildren(...variantMarkup.content.firstElementChild.childNodes);
 
     const b=current(),materials=context.state.materials,options=types=>[['','Elegir…'],...materials.filter(m=>types.includes(m.material_type)).map(m=>[m.id,`${materialLabel(m)} · ${context.money(m.average_cost_cents)} / u`])];
-    const rowField=(group,index,key,label,value,type='number',extra='')=>`<label class="field">${label}<input class="input" type="${type}" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="${key}" value="${escape(value)}" ${extra}></label>`;
+    const rowField=(group,index,key,label,value,attrs='')=>`<label class="field">${label}<input class="input" type="number" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="${key}" value="${escape(value)}" aria-label="${escape(label)}" ${attrs}></label>`;
     const rowSelect=(group,index,key,label,value,choices)=>`<label class="field">${label}<select class="select" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="${key}">${choices.map(([id,name])=>`<option value="${escape(id)}" ${String(id)===String(value)?'selected':''}>${escape(name)}</option>`).join('')}</select></label>`;
-    const rows=(group,cover=false)=>b[group].map((row,index)=>{let choices=options(cover?[COVER,PAPER]:[PAPER]);if(Number(row.materialId)&&!choices.some(([id])=>Number(id)===Number(row.materialId))){const old=materials.find(m=>Number(m.id)===Number(row.materialId));if(old)choices.push([old.id,materialLabel(old)]);}
-      return `<div class="book-material-row" data-book-material-group="${group}"><div class="book-row-heading"><strong>${cover?'Tapas':'Papel interior'} ${index+1}</strong><button type="button" class="icon-btn" data-book-remove-row="${group}" data-book-row-index="${index}" aria-label="Quitar ${cover?'material de tapas':'papel'} ${index+1}">×</button></div><div class="book-row-fields">${rowSelect(group,index,'materialId','Material',row.materialId,choices)}${rowField(group,index,'quantity','Cantidad por ejemplar',row.quantity,'number','min=".001" step="1"')}${rowSelect(group,index,'unit','Cantidad expresada en',row.unit,[['final',cover?'Piezas al tamaño final':'Hojas al tamaño final'],['source','Hojas / planchas compradas']])}${cover?rowSelect(group,index,'printFaces','Caras impresas por hoja',row.printFaces,[[0,'Sin imprimir'],[1,'Una cara'],[2,'Dos caras']])+rowSelect(group,index,'color','Tinta',row.color===false?'bw':'color',[['color','Color'],['bw','Blanco y negro']]):rowSelect(group,index,'printMode','Impresión',row.printMode,[['color','Color'],['bw','Blanco y negro'],['mixed','Color y blanco y negro'],['none','Sin imprimir']])+`<label class="book-check"><input type="checkbox" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="duplex" ${row.duplex?'checked':''}>Doble faz</label>`+(row.printMode==='mixed'?rowField(group,index,'colorFaces','Caras a color (hoja de compra)',row.colorFaces??0,'number','min="0" step="1"'):'')}</div></div>`;}).join('');
-    host.innerHTML=`<div class="book-section-heading"><h3>Libro / cuaderno</h3><button type="button" class="btn btn-ghost" data-book-purchase="${PAPER}">Comprar materiales</button></div><div class="book-fields-grid">${select('Formato final','format',b.format,Object.keys(FORMATS).map(x=>[x,x]))}</div><div class="book-section-heading"><h4>Papeles interiores</h4><button type="button" class="btn btn-ghost" data-book-add-row="papers">+ Papel</button></div>${rows('papers')}<div class="book-section-heading"><label class="book-check"><input type="checkbox" data-book-field="useCovers" ${b.useCovers?'checked':''}>Con tapas</label>${b.useCovers?'<button type="button" class="btn btn-ghost" data-book-add-row="covers">+ Tapas</button>':''}</div>${b.useCovers?rows('covers',true):''}<div class="book-fields-grid">${select('Encuadernado','binding',b.binding,[['spiral','Espiral / gancho'],['staples','Grampas'],['none','Sin encuadernar']])}${b.binding!=='none'?select(b.binding==='staples'?'Grampas':'Espiral y capacidad','bindingId',b.bindingId,options(b.binding==='staples'?[STAPLE]:[SPIRAL])):''}${b.binding==='staples'?field('Grampas por ejemplar','staples',b.staples,'number','min="1" step="1"'):''}${b.binding!=='none'?`<button class="btn btn-ghost book-add-material" type="button" data-book-purchase="${b.binding==='staples'?STAPLE:SPIRAL}">Comprar ${b.binding==='staples'?'grampas':'espirales'}</button>`:''}</div><details class="book-ink-panel" open><summary>Tintas · estimación editable</summary><p>Precio por cada cara A4 impresa.</p><div class="book-fields-grid">${field('Color por cara A4 ($)','colorRateCents',(b.colorRateCents/100).toFixed(2),'number','min="0" step=".01"')}${field('Blanco y negro por cara A4 ($)','bwRateCents',(b.bwRateCents/100).toFixed(2),'number','min="0" step=".01"')}</div><button type="button" class="btn btn-ghost" data-book-save-rates>Usar estos valores en próximos libros</button></details><div class="book-usage-summary" id="bookUsageSummary" aria-live="polite"></div>`;
+    const rows=(group,cover=false)=>b[group].map((row,index)=>{
+      const title=`${cover?'Tapas':'Papel interior'} ${index+1}`;
+      if(confirmedRows.has(row))return materialRow(group,index,row,title,'');
+      const choices=options(cover?[COVER,PAPER]:[PAPER]);
+      if(Number(row.materialId)&&!choices.some(([id])=>Number(id)===Number(row.materialId))){
+        const old=materials.find(m=>Number(m.id)===Number(row.materialId));
+        if(old)choices.push([old.id,materialLabel(old)]);
+      }
+      const numberAttrs=row.unit==='source'?'min=".001" step="any" inputmode="decimal"':'min="1" step="1" inputmode="numeric"';
+      const ink=cover
+        ?rowSelect(group,index,'printFaces','Caras impresas por hoja',row.printFaces,[[0,'Sin imprimir'],[1,'Una cara'],[2,'Dos caras']])+rowSelect(group,index,'color','Tinta',row.color===false?'bw':'color',[['color','Color'],['bw','Blanco y negro']])
+        :rowSelect(group,index,'printMode','Impresión',row.printMode,[['color','Color'],['bw','Blanco y negro'],['mixed','Color y blanco y negro'],['none','Sin imprimir']])+`<label class="book-check"><input type="checkbox" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="duplex" ${row.duplex?'checked':''}>Doble faz</label>`+(row.printMode==='mixed'?rowField(group,index,'colorFaces','Caras a color (hoja de compra)',row.colorFaces??0,'min="0" step="1"'):'');
+      const fields=`<div class="book-row-fields">
+        ${rowSelect(group,index,'materialId','Material',row.materialId,choices)}
+        ${rowField(group,index,'quantity','Cantidad por ejemplar',row.quantity,numberAttrs)}
+        ${rowSelect(group,index,'unit','Cantidad expresada en',row.unit,[['final',cover?'Piezas al tamaño final':'Hojas al tamaño final'],['source','Hojas / planchas compradas']])}
+        ${ink}
+      </div>`;
+      return materialRow(group,index,row,title,fields);
+    }).join('');
+    const stapled=b.binding==='staples';
+    const bindingOptions=select('Encuadernado','binding',b.binding,[['spiral','Espiral / gancho'],['staples','Grampas'],['none','Sin encuadernar']]);
+    const bindingFields=`<div class="book-fields-grid">${bindingOptions}${b.binding!=='none'?`${select(stapled?'Grampas':'Espiral y capacidad','bindingId',b.bindingId,options(stapled?[STAPLE]:[SPIRAL]))}${stapled?field('Grampas por ejemplar','staples',b.staples,'number','min="1" step="1"'):''}<button class="btn btn-ghost book-add-material" type="button" data-book-purchase="${stapled?STAPLE:SPIRAL}">Comprar ${stapled?'grampas':'espirales'}</button>`:''}</div>`;
+    const binding=b.binding==='none'?bindingFields:materialRow('binding',0,b,'Encuadernado',bindingFields);
+    host.innerHTML=`<div class="book-section-heading"><h3>Libro / cuaderno</h3><button type="button" class="btn btn-ghost" data-book-purchase="${PAPER}">Comprar materiales</button></div>
+      <div class="book-fields-grid">${select('Formato final','format',b.format,Object.keys(FORMATS).map(x=>[x,x]))}</div>
+      <div class="book-section-heading"><h4>Papeles interiores</h4><button type="button" class="btn btn-ghost" data-book-add-row="papers">+ Papel</button></div>${rows('papers')}
+      <div class="book-section-heading"><label class="book-check"><input type="checkbox" data-book-field="useCovers" ${b.useCovers?'checked':''}>Con tapas</label>${b.useCovers?'<button type="button" class="btn btn-ghost" data-book-add-row="covers">+ Tapas</button>':''}</div>${b.useCovers?rows('covers',true):''}
+      ${binding}
+      <details class="book-ink-panel" open><summary>Tintas · estimación editable</summary><p>Precio por cada cara A4 impresa.</p><div class="book-fields-grid">${field('Color por cara A4 ($)','colorRateCents',(b.colorRateCents/100).toFixed(2),'number','min="0" step=".01"')}${field('Blanco y negro por cara A4 ($)','bwRateCents',(b.bwRateCents/100).toFixed(2),'number','min="0" step=".01"')}</div><button type="button" class="btn btn-ghost" data-book-save-rates>Usar estos valores en próximos libros</button></details>
+      <div class="book-usage-summary" id="bookUsageSummary" aria-live="polite"></div>`;
     refreshSummary();
   }
   function load(product){
@@ -123,6 +196,16 @@
       const material=event.target.closest('[data-book-material]');if(material){const item=context.state.purchaseItems[Number(material.dataset.bookRow)];if(item)syncPurchase(item,material.closest('[data-purchase-row]'));}
     });
     document.addEventListener('click',async event=>{
+      const toggle=event.target.closest('[data-book-confirm-row],[data-book-edit-row]');
+      if(toggle){
+        const card=toggle.closest('[data-book-material-group]'),group=card.dataset.bookMaterialGroup,index=Number(card.dataset.bookMaterialIndex),book=current();
+        const row=group==='binding'?book:book[group][index],confirming=toggle.hasAttribute('data-book-confirm-row');
+        if(confirming)confirmedRows.add(row);else confirmedRows.delete(row);
+        render();
+        const next=$(`[data-book-material-group="${group}"][data-book-material-index="${index}"]`);
+        next?.querySelector(confirming?'[data-book-edit-row]':'select')?.focus({preventScroll:true});
+        return;
+      }
       const add=event.target.closest('[data-book-add-row]');if(add){const group=add.dataset.bookAddRow;current()[group].push(group==='papers'?{materialId:0,quantity:1,unit:'source',duplex:false,printMode:'none',colorFaces:0}:{materialId:0,quantity:2,unit:'final',printFaces:0,color:true});render();context.recalculate();return;}
       const remove=event.target.closest('[data-book-remove-row]');if(remove){current()[remove.dataset.bookRemoveRow].splice(Number(remove.dataset.bookRowIndex),1);render();context.recalculate();return;}
       const purchase=event.target.closest('[data-book-purchase]');if(purchase){event.preventDefault();try{await context.openPurchase(purchase.dataset.bookPurchase);}catch(error){context.toast(error.message,'error');}}

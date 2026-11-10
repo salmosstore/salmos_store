@@ -41,6 +41,34 @@ body #productionDialog[data-book="true"] #productionBuilderCost .production-cost
 @media(max-width:600px){body #productionDialog .production-top-grid,body #productionDialog[data-book="true"] .production-top-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.book-fields-grid,.book-purchase-fields{grid-template-columns:1fr}.book-material-grid{grid-template-columns:1fr auto}.book-production-panel{padding:12px}body .purchase-item-row.is-book-material{grid-template-columns:1fr!important}.book-section-heading .btn{max-width:100%;white-space:normal}}
 .book-material-row{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 14px;background:var(--surface-2)}
 .book-row-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}.book-row-heading .icon-btn{width:32px;height:32px;min-height:32px}
+.book-row-actions,.book-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.book-row-actions { justify-content: flex-end; flex-wrap: wrap; }
+.book-row-actions .btn { min-height: 32px; padding: 4px 12px; }
+.book-row-actions .icon-btn,.book-row-compact .icon-btn { flex: none; }
+.book-row-cost { color: var(--gold-2); font-size: .85rem; }
+.book-material-row.is-confirmed {
+  padding: 6px 10px;
+  border-color: var(--gold);
+  border-inline-start-width: 3px;
+  background: color-mix(in srgb,var(--gold) 9%,var(--surface-2));
+}
+.book-row-compact-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-row-compact .book-row-cost { flex: none; white-space: nowrap; }
+.book-material-row > .book-fields-grid { margin: 0; }
+@media (max-width: 550px) {
+  .book-row-heading { flex-wrap: wrap; }
+  .book-row-actions { margin-inline-start: auto; }
+}
 .book-row-fields{display:grid;grid-template-columns:minmax(220px,2fr) minmax(95px,.7fr) minmax(150px,1fr) minmax(140px,1fr);gap:10px;align-items:end}.book-row-fields>.field{display:grid;gap:6px;min-width:0;margin:0}.book-row-fields .book-check{margin:0;align-self:center}.book-row-fields .input,.book-row-fields .select{min-width:0;width:100%}
 .book-section-heading h4{margin:0}.book-usage-summary ul{margin:6px 0 10px;padding-left:20px;font-size:13px}.mockup-public-field{grid-column:1/-1}.mockup-public-field .product-audiences{width:100%}
 .production-photo-tile{position:relative;min-width:0;display:flex;align-items:stretch}.production-photo-tile>.mockup-variant-card{width:100%;height:100%}.production-photo-edit{position:absolute;right:6px;bottom:6px;z-index:4;width:34px!important;height:34px!important;min-height:34px!important;border:1px solid var(--line)!important;border-radius:10px!important;background:var(--surface)!important;box-shadow:0 2px 8px #0005}
