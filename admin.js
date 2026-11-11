@@ -1750,10 +1750,47 @@
   async function productionMediaRequest(path,form){
     for(let attempt=0;;attempt++)try{return await api(path,{method:'POST',body:form});}catch(error){const transient=error instanceof TypeError||[502,503,504].includes(error.status)||error.status===500&&/D1_ERROR|internal error|temporar|database.*busy/i.test(error.message);if(!transient||attempt>=2)throw error;await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));}
   }
+  const PRODUCT_PHOTO_LIMIT=12*1024*1024;
+  async function prepareProductPhotoUpload(file,mediaType,{foreground=false}={}){
+    if(!foreground&&(mediaType==='video'||file.type.startsWith('video/')||mediaTypeFromName(file.name)==='video'))return file;
+    if(file.size<=PRODUCT_PHOTO_LIMIT&&(!foreground||file.type==='image/png'))return file;
+    const name=file.name||'foto';
+    if(!foreground&&(file.type==='image/gif'||/\.gif$/i.test(name)))throw new Error(`El GIF «${name}» supera 12 MB. Cargá una copia de hasta 12 MB.`);
+    const type=!foreground&&['image/jpeg','image/webp'].includes(file.type)?file.type:'image/png';
+    try{
+      const blob=await resizePhotoToLimit(file,PRODUCT_PHOTO_LIMIT,type,4096);
+      const filename=file.name&&blob.type===file.type?file.name:name.replace(/\.[^.]+$/,'')+'.'+downloadImageExtension(blob);
+      return new File([blob],filename,{type:blob.type,lastModified:file.lastModified});
+    }catch(error){
+      throw new Error(`No se pudo preparar «${name}» para subirla. Cargá una copia PNG o JPG de hasta 12 MB.`,{cause:error});
+    }
+  }
   async function persistProductionBuilderMedia(productId){
     for(const item of [...state.mediaItems]){
-      if(item.file&&!item.id){item.uploadToken??=crypto.randomUUID();await persistProductionDraft(false);const form=new FormData();form.append('file',item.file);form.append('uploadToken',item.uploadToken);const uploaded=await productionMediaRequest(`/api/admin/products/${productId}/media`,form);if(!Number(uploaded?.id))throw new Error('No se confirmó la imagen. Conservamos la edición para reintentar.');item.id=Number(uploaded.id);item.url=uploaded.url||item.url;await persistProductionDraft(false);}
-      if(item.foregroundFile&&!item.foregroundSaved){item.foregroundUploadToken??=crypto.randomUUID();const form=new FormData();form.append('file',item.foregroundFile);form.append('uploadToken',item.foregroundUploadToken);await productionMediaRequest(`/api/admin/products/${productId}/media/${item.id}/foreground`,form);item.foregroundSaved=true;}
+      if(item.file&&!item.id){
+        const file=await prepareProductPhotoUpload(item.file,item.mediaType);
+        item.uploadToken??=crypto.randomUUID();
+        await persistProductionDraft(false);
+        const form=new FormData();
+        form.append('file',file);
+        form.append('uploadToken',item.uploadToken);
+        const uploaded=await productionMediaRequest(`/api/admin/products/${productId}/media`,form);
+        if(!Number(uploaded?.id))throw new Error('No se confirmó la imagen. Conservamos la edición para reintentar.');
+        item.id=Number(uploaded.id);
+        item.url=uploaded.url||item.url;
+        await persistProductionDraft(false);
+      }
+      if(item.foregroundFile&&!item.foregroundSaved){
+        const file=await prepareProductPhotoUpload(item.foregroundFile,'image',{foreground:true});
+        item.foregroundUploadToken??=crypto.randomUUID();
+        await persistProductionDraft(false);
+        const form=new FormData();
+        form.append('file',file);
+        form.append('uploadToken',item.foregroundUploadToken);
+        await productionMediaRequest(`/api/admin/products/${productId}/media/${item.id}/foreground`,form);
+        item.foregroundSaved=true;
+        await persistProductionDraft(false);
+      }
       if(item.viewKey&&state.productionMountViews?.[item.viewKey])state.productionMountViews[item.viewKey].outputMediaId=Number(item.id)||null;
     }
     return state.mediaItems.map(item=>Number(item.id)).filter(Boolean);
@@ -2906,7 +2943,41 @@
     const filename=`SALMOS-${String(name).replace(/[^a-z0-9_-]+/gi,'-')}-${String(base.model_name||'producto').replace(/[^a-z0-9_-]+/gi,'-')}-${side}.png`;
     return {blob,filename,width:canvas.width,height:canvas.height};
   }
-  async function prepareDownloadQuality(blob,quality){if(quality!=='small'||blob.size<4900000)return blob;const bitmap=await createImageBitmap(blob);try{const canvas=document.createElement('canvas'),jpeg=blob.type==='image/jpeg';let width=bitmap.width,height=bitmap.height;for(let attempt=0;attempt<40;attempt++){canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bitmap,0,0,width,height);if(jpeg){for(const q of [.94,.85,.75,.65,.5]){const result=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',q));if(result&&result.size<4900000)return result;}}else{const result=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(result&&result.size<4900000)return result;}if(width===1&&height===1)break;width=Math.max(1,Math.floor(width*.85));height=Math.max(1,Math.floor(height*.85));}throw new Error('No se pudo reducir esta foto a menos de 5 MB.');}finally{bitmap.close?.();}}
+  async function resizePhotoToLimit(blob,maxBytes,type,maxSide=Infinity){
+    const canvas=document.createElement('canvas');
+    const bitmap=await createImageBitmap(blob);
+    try{
+      const scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+      let width=Math.max(1,Math.floor(bitmap.width*scale));
+      let height=Math.max(1,Math.floor(bitmap.height*scale));
+      const qualities=type==='image/png'?[undefined]:[.94,.85,.75,.65,.5];
+      while(true){
+        canvas.width=width;
+        canvas.height=height;
+        const ctx=canvas.getContext('2d');
+        if(!ctx)break;
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality='high';
+        ctx.drawImage(bitmap,0,0,width,height);
+        for(const quality of qualities){
+          const result=await new Promise(resolve=>canvas.toBlob(resolve,type,quality));
+          if(result?.size&&result.size<=maxBytes)return result;
+        }
+        if(width===1&&height===1)break;
+        width=Math.max(1,Math.floor(width*.85));
+        height=Math.max(1,Math.floor(height*.85));
+      }
+      throw new Error('No se pudo reducir la imagen al tamaño permitido.');
+    }finally{
+      bitmap.close?.();
+      canvas.width=canvas.height=0;
+    }
+  }
+  async function prepareDownloadQuality(blob,quality){
+    if(quality!=='small'||blob.size<4900000)return blob;
+    try{return await resizePhotoToLimit(blob,4899999,blob.type==='image/jpeg'?'image/jpeg':'image/png');}
+    catch(error){throw new Error('No se pudo reducir esta foto a menos de 5 MB.',{cause:error});}
+  }
   function downloadImageExtension(blob){return blob.type==='image/jpeg'?'jpg':blob.type==='image/webp'?'webp':'png';}
   async function askProductionDownloadQuality(){const dialog=ensureAdminDialog('productionDownloadQualityDialog','Calidad de descarga');dialog.classList.add('tiny-dialog');qs('.dialog-body',dialog).innerHTML='<label class="field">Calidad<select class="select" data-production-download-quality><option value="max">Máxima calidad</option><option value="small">Menos de 5 MB por foto · catálogo de WhatsApp</option></select></label><button type="button" class="btn btn-primary" data-production-download-confirm>Descargar</button>';return new Promise(resolve=>{let chosen=false;dialog.addEventListener('close',()=>{if(!chosen)resolve(null);},{once:true});qs('[data-production-download-confirm]',dialog).onclick=()=>{chosen=true;const quality=qs('[data-production-download-quality]',dialog).value;dialog.close();resolve(quality);};dialog.showModal();});}
   async function zipProductViews(files){const roots=new Set(files.map(file=>file.name.split('/')[0])),root=roots.size===1&&files.every(file=>file.name.includes('/'))?[...roots][0]:'SALMOS-descarga',used=new Set();files=files.map(file=>{const parts=file.name.split('/').filter(Boolean),leaf=parts.length>1?parts.slice(1).join('-'):parts[0];let name=`${root}/${roots.size>1&&parts.length>1?parts[0]+'-':''}${leaf}`,index=1;while(used.has(name)){const dot=name.lastIndexOf('.'),base=`${root}/${roots.size>1&&parts.length>1?parts[0]+'-':''}${leaf}`;name=dot>name.lastIndexOf('/')?base.slice(0,base.lastIndexOf('.'))+'-'+(++index)+base.slice(base.lastIndexOf('.')):base+'-'+(++index);}used.add(name);return {...file,name};});const chunks=[],directory=[];let offset=0;const table=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;table[n]=c>>>0;}for(const file of files){const bytes=new Uint8Array(await file.blob.arrayBuffer()),name=new TextEncoder().encode(file.name),crc=bytes.reduce((c,b)=>table[(c^b)&255]^(c>>>8),0xffffffff)^0xffffffff,local=new Uint8Array(30+name.length),v=new DataView(local.buffer);v.setUint32(0,0x04034b50,true);v.setUint16(4,20,true);v.setUint16(6,0x0800,true);v.setUint32(14,crc>>>0,true);v.setUint32(18,bytes.length,true);v.setUint32(22,bytes.length,true);v.setUint16(26,name.length,true);local.set(name,30);const central=new Uint8Array(46+name.length),c=new DataView(central.buffer);c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint32(16,crc>>>0,true);c.setUint32(20,bytes.length,true);c.setUint32(24,bytes.length,true);c.setUint16(28,name.length,true);c.setUint32(42,offset,true);central.set(name,46);chunks.push(local,file.blob);directory.push(central);offset+=local.length+bytes.length;}const size=directory.reduce((n,b)=>n+b.length,0),end=new Uint8Array(22),e=new DataView(end.buffer);e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,size,true);e.setUint32(16,offset,true);return new Blob([...chunks,...directory,end],{type:'application/zip'});}
@@ -3202,7 +3273,7 @@
     const payload={name,production_catalog:catalog,show_all_sizes:1,publication_variant:qs('#productionPublicationVariant')?.value.trim()||'',category_id:categoryId,status:cost.sale>0?(qs('#productionStatus')?.value||'draft'):'draft',price_cents:cost.sale,compare_at_cents:0,cost_cents:cost.unitCost,recipe,short_description:qs('#productionDescription')?.value||'',meaning_text:qs('#productionMeaning')?.value||'',verse_text:qs('#productionVerse')?.value||'',verse_reference:qs('#productionVerseReference')?.value||'',fit:primary?.fit||'',audience:window.SalmosAudience.serialize(state.productionAudiences||[]),sale_mode:'stock',inventory_stage:'to_print',garment_ready:1,print_ready:bookMode||state.productionDesignsSelected.length?1:0,capacity_ml:Number(qs('#productionCapacity')?.value)||Number(primary?.capacity_ml)||0,is_new:qs('#productionIsNew')?.checked?1:0,is_featured:qs('#productionFeatured')?.checked?1:0,is_bestseller:qs('#productionBestseller')?.checked?1:0,weight_grams:Number(qs('#productionWeight')?.value)||0,height_cm:Number(qs('#productionHeight')?.value)||0,width_cm:Number(qs('#productionWidth')?.value)||0,depth_cm:Number(qs('#productionDepth')?.value)||0,variants};
     await ensureProductionPreviewMedia();
     const editing=state.productionEditingProduct;let productId=Number(editing?.id||state.productionCreatedProductId)||0;
-    if(!productId){const created=await api('/api/admin/products',{method:'POST',body:JSON.stringify(payload)});productId=Number(created.item.id);state.productionCreatedProductId=productId;await persistProductionDraft(false);}
+    if(!productId){const created=await api('/api/admin/products',{method:'POST',body:JSON.stringify({...payload,status:'draft'})});productId=Number(created.item.id);state.productionCreatedProductId=productId;await persistProductionDraft(false);}
     const orderedIds=await persistProductionBuilderMedia(productId);
     const mounted=await api(`/api/admin/products/${productId}/production-mount`,{method:'PATCH',body:JSON.stringify({mount:collectProductionMount(),saveToken:state.productionMountSaveToken,expectedMountRevision:state.productionMountRevision||0,jobId:state.productionEditingJob?.id||0,expectedJobRevision:state.productionEditingJob?.revision,quantity:productionVirtualStock()||stockModeChange||editing&&!state.productionEditingJob?undefined:qty,stockModeChange,variantUpdates,notes:qs('#productionNotes').value,recipe,product:payload,mediaIds:orderedIds,removeMediaIds:state.productionRemovedMediaIds||[]})});state.productionMountRevision=Number(mounted.revision);if(state.productionEditingJob&&mounted.jobRevision!==null)state.productionEditingJob.revision=Number(mounted.jobRevision);
     if(!editing&&stockKind==='physical'&&!state.productionCreatedJobId){const pd=await api(`/api/admin/products/${productId}`),variantId=Number(pd.item?.variants?.[0]?.id);if(!variantId)throw new Error('No se pudo crear la variante del producto.');const job=await api('/api/admin/production',{method:'POST',body:JSON.stringify({productId,variantId,quantity:qty,notes:qs('#productionNotes')?.value||''})});state.productionCreatedJobId=Number(job.item.id);}
