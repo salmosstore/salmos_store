@@ -367,6 +367,43 @@
       if(renderers[view])await renderers[view]();syncAdminNavigation();applyAdminListState();prepareProductionTables();
     }catch(error){renderAccessError(error)}
   }
+  const ADMIN_VIEW_SESSION_KEY='salmos_admin_view_v1';
+  function rememberAdminView(){
+    const expanded=qs('#montageFullscreenDialog[open]');
+    const track=qs('#montagePhotoTrack');
+    const montage={
+      filters:state.montageFilters,
+      search:state.montageSearch,
+      expanded:Boolean(expanded),
+      left:expanded?state.montageInlineLeft:track?.scrollLeft,
+      top:expanded?qs('.dialog-body',expanded).scrollTop:0,
+      rowScroll:Object.fromEntries(qsa('#montageWorkspace [data-montage-filter]').map(row=>[row.dataset.montageFilter,row.scrollLeft]))
+    };
+    try{sessionStorage.setItem(ADMIN_VIEW_SESSION_KEY,JSON.stringify({view:state.view,top:window.scrollY,montage}));}catch{}
+  }
+  async function restoreAdminView(){
+    let saved;
+    if(performance.getEntriesByType('navigation')[0]?.type==='reload'){
+      try{saved=JSON.parse(sessionStorage.getItem(ADMIN_VIEW_SESSION_KEY));}catch{}
+    }
+    const view=Object.hasOwn(titles,saved?.view)||['photos','sales','storefront'].includes(saved?.view)?saved.view:'products';
+    const montage=saved?.montage;
+    state.montageFilters=montageFilters(montage?.filters);
+    state.montageSearch=typeof montage?.search==='string'?montage.search:'';
+    if(saved&&'scrollRestoration' in history)history.scrollRestoration='manual';
+    window.addEventListener('pagehide',rememberAdminView);
+    await navigate(view);
+    if(!saved||state.view!==view)return;
+    window.scrollTo({top:Number(saved.top)||0,behavior:'instant'});
+    if(view!=='photos'||!qs('#montageWorkspace')||!montage)return;
+    for(const row of qsa('#montageWorkspace [data-montage-filter]'))row.scrollLeft=Number(montage.rowScroll?.[row.dataset.montageFilter])||0;
+    const track=qs('#montagePhotoTrack');
+    if(track)track.scrollLeft=Number(montage.left)||0;
+    if(montage.expanded){
+      openMontageFullscreen();
+      qs('#montageFullscreenDialog .dialog-body').scrollTop=Number(montage.top)||0;
+    }
+  }
   function syncAdminNavigation(){
     const groups={products:[['products','Productos'],['designs','Diseños'],['production','Producción'],['photos','Fotos de montaje']],clients:[['clients','Clientes'],['customOrders','Pedidos'],['orders','Órdenes']],expenses:[['expenses','Caja'],['purchases','Compras'],['sales','Ventas'],['dashboard','DASH']],settings:[['settings','Configuraciones'],['shipping','Envíos'],['promos','Promos'],['storefront','Portada de tienda']]};
     const selected=state.view==='categories'?'products':state.view,group=Object.keys(groups).find(key=>groups[key].some(([view])=>view===selected)),title=qs('#viewTitle');
@@ -2398,7 +2435,9 @@
     ['hoodie','Buzos'],['chomba','Chombas'],['background','Fondos']
   ];
   const MONTAGE_AUDIENCES=[['Hombre','Hombres'],['Mujer','Mujeres'],['Kids','Niños']];
-  const MONTAGE_BOOK_GROUPS=[['agenda','Agendas'],['actividades','Actividades'],['animales','Animales por tomo'],['album','Álbum']];
+  const MONTAGE_GARMENTS=['shirt','hoodie','chomba'];
+  const MONTAGE_CAP_AGES=[['adult','Adultos'],['kids','Niños']];
+  const MONTAGE_FIELDS=['section','audience','collection','fit','model','color','capAge','capStyle'];
   const MONTAGE_CAP_STYLES=[['red','Red'],['gabardina','Gabardina']];
 
   async function loadMontagePhotos(){
@@ -2424,23 +2463,39 @@
     if(photoLine25(asset)==='SALMOS Kids')return ['Kids'];
     return section==='book'?['Hombre','Mujer','Kids']:['Hombre','Mujer'];
   }
-  function montageBookGroup(asset,type){
+  function montageCollectionKind(value){
     const {key,bookVariant}=window.SalmosProductionGallery;
-    const variants=mockupMultiValues(asset.variant_label||asset.book_variant||asset.book?.kind);
-    for(const value of [...variants,type,asset.name,asset.file_name]){
-      const label=key(value),kind=bookVariant(label);
-      if(MONTAGE_BOOK_GROUPS.some(([name])=>name===kind))return kind;
-      if(kind==='colorear'||/\b(?:actividades?|para pintar|pasatiempos)\b/.test(label))return 'actividades';
-      if(/\bgranja\b/.test(label))return 'animales';
-    }
-    return 'unknown';
+    const text=key(value),kind=bookVariant(text);
+    if(kind==='colorear'||/\b(?:actividades?|para pintar|pasatiempos)\b/.test(text))return 'actividades';
+    if(/\bgranja\b/.test(text))return 'animales';
+    return kind;
   }
-  function montageAnimalVolume(asset){
-    const text=window.SalmosProductionGallery.key([asset.variant_label,asset.model_name,asset.name,asset.file_name].join(' '));
-    if(/\b(?:granja|domesticos)\b/.test(text))return 'Granja y domésticos';
-    if(/\binsectos?\b/.test(text))return 'Insectos';
-    const number=text.match(/\btomo\s*[-nº°.#]*\s*(\d+)\b/)?.[1];
-    return number?`Tomo ${Number(number)}`:'Sin tomo';
+  function montageCollections(){
+    return window.SalmosCatalog.rows('bookKinds',window.SalmosBook.BOOK_VARIANTS);
+  }
+  function montageBookCollections(asset,type,collections){
+    const key=window.SalmosProductionGallery.key;
+    const explicit=mockupMultiValues(asset.variant_label||asset.book_variant||asset.book?.kind);
+    const find=value=>{
+      const name=key(value);
+      if(!name)return [];
+      const exact=collections.find(row=>key(row.value)===name||key(row.label)===name);
+      if(exact)return [[exact.value,exact.label]];
+      const kind=montageCollectionKind(name);
+      const equivalent=collections.filter(row=>montageCollectionKind(row.label)===kind);
+      if(equivalent.length===1)return [[equivalent[0].value,equivalent[0].label]];
+      if(!equivalent.length&&kind==='animales'){
+        const book=collections.find(row=>montageCollectionKind(row.label)==='libro');
+        if(book)return [[book.value,book.label]];
+      }
+      return [];
+    };
+    if(explicit.length)return explicit.flatMap(find);
+    for(const value of [asset.name,asset.file_name,type]){
+      const match=find(value);
+      if(match.length)return match;
+    }
+    return find('Libro');
   }
   function montageCapStyle(asset,details){
     const key=window.SalmosProductionGallery.key;
@@ -2455,124 +2510,175 @@
     }
     return 'unknown';
   }
-  function montagePhotoRecord(asset){
+  function montagePhotoRecord(asset,collections){
     const details=photoProductDetails(asset),section=montageSection(asset,details.type);
+    const isGarment=MONTAGE_GARMENTS.includes(section),key=window.SalmosProductionGallery.key;
     const audiences=montageAudiences(asset,section);
-    const key=window.SalmosProductionGallery.key;
     const fit=photoFit(details.variant||asset.garment_style);
     const fitLabel=({clasico:'Clásico',oversize:'Oversize',crop:'Crop',boxy:'Boxy'})[fit]||shortGarmentName(asset.garment_style)||fit||'Sin corte';
-    const color=details.color, colorLabel=materialColorName(color)||'Sin color';
-    const models=['shirt','hoodie','chomba'].includes(section)?galleryLayoutValues(asset,'model',{includeAssociated:true}):[];
-    const book=section==='book'?montageBookGroup(asset,details.type):'';
-    const volume=book==='animales'?montageAnimalVolume(asset):'';
-    const style=section==='cap'?montageCapStyle(asset,details):'';
-    const search=key([asset.name,asset.file_name,asset.gender,asset.variant_label,asset.model_name,...models.map(model=>model.label),fitLabel,colorLabel,
-      materialTypeLabel(details.type),...details.features,volume,...audiences,
-      MONTAGE_SECTIONS.find(([id])=>id===section)?.[1],MONTAGE_BOOK_GROUPS.find(([id])=>id===book)?.[1],
-      MONTAGE_CAP_STYLES.find(([id])=>id===style)?.[1]].join(' '));
-    return {asset,section,audiences,fitColor:JSON.stringify([fit,photoColor(color)]),fitColorLabel:`${fitLabel} · ${colorLabel}`,
-      color,models,book,volume,style,search};
+    const color=details.color,style=section==='cap'?montageCapStyle(asset,details):'';
+    const options={
+      audience:isGarment||section==='book'||section==='cap'?MONTAGE_AUDIENCES.filter(([value])=>audiences.includes(value)):[],
+      collection:section==='book'?montageBookCollections(asset,details.type,collections):[],
+      fit:isGarment?[[fit||'sin corte',fitLabel]]:[],
+      model:isGarment?galleryLayoutValues(asset,'model',{includeAssociated:true}).map(model=>[key(model.label),model.label]):[],
+      color:color?[[photoColor(color),materialColorName(color)||color,color]]:[],
+      capAge:section==='cap'?MONTAGE_CAP_AGES.filter(([value])=>value==='kids'?audiences.includes('Kids'):audiences.some(audience=>audience!=='Kids')):[],
+      capStyle:style?[MONTAGE_CAP_STYLES.find(([value])=>value===style)||['unknown','Sin especificar']]:[]
+    };
+    const search=key([
+      asset.name,asset.file_name,asset.gender,asset.variant_label,asset.model_name,
+      materialTypeLabel(details.type),...details.features,...audiences,
+      MONTAGE_SECTIONS.find(([value])=>value===section)?.[1],
+      ...Object.values(options).flatMap(choices=>choices.map(([,label])=>label))
+    ].join(' '));
+    return {asset,section,options,search};
   }
-  function montageChoices(rows,values,fixed){
-    const groups=new Map((fixed||[]).map(([key,label])=>[key,{key,label,rows:[]}]));
+  function montageFilters(saved={}){
+    return Object.fromEntries(MONTAGE_FIELDS.map(field=>[
+      field,Array.isArray(saved?.[field])?saved[field].filter(value=>typeof value==='string'):[]
+    ]));
+  }
+  function montageOptions(rows,field){
+    const options=new Map();
     for(const row of rows){
-      for(const [key,label,color] of values(row)){
-        if(!groups.has(key))groups.set(key,{key,label,color,rows:[]});
-        const group=groups.get(key);
-        if(group.rows.at(-1)!==row)group.rows.push(row);
-      }
+      for(const option of row.options[field])if(!options.has(option[0]))options.set(option[0],option);
     }
-    return [...groups.values()];
+    return [...options.values()].sort((a,b)=>a[1].localeCompare(b[1],'es',{numeric:true}));
   }
-  function renderProductionPhotos(focusPath){
+  function montageFilterRow(field,label,choices,selected){
+    if(!choices.length)return '';
+    const swatches=field==='color';
+    return `<div class="montage-level"><span class="montage-level-label">${label}</span>
+      <div class="montage-choices${swatches?' product-quick-colors':''}" ${swatches?'id="montageQuickColors"':''} data-montage-filter="${field}" role="group" aria-label="${label}">
+        ${choices.map(([value,name,color])=>{
+          const pressed=selected.includes(value);
+          const control=`type="button" data-montage-choice="${escapeHtml(value)}" aria-pressed="${pressed}"`;
+          if(swatches)return `<button ${control} class="product-quick-color${pressed?' active':''}" aria-label="${escapeHtml(name)}" title="${escapeHtml(name)}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(color))}" aria-hidden="true"></span></button>`;
+          return `<button ${control} class="btn btn-ghost montage-choice">${escapeHtml(name)}</button>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  function renderProductionPhotos({focusField,focusValue,resetScroll=false}={}){
     const host=qs('#productionPhotosGallery');
     if(!host)return;
     const key=window.SalmosProductionGallery.key;
-    const query=key(state.montageSearch),positions=new Map(qsa('[data-montage-path]',host).map(row=>[row.dataset.montagePath,row.scrollLeft]));
-    const previousTrack=qs('[data-montage-track]',host),previousLeft=previousTrack?.scrollLeft||0;
-    const selections=state.montageSelections??=new Map(),levels=[],path=[];
-    let rows=galleryOrder('photos',state.mockupAssets.filter(asset=>!Number(asset.duplicate_of))).map(montagePhotoRecord);
-    if(query){const terms=query.split(' ');rows=rows.filter(row=>terms.every(term=>row.search.includes(term)));}
-    const choose=(label,values,fixed)=>{
-      const scope=JSON.stringify(path);
-      const choices=montageChoices(rows,values,fixed).filter(choice=>!query||choice.rows.length);
-      const selected=choices.find(choice=>choice.key===selections.get(scope))||choices.find(choice=>choice.rows.length)||choices[0];
-      if(!selected)return '';
-      if(!query)selections.set(scope,selected.key);
-      levels.push(`<div class="montage-level"><span class="montage-level-label">${label}</span>
-        <div class="montage-choices" data-montage-path="${escapeHtml(scope)}" role="group" aria-label="${label}">
-          ${choices.map(choice=>`<button type="button" class="btn btn-ghost montage-choice" data-montage-choice="${escapeHtml(choice.key)}" aria-pressed="${choice===selected}">${choice.color?`<span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(choice.color))}" aria-hidden="true"></span>`:''}<span>${escapeHtml(choice.label)}</span></button>`).join('')}
-        </div></div>`);
-      rows=selected.rows;
-      path.push(selected.key);
-      return selected.key;
-    };
-    const section=choose('Rubro',row=>[[row.section,'Otros']],MONTAGE_SECTIONS);
-    const chooseAudience=()=>choose('Público',row=>row.audiences.map(audience=>[audience,audience]),MONTAGE_AUDIENCES);
-    let audience='';
-    if(['shirt','hoodie','chomba'].includes(section)){
-      audience=chooseAudience();
-      choose('Corte y color',row=>[[row.fitColor,row.fitColorLabel,row.color]]);
-      choose('Modelo',row=>row.models.map(model=>[key(model.label),model.label]));
-    }else if(section==='book'){
-      const book=choose('Colección',row=>[[row.book,'Sin clasificar']],MONTAGE_BOOK_GROUPS);
-      if(book==='animales')choose('Tomo',row=>[[key(row.volume),row.volume]]);
-      audience=chooseAudience();
-    }else if(section==='cap'){
-      const age=choose('Edad',row=>[
-        ...(row.audiences.some(audience=>audience!=='Kids')?[['adult','Adultos']]:[]),
-        ...(row.audiences.includes('Kids')?[['kids','Niños']]:[])
-      ],[['adult','Adultos'],['kids','Niños']]);
-      audience=age==='kids'?'Kids':age==='adult'?'Hombre | Mujer':'';
-      choose('Tipo',row=>[[row.style,'Sin especificar']],MONTAGE_CAP_STYLES);
+    const query=key(state.montageSearch),terms=query?query.split(' '):[];
+    const filters=state.montageFilters??=montageFilters();
+    const positions=new Map(qsa('[data-montage-filter]',host).map(row=>[row.dataset.montageFilter,row.scrollLeft]));
+    const left=resetScroll?0:qs('#montagePhotoTrack',host)?.scrollLeft||0;
+    if(resetScroll)state.montageInlineLeft=0;
+    const collections=montageCollections();
+    const rows=galleryOrder('photos',state.mockupAssets.filter(asset=>!Number(asset.duplicate_of))).map(asset=>montagePhotoRecord(asset,collections));
+    const sections=[...MONTAGE_SECTIONS];
+    if(rows.some(row=>row.section==='other'))sections.push(['other','Otros']);
+    filters.section=filters.section.filter(value=>sections.some(([section])=>section===value));
+    const scoped=rows.filter(row=>!filters.section.length||filters.section.includes(row.section));
+    const includesSection=section=>filters.section.includes(section)||!filters.section.length&&scoped.some(row=>row.section===section);
+    const hasCaps=includesSection('cap'),hasBooks=includesSection('book');
+    const hasGarments=MONTAGE_GARMENTS.some(includesSection);
+    const capStyles=[...MONTAGE_CAP_STYLES];
+    if(scoped.some(row=>row.options.capStyle.some(([value])=>value==='unknown')))capStyles.push(['unknown','Sin especificar']);
+    const fields=[
+      ['audience','Público',hasGarments||hasBooks?MONTAGE_AUDIENCES:[]],
+      ['collection','Colección',hasBooks?collections.map(row=>[row.value,row.label]):[]],
+      ['capAge','Edad',hasCaps?MONTAGE_CAP_AGES:[]],
+      ['capStyle','Tipo de gorra',hasCaps?capStyles:[]],
+      ['fit','Corte',montageOptions(scoped,'fit')],
+      ['model','Modelo',montageOptions(scoped,'model')],
+      ['color','Color',montageOptions(scoped,'color')]
+    ];
+    const controls={};
+    for(const [field,label,choices] of fields){
+      filters[field]=filters[field].filter(value=>choices.some(([choice])=>choice===value));
+      controls[field]=montageFilterRow(field,label,choices,filters[field]);
     }
-
-    const assets=rows.map(row=>row.asset),trackPath=JSON.stringify(path);
+    const selectedFields=fields.map(([field])=>field).filter(field=>filters[field].length);
+    const visible=scoped.filter(row=>
+      terms.every(term=>row.search.includes(term)) &&
+      selectedFields.every(field=>row.options[field].some(([value])=>filters[field].includes(value)))
+    );
+    const assets=visible.map(row=>row.asset);
     state.montageGalleryAssets=assets;
-    state.montageGalleryAudience=audience;
-    host.innerHTML=`${levels.join('')}<div class="montage-gallery-heading">
-      <small class="muted" role="status">${assets.length} foto${assets.length===1?'':'s'}${section==='mug'?' · Cerámica / interior de color':''}</small>
-      ${assets.length?`<button type="button" class="btn btn-ghost" data-add-montage-photo title="Subir una foto con los datos de este grupo">+ Foto al grupo</button>`:''}
-    </div>${assets.length?`<div class="horizontal-gallery-shell montage-track-shell">
-      <button type="button" class="gallery-arrow gallery-arrow-left" data-scroll-target="montagePhotoTrack" data-scroll-dir="-1" aria-label="Fotos anteriores">‹</button>
-      <div class="montage-photo-grid montage-track" id="montagePhotoTrack" data-montage-track="${escapeHtml(trackPath)}" tabindex="0" role="region" aria-label="Fotos de la galería">${assets.map(montagePhotoCard).join('')}</div>
-      <button type="button" class="gallery-arrow gallery-arrow-right" data-scroll-target="montagePhotoTrack" data-scroll-dir="1" aria-label="Fotos siguientes">›</button>
-    </div>`:`<div class="notice">${query?'No encontramos fotos con esa búsqueda.':'Todavía no hay fotos en esta galería.'}</div>`}`;
+    const capAudience=filters.capAge.flatMap(value=>value==='kids'?['Kids']:['Hombre','Mujer']);
+    state.montageGalleryAudience=window.SalmosAudience.serialize(filters.audience.length?filters.audience:capAudience);
+    const filtered=Boolean(query||filters.section.length||selectedFields.length);
+    const sameSection=visible.length>0&&visible.every(row=>row.section===visible[0].section);
+    const groupUpload=filtered&&sameSection;
+    const pair=(a,b)=>a||b?`<div class="montage-filter-pair">${a}${b}</div>`:'';
+    qs('#clearMontageFiltersBtn').hidden=!filtered;
 
-    for(const row of qsa('[data-montage-path]',host)){
-      row.scrollLeft=positions.get(row.dataset.montagePath)||0;
-      const active=qs('[aria-pressed="true"]',row);
-      if(row.dataset.montagePath===focusPath)active.focus({preventScroll:true});
-      const box=active.getBoundingClientRect(),viewport=row.getBoundingClientRect();
-      if(box.left<viewport.left)row.scrollLeft+=box.left-viewport.left;
-      if(box.right>viewport.right)row.scrollLeft+=box.right-viewport.right;
+    host.innerHTML=`
+      ${montageFilterRow('section','Rubro',sections,filters.section)}
+      ${controls.audience}${controls.collection}
+      ${pair(controls.capAge,controls.capStyle)}
+      ${pair(controls.fit,controls.model)}
+      ${controls.color}
+      <div class="montage-gallery-heading">
+        <small class="muted" role="status">${assets.length} foto${assets.length===1?'':'s'}</small>
+        ${groupUpload?'<button type="button" class="btn btn-ghost" data-add-montage-photo title="Subir una foto con los datos de este grupo">+ Foto al grupo</button>':''}
+      </div>
+      ${assets.length?`<div class="horizontal-gallery-shell montage-track-shell">
+        <button type="button" class="gallery-arrow gallery-arrow-left" data-scroll-target="montagePhotoTrack" data-scroll-dir="-1" aria-label="Fotos anteriores">‹</button>
+        <div class="montage-photo-grid montage-track" id="montagePhotoTrack" tabindex="0" role="region" aria-label="Fotos de la galería">${assets.map(montagePhotoCard).join('')}</div>
+        <button type="button" class="gallery-arrow gallery-arrow-right" data-scroll-target="montagePhotoTrack" data-scroll-dir="1" aria-label="Fotos siguientes">›</button>
+      </div>`:`<div class="notice">${filtered?'No hay fotos para estos filtros.':'Todavía no hay fotos de montaje.'}</div>`}`;
+
+    for(const row of qsa('[data-montage-filter]',host)){
+      const field=row.dataset.montageFilter;
+      row.scrollLeft=positions.get(field)||0;
+      if(field!==focusField)continue;
+      const button=qsa('[data-montage-choice]',row).find(choice=>choice.dataset.montageChoice===focusValue);
+      button?.focus({preventScroll:true});
     }
     const track=qs('#montagePhotoTrack',host);
-    if(track&&previousTrack?.dataset.montageTrack===trackPath)track.scrollLeft=previousLeft;
-    if(track){
-      const shell=track.parentElement;
-      const sync=()=>{shell.classList.toggle('can-scroll-back',track.scrollLeft>1);shell.classList.toggle('can-scroll-next',track.scrollWidth-track.clientWidth-track.scrollLeft>1);};
-      track.addEventListener('scroll',sync,{passive:true});
-      state.montageTrackResize?.disconnect();
-      if(window.ResizeObserver){
-        state.montageTrackResize=new ResizeObserver(sync);
-        state.montageTrackResize.observe(track);
-      }
-      sync();
-    }else state.montageTrackResize?.disconnect();
+    state.montageTrackResize?.disconnect();
+    if(!track)return;
+    track.scrollLeft=left;
+    const shell=track.parentElement;
+    const sync=()=>{
+      shell.classList.toggle('can-scroll-back',track.scrollLeft>1);
+      shell.classList.toggle('can-scroll-next',track.scrollWidth-track.clientWidth-track.scrollLeft>1);
+    };
+    track.addEventListener('scroll',sync,{passive:true});
+    if(window.ResizeObserver){
+      state.montageTrackResize=new ResizeObserver(sync);
+      state.montageTrackResize.observe(track);
+    }
+    sync();
+  }
+  function toggleMontageFilter(button){
+    const field=button.closest('[data-montage-filter]').dataset.montageFilter;
+    const value=button.dataset.montageChoice,filters=state.montageFilters;
+    const selected=filters[field].includes(value)?filters[field].filter(item=>item!==value):[...filters[field],value];
+    if(field==='section')state.montageFilters=montageFilters({section:selected});
+    else filters[field]=selected;
+    renderProductionPhotos({focusField:field,focusValue:value,resetScroll:true});
+  }
+  function clearMontageFilters(){
+    state.montageFilters=montageFilters();
+    state.montageSearch='';
+    const search=qs('#montagePhotoSearch');
+    search.value='';
+    renderProductionPhotos({resetScroll:true});
+    search.focus({preventScroll:true});
   }
   function openMontageFullscreen(){
     const workspace=qs('#montageWorkspace'),mount=qs('#montageGalleryMount');
     if(!workspace||!mount)return;
     const dialog=ensureAdminDialog('montageFullscreenDialog','Fotos de montaje');
+    if(dialog.open)return;
     dialog.classList.remove('compact-admin-dialog');
-    const body=qs('.dialog-body',dialog),track=qs('#montagePhotoTrack',workspace),left=track?.scrollLeft||0;
+    const body=qs('.dialog-body',dialog);
+    state.montageInlineLeft=qs('#montagePhotoTrack',workspace)?.scrollLeft||0;
+    const previousFilters=JSON.stringify([state.montageFilters,state.montageSearch||'']);
     qs('h2',dialog).id='montageFullscreenTitle';
     dialog.setAttribute('aria-labelledby','montageFullscreenTitle');
     dialog.addEventListener('close',()=>{
       mount.append(workspace);
-      const current=qs('#montagePhotoTrack',workspace);
-      if(current&&current.dataset.montageTrack===track?.dataset.montageTrack)current.scrollLeft=left;
+      const track=qs('#montagePhotoTrack',workspace);
+      if(track&&previousFilters===JSON.stringify([state.montageFilters,state.montageSearch||'']))track.scrollLeft=state.montageInlineLeft;
       qs('#expandMontageGalleryBtn',workspace).focus({preventScroll:true});
     },{once:true});
     body.append(workspace);
@@ -2582,7 +2688,7 @@
   document.addEventListener('input',event=>{
     if(event.target.id!=='montagePhotoSearch')return;
     state.montageSearch=event.target.value;
-    renderProductionPhotos();
+    renderProductionPhotos({resetScroll:true});
   });
 
   const MOCKUP_CATALOG_DEFAULT={models:[],garments:['Remera clásica','Remera oversize','Remera crop','Chomba','Buzo'],products:[],variants:['Blanca','Interior de color'],colors:[...PURCHASE_BASIC_COLORS]};
@@ -2664,7 +2770,7 @@
     const render=()=>{const rows=drafts.get(draftKey())||current();qs('[data-product-list-rows]',dialog).classList.toggle('product-color-grid',selectedKind==='colors');qs('[data-product-list-rows]',dialog).innerHTML=rows.map(value=>selectedKind==='colors'?colorRow(value):`<div class="product-list-option"><input class="input" data-product-list-value value="${escapeHtml(value)}" maxlength="160"><button type="button" class="icon-btn" data-product-list-remove aria-label="Quitar opción"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div>`).join('');qs('[data-product-list-class-field]',dialog).hidden=selectedKind!=='sizes';const typeField=qs('[data-product-list-type-field]',dialog);typeField.classList.toggle('hidden',!['features','variants'].includes(selectedKind));typeField.hidden=typeField.classList.contains('hidden');qs('[data-product-list-status]',dialog).textContent='';};
     qs('[data-product-list-kind]',dialog).value=selectedKind;qs('[data-product-list-class]',dialog).value=selectedClass;qs('[data-product-list-kind]',dialog).onchange=event=>{remember();selectedKind=event.target.value;render();};qs('[data-product-list-class]',dialog).onchange=event=>{remember();selectedClass=event.target.value;render();};qs('[data-product-list-type]',dialog).value=selectedType;qs('[data-product-list-type]',dialog).onchange=event=>{remember();selectedType=event.target.value;render();};
     qs('[data-product-list-rows]',dialog).onclick=event=>{const button=event.target.closest('[data-product-list-remove]');if(button)button.closest('.product-list-option').remove();};qs('[data-product-list-add]',dialog).onclick=()=>{qs('[data-product-list-rows]',dialog).insertAdjacentHTML('beforeend',selectedKind==='colors'?colorRow(''):'<div class="product-list-option"><input class="input" data-product-list-value maxlength="160"><button type="button" class="icon-btn" data-product-list-remove aria-label="Quitar opción"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div>');qsa('[data-product-list-value]',dialog).at(-1)?.focus();};qs('[data-product-list-cancel]',dialog).onclick=()=>dialog.close();
-    qs('[data-product-list-save]',dialog).onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{if(selectedKind==='colors'){const entries=qsa('.product-list-color',dialog).map(row=>({name:qs('[data-product-list-value]',row).value.trim(),color:qs('[data-product-list-color]',row).value})).filter(row=>row.name);const merged=[...(window.SalmosColors?.catalog()||[]).filter(entry=>!entries.some(row=>row.name.toLocaleLowerCase('es')===entry.name.toLocaleLowerCase('es'))),...entries];await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{named_color_catalog:JSON.stringify(merged),admin_purchase_options_v2:JSON.stringify({...state.purchaseOptions,colorCatalog:entries.map(row=>row.name)})}})});window.SalmosColors?.setCatalog(merged);state.settings.named_color_catalog=JSON.stringify(merged);}const saved=selectedKind==='colors'?(state.purchaseOptions.colorCatalog=uniqOptions(readValues().map(value=>value.trim()).filter(Boolean))):await saveProductList(selectedKind,readValues(),{materialClass:selectedClass,type:selectedType});drafts.set(draftKey(),saved);refreshManagedSizeSelectors();if(qs('#purchaseDialog')?.open){qsa('[data-purchase-row]').forEach(syncPurchaseRowFromDom);renderPurchaseItems();}if(qs('#mockupAssetDialog')?.open){captureMockupQueue();renderMockupUploadQueue();renderMockupCatalogEditor();}if(qs('#productionDialog')?.open){if(selectedKind==='variants'){window.SalmosBook.render();renderMockupStudioOptions();}renderProductionMaterialGallery();renderProductionVariantStock();}if(state.view==='products')renderUnifiedProducts();dialog.close();toast('Lista guardada','success');}catch(error){qs('[data-product-list-status]',dialog).textContent=error.message;}finally{button.disabled=false;}};render();dialog.showModal();
+    qs('[data-product-list-save]',dialog).onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{if(selectedKind==='colors'){const entries=qsa('.product-list-color',dialog).map(row=>({name:qs('[data-product-list-value]',row).value.trim(),color:qs('[data-product-list-color]',row).value})).filter(row=>row.name);const merged=[...(window.SalmosColors?.catalog()||[]).filter(entry=>!entries.some(row=>row.name.toLocaleLowerCase('es')===entry.name.toLocaleLowerCase('es'))),...entries];await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{named_color_catalog:JSON.stringify(merged),admin_purchase_options_v2:JSON.stringify({...state.purchaseOptions,colorCatalog:entries.map(row=>row.name)})}})});window.SalmosColors?.setCatalog(merged);state.settings.named_color_catalog=JSON.stringify(merged);}const saved=selectedKind==='colors'?(state.purchaseOptions.colorCatalog=uniqOptions(readValues().map(value=>value.trim()).filter(Boolean))):await saveProductList(selectedKind,readValues(),{materialClass:selectedClass,type:selectedType});drafts.set(draftKey(),saved);refreshManagedSizeSelectors();if(qs('#purchaseDialog')?.open){qsa('[data-purchase-row]').forEach(syncPurchaseRowFromDom);renderPurchaseItems();}if(qs('#mockupAssetDialog')?.open){captureMockupQueue();renderMockupUploadQueue();renderMockupCatalogEditor();}if(qs('#productionDialog')?.open){if(selectedKind==='variants'){window.SalmosBook.render();renderMockupStudioOptions();}renderProductionMaterialGallery();renderProductionVariantStock();}if(state.view==='products')renderUnifiedProducts();renderProductionPhotos();dialog.close();toast('Lista guardada','success');}catch(error){qs('[data-product-list-status]',dialog).textContent=error.message;}finally{button.disabled=false;}};render();dialog.showModal();
   }
   function mockupProductAssociationField(values,recordId){let ids=[];try{ids=JSON.parse(values.associatedProductsJson||'[]');}catch{}return `<div class="field mockup-product-association" data-associated-products-field><label>Productos asociados al modelo</label><input type="hidden" data-mockup-field="associatedProductsJson" value="${escapeHtml(JSON.stringify(ids))}"><button type="button" class="btn btn-ghost" data-choose-model-products="${recordId}"><i class="fa-solid fa-images"></i> Elegir productos · ${ids.length}</button></div>`;}
   function mockupProductFamilies(){const groups=new Map();for(const asset of state.mockupAssets.filter(asset=>mockupAssetCategory(asset)==='Producto')){const details=photoProductDetails(asset),key=JSON.stringify([details.type,details.variant,photoColor(details.color),details.features.map(productionDesignSearchText).sort()]);if(!groups.has(key))groups.set(key,{key,items:[],details});groups.get(key).items.push(asset);}return [...groups.values()];}
@@ -3045,6 +3151,7 @@
       <div class="production-page-toolbar montage-toolbar">
         <input class="input" type="search" id="montagePhotoSearch" aria-label="Buscar fotos" placeholder="Buscar por nombre, modelo, corte o color" value="${escapeHtml(state.montageSearch||'')}">
         <div class="admin-actions production-page-actions">
+          <button type="button" class="btn btn-ghost" id="clearMontageFiltersBtn" aria-label="Quitar todos los filtros" hidden>Quitar filtros</button>
           <button type="button" class="icon-btn" data-open-product-lists aria-label="Administrar listas de productos" title="Administrar listas de productos"><i class="fa-solid fa-text-height" aria-hidden="true"></i></button>
           <button type="button" class="icon-btn" id="expandMontageGalleryBtn" aria-haspopup="dialog" aria-label="Ver galería a pantalla completa" title="Ver galería a pantalla completa"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
           <button type="button" class="btn btn-primary" id="newMontagePhotosBtn">+ Subir foto</button>
@@ -4609,13 +4716,9 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(e.target.matches('[data-mockup-catalog-add],[data-mockup-catalog-save],[data-mockup-catalog-delete]')){const key=state.mockupCatalogKey||'models',list=mockupCatalogList(key);if(e.target.hasAttribute('data-mockup-catalog-add')){const value=qs('#mockupCatalogNew').value.trim();if(value&&!list.includes(value))list.push(value)}else if(e.target.hasAttribute('data-mockup-catalog-delete'))list.splice(Number(e.target.dataset.mockupCatalogDelete),1);else{const value=qs(`[data-mockup-catalog-value="${e.target.dataset.mockupCatalogSave}"]`)?.value.trim();if(value)list[Number(e.target.dataset.mockupCatalogSave)]=value}try{for(const r of state.mockupUploadQueue||[]){const card=qs(`[data-mockup-upload="${r.id}"]`);if(card)r.values=mockupCardValues(card);}await persistMockupCatalog();renderMockupCatalogEditor();renderMockupUploadQueue();toast('Lista actualizada','success')}catch(err){toast(err.message,'error')}return;}
       const productionSection=e.target.closest('[data-production-section]');if(productionSection){state.productionSection=productionSection.dataset.productionSection;try{await renderProduction()}catch(err){toast(err.message,'error')}return;}
       if(e.target.closest('#expandMontageGalleryBtn')){openMontageFullscreen();return;}
-      const montageGroup=e.target.closest('[data-montage-choice]');
-      if(montageGroup){
-        const row=montageGroup.closest('[data-montage-path]');
-        state.montageSelections.set(row.dataset.montagePath,montageGroup.dataset.montageChoice);
-        renderProductionPhotos(row.dataset.montagePath);
-        return;
-      }
+      const montageChoice=e.target.closest('[data-montage-choice]');
+      if(montageChoice){toggleMontageFilter(montageChoice);return;}
+      if(e.target.closest('#clearMontageFiltersBtn')){clearMontageFilters();return;}
       if(e.target.id==='newMontagePhotosBtn'){try{await openMockupAssetDialog()}catch(err){toast(err.message,'error')}return;}
       if(e.target.closest('[data-add-montage-photo]')){
         const galleryDefaults=galleryGroupUploadDefaults(state.montageGalleryAssets,state.montageGalleryAudience);
@@ -5302,7 +5405,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     typeEntries:()=>[...MATERIAL_TYPES,...customTypeEntries().filter(row=>row.code!=='other').map(row=>[row.code,row.label])],
     before:()=>{qsa('[data-purchase-row]').forEach(syncPurchaseRowFromDom);captureMockupQueue();},
     remap:(key,renames)=>{const fields={fits:'fit',classes:'materialClass',genders:'gender'};if(fields[key])for(const item of state.purchaseItems)item[fields[key]]=renames.get(item[fields[key]])||item[fields[key]];if(key.startsWith('sizes:'))for(const item of state.purchaseItems)item.size=renames.get(item.size)||item.size;const bookFields={paperKinds:'kind',paperFinishes:'finish',bindingCapacities:'capacity'};if(bookFields[key])for(const item of state.purchaseItems)if(item.bookMaterial){item.bookMaterial[bookFields[key]]=renames.get(String(item.bookMaterial[bookFields[key]]))||item.bookMaterial[bookFields[key]];window.SalmosBook.syncPurchase(item);}if(key==='bookKinds'&&state.productionBook)state.productionBook.kind=renames.get(state.productionBook.kind)||state.productionBook.kind;},
-    refresh:(key)=>{if(key==='designDestinations')for(const picker of qsa('.design-destinations')){const selected=qsa('[data-design-destination]:checked',picker).map(input=>input.value);picker.outerHTML=designDestinationPicker({destinations:selected});}if(qs('#purchaseDialog')?.open)renderPurchaseItems();if(qs('#mockupAssetDialog')?.open)renderMockupUploadQueue();if(qs('#productionDialog')?.open){window.SalmosBook.render();renderMockupStudioOptions();}if(state.view==='products')renderUnifiedProducts();}
+    refresh:(key)=>{if(key==='designDestinations')for(const picker of qsa('.design-destinations')){const selected=qsa('[data-design-destination]:checked',picker).map(input=>input.value);picker.outerHTML=designDestinationPicker({destinations:selected});}if(qs('#purchaseDialog')?.open)renderPurchaseItems();if(qs('#mockupAssetDialog')?.open)renderMockupUploadQueue();if(qs('#productionDialog')?.open){window.SalmosBook.render();renderMockupStudioOptions();}if(state.view==='products')renderUnifiedProducts();renderProductionPhotos();}
   });
   window.SalmosPurchasePacks.init({state,money,capture:()=>qsa('[data-purchase-row]').forEach(syncPurchaseRowFromDom),render:renderPurchaseItems,total:updatePurchaseTotal});
   document.addEventListener('input',event=>{if(event.target.id==='purchaseFundingAmount')event.target.dataset.automatic='0';});
@@ -5317,7 +5420,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qs('#productionDialog').addEventListener('close',notifyClosed);
     window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.parent&&event.data?.type==='salmos-request-production-close')closeProductionEditor();});
     (embeddedProductId>0?openProductionMount(embeddedProductId):openProductionDialog(false)).then(async()=>{if(embeddedProductId>0)focusProductionMedia(productionParams.get('productionMedia'));else{state.productionAudiences=window.SalmosAudience.parse(productionParams.get('productionAudience'));state.productionAudienceDirty=true;renderProductionAudiences();renderMockupStudioOptions();showProductionEditor();applyMockupZoom();await refreshMockupPreview();state.productionBaselineFingerprint=productionEditorFingerprint();}}).catch(error=>{toast('No se pudo abrir la producción: '+error.message,'error');notifyClosed();});
-  }else{initAdminDailyPassage();navigate('products');}
+  }else{initAdminDailyPassage();restoreAdminView();}
   syncAdminTopbarHeight();if(window.ResizeObserver)new ResizeObserver(syncAdminTopbarHeight).observe(qs('.admin-topbar'));window.addEventListener('resize',syncAdminTopbarHeight);
   // BEGIN SALMOS_MARKETING_BRIDGE_1
   window.SalmosMarketingBridge = {

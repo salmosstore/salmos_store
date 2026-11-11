@@ -105,8 +105,18 @@ html body #mockupAssetDialog #closeMockupAssetsBtn{position:static!important;mar
 /* Fotos de montaje */
 #montageWorkspace { min-width: 0; }
 #montageWorkspace .montage-toolbar { justify-content: space-between; }
+#clearMontageFiltersBtn[hidden] { display: none !important; }
 #montagePhotoSearch { flex: 1; width: 100%; min-width: 0; max-width: 390px; margin: 0; }
 #productionPhotosGallery { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.montage-filter-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+@media (min-width: 761px) {
+  .montage-filter-pair:has(> .montage-level + .montage-level) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .montage-filter-pair:has([data-montage-filter="fit"]):has([data-montage-filter="model"]) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  }
+}
 .montage-level {
   display: grid;
   grid-template-columns: 98px minmax(0, 1fr);
@@ -126,6 +136,28 @@ html body #mockupAssetDialog #closeMockupAssetsBtn{position:static!important;mar
   overflow-x: auto;
   padding: 3px;
   scrollbar-width: thin;
+}
+#montageWorkspace .montage-choices.product-quick-colors {
+  width: auto;
+  padding: 3px;
+  border: 0;
+  flex-wrap: nowrap;
+}
+#montageWorkspace #montageQuickColors > .product-quick-color {
+  flex: 0 0 29px;
+  width: 29px;
+  height: 29px;
+  min-width: 29px;
+  min-height: 29px;
+  padding: 3px;
+}
+#montageWorkspace #montageQuickColors .color-dot {
+  flex-basis: 18px;
+  width: 18px;
+  height: 18px;
+}
+#montageWorkspace #montageQuickColors > [aria-pressed="true"] {
+  border: 2px solid var(--gold);
 }
 .montage-choices > .montage-choice {
   flex: 0 0 auto;
