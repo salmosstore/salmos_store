@@ -19,9 +19,9 @@
   <link rel="stylesheet" href="design-editor.css?v=25.77">
   <link rel="stylesheet" href="sharing.css?v=25.44">
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
-  <link rel="stylesheet" href="admin-books.css?v=46.3">
+  <link rel="stylesheet" href="admin-books.css?v=46.7">
   <link rel="stylesheet" href="admin-management.css?v=38.0">
-  <link rel="stylesheet" href="admin-refinements.css?v=46.5">
+  <link rel="stylesheet" href="admin-refinements.css?v=46.7">
   <link rel="stylesheet" href="production-gallery.css?v=39.0">
   <link rel="stylesheet" href="storefront-refinements.css?v=46.4">
   <link rel="stylesheet" href="book-digital.css?v=28.0">
@@ -110,7 +110,7 @@
   <dialog class="admin-dialog production-builder-dialog" id="productionDialog">
     <div class="dialog-shell">
       <div class="dialog-head"><div><div class="admin-eyebrow">Producción</div><h2 id="productionDialogTitle">Armar producto terminado</h2></div><button class="icon-btn" type="button" id="closeProductionDialogBtn">×</button></div>
-      <div class="production-tabs"><button class="production-tab active" type="button" data-production-tab="1"><span>1</span> Producción y costos</button><button class="production-tab" type="button" data-production-tab="2"><span>2</span> Publicación</button></div>
+      <div class="production-tabs"><button class="production-tab active" type="button" data-production-tab="1"><span>1</span> Costos</button><button class="production-tab" type="button" data-production-tab="2"><span>2</span> Producción</button><button class="production-tab" type="button" data-production-tab="3"><span>3</span> Publicación</button></div>
       <div class="dialog-body production-builder-body">
         <section class="production-tab-panel" data-production-panel="1">
           <div class="production-top-grid">
@@ -125,6 +125,9 @@
           <div class="production-stock-note" id="productionStockNote">Stock físico descuenta la materia prima al iniciar producción. El stock virtual permite armar el producto aunque todavía no tengas la materia prima.</div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3 id="productionMaterialsTitle">Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div><button class="btn btn-ghost" type="button" id="productionAddMaterialFromEditorBtn">+ Agregar materia prima</button></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedMaterials"></div>
+          <div class="production-sale-prices"><label class="field"><span id="productionSalePriceLabel">Precio de venta ($)</span><input class="input" id="productionSalePrice" type="number" min="0" step="1" placeholder="Sugerencia del último producto similar"></label><div id="productionCapPriceBox" class="hidden"><label class="field">Gorra agregada · materia prima<select class="select" id="mockupCapMaterialSelect"><option value="">Elegir gorra</option></select></label><label class="field">Precio de venta de la gorra ($)<input class="input" id="mockupCapSalePrice" type="number" min="0" step="1" placeholder="Último precio usado"></label></div></div><div class="production-cost-summary" id="productionBuilderCost"></div>
+        </section>
+        <section class="production-tab-panel hidden" data-production-panel="2">
           <div class="production-picker-section"><div class="production-picker-head"><div><h3>Diseños / estampas</h3><p class="muted">Podés combinar varias estampas: por ejemplo 30×30 + 10×10 + 5×5.</p></div><div class="production-design-gallery-actions"><button class="icon-btn" type="button" id="productionDesignSearchBtn" aria-label="Buscar diseños" title="Buscar diseños" aria-expanded="false" aria-controls="productionDesignSearchRow"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button><button class="icon-btn" type="button" id="productionDesignExpandBtn" aria-label="Ampliar galería de diseños" title="Ampliar galería de diseños"><i class="fa-solid fa-expand" aria-hidden="true"></i></button><button class="btn btn-primary" type="button" id="productionUploadDesignBtn">+ Agregar diseño</button></div></div><div class="production-design-search-row" id="productionDesignSearchRow" hidden><input class="input" id="productionDesignSearch" type="search" aria-label="Buscar diseños" placeholder="Buscar…" autocomplete="off"></div><div id="productionDesignFilters"></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="-1">‹</button><div class="production-design-gallery" id="productionDesignGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionDesignGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedDesigns"></div>
           <section class="production-mockup-card" id="productionMockupStudio">
@@ -135,11 +138,9 @@
             </div>
           </section>
           
-          <div class="production-sale-prices"><label class="field"><span id="productionSalePriceLabel">Precio de venta ($)</span><input class="input" id="productionSalePrice" type="number" min="0" step="1" placeholder="Sugerencia del último producto similar"></label><div id="productionCapPriceBox" class="hidden"><label class="field">Gorra agregada · materia prima<select class="select" id="mockupCapMaterialSelect"><option value="">Elegir gorra</option></select></label><label class="field">Precio de venta de la gorra ($)<input class="input" id="mockupCapSalePrice" type="number" min="0" step="1" placeholder="Último precio usado"></label></div></div><div class="production-cost-summary" id="productionBuilderCost"></div>
           <div class="field"><label>Nota interna de producción</label><textarea class="textarea" id="productionNotes" rows="2" placeholder="Opcional"></textarea></div>
-          <div class="production-next-row"><button class="btn btn-primary" type="button" id="productionNextBtn">Continuar a publicación →</button></div>
         </section>
-        <section class="production-tab-panel hidden" data-production-panel="2">
+        <section class="production-tab-panel hidden" data-production-panel="3">
           <div class="form-section production-media-first"><div class="admin-section-head"><div><h3>Fotos y videos</h3></div></div><input class="input" id="productionImagesInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime,video/x-m4v" multiple><div class="salmos-media-list" id="productionMediaOrderList"></div></div>
           <div class="form-section production-publication-section"><div class="admin-section-head"><div><h3>Datos para publicar</h3></div></div><div class="form-grid production-publication-grid">
             <div class="field"><label for="productionProductName">Nombre del producto</label><input class="input" id="productionProductName" required placeholder="Ej.: YESHUA"></div>
@@ -160,7 +161,7 @@
           <div class="toggle-row"><label class="toggle-label"><input type="checkbox" id="productionIsNew"> Novedad</label><label class="toggle-label"><input type="checkbox" id="productionFeatured"> Destacado</label><label class="toggle-label"><input type="checkbox" id="productionBestseller"> Más vendido</label></div>
         </section>
       </div>
-      <div class="dialog-foot hidden"><span class="dialog-spacer"></span><button class="btn btn-ghost hidden" type="button" id="productionBackBtn">← Volver a producción</button><button class="btn btn-primary hidden" type="button" id="saveProductionBtn">Guardar e iniciar producción</button></div>
+      <div class="dialog-foot"><button class="btn btn-ghost hidden" type="button" id="productionBackBtn">← Costos</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="productionNextBtn">Producción →</button><button class="btn btn-primary" type="button" id="saveProductionBtn">Finalizar</button></div>
     </div>
   </dialog>
 
@@ -278,7 +279,7 @@
   <script src="storefront-visuals-admin.js?v=45.0" defer></script>
   <script src="admin-catalogs.js?v=30.0" defer></script>
   <script src="purchase-packs.js?v=30.0" defer></script>
-  <script src="book-production.js?v=46.3" defer></script>
+  <script src="book-production.js?v=46.7" defer></script>
   <script src="production-gallery.js?v=39.0" defer></script>
   <script src="book-digital-admin.js?v=37.0" defer></script>
   <script src="product-copy.js?v=27.0" defer></script>
@@ -289,7 +290,7 @@
   <script src="admin-shipping-request.js?v=40.0" defer></script>
   <script src="web-projects-shared.js?v=46.0" defer></script>
   <script src="web-projects-admin.js?v=46.0" defer></script>
-  <script src="admin.js?v=46.6&amp;mkt=26.0" defer></script>
+  <script src="admin.js?v=46.7&amp;mkt=26.0" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=46.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
@@ -304,6 +305,6 @@
 
 
 
-  <script src="marketing-admin.js?v=15.0" defer></script>
+  <script src="marketing-admin.js?v=46.7" defer></script>
 </body>
 </html>

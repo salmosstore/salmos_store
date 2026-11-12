@@ -470,7 +470,7 @@
     </div>`;
     if(state.accountTab==='favorites'){
       const favs=state.products.filter(p=>state.auth.favoriteIds.has(Number(p.id)));
-      content=favs.length?`<div class="account-list">${favs.map(p=>`<button class="account-product-row" data-open-favorite="${p.id}">${p.primary_image_url?`<img src="${escapeHtml(p.primary_image_url)}" alt="">`:'<span class="account-product-placeholder">S</span>'}<span><strong>${escapeHtml(p.name)}</strong><small>${money(p.price_cents)}</small></span><b>›</b></button>`).join('')}</div>`:'<div class="empty-state"><strong>Todavía no guardaste favoritos.</strong>Tocá el corazón de cualquier producto.</div>';
+      content=favs.length?`<div class="account-list">${favs.map(p=>`<button class="account-product-row" data-open-favorite="${p.id}">${p.primary_image_url?`<img src="${escapeHtml(p.primary_image_url)}" alt="">`:'<span class="account-product-placeholder">S</span>'}<span><strong>${escapeHtml(p.name)}</strong><small>${storefrontPriceLabel(p)}</small></span><b>›</b></button>`).join('')}</div>`:'<div class="empty-state"><strong>Todavía no guardaste favoritos.</strong>Tocá el corazón de cualquier producto.</div>';
     }
     if(state.accountTab==='orders'){
       content=state.auth.orders.length?`<div class="account-orders">${state.auth.orders.map(o=>`<div class="account-order"><div><strong>${escapeHtml(o.code)}</strong><small>${new Date(o.created_at).toLocaleDateString('es-AR')}</small></div><div class="account-order-total">${money(o.total_cents)}</div><div class="account-statuses"><span>${escapeHtml(statusLabel(o.payment_status))}</span><span>${escapeHtml(statusLabel(o.fulfillment_status))}</span></div>${o.tracking_number?`<small>Seguimiento: ${escapeHtml(o.tracking_number)}</small>`:''}</div>`).join('')}</div>`:'<div class="empty-state"><strong>Todavía no hay pedidos en esta cuenta.</strong>Las compras que hagas conectado con Google aparecerán acá.</div>';
@@ -597,6 +597,8 @@
     row.classList.add('catalog-filter-row');
     const previousScroll=qs('.catalog-type-chips',row)?.scrollLeft||0;
     const types=window.SalmosHome.catalogTypesFor(catalogAudienceProducts());
+    const side=state.activeSideGallery;
+    if(side?.key===state.catalogType&&!types.some(type=>type.key===side.key))types.push({key:side.key,name:side.title});
     const reset=state.storeProductsLoaded && state.catalogType!=='all' && !types.some(type=>type.key===state.catalogType);
     if(reset)state.catalogType='all';
     const audiences=window.SalmosHome.catalogAudiences.map(({key,name})=>categoryChip('data-catalog-audience',key,name,key===(state.homeCollection||'all'))).join('');
@@ -614,6 +616,7 @@
       const button=event.target.closest('button.chip');
       if(!button||state.storeOrderEditor?.saving)return;
       const {catalogAudience,catalogType}=button.dataset;
+      state.activeSideGallery=null;
       if(catalogAudience!==undefined)state.homeCollection=catalogAudience==='all'?null:catalogAudience;
       else state.catalogType=catalogType;
       renderCategories();
@@ -624,8 +627,10 @@
   }
 
   function orderedStoreProducts(items,scope=state.homeCollection||'all') {
-    const ids=state.storeOrderEditor?.drafts.get(scope)||
-      (scope==='all'?[]:state.config?.storefrontHome?.orders?.[`collection:${scope}`]||[]);
+    const side=state.activeSideGallery?.key===state.catalogType?state.activeSideGallery:null,editor=state.storeOrderEditor;
+    const saved=state.config?.storefrontHome?.orders||{};
+    const ids=side?(editor?.homeDrafts.get(side.id)||saved[side.id]||[]):
+      (editor?.drafts.get(scope)||(scope==='all'?[]:saved[`collection:${scope}`]||[]));
     const ranks=new Map(ids.map((id,index)=>[Number(id),index]));
     return [...items].sort((a,b)=>
       (ranks.get(Number(a.id))??1e9)-(ranks.get(Number(b.id))??1e9)||
@@ -665,6 +670,7 @@
       editor.drafts.clear();
       editor.orderBases.clear();
       editor.homeDrafts.clear();
+      delete editor.sideGalleryDraft;
       if(editor.backgroundPanel)editor.backgroundPanel.reset();
       else renderProducts();
     });
@@ -720,7 +726,7 @@
       if(next){grid.insertBefore(card,direction<0?next:next.nextSibling);rememberStoreProductOrder();}
     },true);
     window.addEventListener('beforeunload',event=>{
-      if(editor.drafts.size||editor.homeDrafts.size||editor.backgroundPanel?.dirty()){event.preventDefault();event.returnValue='';}
+      if(editor.drafts.size||editor.homeDrafts.size||editor.sideGalleryDraft||editor.backgroundPanel?.dirty()){event.preventDefault();event.returnValue='';}
     });
     for(const id of ['productGrid','orderProductGrid'])bindStoreOrderGrid(qs('#'+id));
   }
@@ -761,12 +767,15 @@
   }
   function rememberStoreProductOrder() {
     const editor=state.storeOrderEditor,scope=state.homeCollection||'all';
-    let ids=orderedStoreProducts(catalogAudienceProducts(),scope).map(product=>Number(product.id));
+    const side=state.activeSideGallery?.key===state.catalogType?state.activeSideGallery:null;
+    const products=catalogAudienceProducts();
+    let ids=orderedStoreProducts(side?products.filter(product=>window.SalmosHome.matchesCatalogType(product,side.key)):products,scope).map(product=>Number(product.id));
     const base=editor.orderBases.get(scope)||ids;
     for(const id of ['productGrid','orderProductGrid']){
       const visible=qsa('.product-card',qs('#'+id)).map(card=>Number(card.dataset.productId));
       ids=mergeVisibleProductOrder(ids,visible);
     }
+    if(side){editor.homeDrafts.set(side.id,ids);renderStoreOrderControls();return;}
     if(ids.every((id,index)=>id===base[index])){
       editor.drafts.delete(scope);
       editor.orderBases.delete(scope);
@@ -787,7 +796,7 @@
       editor.backgroundLocation=position;
       editor.backgroundPanel.setLocation(view,target);
     }
-    const dirty=editor.drafts.size+editor.homeDrafts.size+Number(editor.backgroundPanel?.dirty()||false);
+    const dirty=editor.drafts.size+editor.homeDrafts.size+Number(Boolean(editor.sideGalleryDraft))+Number(editor.backgroundPanel?.dirty()||false);
     qs('#saveStoreOrder').disabled=editor.saving||!dirty;
     qs('#discardStoreOrder').disabled=editor.saving||!dirty;
     editor.backgroundPanel?.setBusy(editor.saving);
@@ -824,8 +833,9 @@
     if(!editor||editor.saving)return;
     const panel=editor.backgroundPanel,backgrounds=panel?.patch()||{};
     const hasBackgrounds=panel?.dirty()||false;
+    const sideGalleries=editor.sideGalleryDraft;
     const orders=Object.fromEntries([...editor.homeDrafts,...[...editor.drafts].filter(([key])=>key!=='all').map(([key,ids])=>[`collection:${key}`,ids])]);
-    if(!editor.drafts.size&&!editor.homeDrafts.size&&!hasBackgrounds)return;
+    if(!editor.drafts.size&&!editor.homeDrafts.size&&!sideGalleries&&!hasBackgrounds)return;
     editor.saving=true;
     renderStoreOrderControls();
     try{
@@ -847,8 +857,8 @@
           editor.preparing=false;
         }
       }
-      if(hasBackgrounds||Object.keys(orders).length){
-        const saved=await api('/api/admin/storefront/preferences',{method:'PATCH',credentials:'include',body:JSON.stringify({orders,...(hasBackgrounds?{backgrounds}:{})})});
+      if(hasBackgrounds||sideGalleries||Object.keys(orders).length){
+        const saved=await api('/api/admin/storefront/preferences',{method:'PATCH',credentials:'include',body:JSON.stringify({orders,...(sideGalleries?{sideGalleries}:{}),...(hasBackgrounds?{backgrounds}:{})})});
         state.config.storefrontHome=saved.home;
         if(hasBackgrounds){
           state.config.storefrontBackgrounds=saved.backgrounds;
@@ -857,6 +867,7 @@
         editor.drafts.clear();
         editor.orderBases.clear();
         editor.homeDrafts.clear();
+        delete editor.sideGalleryDraft;
       }
       toast('Cambios guardados en la tienda','success');
     }catch(error){toast(`No se guardaron todos los cambios. ${error.message}`,'error');}
@@ -950,18 +961,20 @@
     return orderedStoreProducts(items);
   }
 
+  function hasStorefrontPrice(product){return Number(product?.price_cents)>0;}
+  function storefrontPriceLabel(product){return hasStorefrontPrice(product)?money(product.price_cents):'Consultar precio';}
   function productCard(p) {
     const media=productCollectionImages(p),first=media[0];
     const catalogKind=window.SalmosHome.isGarment(p) ? 'garment' : 'object';
     const image = first?.url
       ? `<img loading="lazy" src="${escapeHtml(first.url)}" alt="${escapeHtml(first.alt_text||p.name)}" data-catalog-framing="${catalogPhotoFraming(first)}" draggable="false">`
       : `<div class="product-placeholder">SALMOS</div>`;
-    const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : '', Number(p.available_stock)<=0 ? '<span class="tag">AGOTADO</span>' : ''].join('');
+    const tags = [p.is_new ? '<span class="tag gold">NUEVO</span>' : '', p.is_bestseller ? '<span class="tag">MÁS VENDIDO</span>' : '', hasStorefrontPrice(p)&&Number(p.available_stock)<=0 ? '<span class="tag">AGOTADO</span>' : ''].join('');
     return `<article class="product-card" data-product-id="${p.id}" data-sale-mode="${escapeHtml(p.sale_mode||'stock')}" ${catalogKind?`data-catalog-kind="${catalogKind}"`:''} ${productBackgroundAttrs(p)}>
       <div class="product-media" data-media-index="0">${image}${state.storeOrderEditor?.enabled?`<button type="button" class="product-edit-production" data-edit-store-production="${p.id}" aria-label="Editar producción y publicación de ${escapeHtml(p.name)}">Editar producción</button>`:''}${media.length>1?`<button type="button" class="product-photo-arrow previous" data-card-media-step="-1" aria-label="Foto anterior de ${escapeHtml(p.name)}">‹</button><button type="button" class="product-photo-arrow next" data-card-media-step="1" aria-label="Foto siguiente de ${escapeHtml(p.name)}">›</button><span class="product-photo-count" aria-live="polite">1 / ${media.length}</span>`:''}<div class="product-tags">${tags}</div><button class="favorite-btn ${state.auth.favoriteIds.has(Number(p.id))?'active':''}" data-favorite-product="${p.id}" aria-label="Guardar en favoritos" title="Favorito"><svg class="favorite-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" fill="currentColor"/></svg></button></div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
-        <div class="price-row"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+        <div class="price-row"><span class="price">${storefrontPriceLabel(p)}</span>${hasStorefrontPrice(p)&&p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
         ${state.storeOrderEditor?.enabled?'':quickCartButton(p)}
       </div>
     </article>`;
@@ -1046,7 +1059,7 @@
     const orderItems=items.filter(p=>p.sale_mode==='order');
     const collection=window.SalmosHome.selectedName();
     const type=qs('#categoryRow [data-catalog-type].active:not([data-catalog-type="all"])')?.textContent;
-    const title = [collection,type].filter(Boolean).join(' · ') || 'Todos los productos';
+    const title = (state.activeSideGallery?.key===state.catalogType?state.activeSideGallery.title:'')||[collection,type].filter(Boolean).join(' · ')||'Todos los productos';
     if(qs('#catalogCollectionTitle'))qs('#catalogCollectionTitle').textContent=state.query?`Resultados para “${state.query}”`:title;
     if(qs('#catalogCollectionCount'))qs('#catalogCollectionCount').textContent=items.length?`${items.length} ${items.length===1?'producto':'productos'}`:'Todavía no hay publicaciones en esta colección.';
     const t=qs('#productsTitle'),sub=qs('#productsSubtitle'),clear=qs('#clearFiltersBtn');
@@ -1273,6 +1286,7 @@
   }
 
   function quickCartButton(product) {
+    if(!hasStorefrontPrice(product))return '';
     return `<button class="quick-cart-button" type="button" data-quick-cart="${Number(product.id)}"
       title="Agregar al carrito" aria-label="Agregar ${escapeHtml(product.name)} al carrito"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i></button>`;
   }
@@ -1286,7 +1300,8 @@
     if (guide) media.push({sizeGuide:guide});
     const catalogVariants = (p.variants || []).filter(v=>v.active!==0).map(v=>({...v,size:normalizePublicSize(v.size)}));
     const loading=Boolean(state.productDetailLoading),detailError=state.productDetailError||'';
-    const availableVariants = loading||detailError?[]:catalogVariants.filter(v => publicVariantStock(v) > 0);
+    const hasPrice=hasStorefrontPrice(p);
+    const availableVariants = loading||detailError||!hasPrice?[]:catalogVariants.filter(v => publicVariantStock(v) > 0);
     const activeVariant = availableVariants.find(v => v.id === Number(state.selectedVariantId)) || null;
     const colors = [...new Set(catalogVariants.map(v => v.color || '').filter((v,i,a) => a.indexOf(v) === i))];
     if (state.selectedColor && !colors.includes(state.selectedColor)) state.selectedColor = colors[0] || null;
@@ -1313,7 +1328,7 @@
         </div>
         <div class="detail-info detail-info-v4">
           <h2>${escapeHtml(p.name)}</h2>
-          <div class="price-row detail-price-centered ${p.digitalBook?.enabled?'hidden':''}"><span class="price">${money(p.price_cents)}</span>${p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
+          <div class="price-row detail-price-centered ${p.digitalBook?.enabled&&hasPrice?'hidden':''}"><span class="price">${storefrontPriceLabel(p)}</span>${hasPrice&&p.compare_at_cents > p.price_cents ? `<span class="price-old">${money(p.compare_at_cents)}</span>` : ''}</div>
           ${window.SalmosDigital?.editionHtml(p)||''}
           ${loading?'<div class="product-detail-status" role="status">Cargando opciones…</div>':detailError?`<div class="product-detail-status" role="alert">${escapeHtml(detailError)}<button type="button" class="btn btn-ghost" data-retry-product="${escapeHtml(p.id)}">Reintentar</button></div>`:''}
           ${attributeCells.length?`<div class="product-attribute-line" aria-label="Opciones del producto">${attributeCells.join('')}</div>`:''}
@@ -1321,14 +1336,15 @@
           ${p.verse_text ? `<div class="detail-verse-centered"><div class="detail-verse-text">${escapeHtml(p.verse_text)}</div>${p.verse_reference ? `<div class="detail-verse-reference">${escapeHtml(p.verse_reference)}</div>` : ''}</div>` : ''}
           <p class="detail-description">${escapeHtml(p.short_description || '')}</p>
           ${p.meaning_text ? `<p class="detail-description detail-meaning-plain">${escapeHtml(p.meaning_text)}</p>` : ''}
-          ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)&&!loading&&!detailError?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
+          ${hasPrice&&!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)&&!loading&&!detailError?'<div class="stock-note" style="text-align:center"><strong>Sin stock disponible por el momento.</strong></div>':''}
         </div>
       </div>
       </div>
           <div class="detail-actions product-modal-actions">
             <button class="btn btn-ghost detail-share-inline" data-share-product type="button" title="Compartir este producto"><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.1M8.7 13.3l6.6 4.1"/></svg></span><span>Compartir</span></button>
-            <button class="btn btn-secondary" data-add-cart ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>${p.digitalBook?.enabled?'Agregar impreso':'Agregar al carrito'}</span></button>
-            <button class="btn btn-primary" data-buy-now ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>${p.digitalBook?.enabled?'Comprar impreso':'Comprar ahora'}</span></button>
+            ${hasPrice?`<button class="btn btn-secondary" data-add-cart ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg></span><span>${p.digitalBook?.enabled?'Agregar impreso':'Agregar al carrito'}</span></button>
+            <button class="btn btn-primary" data-buy-now ${!availableVariants.some(v=>!state.selectedColor||v.color===state.selectedColor)?'disabled':''}><span class="detail-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2zM12 7v14"/><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg></span><span>${p.digitalBook?.enabled?'Comprar impreso':'Comprar ahora'}</span></button>`:
+              `<a class="btn btn-primary" href="${escapeHtml(window.SalmosHome.whatsapp('Hola SALMOS, quisiera consultar el precio de '+p.name+'.'))}" target="_blank" rel="noopener noreferrer">Consultar por WhatsApp</a>`}
           </div>`;
     qs('.product-modal-content',modal).scrollTop=previousScroll;
     const strip=qs('#detailMediaStrip');
@@ -1454,6 +1470,7 @@
   }
 
   function beginProductPurchase(product, options) {
+    if(!hasStorefrontPrice(product)){toast('Consultá el precio antes de comprar.','error');return;}
     const variants = (product.variants || []).filter(variant => variant.active !== 0).map(variant=>({...variant,id:Number(variant.id)}));
     const category = product.category_slug || product.category_name;
     const type = product.production_catalog?.materialType || promotionProductType(category, product.fit);
@@ -2509,7 +2526,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qs('#heroShopBtn')?.addEventListener('click', () => qs('#productos')?.scrollIntoView({behavior:'smooth'}));
     qs('#flyersLaunchBtn')?.addEventListener('click',()=>{const sec=qs('#flyersSection');if(sec){sec.classList.remove('hidden');sec.scrollIntoView({behavior:'smooth',block:'start'});}});
     qs('#closeFlyersBtn')?.addEventListener('click',()=>qs('#flyersSection')?.classList.add('hidden'));
-    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.homeCollection=null;state.storefrontCatalog=true;state.catalogType='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
+    qs('#clearFiltersBtn')?.addEventListener('click', () => { state.homeCollection=null;state.activeSideGallery=null;state.storefrontCatalog=true;state.catalogType='all'; state.query=''; qs('#searchInput').value=''; renderCategories(); renderProducts(); });
     qs('#searchInput').addEventListener('input', e => { state.storefrontCatalog=true;state.query=e.target.value; renderCategories();renderProducts(); });
     if(qs('#year')) qs('#year').textContent = new Date().getFullYear();
     window.addEventListener('popstate',()=>{const key=currentProductPathKey();if(!key){if(qs('#productModal')?.classList.contains('open'))closeModal('#productModal');return;}openProductFromCurrentPath();});
@@ -3042,7 +3059,13 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
   initBackToTop();
   window.SalmosWholesale?.init({state,storefrontPageBackground,money,escapeHtml,apiUrl,openProduct,openCart,cartPromotion,renderCategories,renderProducts,quickCartButton,productCardImages,productBackgroundAttrs});
-  window.SalmosHome?.init({state,storefrontPageBackground,cfg,apiUrl,quickCartButton,renderCategories,renderProducts,productCardImages,productBackgroundAttrs,openCart,closeCart,money,openProduct,editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();}});
+  window.SalmosHome?.init({state,storefrontPageBackground,cfg,apiUrl,quickCartButton,renderCategories,renderProducts,
+    productCardImages,productBackgroundAttrs,openCart,closeCart,money,priceLabel:storefrontPriceLabel,openProduct,
+    editProduct:(id,mediaId)=>openStoreProductProduction({dataset:{productId:String(id)},querySelector:()=>null},{mediaId}),
+    newProduct:key=>openStoreProductProduction(null,{create:true,audience:{hombre:'Hombre',mujer:'Mujer',kids:'Kids'}[key]||''}),
+    onHomeOrder:(key,ids)=>{state.storeOrderEditor?.homeDrafts.set(key,ids);renderStoreOrderControls();},
+    onSideGalleryChange:renderStoreOrderControls
+  });
   window.SalmosStoreShipping?.init({
     state,api,apiUrl,authApi,currentIdToken,escapeHtml,signIn:signInGoogle,
     whatsapp:window.SalmosHome.whatsapp,dialog:window.SalmosHome.dialog

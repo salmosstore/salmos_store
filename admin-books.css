@@ -158,3 +158,10 @@ body .admin-topbar #addPromotionBtn[hidden],body .admin-topbar #saveSettingsBtn[
 .custom-price-tools h4{margin:0}
 .custom-condition-fields{grid-column:1/-1}
 .custom-condition-copy{white-space:pre-line;overflow-wrap:anywhere}
+
+.book-row-yield{display:block;margin-top:8px;color:var(--muted)}
+.book-material-manager{display:grid;gap:12px}
+.book-material-manager p{margin:0}
+.book-material-manager fieldset{display:grid;gap:8px;margin:0;padding:12px;border:1px solid var(--line);border-radius:12px}
+.book-material-manager .btn{justify-self:end}
+#productionDialog .book-ink-panel[hidden]{display:none!important}

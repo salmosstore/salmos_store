@@ -229,3 +229,7 @@ html body #mockupAssetDialog #closeMockupAssetsBtn{position:static!important;mar
   #montageFullscreenDialog #montageWorkspace .montage-track { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   #montageWorkspace .montage-photo-info .icon-btn { min-width: 28px; padding: 0 4px; }
 }
+
+#productionFinalizeDialog .dialog-body{display:grid;gap:12px}
+#productionFinalizeDialog .dialog-body :is(p,ul){margin:0}
+#productionFinalizeDialog .admin-actions{flex-wrap:wrap}
