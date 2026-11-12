@@ -312,7 +312,7 @@
     document.addEventListener('pointercancel',finish);
     document.addEventListener('lostpointercapture',finish);
   }
-  function installGalleryEditorStyles(){
+  function installStorefrontStyles(){
     const style=document.createElement('style');
     style.textContent=`
       .home-side-controls{display:flex;justify-content:space-around;border-top:1px solid var(--line)}
@@ -327,10 +327,28 @@
       #homeSideGalleryProductsDialog{width:min(880px,calc(100% - 24px));max-width:none}
       #homeSideGalleryProductsDialog .home-product{flex:0 0 min(200px,64vw)}
       .home-photo-missing{display:grid;place-items:center;min-height:130px}
+      .detail-info .detail-description:not(.detail-meaning-plain){font-size:.9rem;line-height:1.45}
+      .detail-info .detail-description:empty{display:none}
+      @media(max-width:650px){
+        .storefront .storefront-page-offer{
+          display:grid;grid-template-columns:minmax(0,1fr);align-items:start;
+        }
+        .storefront .storefront-page-offer > .storefront-page-offer-copy{
+          display:flex;align-items:center;grid-column:1/-1;grid-row:1;min-width:0;
+        }
+        .storefront .storefront-page-offer-copy > .fa-globe{align-self:center}
+        .storefront .storefront-page-offer:has(> .fa-globe){grid-template-columns:auto minmax(0,1fr)}
+        .storefront .storefront-page-offer > .fa-globe{grid-column:1;grid-row:1;align-self:center}
+        .storefront .storefront-page-offer:has(> .fa-globe) > .storefront-page-offer-copy{grid-column:2}
+        .storefront .storefront-page-offer > .storefront-page-offer-actions{
+          grid-column:1/-1;grid-row:2;width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+        }
+        .storefront .storefront-page-offer-actions > .btn{width:100%;min-width:0;margin:0;white-space:normal}
+      }
     `;
     document.head.append(style);
   }
-  function init(options){context=options;installGalleryEditorStyles();installGallerySorting();
+  function init(options){context=options;installStorefrontStyles();installGallerySorting();
     document.addEventListener('click',event=>{
       const edit=event.target.closest('[data-home-edit]');if(edit){event.preventDefault();context.editProduct?.(Number(edit.dataset.homeEdit),Number(edit.dataset.homeMedia));return;}
       const add=event.target.closest('[data-home-new]');if(add){event.preventDefault();context.newProduct?.(add.dataset.homeNew);return;}

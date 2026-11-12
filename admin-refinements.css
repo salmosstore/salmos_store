@@ -233,3 +233,83 @@ html body #mockupAssetDialog #closeMockupAssetsBtn{position:static!important;mar
 #productionFinalizeDialog .dialog-body{display:grid;gap:12px}
 #productionFinalizeDialog .dialog-body :is(p,ul){margin:0}
 #productionFinalizeDialog .admin-actions{flex-wrap:wrap}
+
+/* El editor del montaje ahora vive en la pestaña Producción. */
+body #productionDialog.production-editor-fullscreen .production-tab-panel:not([data-production-panel="2"]) {
+  display: none !important;
+}
+body #productionDialog.production-editor-fullscreen [data-production-panel="2"] {
+  display: block !important;
+  height: 100% !important;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+body #productionDialog.production-editor-fullscreen [data-production-panel="2"] > :not(#productionMockupStudio) {
+  display: none !important;
+}
+
+@media (min-width: 761px) {
+  .montage-rubro-view:has(> .montage-level + .montage-level) {
+    grid-template-columns: minmax(0, 1fr) minmax(275px, .38fr);
+  }
+}
+#montageBatchBtn[aria-pressed="true"],
+#montageWorkspace .montage-batch-card.selected {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.montage-batch-tools {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.montage-batch-tools .admin-actions { flex-wrap: wrap; }
+#montageWorkspace .montage-batch-card .montage-photo-thumb { position: relative; }
+.montage-batch-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #fff;
+  background: #351828;
+  color: #fff;
+}
+.montage-batch-check i { visibility: hidden; }
+.montage-batch-card.selected .montage-batch-check { background: #f6a4c5; color: #2d1423; }
+.montage-batch-card.selected .montage-batch-check i { visibility: visible; }
+.montage-metadata-form { display: grid; gap: 12px; }
+.montage-metadata-form p { margin: 0; }
+.montage-metadata-fields,
+.montage-metadata-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}
+.montage-metadata-fields > * { flex: 1 1 160px; }
+.montage-metadata-options,
+.montage-material-differences {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line, #75405b);
+  border-radius: 10px;
+}
+.montage-material-differences h3 { margin: 0; }
+.montage-material-differences h4 { margin: 12px 0 4px; }
+.montage-material-differences table { width: 100%; margin-bottom: 10px; border-collapse: collapse; }
+.montage-material-differences :is(th,td) {
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line, #75405b);
+  overflow-wrap: anywhere;
+}
+
+.montage-material-review-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
