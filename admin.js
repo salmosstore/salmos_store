@@ -1011,12 +1011,82 @@
     }
     return `<div class="field purchase-image-choice">${purchaseImagePickerHtml(item,i)}</div>`;
   }
-  function purchasePhotoIds(item){return [...new Set((Array.isArray(item.imageAssetIds)?item.imageAssetIds:item.imageAssetId?[item.imageAssetId]:[]).map(Number).filter(id=>id>0))];}
+  const isGarmentPhoto=asset=>asset?.asset_type==='base'&&materialIsGarment(asset.product_type);
+  const isHangerPhoto=asset=>isGarmentPhoto(asset)&&asset.gender==='Producto';
+  function garmentFamilyFields(item){
+    const type=item.material_type||item.materialType||item.type,fit=item.fit||'',color=item.color||'';
+    const line=item.line||(window.SalmosAudience.parse(item.material_class||item.materialClass).includes('Kids')?'kids':'adult');
+    if(!materialIsGarment(type)||!photoFit(fit)||!photoColor(color))return null;
+    return {key:JSON.stringify([type,photoFit(fit),photoColor(color),line]),type,fit,color,line};
+  }
+  function garmentPhotoAssignmentsData(data){
+    const rows=values=>new Map((values||[]).map(row=>[row.key,row]));
+    const memberships=new Map(),families=rows(data.families);
+    for(const row of families.values())for(const id of [...row.hangerIds,...row.modelIds]){
+      if(!memberships.has(id))memberships.set(id,[]);
+      memberships.get(id).push(row);
+    }
+    state.garmentPhotos={revision:data.revision??null,families,memberships,suggestions:rows(data.suggestions),
+      legacyModelLinks:new Set(data.legacyModelLinks||[]),unlinkedModelIds:new Set(data.unlinkedModelIds||[])};
+  }
+  async function loadGarmentPhotos(){
+    if(state.garmentPhotosRequest)return state.garmentPhotosRequest;
+    const path='/api/admin/mockup-assets/garment-families';
+    state.garmentPhotosRequest=api(path,{cache:'no-store'}).then(data=>garmentPhotoAssignmentsData(data)).catch(error=>{
+      if(error.status!==404)throw error;
+    }).finally(()=>{state.garmentPhotosRequest=null;});
+    return state.garmentPhotosRequest;
+  }
+  function garmentPhotoFamilyFor(item){
+    const fields=garmentFamilyFields(item);
+    return fields&&state.garmentPhotos?.families.get(fields.key);
+  }
+  function garmentPhotoMembership(asset){
+    if(!isGarmentPhoto(asset))return [];
+    return state.garmentPhotos?.memberships.get(Number(asset.id))||[];
+  }
+  function garmentPhotoAudience(asset,rows=garmentPhotoMembership(asset)){
+    if(!rows.length)return [];
+    const adults=rows.some(row=>row.line==='adult'),kids=rows.some(row=>row.line==='kids');
+    if(isHangerPhoto(asset))return [...(adults?['Hombre','Mujer']:[]),...(kids?['Kids']:[])];
+    const tagged=savedPhotoAudiences(asset),model=tagged.length?tagged:window.SalmosAudience.parse(asset.gender);
+    const adult=model.filter(value=>value!=='Kids');
+    return [...(adults?(adult.length?adult:['Hombre','Mujer']):[]),...(kids?['Kids']:[])];
+  }
+  function purchaseGarmentPhotos(item){
+    const family=garmentPhotoFamilyFor(item);
+    if(!family)return [];
+    const photos=new Map(state.mockupAssets.filter(isHangerPhoto).map(photo=>[Number(photo.id),photo]));
+    return family.hangerIds.map(id=>photos.get(id)).filter(Boolean);
+  }
+  function garmentPhotoChoices(item){
+    const fields=garmentFamilyFields(item);
+    if(!fields)return [];
+    const family=state.garmentPhotos?.families.get(fields.key);
+    const suggested=state.garmentPhotos?.suggestions.get(fields.key);
+    const ids=new Set([...(family?.hangerIds||[]),...(suggested?.hangerIds||[])]);
+    return state.mockupAssets.filter(asset=>{
+      if(!isHangerPhoto(asset)||asset.product_type!==fields.type)return false;
+      const details=photoProductDetails(asset);
+      return ids.has(Number(asset.id))||photoFit(details.variant)===photoFit(fields.fit)&&photoColor(details.color)===photoColor(fields.color);
+    });
+  }
+  function purchasePhotoSelection(item){
+    const ids=Array.isArray(item.imageAssetIds)?item.imageAssetIds:item.imageAssetId?[item.imageAssetId]:[];
+    return [...new Set(ids.map(Number).filter(id=>id>0))];
+  }
+  function purchasePhotoIds(item){
+    const type=item.materialType||item.material_type;
+    if(!materialIsGarment(type))return purchasePhotoSelection(item);
+    if(!item._imageTouched)return purchaseGarmentPhotos(item).map(photo=>Number(photo.id));
+    const allowed=new Set(garmentPhotoChoices(item).map(photo=>Number(photo.id)));
+    return purchasePhotoSelection(item).filter(id=>allowed.has(id));
+  }
   function galleryOrder(kind,items){let saved={};try{saved=JSON.parse(state.settings.admin_gallery_order||'{}')}catch{}const ids=state.galleryOrders?.[kind]||saved[kind]||[],positions=new Map(ids.map((id,i)=>[Number(id),i]));return [...items].sort((a,b)=>(positions.get(Number(a.id))??1e6)-(positions.get(Number(b.id))??1e6));}
   function photoFit(value){const text=String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();return text.includes('over')?'oversize':text.includes('crop')?'crop':text.includes('boxy')?'boxy':text.includes('clasic')||text.includes('basic')?'clasico':text.replace(/remera|buzo|chomba|camisa/g,'').trim();}
   function photoColor(value){const normalize=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase(),text=normalize(value);if(['negro','negra','black'].includes(text))return 'negro';if(['blanco','blanca','white'].includes(text))return 'blanco';const named=window.SalmosColors?.colorForName(value)||window.SalmosColors?.catalog().find(c=>normalize(c.name)===text)?.color||previewColor(value);return ['#ffffff','#f7f5ef'].includes(named)?'blanco':['#000000','#151515'].includes(named)?'negro':named||text;}
   function photoMatchesItem(asset,item){const type=item.materialType||item.material_type||'shirt';if(asset.asset_type!=='base'||asset.product_type!==type&&!(window.SalmosBook.isBookType(type)&&window.SalmosBook.isBookType(asset.product_type)))return false;const color=String(item.color||'').trim(),fit=item.fit||'';return (!color||photoColor(asset.color)===photoColor(color))&&(!fit||photoFit(asset.garment_style)===photoFit(fit));}
-  function photosForItem(item,ids=[]){const chosen=new Set(ids.map(Number));return galleryOrder('photos',state.mockupAssets.filter(a=>photoMatchesItem(a,item)||chosen.has(Number(a.id)))).sort((a,b)=>{const order=item.imageGalleryOrder||ids,ai=order.indexOf(Number(a.id)),bi=order.indexOf(Number(b.id));return (ai<0?1e9:ai)-(bi<0?1e9:bi);});}
+  function photosForItem(item,ids=[]){const chosen=new Set(ids.map(Number)),type=item.material_type||item.materialType;return galleryOrder('photos',materialIsGarment(type)?garmentPhotoChoices(item):state.mockupAssets.filter(a=>photoMatchesItem(a,item)||chosen.has(Number(a.id)))).sort((a,b)=>{const order=item.imageGalleryOrder||ids,ai=order.indexOf(Number(a.id)),bi=order.indexOf(Number(b.id));return (ai<0?1e9:ai)-(bi<0?1e9:bi);});}
   function photoProductDetails(a){if(a.asset_type==='background')return {type:'background',variant:'',color:String(a.color||''),features:[]};const ids=[a.material_id,...(a.material_ids||[])].filter(Boolean).map(Number),material=state.materials.find(m=>ids.includes(Number(m.id))),explicit=Boolean(Number(a.metadata_explicit)),type=a.product_type||material?.material_type||'',variant=materialIsGarment(type)?photoFit(explicit?a.garment_style:a.garment_style||material?.fit||a.variant_label):String(a.variant_label||'').trim();let features=[];try{features=Array.isArray(a.features)?a.features:JSON.parse(a.features_json||'[]');}catch{}if(!explicit&&!features.length&&material)features=itemFeatures(material);return{type,variant,color:explicit?String(a.color||''):a.color||material?.color||'',features};}
 
   function photoProductKey(a){if(a.asset_type==='background')return 'Fondos';const d=photoProductDetails(a),norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();return JSON.stringify([d.type,norm(d.variant),photoColor(d.color),materialIsGarment(d.type)?[]:d.features.map(norm).sort()]);}
@@ -1039,7 +1109,10 @@
   }
   async function openProductionMaterialEditor(id){
     await Promise.all([ensureCostingData(),loadMockupAssets(),ensureAdminOptionSettings()]);const material=state.materials.find(item=>Number(item.id)===Number(id));if(!material)throw new Error('Materia prima no encontrada.');
-    const photoIds=materialPhotos(id).map(asset=>Number(asset.id));state.materialEditor={material:structuredClone(material),features:itemFeatures(material),featureOptions:[],imageAssetIds:[...photoIds],originalImageAssetIds:[...photoIds]};
+    await loadGarmentPhotos();
+    const photoIds=materialPhotos(id).map(asset=>Number(asset.id));
+    const displayed=materialIsGarment(material.material_type)?purchaseGarmentPhotos(material).map(asset=>Number(asset.id)):photoIds;
+    state.materialEditor={material:structuredClone(material),features:itemFeatures(material),featureOptions:[],imageAssetIds:[...displayed],originalImageAssetIds:[...photoIds]};
     let dialog=qs('#materialEditorDialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='materialEditorDialog';dialog.className='admin-dialog material-editor-dialog';dialog.addEventListener('cancel',event=>{if(state.materialEditorBusy)event.preventDefault()});document.body.append(dialog);}
     const choice=(name,label,value,options)=>`<label class="field"><span>${label}</span><select class="select" data-material-field="${name}"><option value="">Sin especificar</option>${mergePurchaseOptions(options,[value]).map(v=>`<option value="${escapeHtml(v)}" ${v===value?'selected':''}>${escapeHtml(v)}</option>`).join('')}${name==='fit'?'<option value="__manage_fits__">Administrar cortes…</option>':''}</select></label>`,field=(name,label,value,type='text')=>`<label class="field"><span>${label}</span><input class="input" data-material-field="${name}" type="${type}" ${type==='number'?'min="0" step=".01"':'maxlength="120"'} value="${escapeHtml(value??'')}"></label>`,garment=materialIsGarment(material.material_type);
     dialog.innerHTML=`<div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">${escapeHtml(materialTypeLabel(material.material_type))}</div><h2>Editar materia prima</h2></div><button class="icon-btn" type="button" data-close-material-editor aria-label="Cerrar">×</button></div><div class="dialog-body"><div class="material-editor-stock">${Number(material.stock_qty).toLocaleString('es-AR',{maximumFractionDigits:3})} ${material.unit==='meter'?'m':'u'} disponibles · ${money(material.average_cost_cents)} por ${material.unit==='meter'?'metro':'unidad'}</div><div class="field" id="materialEditorFeatures">${materialEditorFeaturesHtml()}</div><div class="form-grid material-editor-fields">${materialUsesColor(material.material_type)?`<label class="field"><span>Color</span><div class="salmos-color-field"><input class="input" data-material-field="color" data-material-color-palette readonly aria-haspopup="dialog" value="${escapeHtml(material.color||'')}"><button class="salmos-color-button" type="button" data-material-color-palette style="--color-swatch:${escapeHtml(colorSwatch(material.color))}" aria-label="Elegir color desde la paleta"></button></div></label>`:''}${garment?choice('fit','Corte',material.fit,purchaseFitOptions())+choice('size','Talle',material.size,purchaseSizeOptions({materialClass:material.material_class}))+choice('materialClass','Clase',material.material_class,purchaseClassOptions())+choice('gender','Género',material.gender,['Unisex','Varón','Mujer']):''}${Number(material.capacity_ml)>0||['mug','glass','thermos','tumbler'].includes(material.material_type)?field('capacityMl','Capacidad (ml)',material.capacity_ml,'number'):''}${material.unit==='meter'?field('widthCm','Ancho (cm)',material.width_cm,'number'):''}${field('unitCostPesos',material.unit==='meter'?'Costo pagado por metro ($)':'Costo pagado por unidad ($)',centsToPesos(material.average_cost_cents),'number')}</div><div class="material-cost-history"><small class="field-help">Costo usado para la producción.</small><button type="button" class="btn btn-ghost" data-edit-material-purchase>Editar última compra y pago</button></div><section id="materialEditorPhotos"></section></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" data-close-material-editor>Cancelar</button><button class="btn btn-primary" type="button" id="saveMaterialEditorBtn">Guardar materia prima</button></div></div>`;
@@ -1047,16 +1120,17 @@
   }
   async function saveMaterialEditor(button){
     const editor=state.materialEditor;if(!editor)return;const features=uniqOptions(editor.features);if(!features.length)throw new Error('Elegí los materiales y características.');
-    const payload={features,name:features.join(' · '),imageAssetIds:editor.imageAssetIds,expectedUpdatedAt:editor.material.updated_at,expectedImageAssetIds:editor.originalImageAssetIds};qsa('[data-material-field]',qs('#materialEditorDialog')).forEach(input=>payload[input.dataset.materialField]=input.type==='number'?Number(input.value):input.value.trim());
+    const payload={features,name:features.join(' · '),...(!materialIsGarment(editor.material.material_type)||editor.photosTouched?{imageAssetIds:editor.imageAssetIds}:{}),expectedUpdatedAt:editor.material.updated_at,expectedImageAssetIds:editor.originalImageAssetIds};qsa('[data-material-field]',qs('#materialEditorDialog')).forEach(input=>payload[input.dataset.materialField]=input.type==='number'?Number(input.value):input.value.trim());
     payload.unitCostCents=pesosToCents(payload.unitCostPesos);delete payload.unitCostPesos;payload.expectedUnitCostCents=Number(editor.material.average_cost_cents)||0;const controls=qsa('input,select,textarea,button',qs('#materialEditorDialog')).map(control=>[control,control.disabled]);controls.forEach(([control])=>control.disabled=true);state.materialEditorBusy=true;button.disabled=true;
     try{const result=await api(`/api/admin/materials/${Number(editor.material.id)}`,{method:'PATCH',body:JSON.stringify(payload)});state.materials=state.materials.map(material=>Number(material.id)===Number(result.item.id)?result.item:material);if(Array.isArray(result.photos))state.mockupAssets=result.photos;
+      if(result.garmentPhotos)garmentPhotoAssignmentsData(result.garmentPhotos);
       for(const feature of features)addPurchaseOption('materials',feature,result.item.material_type);if(Array.isArray(state.purchaseOptions.featureCatalog?.[result.item.material_type]))state.purchaseOptions.featureCatalog[result.item.material_type]=uniqOptions([...state.purchaseOptions.featureCatalog[result.item.material_type],...features]);persistAdminOptionSettings().catch(()=>{});
       renderProductionMaterialGallery();renderProductionSelectedMaterials();renderMockupStudioOptions();if(!qs('#mockupBaseSelect')?.value){const first=materialPhotos(editor.material.id)[0];if(first)selectMockupVariant(first.id);}await refreshMockupPreview().catch(()=>{});qs('#materialEditorDialog').close();state.materialEditor=null;toast('Materia prima y fotos guardadas','success');
     }finally{controls.forEach(([control,disabled])=>control.disabled=disabled);state.materialEditorBusy=false;button.disabled=false;}
   }
   function purchaseImagePickerHtml(item,i){
     const type=item.materialType||'shirt',ids=purchasePhotoIds(item),assets=photosForItem(item,ids),selected=assets.filter(a=>ids.includes(Number(a.id)));
-    return `<div class="purchase-image-picker-head"><label>Fotos de la materia prima<small>${selected.length} elegida${selected.length===1?'':'s'}</small></label><button class="btn btn-ghost" type="button" data-purchase-photos-all="${i}">${assets.length&&assets.every(a=>ids.includes(Number(a.id)))?'Desmarcar todas':'Marcar todas'}</button><button class="btn btn-ghost" type="button" data-upload-material-image="${i}">+ Subir fotos</button></div><div class="horizontal-gallery-shell"><button type="button" class="gallery-arrow gallery-arrow-left" data-scroll-target="purchaseImageGallery-${i}" data-scroll-dir="-1" aria-label="Fotos anteriores">‹</button><div class="purchase-image-gallery" id="purchaseImageGallery-${i}" aria-label="Elegir varias fotos de la materia prima"><button type="button" class="purchase-image-option ${!ids.length?'selected':''}" data-choose-purchase-image="0" data-purchase-image-row="${i}" aria-pressed="${!ids.length}" aria-label="Sin foto"><span>Sin foto</span></button>${assets.map((a,index)=>`<button type="button" class="purchase-image-option ${ids.includes(Number(a.id))?'selected':''}" data-choose-purchase-image="${a.id}" data-purchase-image-row="${i}" data-sort-photo="${a.id}" data-photo-owner="purchase-${i}" draggable="true" aria-pressed="${ids.includes(Number(a.id))}" aria-label="Foto ${index+1}"><span class="photo-sort-handle" data-photo-sort-handle title="Arrastrar para ordenar">↔</span><img draggable="false" src="${escapeHtml(mockupAssetUrl(a))}" alt="Foto ${index+1}" loading="lazy" decoding="async">${ids.includes(Number(a.id))?'<span class="purchase-photo-check">✓</span>':''}</button>`).join('')}</div><button type="button" class="gallery-arrow gallery-arrow-right" data-scroll-target="purchaseImageGallery-${i}" data-scroll-dir="1" aria-label="Fotos siguientes">›</button></div>`;
+    return `<div class="purchase-image-picker-head"><label>${materialIsGarment(type)?'Fotos en percha · todos los talles':'Fotos de la materia prima'}<small>${selected.length} elegida${selected.length===1?'':'s'}</small></label><button class="btn btn-ghost" type="button" data-purchase-photos-all="${i}">${assets.length&&assets.every(a=>ids.includes(Number(a.id)))?'Desmarcar todas':'Marcar todas'}</button><button class="btn btn-ghost" type="button" data-upload-material-image="${i}">+ Subir fotos</button></div><div class="horizontal-gallery-shell"><button type="button" class="gallery-arrow gallery-arrow-left" data-scroll-target="purchaseImageGallery-${i}" data-scroll-dir="-1" aria-label="Fotos anteriores">‹</button><div class="purchase-image-gallery" id="purchaseImageGallery-${i}" aria-label="Elegir varias fotos de la materia prima"><button type="button" class="purchase-image-option ${!ids.length?'selected':''}" data-choose-purchase-image="0" data-purchase-image-row="${i}" aria-pressed="${!ids.length}" aria-label="Sin foto"><span>Sin foto</span></button>${assets.map((a,index)=>`<button type="button" class="purchase-image-option ${ids.includes(Number(a.id))?'selected':''}" data-choose-purchase-image="${a.id}" data-purchase-image-row="${i}" data-sort-photo="${a.id}" data-photo-owner="purchase-${i}" draggable="true" aria-pressed="${ids.includes(Number(a.id))}" aria-label="Foto ${index+1}"><span class="photo-sort-handle" data-photo-sort-handle title="Arrastrar para ordenar">↔</span><img draggable="false" src="${escapeHtml(mockupAssetUrl(a))}" alt="Foto ${index+1}" loading="lazy" decoding="async">${ids.includes(Number(a.id))?'<span class="purchase-photo-check">✓</span>':''}</button>`).join('')}</div><button type="button" class="gallery-arrow gallery-arrow-right" data-scroll-target="purchaseImageGallery-${i}" data-scroll-dir="1" aria-label="Fotos siguientes">›</button></div>`;
   }
   function choosePurchaseImage(index,id){
     const item=state.purchaseItems[index],row=qs(`[data-purchase-row="${index}"]`);if(!item||!row)return;
@@ -1078,9 +1152,9 @@
     }
     const index=owner.startsWith('purchase-')?Number(owner.slice(9)):null,item=index!==null?state.purchaseItems[index]:state.materialEditor;if(!item)return;
     const type=index!==null?item.materialType:item.material.material_type,ids=index!==null?purchasePhotoIds(item):item.imageAssetIds;
-    const ordered=orderedPhotoAssets(type,item.imageGalleryOrder||ids).map(asset=>Number(asset.id)),from=ordered.indexOf(Number(fromId)),to=ordered.indexOf(Number(toId));if(from<0||to<0)return;
+    const ordered=(materialIsGarment(type)?photosForItem(index!==null?item:{...item.material,imageGalleryOrder:item.imageGalleryOrder},ids):orderedPhotoAssets(type,item.imageGalleryOrder||ids)).map(asset=>Number(asset.id)),from=ordered.indexOf(Number(fromId)),to=ordered.indexOf(Number(toId));if(from<0||to<0)return;
     const [id]=ordered.splice(from,1);ordered.splice(to,0,id);item.imageGalleryOrder=ordered;item.imageAssetIds=ordered.filter(id=>ids.includes(id));
-    if(index!==null){item.imageAssetId=item.imageAssetIds[0]||null;item._imageTouched=true;refreshPurchasePhotoField(index);}else renderMaterialEditorPhotos();animateGalleryOrder(document,before);
+    if(index!==null){item.imageAssetId=item.imageAssetIds[0]||null;item._imageTouched=true;refreshPurchasePhotoField(index);}else{item.photosTouched=true;renderMaterialEditorPhotos();}animateGalleryOrder(document,before);
   }
   function enhanceActionIcons(root=document){if(!root)return;for(const button of [...(root.matches?.('button')?[root]:[]),...(root.querySelectorAll?.('button')||[])]){const collapseLabel=button.textContent.trim();if(/^(Comprimir|Descomprimir|Expandir)(?: |$)/.test(collapseLabel)){button.setAttribute('aria-label',collapseLabel);button.title=collapseLabel;button.innerHTML='<i class="fa-solid '+(/^Comprimir/.test(collapseLabel)?'fa-chevron-up':'fa-chevron-down')+'" aria-hidden="true"></i>';}if(button.matches('[data-mockup-copy-info],[data-duplicate-purchase-item]')&&!button.querySelector('.fa-copy')){button.innerHTML='<i class="fa-solid fa-copy" aria-hidden="true"></i>';button.classList.add('action-icon');}const icons={'data-edit-production-mount':'fa-image','data-edit-production':'fa-pen','data-complete-production':'fa-check','data-cancel-production':'fa-ban'};for(const [attr,icon] of Object.entries(icons))if(button.hasAttribute(attr)&&!button.querySelector('.'+icon)){button.setAttribute('aria-label',button.getAttribute('aria-label')||button.textContent.trim());button.title=button.getAttribute('aria-label');button.innerHTML='<i class="fa-solid '+icon+'" aria-hidden="true"></i>';button.classList.add('action-icon');}if(button.querySelector('.fa-trash-can'))continue;const text=button.textContent.trim(),remove=Array.from(button.attributes).some(x=>/^data-(delete|remove|mockup-remove)/.test(x.name));if(/^Eliminar(?:\s|$)/.test(text)||(remove&&text==='×')){button.setAttribute('aria-label',button.getAttribute('aria-label')||text||'Eliminar');button.setAttribute('title',button.getAttribute('title')||button.getAttribute('aria-label'));button.classList.add('action-icon-delete');button.innerHTML='<i class="fa-solid fa-trash-can" aria-hidden="true"></i>';}}}
   function bindActionIcons(){enhanceActionIcons();if(!window.MutationObserver)return;const observer=new MutationObserver(records=>{const roots=new Set();for(const record of records){if(record.target.nodeType===1&&record.target.matches('button'))roots.add(record.target);for(const node of record.addedNodes)if(node.nodeType===1)roots.add(node);}for(const root of roots)if(root.isConnected)enhanceActionIcons(root);});observer.observe(document.body,{childList:true,subtree:true});}
@@ -1360,7 +1434,7 @@
     reset();
     requestAnimationFrame(()=>{if(dialog.open)reset();});
   }
-  async function openPurchaseDialog(purchase=null,context='purchases'){await Promise.all([ensureCostingData(),loadMockupAssets()]);state.stockPurchaseDraft=null;state.purchaseContext=context;state.editingPurchaseId=purchase?Number(purchase.id):null;state.purchaseOriginalOccurredAt=purchase?.occurred_at||null;state.purchaseSupplierAutoValue='';const f=qs('#purchaseForm');f.reset();refreshSupplierPickers(purchase?.supplier||'');const title=qs('#purchaseDialogTitle');if(title)title.textContent=purchase?`Editar compra #${purchase.id}`:'Nueva compra';if(purchase){state.purchaseItems=(purchase.items||[]).map(i=>({sourceItemId:Number(i.id),materialType:i.material_type,purchaseMode:i.pack_json?'pack':'unit',pack:window.SalmosPurchasePacks.fromRecord(i),name:i.material_name,features:itemFeatures(i),quantity:Number(i.quantity)||1,color:i.color||'',size:i.size||'',fit:i.fit||'',materialClass:i.material_class||'',gender:i.gender||'Unisex',capacityMl:Number(i.capacity_ml)||0,widthCm:Number(i.width_cm)||0,unitPricePesos:(Number(i.unit_price_cents)||0)/100,sheetAssetId:Number(i.sheet_asset_id)||null,lineTotalCents:Number(i.line_total_cents),imageAssetIds:materialPhotos(i.material_id).map(a=>Number(a.id)),imageAssetId:Number(materialPhotos(i.material_id)[0]?.id)||null,_imageTouched:false,_custom:{}}));f.elements.date.value=today(parseAdminDate(purchase.occurred_at)||new Date());f.elements.supplier.value=purchase.supplier||'';f.elements.reference.value=purchase.reference||'';f.elements.notes.value=purchase.notes||'';qs('#purchaseSurchargeType').value=purchase.surcharge_type||'fixed';qs('#purchaseSurcharge').value=purchase.surcharge_value??((Number(purchase.surcharge_cents)||0)/100);const pays=purchase.payments||[],cash=pays.filter(p=>p.method!=='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0),tr=pays.filter(p=>p.method==='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0);qs('#purchasePaymentMethod').value=cash&&tr?'mixed':tr?'transfer':'cash';qs('#purchaseCashAmount').value=cash/100||'';qs('#purchaseTransferAmount').value=tr/100||'';const tp=pays.find(p=>p.method==='transfer');qs('#purchaseTransferOrigin').value=tp?.origin||'';qs('#purchaseTransferDestination').value=tp?.destination||'';qs('#purchaseTransferReference').value=tp?.reference||'';qs('#purchaseTransferDetails').value=tp?.details||'';}else{state.purchaseItems=[purchaseDefaultItem(context==='production'&&qs('#productionDialog')?.open?(qs('#productionMaterialType')?.value||'shirt'):'shirt')];f.elements.date.value=today();qs('#purchasePaymentMethod').value='cash';qs('#purchaseSurcharge').value='';}await setupPurchaseFunding(purchase);let receipts=qs('#purchaseExistingReceipts');if(!receipts){receipts=document.createElement('section');receipts.id='purchaseExistingReceipts';qs('[name="attachments"]',f).closest('.field').append(receipts);}receipts.innerHTML=purchaseReceiptHtml(purchase?.attachments||[],true)+purchaseFundingSummary(purchase);renderPurchaseItems();showPurchaseEditor();}
+  async function openPurchaseDialog(purchase=null,context='purchases'){await Promise.all([ensureCostingData(),loadMockupAssets(),loadGarmentPhotos()]);state.stockPurchaseDraft=null;state.purchaseContext=context;state.editingPurchaseId=purchase?Number(purchase.id):null;state.purchaseOriginalOccurredAt=purchase?.occurred_at||null;state.purchaseSupplierAutoValue='';const f=qs('#purchaseForm');f.reset();refreshSupplierPickers(purchase?.supplier||'');const title=qs('#purchaseDialogTitle');if(title)title.textContent=purchase?`Editar compra #${purchase.id}`:'Nueva compra';if(purchase){state.purchaseItems=(purchase.items||[]).map(i=>({sourceItemId:Number(i.id),materialType:i.material_type,purchaseMode:i.pack_json?'pack':'unit',pack:window.SalmosPurchasePacks.fromRecord(i),name:i.material_name,features:itemFeatures(i),quantity:Number(i.quantity)||1,color:i.color||'',size:i.size||'',fit:i.fit||'',materialClass:i.material_class||'',gender:i.gender||'Unisex',capacityMl:Number(i.capacity_ml)||0,widthCm:Number(i.width_cm)||0,unitPricePesos:(Number(i.unit_price_cents)||0)/100,sheetAssetId:Number(i.sheet_asset_id)||null,lineTotalCents:Number(i.line_total_cents),imageAssetIds:materialPhotos(i.material_id).map(a=>Number(a.id)),imageAssetId:Number(materialPhotos(i.material_id)[0]?.id)||null,_imageTouched:false,_custom:{}}));f.elements.date.value=today(parseAdminDate(purchase.occurred_at)||new Date());f.elements.supplier.value=purchase.supplier||'';f.elements.reference.value=purchase.reference||'';f.elements.notes.value=purchase.notes||'';qs('#purchaseSurchargeType').value=purchase.surcharge_type||'fixed';qs('#purchaseSurcharge').value=purchase.surcharge_value??((Number(purchase.surcharge_cents)||0)/100);const pays=purchase.payments||[],cash=pays.filter(p=>p.method!=='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0),tr=pays.filter(p=>p.method==='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0);qs('#purchasePaymentMethod').value=cash&&tr?'mixed':tr?'transfer':'cash';qs('#purchaseCashAmount').value=cash/100||'';qs('#purchaseTransferAmount').value=tr/100||'';const tp=pays.find(p=>p.method==='transfer');qs('#purchaseTransferOrigin').value=tp?.origin||'';qs('#purchaseTransferDestination').value=tp?.destination||'';qs('#purchaseTransferReference').value=tp?.reference||'';qs('#purchaseTransferDetails').value=tp?.details||'';}else{state.purchaseItems=[purchaseDefaultItem(context==='production'&&qs('#productionDialog')?.open?(qs('#productionMaterialType')?.value||'shirt'):'shirt')];f.elements.date.value=today();qs('#purchasePaymentMethod').value='cash';qs('#purchaseSurcharge').value='';}await setupPurchaseFunding(purchase);let receipts=qs('#purchaseExistingReceipts');if(!receipts){receipts=document.createElement('section');receipts.id='purchaseExistingReceipts';qs('[name="attachments"]',f).closest('.field').append(receipts);}receipts.innerHTML=purchaseReceiptHtml(purchase?.attachments||[],true)+purchaseFundingSummary(purchase);renderPurchaseItems();showPurchaseEditor();}
   async function savePurchase(){
     const form=qs('#purchaseForm');qsa('[data-purchase-row]',form).forEach(syncPurchaseRowFromDom);const fd=new FormData(form);
     for(const x of state.purchaseItems){if(x.materialType==='__other__'){const label=normalizeOption(x.customTypeLabel);if(!label)throw new Error('Escribí el nombre del nuevo tipo.');const code=safeCustomTypeCode(label);x.materialType=code;if(!customTypeEntries().some(t=>t.code===code))state.purchaseOptions.types.push({code,label});}}
@@ -1403,7 +1477,7 @@
     field.value=value;state.purchaseSupplierAutoValue=value;
   }
   async function openPurchaseReview(id){
-    const {item:purchase}=await api(`/api/admin/purchases/${Number(id)}`,{cache:'no-store'});if(!purchase)throw new Error('Compra no encontrada.');await Promise.all([loadMockupAssets(),ensureCostingData()]);
+    const {item:purchase}=await api(`/api/admin/purchases/${Number(id)}`,{cache:'no-store'});if(!purchase)throw new Error('Compra no encontrada.');await Promise.all([loadMockupAssets(),ensureCostingData(),loadGarmentPhotos()]);
     const items=(purchase.items||[]).map(item=>({photos:[...new Map(purchaseListPhotos(item).map(p=>[p.url,p])).values()],index:0}));
     state.purchaseReview={id:purchase.id,items,activeItem:0};const dialog=ensureAdminDialog('purchaseReviewDialog',`Compra #${purchase.id}`);
     qs('.dialog-body',dialog).innerHTML=`<div class="purchase-review-layout per-item-purchase"><div class="purchase-review-info"><header><button type="button" class="icon-btn" data-delete-purchase="${purchase.id}" aria-label="Eliminar compra"><i class="fa-solid fa-trash-can"></i></button><strong>${escapeHtml(purchase.supplier||'Sin proveedor')}</strong><button type="button" class="icon-btn" data-edit-reviewed-purchase="${purchase.id}" aria-label="Editar compra"><i class="fa-solid fa-pen" aria-hidden="true"></i></button></header><div>${adminDateTimeHtml(purchase.occurred_at)}</div>${(purchase.items||[]).map((i,index)=>`<section class="purchase-review-item"><button type="button" class="purchase-item-preview" data-purchase-item-photos="${index}" aria-label="Fotos de ${escapeHtml(i.material_name)}" ${state.purchaseReview.items[index].photos.length?'':'disabled'}>${state.purchaseReview.items[index].photos.length?`<img src="${escapeHtml(state.purchaseReview.items[index].photos[0].url)}" alt="${escapeHtml(i.material_name)}" loading="lazy">`:'<i class="fa-regular fa-image" aria-hidden="true"></i>'}</button><div class="purchase-review-item-detail">${colorDetail(i.color)}<strong>${escapeHtml([i.size,i.fit,i.material_name,i.material_class,i.gender,Number(i.capacity_ml)>0?i.capacity_ml+' ml':''].filter(Boolean).join(' · '))}</strong></div><div class="purchase-review-item-quantity"><b>${Number(i.quantity).toLocaleString('es-AR')}</b>${i.unit==='meter'?'<small>m</small>':''}</div><div class="purchase-review-item-price"><b>${purchaseReviewMoney(i.line_total_cents)}</b><small>${purchaseReviewMoney(i.unit_price_cents)} / ${i.unit==='meter'?'m':'u'}</small></div></section>`).join('')}<div>Subtotal ${purchaseWholeMoney(purchase.subtotal_cents??Number(purchase.total_cents)-Number(purchase.surcharge_cents||0))}</div>${Number(purchase.surcharge_cents)>0?`<div>Recargo ${purchaseWholeMoney(purchase.surcharge_cents)}</div>`:''}<h3>Total ${purchaseWholeMoney(purchase.total_cents)}</h3>${(purchase.payments||[]).map(payment=>`<section><strong>${payment.method==='transfer'?'Transferencia':'Efectivo'} ${purchaseWholeMoney(payment.amount_cents)}</strong><div>${escapeHtml([payment.origin,payment.destination,payment.reference,payment.details].filter(Boolean).join(' · '))}</div></section>`).join('')}${purchaseFundingSummary(purchase)}${purchaseReceiptHtml(purchase.attachments)}${purchase.reference?`<p>${escapeHtml(purchase.reference)}</p>`:''}${purchase.notes?`<p>${escapeHtml(purchase.notes)}</p>`:''}</div></div>`;dialog.showModal();
@@ -1430,7 +1504,7 @@
     qs('#adminContent').innerHTML=`<div class="admin-section-head purchase-create-head"><button class="btn btn-primary" id="newPurchaseBtn">+ Nueva compra</button></div><div class="purchase-overview" role="group" aria-label="Totales de compras">${PURCHASE_GROUPS.map(tab=>{const count=filtered.filter(p=>purchaseMatchesGroup(p,tab.key)).length;return `<button type="button" class="purchase-overview-card ${group===tab.key?'active':''}" id="purchaseTab-${tab.key}" data-purchase-group="${tab.key}" aria-pressed="${group===tab.key}" data-purchase-total="${totals[tab.key]}"><span class="purchase-overview-label"><i class="fa-solid ${tab.icon}" aria-hidden="true"></i>${tab.key==='all'?'Total':tab.label}</span><strong>${purchaseWholeMoney(totals[tab.key])}</strong><small>${count} ${count===1?'compra':'compras'}</small></button>`;}).join('')}</div><div class="purchase-filter-bar"><details class="purchase-date-popover"><summary class="btn btn-ghost">Fechas</summary><div>${reportFiltersHtml(state.purchaseReportRange).replace('>Fechas</button>','>Personalizadas</button>')}</div></details><button type="button" class="btn btn-ghost" data-open-purchase-detail-filters><i class="fa-solid fa-filter"></i> Filtrar compras${Object.values(state.purchaseProductFilter||{}).some(Boolean)?' · activo':''}</button><label class="field">Proveedor<select class="select" id="purchaseSupplierFilter"><option value="">Todos</option>${suppliers.map(name=>`<option ${state.purchaseSupplier===name?'selected':''} value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}<option value="__manage_suppliers__">Administrar proveedores…</option></select></label><strong>${items.length} ${items.length===1?'compra':'compras'} · ${purchaseWholeMoney(totals[group])}</strong></div><section class="purchase-compact-list" id="purchaseGroupPanel" role="tabpanel" aria-labelledby="purchaseTab-${group}">${items.map(p=>purchaseListRow(p,group)).join('')||'<p class="muted">Sin compras en este filtro.</p>'}</section>`;
   }
   async function renderPurchases(){
-    const seq=state.purchaseRenderSeq=(state.purchaseRenderSeq||0)+1,r=reportRangeDates(state.purchaseReportRange),query=state.purchaseReportRange==='total'?'':`?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`,[d,m]=await Promise.all([api(`/api/admin/purchases${query}`),api('/api/admin/materials'),loadMockupAssets(),ensureAdminOptionSettings()]);if(seq!==state.purchaseRenderSeq||state.view!=='purchases')return;state.purchases=d.items||[];state.materials=m.items||[];renderPurchasesContent();
+    const seq=state.purchaseRenderSeq=(state.purchaseRenderSeq||0)+1,r=reportRangeDates(state.purchaseReportRange),query=state.purchaseReportRange==='total'?'':`?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`,[d,m]=await Promise.all([api(`/api/admin/purchases${query}`),api('/api/admin/materials'),loadMockupAssets(),ensureAdminOptionSettings(),loadGarmentPhotos()]);if(seq!==state.purchaseRenderSeq||state.view!=='purchases')return;state.purchases=d.items||[];state.materials=m.items||[];renderPurchasesContent();
   }
 
   function syncProductionCustomTypes(){
@@ -1466,11 +1540,61 @@
     const actual=material.audiences||purchaseItemAudiences(material);
     return actual.length?actual.some(audience=>wanted.includes(audience)):wanted.some(audience=>audience!=='Kids');
   }
-  function productionVirtualMaterialFromPhoto(asset){const details=photoProductDetails(asset),audiences=photoAudiences33(asset),kids=photoLine25(asset)==='SALMOS Kids'||audiences.includes('Kids')&&!audiences.some(audience=>audience!=='Kids'),known=state.materials.find(material=>photoMatchesItem(asset,material)&&purchaseItemAudiences(material).includes('Kids')===kids);return {virtual:true,audiences:audiences.length?audiences:kids?['Kids']:undefined,sourcePhotoId:Number(asset.id),material_type:asset.product_type,name:details.features.join(' · ')||materialTypeLabel(asset.product_type),fit:materialIsGarment(asset.product_type)?details.variant:'',color:details.color,features_json:JSON.stringify(details.features),size:'',material_class:kids?'NIÑOS':known?.material_class||'ADULTOS',capacity_ml:Number(known?.capacity_ml)||0,average_cost_cents:null};}
-  function productionVirtualFamily(material){return JSON.stringify([material.material_type,photoFit(material.fit),photoColor(material.color),String(material.material_class||'ADULTOS').toLocaleLowerCase('es'),Number(material.capacity_ml)||0,itemFeatures(material).map(productionDesignSearchText).sort()]);}
+  function productionVirtualMaterialFromPhoto(asset,family){
+    const details=photoProductDetails(asset),rows=garmentPhotoMembership(asset),wanted=state.productionAudiences||[];
+    const kidsOnly=Boolean(wanted.length)&&wanted.every(audience=>audience==='Kids');
+    const attached=family||rows.find(row=>!wanted.length||kidsOnly===(row.line==='kids'));
+    const audiences=attached?garmentPhotoAudience(asset,[attached]):photoAudiences33(asset);
+    const kids=attached?attached.line==='kids':audiences.includes('Kids')&&!audiences.some(audience=>audience!=='Kids')||photoLine25(asset)==='SALMOS Kids';
+    const matching={type:details.type,fit:attached?.fit||details.variant,color:attached?.color||details.color,line:kids?'kids':'adult'};
+    const familyKey=garmentFamilyFields(matching)?.key;
+    const known=state.materials.find(material=>materialIsGarment(details.type)?
+      familyKey&&garmentFamilyFields(material)?.key===familyKey:photoMatchesItem(asset,material));
+    return {virtual:true,audiences:audiences.length?audiences:kids?['Kids']:undefined,sourcePhotoId:Number(asset.id),
+      material_type:asset.product_type,name:details.features.join(' · ')||materialTypeLabel(asset.product_type),
+      fit:materialIsGarment(asset.product_type)?matching.fit:'',color:matching.color,features_json:JSON.stringify(details.features),
+      size:'',material_class:kids?'NIÑOS':known?.material_class||'ADULTOS',
+      capacity_ml:Number(known?.capacity_ml)||0,average_cost_cents:null};
+  }
+  function productionVirtualFamily(material){
+    return JSON.stringify([material.material_type,photoFit(material.fit),photoColor(material.color),
+      normalizePurchaseClass(material.material_class||'ADULTOS'),Number(material.capacity_ml)||0,
+      itemFeatures(material).map(productionDesignSearchText).sort()]);
+  }
   function productionVirtualCatalog(type){
-    const groups=new Map(),linkedPhotos=new Set();for(const material of galleryOrder('materials',state.materials.filter(material=>material.material_type===type&&productionMaterialMatchesAudience(material)))){const photos=state.mockupAssets.filter(asset=>photoMatchesItem(asset,material)&&productionPhotoMatchesAudience(asset,state.productionAudiences?.length?state.productionAudiences:purchaseItemAudiences(material))),asset=photos.find(asset=>[asset.material_id,...asset.material_ids||[]].map(Number).includes(Number(material.id)))||photos[0],key=productionVirtualFamily(material);if(asset)linkedPhotos.add(Number(asset.id));if(groups.has(key)){groups.get(key).physicalStock+=Number(material.stock_qty)||0;continue;}groups.set(key,{...material,virtual:true,virtualKey:'material:'+material.id,sourceMaterialId:Number(material.id),sourcePhotoId:asset?Number(asset.id):0,size:'',material_class:material.material_class||'ADULTOS',physicalStock:Number(material.stock_qty)||0});}
-    for(const asset of orderedProductPhotos(state.mockupAssets.filter(asset=>asset.asset_type==='base'&&asset.product_type===type))){if(linkedPhotos.has(Number(asset.id)))continue;const material={...productionVirtualMaterialFromPhoto(asset),virtualKey:'photo:'+asset.id,physicalStock:0},key=productionVirtualFamily(material);if(productionMaterialMatchesAudience(material)&&!groups.has(key))groups.set(key,material);}
+    const groups=new Map(),represented=new Set(),familiesWithArticle=new Set();
+    for(const material of galleryOrder('materials',state.materials.filter(material=>material.material_type===type&&productionMaterialMatchesAudience(material)))){
+      const photos=state.mockupAssets.filter(asset=>productionPhotoMatchesItem(asset,material)
+        &&productionPhotoMatchesAudience(asset,state.productionAudiences?.length?state.productionAudiences:purchaseItemAudiences(material)));
+      const preferred=materialIsGarment(type)?purchaseGarmentPhotos(material).find(asset=>photos.includes(asset)):null;
+      const asset=preferred||photos.find(asset=>[asset.material_id,...asset.material_ids||[]].map(Number).includes(Number(material.id)))||photos[0];
+      const key=productionVirtualFamily(material),family=garmentFamilyFields(material);
+      if(family)familiesWithArticle.add(family.key);
+      if(asset)represented.add(family?JSON.stringify([asset.id,family.key]):String(asset.id));
+      if(groups.has(key)){groups.get(key).physicalStock+=Number(material.stock_qty)||0;continue;}
+      groups.set(key,{...material,virtual:true,virtualKey:'material:'+material.id,sourceMaterialId:Number(material.id),
+        sourcePhotoId:Number(asset?.id)||0,size:'',material_class:material.material_class||'ADULTOS',physicalStock:Number(material.stock_qty)||0});
+    }
+    for(const asset of orderedProductPhotos(state.mockupAssets.filter(asset=>asset.asset_type==='base'&&asset.product_type===type))){
+      const linked=garmentPhotoMembership(asset);
+      for(const family of linked.length?linked:[null]){
+        const ref=family?JSON.stringify([asset.id,family.key]):String(asset.id);
+        if(represented.has(ref))continue;
+        const material={...productionVirtualMaterialFromPhoto(asset,family),virtualKey:'photo:'+asset.id+':'+(family?.key||''),physicalStock:0};
+        const key=productionVirtualFamily(material);
+        if(productionMaterialMatchesAudience(material)){
+          if(family)familiesWithArticle.add(family.key);
+          if(!groups.has(key))groups.set(key,material);
+        }
+      }
+    }
+    for(const family of state.garmentPhotos?.families.values()||[]){
+      if(family.type!==type||familiesWithArticle.has(family.key)||family.hangerIds.length||family.modelIds.length)continue;
+      const material={virtual:true,virtualKey:'prenda:'+family.key,material_type:type,name:materialTypeLabel(type),
+        fit:family.fit,color:family.color,size:'',material_class:family.line==='kids'?'NIÑOS':'ADULTOS',
+        physicalStock:0,average_cost_cents:null};
+      if(productionMaterialMatchesAudience(material))groups.set(productionVirtualFamily(material),material);
+    }
     return [...groups.values()];
   }
   function selectProductionVirtualMaterial(id){
@@ -1480,7 +1604,7 @@
   function renderProductionVirtualMaterial(){const host=qs('#productionSelectedMaterials'),material=productionVirtualStock()?state.productionVirtualMaterial:null;if(!host||!material)return;host.insertAdjacentHTML('afterbegin',`<div class="production-selected-row"><div><strong>${escapeHtml(productionMaterialLabel({...material,size:''}))}</strong><small>Stock virtual · ${materialIsGarment(material.material_type)?'todos los talles':'100 unidades'}</small></div><button class="icon-btn" type="button" data-remove-production-virtual-material aria-label="Quitar artículo virtual">×</button></div>`);}
   function productionCatalogData(){
     if(window.SalmosBook.isBookType(qs('#productionMaterialType')?.value))return {version:1,materialType:window.SalmosBook.BOOK,materialClass:'',fit:'',colors:[],sizes:[''],book:structuredClone(window.SalmosBook.current())};
-    const primary=productionPrimaryMaterial(),type=qs('#productionMaterialType')?.value||'shirt',colors=uniqOptions([primary?.color,...Object.entries(state.productionMountViews||{}).filter(([key,view])=>mockupViewHasOutput(view,key)).map(([,view])=>mockupBaseAsset(view.baseId)).filter(asset=>asset&&productionPhotoMatchesMaterial(asset,primary)).map(asset=>asset.color)].filter(Boolean)),klass=primary?.material_class||'ADULTOS',sizes=materialIsGarment(type)?uniqOptions(purchaseSizeOptions({materialClass:klass})):[''];
+    const primary=productionPrimaryMaterial(),type=qs('#productionMaterialType')?.value||'shirt',colors=uniqOptions([primary?.color,...Object.entries(state.productionMountViews||{}).filter(([key,view])=>mockupViewHasOutput(view,key)).map(([,view])=>mockupBaseAsset(view.baseId)).filter(asset=>asset&&productionPhotoMatchesMaterial(asset,primary)).map(asset=>garmentPhotoMembership(asset).find(row=>row.key===garmentFamilyFields(primary||{})?.key)?.color||asset.color)].filter(Boolean)),klass=primary?.material_class||'ADULTOS',sizes=materialIsGarment(type)?uniqOptions(purchaseSizeOptions({materialClass:klass})):[''];
     return {version:1,materialType:type,materialClass:klass,fit:primary?.fit||state.productionEditingProduct?.fit||'',colors,sizes:sizes.length?sizes:['S','M','L','XL','XXL']};
   }
 
@@ -1494,7 +1618,7 @@
     return category;
   }
   function productionMaterialLabel(m){return uniqOptions([materialTypeLabel(m.material_type),...itemFeatures(m),m.fit,m.size,m.material_class,m.gender,m.color,Number(m.capacity_ml)>0?`${Number(m.capacity_ml)} ml`:''].filter(Boolean)).join(' · ');}
-  function productionMaterialCard(source){const m=productionVirtualStock()?{...source,size:''}:source,selected=state.productionMaterialsSelected.some(x=>Number(x.materialId)===Number(m.id)),stock=Number(m.stock_qty)||0,preview=materialPhotos(m.id).find(asset=>!materialIsGarment(m.material_type)||productionPhotoMatchesAudience(asset,state.productionAudiences||[])&&photoMatchesItem(asset,m));return `<article class="production-picker-card ${selected?'selected':''} ${stock<=0?'out-of-stock':''}"><button type="button" class="production-material-select" data-add-production-material="${m.id}" ${sortablePhotoAttrs(m.id,'catalog-materials')} aria-label="Elegir ${escapeHtml(productionMaterialLabel(m))}">${sortablePhotoHandle()}${preview?`<img class="production-material-thumb" src="${escapeHtml(mockupAssetUrl(preview))}" alt="Vista de ${escapeHtml(m.name)}" loading="lazy">`:''}<strong>${escapeHtml([materialTypeLabel(m.material_type),materialIsGarment(m.material_type)?m.fit:'',materialIsGarment(m.material_type)?m.size:''].filter(Boolean).join(' · '))}</strong><div class="material-feature-chips">${materialFeatureChips(itemFeatures(m))}</div><span>${escapeHtml([m.fit,m.size,m.material_class,m.gender,Number(m.capacity_ml)>0?`${Number(m.capacity_ml)} ml`:''].filter(Boolean).join(' · '))}</span>${m.color?colorDetail(m.color):''}<small>${stock>0?`Disponible: ${stock.toLocaleString('es-AR',{maximumFractionDigits:3})} ${m.unit==='meter'?'m':'u'}`:'Sin stock físico · disponible para stock virtual'}</small><b>${money(m.average_cost_cents)} / ${m.unit==='meter'?'m':'u'}</b></button><button class="btn btn-ghost" type="button" data-edit-production-material="${m.id}">Editar</button></article>`;}
+  function productionMaterialCard(source){const m=productionVirtualStock()?{...source,size:''}:source,selected=state.productionMaterialsSelected.some(x=>Number(x.materialId)===Number(m.id)),stock=Number(m.stock_qty)||0,preview=materialIsGarment(m.material_type)?purchaseGarmentPhotos(m)[0]:materialPhotos(m.id)[0];return `<article class="production-picker-card ${selected?'selected':''} ${stock<=0?'out-of-stock':''}"><button type="button" class="production-material-select" data-add-production-material="${m.id}" ${sortablePhotoAttrs(m.id,'catalog-materials')} aria-label="Elegir ${escapeHtml(productionMaterialLabel(m))}">${sortablePhotoHandle()}${preview?`<img class="production-material-thumb" src="${escapeHtml(mockupAssetUrl(preview))}" alt="Vista de ${escapeHtml(m.name)}" loading="lazy">`:''}<strong>${escapeHtml([materialTypeLabel(m.material_type),materialIsGarment(m.material_type)?m.fit:'',materialIsGarment(m.material_type)?m.size:''].filter(Boolean).join(' · '))}</strong><div class="material-feature-chips">${materialFeatureChips(itemFeatures(m))}</div><span>${escapeHtml([m.fit,m.size,m.material_class,m.gender,Number(m.capacity_ml)>0?`${Number(m.capacity_ml)} ml`:''].filter(Boolean).join(' · '))}</span>${m.color?colorDetail(m.color):''}<small>${stock>0?`Disponible: ${stock.toLocaleString('es-AR',{maximumFractionDigits:3})} ${m.unit==='meter'?'m':'u'}`:'Sin stock físico · disponible para stock virtual'}</small><b>${money(m.average_cost_cents)} / ${m.unit==='meter'?'m':'u'}</b></button><button class="btn btn-ghost" type="button" data-edit-production-material="${m.id}">Editar</button></article>`;}
   function productionEditedGarmentFilters(product,primary,base,variant){
     const catalog=product.production_catalog||{},photo=base&&!base.source_media_id?photoProductDetails(base):null;
     return {
@@ -1861,12 +1985,28 @@
     const selected=qs('#productionSelectedDesigns');sidebar.append(selected);if(previewActions)sidebar.append(previewActions);qs('.production-mockup-head',studio)?.remove();
   }
   function mockupCurrentSide(){const base=mockupBaseAsset();return (base?.pose||state.mockupVariantFilters?.side)==='back'?'back':'front';}
-  function productionPhotoMatchesMaterial(asset,material=productionPrimaryMaterial()){const type=qs('#productionMaterialType')?.value||'shirt',fit=material?.material_type===type&&materialIsGarment(type)?material.fit||'':'';return window.SalmosProductionGallery.compatible(asset,{type,fit,fitKey:photoFit,isBookType:window.SalmosBook.isBookType});}
+  function productionPhotoMatchesItem(asset,item){
+    if(!materialIsGarment(item.material_type||item.materialType))return photoMatchesItem(asset,item);
+    const family=garmentFamilyFields(item),linked=garmentPhotoMembership(asset);
+    if(family&&linked.length)return linked.some(row=>row.key===family.key);
+    const details=photoProductDetails(asset);
+    return photoMatchesItem({...asset,color:details.color,garment_style:details.variant},item);
+  }
+  function productionPhotoMatchesMaterial(asset,material=productionPrimaryMaterial()){
+    const type=qs('#productionMaterialType')?.value||'shirt';
+    const fit=material?.material_type===type&&materialIsGarment(type)?material.fit||'':'';
+    if(fit&&garmentPhotoMembership(asset).some(row=>row.type===type&&photoFit(row.fit)===photoFit(fit)))return true;
+    const details=photoProductDetails(asset);
+    return window.SalmosProductionGallery.compatible({...asset,garment_style:details.variant||asset.garment_style},
+      {type,fit,fitKey:photoFit,isBookType:window.SalmosBook.isBookType});
+  }
   function activeProductionViewLocked(){const view=state.productionMountViews?.[mockupViewKey()];return Boolean(view?.locked||view?.locking);}
   function lockedViewMedia(key){const view=state.productionMountViews?.[key];return state.mediaItems.find(item=>item.viewKey===key||view?.outputMediaId&&Number(item.id)===Number(view.outputMediaId));}
   function productionPhotoLine39(asset){return photoLine25(asset)==='SALMOS Kids'?'kids':'adult';}
   function productionPhotoMatchesAudience(asset,audiences){
     if(!audiences.length)return true;
+    const assigned=garmentPhotoAudience(asset);
+    if(assigned.length)return assigned.some(value=>audiences.includes(value));
     const explicit=savedPhotoAudiences(asset);
     if(explicit.length)return explicit.some(value=>audiences.includes(value));
     if(productionPhotoLine39(asset)==='kids')return audiences.includes('Kids');
@@ -1878,6 +2018,12 @@
   }
   function productionFilteredPhotos(assets,selection){
     return assets.filter(asset=>{
+      const linked=garmentPhotoMembership(asset);
+      if(linked.length)return linked.some(row=>(
+        (!selection.cut||photoFit(row.fit)===photoFit(selection.cut))&&
+        (!selection.color||photoColor(row.color)===photoColor(selection.color))&&
+        (!selection.audiences?.length||garmentPhotoAudience(asset,[row]).some(value=>selection.audiences.includes(value)))
+      ));
       const details=photoProductDetails(asset),actual={...asset,garment_style:details.variant||asset.garment_style,color:details.color};
       return window.SalmosProductionGallery.matches(actual,selection,{fitKey:photoFit,colorKey:photoColor})
         && productionPhotoMatchesAudience(asset,selection.audiences);
@@ -1895,8 +2041,8 @@
     };
     const kinds=window.SalmosCatalog.rows('bookKinds',window.SalmosBook.BOOK_VARIANTS),kind=book?productionPhotoKind39():'';
     const choices=uniqOptions([...kinds.map(row=>row.value),...photos.flatMap(asset=>mockupMultiValues(asset.variant_label)),kind].filter(Boolean));
-    const cuts=uniqOptions(photos.map(asset=>asset.garment_style).filter(Boolean));
-    const colors=uniqOptions(photos.map(asset=>asset.color).filter(Boolean));
+    const cuts=uniqOptions(photos.flatMap(asset=>garmentPhotoMembership(asset).length?garmentPhotoMembership(asset).map(row=>row.fit):[asset.garment_style]).filter(Boolean));
+    const colors=uniqOptions(photos.flatMap(asset=>garmentPhotoMembership(asset).length?garmentPhotoMembership(asset).map(row=>row.color):[asset.color]).filter(Boolean));
     const poses=uniqOptions(photos.map(asset=>asset.pose).filter(Boolean));
     const lines=uniqOptions(selection.audiences.map(audience=>audience==='Kids'?'kids':'adult'));
     const audienceLabel=selection.audiences.join(' · ')||'Todos';
@@ -1912,25 +2058,23 @@
     const baseSelect=qs('#mockupBaseSelect'),backgroundSelect=qs('#mockupBackgroundSelect');if(!baseSelect)return;
     const assets=orderedProductPhotos(mockupBaseAssets()),filters=state.mockupVariantFilters??={},oldBase=String(state.mockupPreferredBaseId??baseSelect.value),oldBackground=String(state.mockupPreferredBackgroundId??backgroundSelect.value);delete state.mockupPreferredBaseId;delete state.mockupPreferredBackgroundId;
     const type=qs('#productionMaterialType').value,book=window.SalmosBook.isBookType(type),virtual=productionVirtualStock(),primary=productionPrimaryMaterial();
-    const fromProduct=state.productionMaterialFilters?.[type]?.fromProduct;
-    const compatible=assets.filter(asset=>productionPhotoMatchesMaterial(asset,fromProduct?null:primary)&&(fromProduct||book||virtual||asset.source_media_id||state.materials.some(material=>photoMatchesItem(asset,material)&&(Number(material.stock_qty)>0||state.productionEditingProduct&&state.productionMaterialsSelected.some(item=>Number(item.materialId)===Number(material.id))))));
-    let sourceAvailable=compatible;
-    if(!book&&primary&&!state.productionMaterialFilters?.[type]?.fromProduct){
-      if(virtual){
-        sourceAvailable=compatible.filter(asset=>photoMatchesItem(asset,primary)||asset.source_media_id);
-      }else if(!virtual&&state.productionLimitMaterialPhotos){
-        const linked=photosForItem(primary,materialPhotos(primary.id).map(asset=>Number(asset.id)));
-        const allowed=new Set([...linked,...state.productionSavedPhotoBases||[]].map(asset=>Number(asset.id)));
-        const linkedAvailable=compatible.filter(asset=>allowed.has(Number(asset.id)));
-        if(linkedAvailable.length)sourceAvailable=linkedAvailable;
-      }
-    }
     const garment=materialIsGarment(type),materialFilters=garment?state.productionMaterialFilters?.[type]:null;
+    const fromProduct=materialFilters?.fromProduct;
+    const compatible=assets.filter(asset=>productionPhotoMatchesMaterial(asset,fromProduct?null:primary)
+      &&(garment||book||virtual||asset.source_media_id||state.materials.some(material=>photoMatchesItem(asset,material)
+        &&(Number(material.stock_qty)>0||state.productionEditingProduct&&state.productionMaterialsSelected.some(item=>Number(item.materialId)===Number(material.id))))));
+    let sourceAvailable=compatible;
+    if(!book&&primary&&!fromProduct&&(virtual||state.productionLimitMaterialPhotos)){
+      const matching=compatible.filter(asset=>productionPhotoMatchesItem(asset,primary)||asset.source_media_id);
+      if(matching.length||virtual)sourceAvailable=matching;
+    }
     const selection={cut:materialFilters?.fit||'',color:materialFilters?.color||'',audiences:garment?state.productionAudiences||[]:[]};
     const photoMatches=window.SalmosProductionGallery.matches,matchingKeys={fitKey:photoFit,colorKey:photoColor};
     const productPhotos=productionFilteredPhotos(sourceAvailable,selection);
     renderProductionPhotoFilters39(productPhotos,selection);
-    const available=productPhotos.filter(asset=>photoMatches(asset,filters,{...matchingKeys,book,kind:book?productionPhotoKind39():'',line:productionPhotoLine39}));
+    const {cut,color,line,...other}=filters;
+    const narrowed=productionFilteredPhotos(productPhotos,{cut,color,audiences:line==='kids'?['Kids']:line==='adult'?['Hombre','Mujer']:[]});
+    const available=narrowed.filter(asset=>photoMatches(asset,other,{...matchingKeys,book,kind:book?productionPhotoKind39():''}));
     const photoCount=qs('#productionPhotoCount39');if(photoCount)photoCount.textContent=available.length+' foto'+(available.length===1?'':'s');
     const description=a=>[a.model_name||a.name,a.garment_style,a.color,a.pose==='both'?'Ambos':a.pose==='back'?'Espalda / lado B':'Frente / lado A',a.variant_label].filter(Boolean).join(' · ');
     baseSelect.innerHTML='<option value="">Elegir una variante de la galería</option>'+compatible.map(a=>`<option value="${a.id}">${escapeHtml(description(a))}</option>`).join('');baseSelect.value=compatible.some(a=>String(a.id)===oldBase)?oldBase:'';
@@ -1959,7 +2103,10 @@
     if(state.mockupViewBusy)return;
     const previous=snapshotActiveMockupView(),asset=mockupBaseAsset(id);if(!asset)return;const filters=state.productionMaterialFilters?.[qs('#productionMaterialType')?.value];
     if(!productionPhotoMatchesMaterial(asset,filters?.fromProduct?null:productionPrimaryMaterial())){toast('Esta foto no coincide con el corte de la materia prima elegida.','error');return;}
-    if(productionVirtualStock()&&(!productionPrimaryMaterial()||kidClass25(productionPrimaryMaterial()?.material_class)!==(photoLine25(asset)==='SALMOS Kids'))){state.productionVirtualMaterial=productionVirtualMaterialFromPhoto(asset);renderProductionSelectedMaterials();renderProductionMaterialGallery();}
+    const current=productionPrimaryMaterial(),wanted=state.productionAudiences||[];
+    const availableForPrimary=!materialIsGarment(qs('#productionMaterialType')?.value)||productionPhotoMatchesAudience(asset,purchaseItemAudiences(current||{}));
+    if(productionVirtualStock()&&(!current||!availableForPrimary||wanted.length&&wanted.every(value=>value==='Kids')&&!kidClass25(current.material_class))){
+      state.productionVirtualMaterial=productionVirtualMaterialFromPhoto(asset);renderProductionSelectedMaterials();renderProductionMaterialGallery();}
     qs('#mockupBaseSelect').value=String(asset.id);const view=rememberMockupView(asset.id);
     const clipboard=state.mockupClipboard,targetKey=mockupViewKey(asset.id);if(clipboard&&targetKey!==clipboard.sourceKey){if(clipboard.targetKey&&clipboard.targetKey!==targetKey)state.mockupClipboard=null;else clipboard.targetKey=targetKey;}else if(clipboard?.targetKey&&clipboard.targetKey!==targetKey)state.mockupClipboard=null;qs('#mockupBackgroundSelect').value=String(view.backgroundId||'');state.mockupPointer=null;state.mockupZoom=1;state.mockupPanX=0;state.mockupPanY=0;
     restoreMockupViewLayers(view);state.mockupSelectedLayer='';renderProductionSelectedDesigns();renderMockupStudioOptions();renderMockupProductViews();renderProductionAudiences();refreshMockupPreview().then(()=>placeQueuedProductionDesigns()).catch(err=>toast(err.message,'error'));
@@ -1998,10 +2145,23 @@
     const options=design?productionMeasureOptions(design):[],oldMeasure=state.mockupCapDesign?.measureOptionId;measureSelect.innerHTML='<option value="">Elegir medida</option>'+options.map(o=>`<option value="${escapeHtml(o.id)}">${escapeHtml(designMeasureLabel(o))}</option>`).join('');const chosen=options.find(o=>o.id===oldMeasure)||options[0];measureSelect.value=chosen?.id||'';if(chosen){state.mockupCapDesign={...(state.mockupCapDesign||{}),designAssetId:Number(design.id),measureOptionId:chosen.id,widthCm:Number(chosen.widthCm)||0,heightCm:Number(chosen.heightCm)||0,measureLabel:designMeasureLabel(chosen),printSide:'front'};}else state.mockupCapDesign=null;
     qsa('.mockup-cap-field').forEach(el=>el.classList.toggle('hidden',!qs('#mockupAddCap')?.checked));
   }
-  function mockupAspectRatio(layer){
+  function mockupImageAspectRatio(layer){
+    if(layer.imageRatio)return layer.imageRatio;
     const raw=state.mockupImageCache.get('raw-design:'+layer.asset?.id),crop=layer.item?.artworkEdit?.crop;
-    const output=layer.item?.surface?.outputCrop||{w:1,h:1};if(raw)return raw.width*(crop?.w||1)/(raw.height*(crop?.h||1))*output.w/output.h;
-    return (state.mockupDesignRatios?.[layer.asset?.id]||Number(layer.item?.widthCm)/Number(layer.item?.heightCm)||1)*output.w/output.h;
+    if(raw&&crop)return Math.max(1,Math.round(raw.width*crop.w))/Math.max(1,Math.round(raw.height*crop.h));
+    return state.mockupDesignRatios?.[layer.asset?.id]||raw&&raw.width/raw.height
+      ||Number(layer.item?.widthCm)/Number(layer.item?.heightCm)||1;
+  }
+  function mockupAspectRatio(layer){
+    const crop=layer.item?.surface?.outputCrop;
+    return mockupImageAspectRatio(layer)*(crop?crop.w/crop.h:1);
+  }
+  function mockupArtworkFrame(box){
+    return window.SalmosMontage.outputGeometry(box.w,box.h,mockupImageAspectRatio(box),box.item?.surface?.outputCrop);
+  }
+  function mockupArtworkBox(box){
+    const frame=mockupArtworkFrame(box);
+    return {...box,x:box.x+(box.w-frame.width)/2,y:box.y+(box.h-frame.height)/2,w:frame.width,h:frame.height};
   }
   async function loadMockupLayerImage(layer,width=1024){
     if(layer.item.kind==='text')return window.SalmosText.image(layer.item,width);
@@ -2102,16 +2262,16 @@
   async function paintMockupPreview(){
     const canvas=qs('#productionMockupCanvas'),empty=qs('#productionMockupEmpty');if(!canvas)return;syncMockupPreviewResolution(canvas);const ctx=canvas.getContext('2d'),seq=++state.mockupRenderSeq;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';syncMockupActions();
     const base=mockupBaseAsset(),background=state.mockupAssets.find(a=>a.asset_type==='background'&&Number(a.id)===Number(qs('#mockupBackgroundSelect')?.value)),side=mockupCurrentSide();
-    if(!base){ctx.clearRect(0,0,canvas.width,canvas.height);empty.textContent='Elegí una miniatura de las variantes cargadas para ver el montaje.';empty.classList.remove('hidden');state.mockupLayerBoxes=[];return;}
+    if(!base){ctx.clearRect(0,0,canvas.width,canvas.height);empty.textContent='Elegí una miniatura de las variantes cargadas para ver el montaje.';empty.classList.remove('hidden');state.mockupLayerBoxes=[];syncMockupBrushCursor(canvas);return;}
     try{
       const layers=mockupLayers(side),[model,bg,...images]=await Promise.all([loadMockupImage(base),background?loadMockupImage(background):null,...layers.map(layer=>loadMockupLayerImage(layer,Math.ceil(mockupPlacement(layer,canvas).w*canvas.width)))]);if(seq!==state.mockupRenderSeq)return;ctx.clearRect(0,0,canvas.width,canvas.height);
       if(bg)drawContained(ctx,bg,0,0,canvas.width,canvas.height,true);
       
       drawContained(ctx,model,0,0,canvas.width,canvas.height);
       const nextBoxes=[];for(const [index,layer] of layers.entries()){
-        const p=mockupPlacement(layer,canvas),image=images[index];if(!layer.item.artworkEdit)(state.mockupDesignRatios??={})[layer.asset.id]=image.width/image.height;if(seq!==state.mockupRenderSeq)return;const box={x:p.x*canvas.width,y:p.y*canvas.height,w:p.w*canvas.width,h:p.h*canvas.height,rotation:p.rotation||0,key:layer.key,item:layer.item,cap:layer.cap,asset:layer.asset};drawMockupLayer(ctx,image,box,false,canvas);nextBoxes.push(box);
+        const p=mockupPlacement(layer,canvas),image=images[index];if(!layer.item.artworkEdit)(state.mockupDesignRatios??={})[layer.asset.id]=image.width/image.height;if(seq!==state.mockupRenderSeq)return;const box={x:p.x*canvas.width,y:p.y*canvas.height,w:p.w*canvas.width,h:p.h*canvas.height,rotation:p.rotation||0,key:layer.key,item:layer.item,cap:layer.cap,asset:layer.asset,imageRatio:image.width/image.height};drawMockupLayer(ctx,image,box,false,canvas);nextBoxes.push(box);
       }
-      if(seq!==state.mockupRenderSeq)return;state.mockupLayerBoxes=nextBoxes;applyCanvasBrightness(ctx,canvas,state.productionMountViews?.[mockupViewKey()]?.brightness??100,state.productionMountViews?.[mockupViewKey()]?.saturation??100);const selectedIds=selectedMockupLayerIds();for(const box of state.mockupLayerBoxes){if(box.key===state.mockupSelectedLayer||!selectedIds.has(box.item.layerId))continue;ctx.save();ctx.translate(box.x+box.w/2,box.y+box.h/2);ctx.rotate(Number(box.rotation||0)*Math.PI/180);ctx.strokeStyle='#f092c2';ctx.lineWidth=2*mockupControlScale(canvas);ctx.strokeRect(-box.w/2,-box.h/2,box.w,box.h);ctx.restore();}const selectedBox=state.mockupLayerBoxes.find(b=>b.key===state.mockupSelectedLayer);if(selectedBox)drawMockupLayer(ctx,null,selectedBox,true,canvas);drawMockupCenterGuides(ctx,canvas);for(const layer of layers){for(const row of qsa('[data-design-size-readout]'))if(row.dataset.designSizeReadout===layer.key){const label=qs('[data-design-size-label]',row);if(label)label.textContent=mockupSizeLabel(layer,canvas);const size=mockupUsageDimensions(layer,canvas);for(const input of qsa('[data-inline-design-dimension]',row))if(document.activeElement!==input)input.value=size[input.dataset.inlineDesignDimension].toFixed(2);}}empty.classList.add('hidden');const hint=qs('#mockupAssetHint');if(hint)hint.textContent=`${base.model_name||base.name} · ${base.gender==='Producto'&&!materialIsGarment(base.product_type)?(base.pose==='back'?'lado B':'lado A'):(base.pose==='back'?'espalda':'frente')} · ${[base.garment_style,base.color,base.cap_style&&base.cap_style!=='none'?(base.cap_style==='mesh'?'gorra con red':'gorra sin red'):''].filter(Boolean).join(' · ')}. Mové, girá y escalá las estampas directamente en la imagen.`;
+      if(seq!==state.mockupRenderSeq)return;state.mockupLayerBoxes=nextBoxes;applyCanvasBrightness(ctx,canvas,state.productionMountViews?.[mockupViewKey()]?.brightness??100,state.productionMountViews?.[mockupViewKey()]?.saturation??100);const selectedIds=selectedMockupLayerIds();for(const box of state.mockupLayerBoxes){if(box.key===state.mockupSelectedLayer||!selectedIds.has(box.item.layerId))continue;ctx.save();ctx.translate(box.x+box.w/2,box.y+box.h/2);ctx.rotate(Number(box.rotation||0)*Math.PI/180);ctx.strokeStyle='#f092c2';ctx.lineWidth=2*mockupControlScale(canvas);ctx.strokeRect(-box.w/2,-box.h/2,box.w,box.h);ctx.restore();}const selectedBox=state.mockupLayerBoxes.find(b=>b.key===state.mockupSelectedLayer);if(selectedBox)drawMockupLayer(ctx,null,selectedBox,true,canvas);drawMockupCenterGuides(ctx,canvas);syncMockupBrushCursor(canvas);for(const layer of layers){for(const row of qsa('[data-design-size-readout]'))if(row.dataset.designSizeReadout===layer.key){const label=qs('[data-design-size-label]',row);if(label)label.textContent=mockupSizeLabel(layer,canvas);const size=mockupUsageDimensions(layer,canvas);for(const input of qsa('[data-inline-design-dimension]',row))if(document.activeElement!==input)input.value=size[input.dataset.inlineDesignDimension].toFixed(2);}}empty.classList.add('hidden');const hint=qs('#mockupAssetHint');if(hint)hint.textContent=`${base.model_name||base.name} · ${base.gender==='Producto'&&!materialIsGarment(base.product_type)?(base.pose==='back'?'lado B':'lado A'):(base.pose==='back'?'espalda':'frente')} · ${[base.garment_style,base.color,base.cap_style&&base.cap_style!=='none'?(base.cap_style==='mesh'?'gorra con red':'gorra sin red'):''].filter(Boolean).join(' · ')}. Mové, girá y escalá las estampas directamente en la imagen.`;
     }catch(err){empty.textContent='No pude abrir una de las imágenes. Revisá que el archivo siga disponible.';empty.classList.remove('hidden');throw err;}
   }
   function mockupMobile(){return window.matchMedia('(max-width:760px)').matches;}
@@ -2121,11 +2281,25 @@
     let row=qs('#mockupMobileTools');if(!row){row=document.createElement('div');row.id='mockupMobileTools';row.className='mockup-mobile-tools';controls.prepend(row);}
     const compact=window.innerWidth<=1100;row.classList.toggle('mockup-tools-compact',compact);qs('#productionDialog')?.classList.toggle('mockup-editor-compact',compact);const textToolbar=qs('#productionTextTools .production-text-toolbar');if(compact&&textToolbar&&row.parentElement!==textToolbar)textToolbar.append(row);else if(!compact&&row.parentElement!==controls)controls.prepend(row);
     const layer=mockupLayers().find(x=>x.key===state.mockupSelectedLayer),tool=['brightness','saturation'].includes(state.mockupTool)?state.mockupTool:layer?state.mockupTool||'move':'fit';
+    let brush=qs('#mockupBrushControls');
+    if(!brush){
+      brush=document.createElement('div');brush.id='mockupBrushControls';brush.className='mockup-crop-actions mockup-brush-controls';
+      brush.innerHTML='<button type="button" class="icon-btn" data-mockup-brush-step="-1" aria-label="Achicar goma">−</button><output aria-live="polite"></output><button type="button" class="icon-btn" data-mockup-brush-step="1" aria-label="Agrandar goma">+</button><button type="button" class="btn btn-ghost" data-mockup-mask-undo>Deshacer trazo</button>';
+      controls.append(brush);
+    }
+    brush.hidden=tool!=='brush'||!layer||activeProductionViewLocked();
+    qs('output',brush).textContent='Diámetro '+mockupBrushDiameter()+' px';
+    qs('[data-mockup-mask-undo]',brush).disabled=!(layer?.item.surface?.outputStrokes?.length||layer?.item.surface?.strokes?.length);
+    qs('[data-mockup-brush-step="-1"]',brush).disabled=mockupBrushDiameter()<=4;
+    qs('[data-mockup-brush-step="1"]',brush).disabled=mockupBrushDiameter()>=200;
+    syncMockupBrushCursor(canvas);
     if(!row.querySelector('[data-mockup-tool]'))row.insertAdjacentHTML('beforeend',[['warp','Ajustar superficie','fa-vector-square'],['curve','Curvatura','fa-mug-hot'],['fold','Pliegues','fa-water'],['phase','Posición del pliegue','fa-wave-square'],['opacity','Opacidad','fa-droplet'],['brightness','Brillo','fa-sun'],['saturation','Saturación','fa-palette'],['brush','Borrar','fa-eraser'],['crop','Cortar diseño','fa-crop-simple']].map(([key,label,icon])=>`<button type="button" class="icon-btn ${tool===key?'active':''}" data-mockup-tool="${key}" aria-label="${label}" title="${label}" ${layer?'':'disabled'}><i class="fa-solid ${icon}" aria-hidden="true"></i><span class="mockup-tool-name">${({warp:'Superficie',phase:'Posición'}[key]||label)}</span></button>`).join(''));
     row.querySelectorAll('[data-mockup-tool]').forEach(b=>{b.disabled=!layer&&!['brightness','saturation'].includes(b.dataset.mockupTool);b.classList.toggle('active',b.dataset.mockupTool===tool);b.setAttribute('aria-pressed',String(b.dataset.mockupTool===tool));});
     let cropActions=qs('#mockupCropActions');if(!cropActions){cropActions=document.createElement('div');cropActions.id='mockupCropActions';cropActions.className='mockup-crop-actions';cropActions.innerHTML='<button type="button" class="btn btn-primary" data-apply-mockup-crop><i class="fa-solid fa-check" aria-hidden="true"></i> Aplicar corte</button><button type="button" class="btn btn-ghost" data-cancel-mockup-crop>Cancelar</button><button type="button" class="btn btn-ghost" data-reset-mockup-crop>Restaurar bordes</button>';controls.append(cropActions);}
     cropActions.hidden=tool!=='crop';const crop=layer&&mockupCropRect(layer.key);qs('[data-apply-mockup-crop]',cropActions).disabled=!layer||!state.mockupCropDraft||!crop||crop.w>=.999&&crop.h>=.999;qs('[data-reset-mockup-crop]',cropActions).hidden=!layer?.item.surface?.outputCrop;
-    slider.hidden=['fit','move','crop'].includes(tool);const valueLabel=qs('#mockupZoomValue');if(valueLabel)valueLabel.hidden=slider.hidden;reset?.classList.toggle('active',tool==='fit');
+    slider.hidden=['fit','move','crop'].includes(tool);
+    slider.title=tool==='brush'?'Intensidad del borrado':'';
+    const valueLabel=qs('#mockupZoomValue');if(valueLabel)valueLabel.hidden=slider.hidden;reset?.classList.toggle('active',tool==='fit');
     let axis=qs('#mockupMobileAxis');if(!axis){axis=document.createElement('button');axis.id='mockupMobileAxis';axis.type='button';axis.className='icon-btn';axis.onclick=()=>{state.mockupMobileAxis=state.mockupMobileAxis==='y'?'x':'y';syncMockupMobileControls();};controls.append(axis);}
     axis.hidden=tool!=='warp';const dir=state.mockupMobileAxis||'x';axis.innerHTML=`<i class="fa-solid ${dir==='x'?'fa-arrows-left-right':'fa-arrows-up-down'}" aria-hidden="true"></i>`;axis.setAttribute('aria-label',dir==='x'?'Cambiar a movimiento vertical':'Cambiar a movimiento horizontal');
     const p=layer&&mockupPlacement(layer,canvas),e=layer?.item.surface||{};let min=0,max=100,step=1,value=0,label='';
@@ -2168,16 +2342,51 @@
   }
   function mockupCropRect(key=state.mockupSelectedLayer){return state.mockupCropDraft?.key===key?state.mockupCropDraft.rect:{x:0,y:0,w:1,h:1};}
   function startMockupCropPointer(point,event,canvas){
-    if(state.mockupTool!=='crop')return false;const box=state.mockupLayerBoxes.find(box=>box.key===state.mockupSelectedLayer);if(!box)return false;const local=mockupBoxLocalPoint(box,point),scale=mockupControlScale(canvas),rect={...mockupCropRect(box.key)},u=Math.max(0,Math.min(1,local.x/box.w)),v=Math.max(0,Math.min(1,local.y/box.h)),handles=[['tl',rect.x,rect.y],['tr',rect.x+rect.w,rect.y],['bl',rect.x,rect.y+rect.h],['br',rect.x+rect.w,rect.y+rect.h],['l',rect.x,rect.y+rect.h/2],['r',rect.x+rect.w,rect.y+rect.h/2],['t',rect.x+rect.w/2,rect.y],['b',rect.x+rect.w/2,rect.y+rect.h]];let handle=handles.find(([,x,y])=>Math.hypot(local.x-x*box.w,local.y-y*box.h)<13*scale)?.[0];
-    if(!handle&&(local.x<0||local.x>box.w||local.y<0||local.y>box.h))return false;const inside=u>rect.x&&u<rect.x+rect.w&&v>rect.y&&v<rect.y+rect.h;handle??=inside&&(rect.w<.999||rect.h<.999)?'move':'select';state.mockupCropDraft={key:box.key,rect};state.mockupPointer={mode:'crop',key:box.key,handle,box,start:{x:u,y:v},initial:rect};return true;
+    if(state.mockupTool!=='crop')return false;
+    const selected=state.mockupLayerBoxes.find(box=>box.key===state.mockupSelectedLayer);
+    if(!selected)return true;
+    const box=mockupArtworkBox(selected),local=mockupBoxLocalPoint(box,point);
+    const scale=mockupControlScale(canvas),rect={...mockupCropRect(box.key)};
+    const u=Math.max(0,Math.min(1,local.x/box.w)),v=Math.max(0,Math.min(1,local.y/box.h));
+    const handles=[['tl',rect.x,rect.y],['tr',rect.x+rect.w,rect.y],['bl',rect.x,rect.y+rect.h],
+      ['br',rect.x+rect.w,rect.y+rect.h],['l',rect.x,rect.y+rect.h/2],['r',rect.x+rect.w,rect.y+rect.h/2],
+      ['t',rect.x+rect.w/2,rect.y],['b',rect.x+rect.w/2,rect.y+rect.h]];
+    let handle=handles.find(([,x,y])=>Math.hypot(local.x-x*box.w,local.y-y*box.h)<13*scale)?.[0];
+    if(!handle&&(local.x<0||local.x>box.w||local.y<0||local.y>box.h))return true;
+    const inside=u>rect.x&&u<rect.x+rect.w&&v>rect.y&&v<rect.y+rect.h;
+    handle??=inside&&(rect.w<.999||rect.h<.999)?'move':'select';
+    state.mockupCropDraft={key:box.key,rect};
+    state.mockupPointer={mode:'crop',key:box.key,handle,box,start:{x:u,y:v},initial:rect};
+    return true;
   }
   function moveMockupCropPointer(drag,point){
+    drag.moved=true;
     const local=mockupBoxLocalPoint(drag.box,point),u=Math.max(0,Math.min(1,local.x/drag.box.w)),v=Math.max(0,Math.min(1,local.y/drag.box.h)),initial=drag.initial,min=.004;let x=initial.x,y=initial.y,right=x+initial.w,bottom=y+initial.h;
     if(drag.handle==='select'){x=Math.min(drag.start.x,u);y=Math.min(drag.start.y,v);right=Math.max(drag.start.x,u);bottom=Math.max(drag.start.y,v);}else if(drag.handle==='move'){x=Math.max(0,Math.min(1-initial.w,x+u-drag.start.x));y=Math.max(0,Math.min(1-initial.h,y+v-drag.start.y));right=x+initial.w;bottom=y+initial.h;}else{if(drag.handle.includes('l'))x=Math.min(right-min,u);if(drag.handle.includes('r'))right=Math.max(x+min,u);if(drag.handle.includes('t'))y=Math.min(bottom-min,v);if(drag.handle.includes('b'))bottom=Math.max(y+min,v);}
     state.mockupCropDraft={key:drag.key,rect:{x,y,w:Math.max(min,right-x),h:Math.max(min,bottom-y)}};syncMockupMobileControls();refreshMockupPreview().catch(()=>{});
   }
   function applyMockupCrop(reset=false){
-    if(activeProductionViewLocked())return;const layer=mockupLayers().find(layer=>layer.key===state.mockupSelectedLayer),canvas=qs('#productionMockupCanvas');if(!layer)return;const p=mockupPlacement(layer,canvas),old=layer.item.surface?.outputCrop||{x:0,y:0,w:1,h:1},rect=reset?{x:-old.x/old.w,y:-old.y/old.h,w:1/old.w,h:1/old.h}:mockupCropRect(layer.key);if(!reset&&rect.w>.999&&rect.h>.999)return;checkpointMockup();const box={x:p.x*canvas.width,y:p.y*canvas.height,w:p.w*canvas.width,h:p.h*canvas.height,rotation:p.rotation||0},center=mockupBoxPoint(box,(rect.x+rect.w/2)*box.w,(rect.y+rect.h/2)*box.h);p.w*=rect.w;p.h*=rect.h;p.x=center.x/canvas.width-p.w/2;p.y=center.y/canvas.height-p.h/2;layer.item.surface??={};if(reset)delete layer.item.surface.outputCrop;else layer.item.surface.outputCrop={x:old.x+rect.x*old.w,y:old.y+rect.y*old.h,w:old.w*rect.w,h:old.h*rect.h};state.mockupCropDraft=null;state.mockupTool='move';snapshotActiveMockupView();renderProductionSelectedDesigns();renderMockupLayerControls();refreshMockupPreview().catch(error=>toast(error.message,'error'));
+    if(activeProductionViewLocked())return;
+    const layer=mockupLayers().find(layer=>layer.key===state.mockupSelectedLayer),canvas=qs('#productionMockupCanvas');
+    if(!layer)return;
+    const p=mockupPlacement(layer,canvas),old=layer.item.surface?.outputCrop;
+    if(reset&&!old)return;
+    const crop=old||{x:0,y:0,w:1,h:1};
+    const rect=reset?{x:-crop.x/crop.w,y:-crop.y/crop.h,w:1/crop.w,h:1/crop.h}:mockupCropRect(layer.key);
+    if(!reset&&rect.w>=.999&&rect.h>=.999)return;
+    const rendered=state.mockupLayerBoxes.find(box=>box.key===layer.key);
+    const box=mockupArtworkBox({x:p.x*canvas.width,y:p.y*canvas.height,w:p.w*canvas.width,h:p.h*canvas.height,
+      rotation:p.rotation||0,item:layer.item,asset:layer.asset,imageRatio:rendered?.imageRatio});
+    checkpointMockup();
+    const center=mockupBoxPoint(box,(rect.x+rect.w/2)*box.w,(rect.y+rect.h/2)*box.h);
+    p.w=box.w*rect.w/canvas.width;p.h=box.h*rect.h/canvas.height;
+    p.x=center.x/canvas.width-p.w/2;p.y=center.y/canvas.height-p.h/2;
+    layer.item.surface??={};
+    if(reset)delete layer.item.surface.outputCrop;
+    else layer.item.surface.outputCrop={x:crop.x+rect.x*crop.w,y:crop.y+rect.y*crop.h,w:crop.w*rect.w,h:crop.h*rect.h};
+    state.mockupCropDraft=null;state.mockupTool='move';
+    snapshotActiveMockupView();renderProductionSelectedDesigns();renderMockupLayerControls();
+    refreshMockupPreview().catch(error=>toast(error.message,'error'));
   }
   function clearMockupSelection(){state.mockupTool='move';state.mockupSelectedLayer='';state.mockupSelectedIds=[];state.mockupSelectionView='';renderMockupLayerControls();refreshMockupPreview().catch(()=>{});}
   function mockupRotation(value){const angle=(Number(value)||0)%360;return angle>180?angle-360:angle<-180?angle+360:angle;}
@@ -2197,9 +2406,9 @@
     host.innerHTML=mockupSurfaceControls(selected,p,canvas);syncMockupMobileControls();syncMockupSize(selected,canvas);
   }
   function mockupSurfaceControls(layer,p,canvas){
-    const e=layer.item.surface||{},view=state.productionMountViews?.[mockupViewKey()],reference=view?.calibration,tool=state.mockupTool||'move';
+    const e=layer.item.surface||{},view=state.productionMountViews?.[mockupViewKey()],reference=view?.calibration;
     const field=(key,label,min,max,value)=>`<label class="field"><span>${label}</span><input type="range" min="${min}" max="${max}" step="1" value="${value}" data-surface-field="${key}" data-layer="${layer.key}"></label>`;
-    return `<div class="mockup-surface-controls"><div class="mockup-effect-sliders">${field('curve','Curvatura · taza',-100,100,e.curve||0)}${field('fold','Pliegues',0,100,e.fold||0)}${field('phase','Posición del pliegue',0,360,e.phase||0)}${field('opacity','Opacidad de la estampa',0,100,e.opacity??100)}</div>${tool==='brush'?`<div class="mockup-brush-mobile"><label><i class="fa-solid fa-expand" aria-hidden="true"></i><input type="number" min="1" max="30" value="${state.mockupBrushSize||5}" data-surface-field="brushSize" aria-label="Tamaño de pincel"></label><label><i class="fa-solid fa-droplet" aria-hidden="true"></i><input type="number" min="1" max="100" value="${state.mockupBrushStrength??100}" data-surface-field="brushStrength" aria-label="Intensidad del borrado">%</label></div><div class="mockup-effect-sliders">${field('brushSize','Tamaño del pincel',1,30,state.mockupBrushSize||5)}${field('brushStrength','Cuánto borrar · 100% borra',1,100,state.mockupBrushStrength??100)}</div>`:''}</div>`;
+    return `<div class="mockup-surface-controls"><div class="mockup-effect-sliders">${field('curve','Curvatura · taza',-100,100,e.curve||0)}${field('fold','Pliegues',0,100,e.fold||0)}${field('phase','Posición del pliegue',0,360,e.phase||0)}${field('opacity','Opacidad de la estampa',0,100,e.opacity??100)}</div></div>`;
   }
   function mockupMultiValues(value){return uniqOptions(String(value||'').split(/\s*·\s*|\n/).filter(Boolean));}
   function mockupMultiOptions(key,choices,selected){return uniqOptions([...choices,...selected]).map(value=>`<label><span>${escapeHtml(value)}</span><input type="checkbox" data-mockup-multi="${key}" value="${escapeHtml(value)}" ${selected.includes(value)?'checked':''}></label>`).join('');}
@@ -2271,7 +2480,7 @@
   }
   function setupMockupHistory(){
     if(state.mockupHistoryBound)return;state.mockupHistoryBound=true;let inputGroup=null;
-    const selector='#applyProductionMeasureBtn,[data-mockup-turn],[data-add-production-text],[data-font-id],[data-text-case],[data-text-bold],[data-text-color],[data-select-mockup-background],[data-add-production-design],[data-remove-production-design],[data-remove-production-text],[data-duplicate-production-design],[data-paste-production-design],[data-apply-mockup-crop],[data-reset-mockup-crop],[data-mockup-mask-undo],[data-mockup-surface-reset]';
+    const selector='#applyProductionMeasureBtn,[data-mockup-turn],[data-add-production-text],[data-font-id],[data-text-case],[data-text-bold],[data-text-color],[data-select-mockup-background],[data-add-production-design],[data-remove-production-design],[data-remove-production-text],[data-duplicate-production-design],[data-paste-production-design],[data-mockup-mask-undo],[data-mockup-surface-reset]';
     document.addEventListener('click',event=>{if(event.target.closest(selector)){inputGroup=null;checkpointMockup();}},true);
     document.addEventListener('pointerdown',event=>{if(event.target.id==='productionMockupCanvas'&&!event.ctrlKey&&!event.metaKey&&event.button!==1&&!state.mockupSpacePressed){inputGroup=null;checkpointMockup();}},true);
     const fields='#productionTextInput,[data-mockup-rotation],[data-surface-field],#mockupReferenceWidth,[data-mockup-reference-width],[data-fullscreen-reference-width]';
@@ -2283,22 +2492,111 @@
   function mockupDimensions(layer,canvas){const option=productionMeasureOptions(layer.asset||{}).find(o=>o.id===layer.item.measureOptionId);return {width:Number(option?.widthCm)||0,height:Number(option?.heightCm)||0,real:Boolean(option?.widthCm&&option?.heightCm)};}
   function mockupSizeLabel(layer,canvas){const printed=mockupDimensions(layer,canvas),actual=mockupUsageDimensions(layer,canvas),fmt=n=>n.toLocaleString('es-AR',{maximumFractionDigits:2});return `${fmt(actual.width)} × ${fmt(actual.height)} cm · uso actual aproximado${printed.real?' | '+fmt(printed.width)+' × '+fmt(printed.height)+' cm · impresión registrada':''}`;}
   function syncMockupSize(layer,canvas){if(!layer)return;for(const row of qsa('[data-design-size-readout]'))if(row.dataset.designSizeReadout===layer.key){const label=qs('[data-design-size-label]',row);if(label)label.textContent=mockupSizeLabel(layer,canvas);else row.textContent=mockupSizeLabel(layer,canvas);const size=mockupUsageDimensions(layer,canvas);for(const input of qsa('[data-inline-design-dimension]',row))if(document.activeElement!==input)input.value=String(Number(size[input.dataset.inlineDesignDimension]).toFixed(2));}updateResizeReadout(layer,canvas);}
-  function updateMockupCursor(){const canvas=qs('#productionMockupCanvas');if(!canvas)return;updateMockupTouchAction(canvas);canvas.style.cursor=state.mockupSpacePressed?'grab':state.mockupTool==='brush'?`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='white' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='black'/%3E%3C/svg%3E") 16 16, crosshair`:['warp','crop'].includes(state.mockupTool)?'crosshair':'default';}
-  function undoMockupBrush(){const layer=mockupLayers().find(l=>l.key===state.mockupSelectedLayer);if(!layer?.item.surface?.strokes?.length)return false;state.mockupPointer=null;layer.item.surface.strokes.pop();renderMockupLayerControls();refreshMockupPreview().catch(()=>{});return true;}
-  function updateMockupSurface(input){if(activeProductionViewLocked())return;const key=input.dataset.surfaceField,value=Number(input.value);if(!Number.isFinite(value)||input.value==='')return;if(key==='brushSize'){state.mockupBrushSize=Math.max(1,Math.min(30,value));return;}if(key==='brushStrength'){state.mockupBrushStrength=Math.max(1,Math.min(100,value));return;}const layer=mockupLayers().find(x=>x.key===input.dataset.layer);if(!layer)return;layer.item.surface??={};layer.item.surface[key]=value;if(key==='phase'&&!layer.item.surface.fold){layer.item.surface.fold=25;const slider=qs('[data-surface-field="fold"]');if(slider)slider.value='25';}refreshMockupPreview().catch(()=>{});}
-  function applyMockupCalibrationPoint(point,canvas){const pending=state.mockupCalibration;if(!pending.first){pending.first=point;toast('Ahora marcá el segundo extremo.');return;}const distance=Math.hypot(point.x-pending.first.x,point.y-pending.first.y);if(distance<8*mockupControlScale(canvas)){toast('Separá los puntos para medir la referencia.','error');return;}const view=rememberMockupView(mockupBaseAsset()?.id);view.calibration={confirmed:true,distanceCm:pending.cm,points:[{x:pending.first.x/canvas.width,y:pending.first.y/canvas.height},{x:point.x/canvas.width,y:point.y/canvas.height}],canvasWidthCm:canvas.width*pending.cm/distance};state.mockupCalibration=null;for(const layer of mockupLayers())syncMockupSize(layer,canvas);renderProductionSelectedDesigns();renderMockupLayerControls();toast('Referencia real guardada para esta foto.','success');}
-  function startMockupSurfacePointer(point,event,canvas){const tool=state.mockupTool;if(!['warp','brush','curve','fold','phase','opacity'].includes(tool))return false;const box=state.mockupLayerBoxes.find(b=>b.key===state.mockupSelectedLayer);if(!box)return false;const layer=mockupLayers().find(l=>l.key===box.key),local=mockupBoxLocalPoint(box,point),ratio=mockupAspectRatio({item:box.item,asset:box.asset}),fitW=Math.min(box.w,box.h*ratio),fitH=fitW/ratio;if(!layer)return false;layer.item.surface??={};const effects=layer.item.surface;
-    if(['curve','fold','phase','opacity'].includes(tool)){if(tool==='phase'&&!effects.fold)effects.fold=25;state.mockupPointer={mode:'effect',key:box.key,effect:tool,startClient:{x:event.clientX,y:event.clientY},initial:Number(effects[tool]??(tool==='opacity'?100:0))};return true;}
-    if(tool==='warp'){let closest=-1,distance=Infinity;for(let i=0;i<9;i++){const original=window.SalmosMontage.point(i%3/2,Math.floor(i/3)/2,effects),crop=effects.outputCrop||{x:0,y:0,w:1,h:1},q={x:(original.x-crop.x)/crop.w,y:(original.y-crop.y)/crop.h},d=Math.hypot(local.x-((q.x-.5)*fitW+box.w/2),local.y-((q.y-.5)*fitH+box.h/2));if(d<distance){distance=d;closest=i;}}if(distance>24*mockupControlScale(canvas))return false;effects.grid??=Array.from({length:9},()=>({x:0,y:0}));state.mockupWarpNode=closest;syncMockupMobileControls();state.mockupPointer={key:box.key,mode:'warp',node:closest,start:local,initial:{...effects.grid[closest]},box,fitW,fitH};return true;}
-    // Bounding fit follows the original design aspect ratio.
-    const crop=effects.outputCrop||{x:0,y:0,w:1,h:1},uv=window.SalmosMontage.inverse(crop.x+((local.x-box.w/2)/fitW+.5)*crop.w,crop.y+((local.y-box.h/2)/fitH+.5)*crop.h,effects);if(!uv)return false;
-    effects.strokes??=[];const stroke={radius:(Number(state.mockupBrushSize)||5)/100,strength:(state.mockupBrushStrength??100)/100,points:[uv]};effects.strokes.push(stroke);state.mockupPointer={key:box.key,mode:'brush',stroke,box,fitW,fitH,startedAt:performance.now()};renderMockupLayerControls();refreshMockupPreview().catch(()=>{});return true;
+  function mockupBrushDiameter(){return Math.max(4,Math.min(200,Number(state.mockupBrushDiameter)||32));}
+  function syncMockupBrushCursor(canvas=qs('#productionMockupCanvas')){
+    const cursor=qs('#mockupBrushCursor'),position=state.mockupBrushHover;
+    if(!cursor||!canvas)return;
+    const viewport=mockupViewport(canvas),bounds=viewport.getBoundingClientRect();
+    const drag=state.mockupPointer;
+    const show=position&&state.mockupTool==='brush'&&!state.mockupSpacePressed&&!activeProductionViewLocked()
+      &&(!drag||drag.mode==='brush')&&state.mockupLayerBoxes.some(box=>box.key===state.mockupSelectedLayer)
+      &&position.x>=bounds.left&&position.x<bounds.left+viewport.clientWidth
+      &&position.y>=bounds.top&&position.y<bounds.top+viewport.clientHeight;
+    cursor.hidden=!show;
+    if(!show)return;
+    const size=drag?.diameter||mockupBrushDiameter(),radius=size/2;
+    const frame=cursor.parentElement.getBoundingClientRect(),left=position.x-frame.left,top=position.y-frame.top;
+    const clip=[bounds.top-position.y+radius,position.x+radius-bounds.left-viewport.clientWidth,
+      position.y+radius-bounds.top-viewport.clientHeight,bounds.left-position.x+radius].map(value=>Math.max(0,value)+'px');
+    Object.assign(cursor.style,{left:left+'px',top:top+'px',width:size+'px',height:size+'px',clipPath:'inset('+clip.join(' ')+')'});
+
   }
-  function moveMockupSurfacePointer(drag,point,layer,canvas){if(drag.mode!=='warp'&&drag.mode!=='brush')return false;const local=mockupBoxLocalPoint(drag.box,point);if(drag.mode==='warp'){const offset=layer.item.surface.grid[drag.node];offset.x=Math.max(-.35,Math.min(.35,drag.initial.x+(local.x-drag.start.x)/drag.fitW*(layer.item.surface.outputCrop?.w||1)));offset.y=Math.max(-.35,Math.min(.35,drag.initial.y+(local.y-drag.start.y)/drag.fitH*(layer.item.surface.outputCrop?.h||1)));}else{const crop=layer.item.surface.outputCrop||{x:0,y:0,w:1,h:1},uv=window.SalmosMontage.inverse(crop.x+((local.x-drag.box.w/2)/drag.fitW+.5)*crop.w,crop.y+((local.y-drag.box.h/2)/drag.fitH+.5)*crop.h,layer.item.surface);if(uv){const last=drag.stroke.points.at(-1);if(Math.hypot(uv.x-last.x,uv.y-last.y)>.002)drag.stroke.points.push(uv);}}refreshMockupPreview().catch(()=>{});return true;}
+  function updateMockupCursor(){
+    const canvas=qs('#productionMockupCanvas');if(!canvas)return;
+    updateMockupTouchAction(canvas);
+    canvas.style.cursor=state.mockupSpacePressed?'grab':['brush','warp','crop'].includes(state.mockupTool)?'crosshair':'default';
+    syncMockupBrushCursor(canvas);
+  }
+  function undoMockupBrush(){
+    const surface=mockupLayers().find(layer=>layer.key===state.mockupSelectedLayer)?.item.surface;
+    const strokes=surface?.outputStrokes?.length?surface.outputStrokes:surface?.strokes;
+    if(!strokes?.length)return false;
+    state.mockupPointer=null;strokes.pop();
+    renderMockupLayerControls();refreshMockupPreview().catch(()=>{});
+    return true;
+  }
+  function updateMockupSurface(input){if(activeProductionViewLocked())return;const key=input.dataset.surfaceField,value=Number(input.value);if(!Number.isFinite(value)||input.value==='')return;if(key==='brushStrength'){state.mockupBrushStrength=Math.max(1,Math.min(100,value));return;}const layer=mockupLayers().find(x=>x.key===input.dataset.layer);if(!layer)return;layer.item.surface??={};layer.item.surface[key]=value;if(key==='phase'&&!layer.item.surface.fold){layer.item.surface.fold=25;const slider=qs('[data-surface-field="fold"]');if(slider)slider.value='25';}refreshMockupPreview().catch(()=>{});}
+  function applyMockupCalibrationPoint(point,canvas){const pending=state.mockupCalibration;if(!pending.first){pending.first=point;toast('Ahora marcá el segundo extremo.');return;}const distance=Math.hypot(point.x-pending.first.x,point.y-pending.first.y);if(distance<8*mockupControlScale(canvas)){toast('Separá los puntos para medir la referencia.','error');return;}const view=rememberMockupView(mockupBaseAsset()?.id);view.calibration={confirmed:true,distanceCm:pending.cm,points:[{x:pending.first.x/canvas.width,y:pending.first.y/canvas.height},{x:point.x/canvas.width,y:point.y/canvas.height}],canvasWidthCm:canvas.width*pending.cm/distance};state.mockupCalibration=null;for(const layer of mockupLayers())syncMockupSize(layer,canvas);renderProductionSelectedDesigns();renderMockupLayerControls();toast('Referencia real guardada para esta foto.','success');}
+  function mockupBrushPoint(box,frame,point,radius=0){
+    const local=mockupBoxLocalPoint(box,point),{crop,fullWidth,fullHeight,width,height}=frame;
+    const u=crop.x+crop.w/2+(local.x-box.w/2)/fullWidth;
+    const v=crop.y+crop.h/2+(local.y-box.h/2)/fullHeight;
+    if(box.item.surface?.outputCrop){
+      if(Math.abs(local.x-box.w/2)>width/2+radius||Math.abs(local.y-box.h/2)>height/2+radius)return null;
+    }else if(u < -.4||v < -.4||u > 1.4||v > 1.4)return null;
+    return {x:u,y:v};
+  }
+  function startMockupSurfacePointer(point,event,canvas){
+    const tool=state.mockupTool;
+    if(!['warp','brush','curve','fold','phase','opacity'].includes(tool))return false;
+    const box=state.mockupLayerBoxes.find(box=>box.key===state.mockupSelectedLayer);
+    const layer=box&&mockupLayers().find(layer=>layer.key===box.key);
+    if(!layer)return false;
+    const local=mockupBoxLocalPoint(box,point),frame=mockupArtworkFrame(box);
+    const effects=layer.item.surface??={};
+    if(['curve','fold','phase','opacity'].includes(tool)){
+      if(tool==='phase'&&!effects.fold)effects.fold=25;
+      state.mockupPointer={mode:'effect',key:box.key,effect:tool,startClient:{x:event.clientX,y:event.clientY},
+        initial:Number(effects[tool]??(tool==='opacity'?100:0))};
+      return true;
+    }
+    if(tool==='warp'){
+      let closest=-1,distance=Infinity;
+      for(let i=0;i<9;i++){
+        const original=window.SalmosMontage.point(i%3/2,Math.floor(i/3)/2,effects);
+        const {crop,fullWidth,fullHeight}=frame;
+        const d=Math.hypot(local.x-(box.w/2+(original.x-crop.x-crop.w/2)*fullWidth),
+          local.y-(box.h/2+(original.y-crop.y-crop.h/2)*fullHeight));
+        if(d<distance){distance=d;closest=i;}
+      }
+      if(distance>24*mockupControlScale(canvas))return false;
+      effects.grid??=Array.from({length:9},()=>({x:0,y:0}));state.mockupWarpNode=closest;
+      syncMockupMobileControls();
+      state.mockupPointer={key:box.key,mode:'warp',node:closest,start:local,initial:{...effects.grid[closest]},box,frame};
+      return true;
+    }
+    const diameter=mockupBrushDiameter(),radius=diameter*mockupControlScale(canvas)/2;
+    const uv=mockupBrushPoint(box,frame,point,radius);
+    if(!uv)return false;
+    effects.outputStrokes??=[];
+    const stroke={radius:radius/Math.min(frame.fullWidth,frame.fullHeight),strength:(state.mockupBrushStrength??100)/100,
+      points:[uv],...(effects.outputCrop?{clip:{...effects.outputCrop}}:{})};
+    effects.outputStrokes.push(stroke);
+    state.mockupPointer={key:box.key,mode:'brush',stroke,box,frame,diameter,radius,startedAt:performance.now()};
+    syncMockupMobileControls();refreshMockupPreview().catch(()=>{});
+    return true;
+  }
+  function moveMockupSurfacePointer(drag,point,layer){
+    if(drag.mode!=='warp'&&drag.mode!=='brush')return false;
+    if(drag.mode==='warp'){
+      const local=mockupBoxLocalPoint(drag.box,point),offset=layer.item.surface.grid[drag.node];
+      offset.x=Math.max(-.35,Math.min(.35,drag.initial.x+(local.x-drag.start.x)/drag.frame.fullWidth));
+      offset.y=Math.max(-.35,Math.min(.35,drag.initial.y+(local.y-drag.start.y)/drag.frame.fullHeight));
+    }else{
+      const uv=mockupBrushPoint(drag.box,drag.frame,point,drag.radius);
+      if(!uv){drag.lifted=true;return true;}
+      const last=drag.stroke.points.at(-1),dx=(uv.x-last.x)*drag.frame.fullWidth,dy=(uv.y-last.y)*drag.frame.fullHeight;
+      if(drag.lifted||Math.hypot(dx,dy)>Math.max(.25,drag.radius*.15)){
+        drag.stroke.points.push(drag.lifted?{...uv,start:true}:uv);drag.lifted=false;
+      }
+    }
+    refreshMockupPreview().catch(()=>{});return true;
+  }
   function drawMockupLayer(ctx,image,box,selected,canvas){
     ctx.save();ctx.translate(box.x+box.w/2,box.y+box.h/2);ctx.rotate(mockupRotation(box.rotation)*Math.PI/180);if(image){ctx.filter=`brightness(${Math.max(0,Number(box.item?.surface?.brightness??100))*Number(box.item?.artworkEdit?100:box.asset?.preview_brightness??100)/10000}) saturate(${Math.max(0,Number(box.item?.surface?.saturation??100))*Number(box.item?.artworkEdit?100:box.asset?.preview_saturation??100)/10000})`;window.SalmosMontage.draw(ctx,image,box.w,box.h,box.item?.surface||{});ctx.filter='none';}
-    if(selected&&state.mockupTool==='crop'){const rect=mockupCropRect(box.key),scale=mockupControlScale(canvas),left=-box.w/2,top=-box.h/2,x=left+rect.x*box.w,y=top+rect.y*box.h,w=rect.w*box.w,h=rect.h*box.h;ctx.fillStyle='#30162966';ctx.fillRect(left,top,box.w,rect.y*box.h);ctx.fillRect(left,y+h,box.w,(1-rect.y-rect.h)*box.h);ctx.fillRect(left,y,rect.x*box.w,h);ctx.fillRect(x+w,y,(1-rect.x-rect.w)*box.w,h);ctx.strokeStyle='#ff67c5';ctx.fillStyle='#ffb3df';ctx.lineWidth=2*scale;ctx.setLineDash([6*scale,4*scale]);ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);for(const [hx,hy] of [[x,y],[x+w,y],[x,y+h],[x+w,y+h],[x+w/2,y],[x+w/2,y+h],[x,y+h/2],[x+w,y+h/2]])ctx.fillRect(hx-4*scale,hy-4*scale,8*scale,8*scale);ctx.restore();return;}
-    if(selected&&state.mockupTool==='warp'){const scale=mockupControlScale(canvas),effects=box.item?.surface||{},ratio=mockupAspectRatio({item:box.item,asset:box.asset}),fitW=Math.min(box.w,box.h*ratio),fitH=fitW/ratio;ctx.strokeStyle='#77e8ff';ctx.fillStyle='#77e8ff';ctx.lineWidth=scale;for(let i=0;i<9;i++){const original=window.SalmosMontage.point((i%3)/2,Math.floor(i/3)/2,effects),crop=effects.outputCrop||{x:0,y:0,w:1,h:1},q={x:(original.x-crop.x)/crop.w,y:(original.y-crop.y)/crop.h};if(q.x<0||q.x>1||q.y<0||q.y>1)continue;ctx.beginPath();ctx.arc((q.x-.5)*fitW,(q.y-.5)*fitH,6*scale,0,Math.PI*2);ctx.fill();}ctx.restore();return;}
+    if(selected&&state.mockupTool==='crop'){const rect=mockupCropRect(box.key),scale=mockupControlScale(canvas),{width,height}=mockupArtworkFrame(box),left=-width/2,top=-height/2,x=left+rect.x*width,y=top+rect.y*height,w=rect.w*width,h=rect.h*height;ctx.fillStyle='#30162966';ctx.fillRect(left,top,width,rect.y*height);ctx.fillRect(left,y+h,width,(1-rect.y-rect.h)*height);ctx.fillRect(left,y,rect.x*width,h);ctx.fillRect(x+w,y,(1-rect.x-rect.w)*width,h);ctx.strokeStyle='#ff67c5';ctx.fillStyle='#ffb3df';ctx.lineWidth=2*scale;ctx.setLineDash([6*scale,4*scale]);ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);for(const [hx,hy] of [[x,y],[x+w,y],[x,y+h],[x+w,y+h],[x+w/2,y],[x+w/2,y+h],[x,y+h/2],[x+w,y+h/2]])ctx.fillRect(hx-4*scale,hy-4*scale,8*scale,8*scale);ctx.restore();return;}
+    if(selected&&state.mockupTool==='warp'){const scale=mockupControlScale(canvas),effects=box.item?.surface||{},{width:fitW,height:fitH}=mockupArtworkFrame(box);ctx.strokeStyle='#77e8ff';ctx.fillStyle='#77e8ff';ctx.lineWidth=scale;for(let i=0;i<9;i++){const original=window.SalmosMontage.point((i%3)/2,Math.floor(i/3)/2,effects),crop=effects.outputCrop||{x:0,y:0,w:1,h:1},q={x:(original.x-crop.x)/crop.w,y:(original.y-crop.y)/crop.h};if(q.x<0||q.x>1||q.y<0||q.y>1)continue;ctx.beginPath();ctx.arc((q.x-.5)*fitW,(q.y-.5)*fitH,6*scale,0,Math.PI*2);ctx.fill();}ctx.restore();return;}
+    if(selected&&state.mockupTool==='brush'){ctx.restore();return;}
     if(selected){const s=mockupControlScale(canvas),x=-box.w/2,y=-box.h/2;ctx.strokeStyle='#f0ba39';ctx.fillStyle='#f0ba39';ctx.lineWidth=2*s;ctx.setLineDash([6*s,4*s]);ctx.strokeRect(x,y,box.w,box.h);ctx.setLineDash([]);
       for(const [cx,cy] of [[x+box.w,y],[x,y+box.h],[x+box.w,y+box.h]]){ctx.beginPath();ctx.arc(cx,cy,6*s,0,Math.PI*2);ctx.fill();}
       ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(0,y-32*s);ctx.stroke();ctx.beginPath();ctx.arc(0,y-32*s,9*s,0,Math.PI*2);ctx.fill();ctx.fillStyle='#241620';ctx.font=`bold ${14*s}px sans-serif`;ctx.textAlign='center';ctx.fillText('↻',0,y-27*s);
@@ -2347,6 +2645,9 @@
     const canvas=qs('#productionMockupCanvas');if(!canvas||canvas.dataset.pointerBound)return;
     bindMockupClipboard();const viewport=mockupViewport(canvas);viewport.tabIndex=0;viewport.setAttribute('aria-label','Vista del montaje');viewport.addEventListener('scroll',syncMockupScrollPan,{passive:true});canvas.dataset.pointerBound='1';updateMockupTouchAction(canvas);canvas.style.transition='none';const pointers=new Map();
     const controls=qs('.mockup-zoom-controls'),hint=controls&&qs('small',controls);hint?.remove();
+    const frame=viewport.closest('.production-preview-frame')||viewport.parentElement;
+    const cursor=document.createElement('span');cursor.id='mockupBrushCursor';cursor.hidden=true;cursor.setAttribute('aria-hidden','true');frame.append(cursor);
+    viewport.addEventListener('pointerleave',()=>{state.mockupBrushHover=null;syncMockupBrushCursor(canvas);});
     if(controls&&!qs('#mockupZoomSlider')){const slider=document.createElement('input');slider.type='range';slider.id='mockupZoomSlider';slider.min='1';slider.max='8';slider.step='.05';slider.value='1';slider.setAttribute('aria-label','Zoom del modelo');controls.insertBefore(slider,qs('#mockupZoomValue',controls));slider.addEventListener('input',()=>applyMockupSharedSlider(Number(slider.value)));syncMockupMobileControls();}
     if(window.ResizeObserver)new ResizeObserver(applyMockupZoom).observe(viewport);
     const point=e=>{const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height}};
@@ -2359,8 +2660,14 @@
     canvas.addEventListener('contextmenu',event=>{event.preventDefault();if(state.mockupPointer)return;const hit=[...state.mockupLayerBoxes].reverse().find(box=>mockupHitTest(box,point(event),mockupControlScale(canvas),false));if(hit)openProductionArtworkEditor(hit.key).catch(error=>toast(error.message,'error'));});
     canvas.addEventListener('pointerdown',e=>{
       if(![0,1].includes(e.button)&&e.pointerType!=='touch')return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});e.preventDefault();canvas.setPointerCapture?.(e.pointerId);
-      if(pointers.size===2){const previous=state.mockupPointer;if(previous?.mode==='brush'&&performance.now()-previous.startedAt<250&&previous.stroke.points.length<=2){const layer=mockupLayers().find(layer=>layer.key===previous.key);if(layer?.item.surface?.strokes?.at(-1)===previous.stroke)layer.item.surface.strokes.pop();}const [a,b]=[...pointers.values()];state.mockupPointer={mode:'pinch',distance:Math.hypot(a.x-b.x,a.y-b.y),zoom:state.mockupZoom,mid:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},pan:{x:state.mockupPanX,y:state.mockupPanY}};refreshMockupPreview().catch(()=>{});return;}if(pointers.size>2)return;
-      if(state.mockupChoosingCenter&&!activeProductionViewLocked()){checkpointMockup();rememberMockupView().centerPoint={x:point(e).x/canvas.width,y:point(e).y/canvas.height};state.mockupChoosingCenter=false;refreshMockupPreview().catch(()=>{});toast('Centro de esta vista guardado','success');return;}if(e.button===0&&(e.ctrlKey||e.metaKey)&&!state.mockupSpacePressed&&!activeProductionViewLocked()){const hit=[...state.mockupLayerBoxes].reverse().find(box=>mockupHitTest(box,point(e),mockupControlScale(canvas),false));if(hit){setMockupLayerSelection(hit.key,true);state.mockupPointer=null;renderMockupLayerControls();refreshMockupPreview().catch(()=>{});return;}}if(e.button===1||e.ctrlKey||e.metaKey||state.mockupSpacePressed||activeProductionViewLocked()){startPan(e);return;}const p=point(e);if(state.mockupCalibration){applyMockupCalibrationPoint(p,canvas);return;}const selectedBox=state.mockupLayerBoxes.find(b=>b.key===state.mockupSelectedLayer);if(startMockupCropPointer(p,e,canvas))return;if(state.mockupTool==='warp'&&selectedBox){if(startMockupSurfacePointer(p,e,canvas)||mockupHitTest(selectedBox,p,mockupControlScale(canvas),false))return;}if(selectedBox&&mockupHitTest(selectedBox,p,mockupControlScale(canvas),false)&&startMockupSurfacePointer(p,e,canvas))return;const scale=mockupControlScale(canvas),boxes=[...state.mockupLayerBoxes].reverse(),selected=boxes.find(b=>b.key===state.mockupSelectedLayer),control=selected&&mockupHitTest(selected,p,scale,true);
+      if(pointers.size===2){const previous=state.mockupPointer;if(previous?.mode==='brush'&&performance.now()-previous.startedAt<250&&previous.stroke.points.length<=2){const layer=mockupLayers().find(layer=>layer.key===previous.key);if(layer?.item.surface?.outputStrokes?.at(-1)===previous.stroke)layer.item.surface.outputStrokes.pop();}const [a,b]=[...pointers.values()];state.mockupPointer={mode:'pinch',distance:Math.hypot(a.x-b.x,a.y-b.y),zoom:state.mockupZoom,mid:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},pan:{x:state.mockupPanX,y:state.mockupPanY}};refreshMockupPreview().catch(()=>{});return;}if(pointers.size>2)return;
+      if(state.mockupChoosingCenter&&!activeProductionViewLocked()){checkpointMockup();rememberMockupView().centerPoint={x:point(e).x/canvas.width,y:point(e).y/canvas.height};state.mockupChoosingCenter=false;refreshMockupPreview().catch(()=>{});toast('Centro de esta vista guardado','success');return;}if(e.button===0&&(e.ctrlKey||e.metaKey)&&!state.mockupSpacePressed&&!activeProductionViewLocked()){const hit=[...state.mockupLayerBoxes].reverse().find(box=>mockupHitTest(box,point(e),mockupControlScale(canvas),false));if(hit){setMockupLayerSelection(hit.key,true);state.mockupPointer=null;renderMockupLayerControls();refreshMockupPreview().catch(()=>{});return;}}if(e.button===1||e.ctrlKey||e.metaKey||state.mockupSpacePressed||activeProductionViewLocked()){startPan(e);return;}const p=point(e);if(state.mockupCalibration){applyMockupCalibrationPoint(p,canvas);return;}const selectedBox=state.mockupLayerBoxes.find(b=>b.key===state.mockupSelectedLayer);if(startMockupCropPointer(p,e,canvas))return;
+      if(state.mockupTool==='brush'){
+        state.mockupBrushHover={x:e.clientX,y:e.clientY};
+        startMockupSurfacePointer(p,e,canvas);syncMockupBrushCursor(canvas);
+        return;
+      }
+      if(state.mockupTool==='warp'&&selectedBox){if(startMockupSurfacePointer(p,e,canvas)||mockupHitTest(selectedBox,p,mockupControlScale(canvas),false))return;}if(selectedBox&&mockupHitTest(selectedBox,p,mockupControlScale(canvas),false)&&startMockupSurfacePointer(p,e,canvas))return;const scale=mockupControlScale(canvas),boxes=[...state.mockupLayerBoxes].reverse(),selected=boxes.find(b=>b.key===state.mockupSelectedLayer),control=selected&&mockupHitTest(selected,p,scale,true);
       let hit=control&&control.mode!=='move'?selected:boxes.find(b=>mockupHitTest(b,p,scale,false));
       if(!hit){startPan(e,true);return;}
       if(state.mockupSelectedLayer!==hit.key){setMockupLayerSelection(hit.key);state.mockupTool='move';state.mockupPointer={mode:'select',key:hit.key,startClient:{x:e.clientX,y:e.clientY},initialPan:{x:state.mockupPanX,y:state.mockupPanY}};renderMockupLayerControls();refreshMockupPreview().catch(()=>{});return;}const action=mockupHitTest(hit,p,scale,true);if(action.mode==='remove'){if(hit.item.kind==='text')removeProductionText(hit.item.layerId);else removeProductionDesign(Number(hit.key.split('-')[1]));return;}
@@ -2368,10 +2675,15 @@
       renderMockupLayerControls();refreshMockupPreview().catch(()=>{});
     });
     viewport.addEventListener('pointermove',e=>{
-      if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const drag=state.mockupPointer;if(!drag)return;
+      if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(state.mockupTool==='brush'){
+        state.mockupBrushHover={x:e.clientX,y:e.clientY};
+        syncMockupBrushCursor(canvas);
+      }
+      const drag=state.mockupPointer;if(!drag)return;
       if(drag.mode==='pinch'){if(pointers.size<2)return;const [a,b]=[...pointers.values()];state.mockupZoom=Math.max(1,Math.min(8,drag.zoom*Math.hypot(a.x-b.x,a.y-b.y)/Math.max(1,drag.distance)));state.mockupPanX=drag.pan.x+(a.x+b.x)/2-drag.mid.x;state.mockupPanY=drag.pan.y+(a.y+b.y)/2-drag.mid.y;applyMockupZoom();return;}
       if(drag.mode==='select'){if(Math.hypot(e.clientX-drag.startClient.x,e.clientY-drag.startClient.y)<4)return;drag.mode='pan';clearMockupSelection();}if(drag.mode==='pan'){drag.moved=drag.moved||Math.hypot(e.clientX-drag.startClient.x,e.clientY-drag.startClient.y)>=4;if(!drag.moved)return;state.mockupPanX=drag.initialPan.x+e.clientX-drag.startClient.x;state.mockupPanY=drag.initialPan.y+e.clientY-drag.startClient.y;applyMockupZoom();return;}
-      const p=point(e),layer=mockupLayers().find(x=>x.key===drag.key);if(!layer)return;if(drag.mode==='crop'){moveMockupCropPointer(drag,p);return;}if(drag.mode==='effect'){const max=drag.effect==='phase'?360:100,min=drag.effect==='curve'?-100:0,value=Math.max(min,Math.min(max,Math.round(drag.initial+(e.clientX-drag.startClient.x)*max/Math.max(80,canvas.getBoundingClientRect().width))));layer.item.surface[drag.effect]=value;const input=qs(`[data-surface-field="${drag.effect}"]`);if(input)input.value=String(value);refreshMockupPreview().catch(()=>{});return;}if(moveMockupSurfacePointer(drag,p,layer,canvas))return;const q=layer.item.mockupPlacement,dx=p.x-drag.start.x,dy=p.y-drag.start.y;
+      const p=point(e),layer=mockupLayers().find(x=>x.key===drag.key);if(!layer)return;if(drag.mode==='crop'){moveMockupCropPointer(drag,p);return;}if(drag.mode==='effect'){const max=drag.effect==='phase'?360:100,min=drag.effect==='curve'?-100:0,value=Math.max(min,Math.min(max,Math.round(drag.initial+(e.clientX-drag.startClient.x)*max/Math.max(80,canvas.getBoundingClientRect().width))));layer.item.surface[drag.effect]=value;const input=qs(`[data-surface-field="${drag.effect}"]`);if(input)input.value=String(value);refreshMockupPreview().catch(()=>{});return;}if(moveMockupSurfacePointer(drag,p,layer))return;const q=layer.item.mockupPlacement,dx=p.x-drag.start.x,dy=p.y-drag.start.y;
       if(drag.mode==='move'){
         drag.moved=drag.moved||Math.hypot(e.clientX-drag.startClient.x,e.clientY-drag.startClient.y)>2;q.x=drag.initial.x+dx/canvas.width;q.y=drag.initial.y+dy/canvas.height;clampMockupPlacement(q,canvas);
         snapMockupPlacement(canvas,q);
@@ -2382,7 +2694,13 @@
         q.w=drag.initial.w*factor;q.h=drag.initial.h*factor;const hx=sx*q.w*canvas.width/2,hy=sy*q.h*canvas.height/2;q.x=(fixed.x+hx*Math.cos(angle)-hy*Math.sin(angle))/canvas.width-q.w/2;q.y=(fixed.y+hx*Math.sin(angle)+hy*Math.cos(angle))/canvas.height-q.h/2;clampMockupPlacement(q,canvas);
       }syncMockupSize(layer,canvas);refreshMockupPreview().catch(()=>{});
     });
-    const stop=e=>{pointers.delete(e.pointerId);if(pointers.size&&state.mockupPointer?.mode==='pinch'){const remaining=[...pointers.values()][0];state.mockupPointer={mode:'pan',startClient:remaining,initialPan:{x:state.mockupPanX,y:state.mockupPanY}};return;}if(pointers.size)return;const changed=state.mockupPointer;state.mockupPointer=null;if(changed?.deselectOnClick&&!changed.moved&&e.type==='pointerup'){clearMockupSelection();return;}if(changed?.key){renderProductionSelectedDesigns();calcProductionBuilderCost();}refreshMockupPreview().catch(()=>{});};viewport.addEventListener('pointerup',stop);viewport.addEventListener('pointercancel',stop);viewport.addEventListener('lostpointercapture',event=>{if(pointers.has(event.pointerId))stop(event);});window.addEventListener('blur',()=>{pointers.clear();state.mockupPointer=null;state.mockupSpacePressed=false;});qs('#productionDialog')?.addEventListener('close',()=>{pointers.clear();state.mockupPointer=null;});
+    const stop=e=>{pointers.delete(e.pointerId);if(pointers.size&&state.mockupPointer?.mode==='pinch'){const remaining=[...pointers.values()][0];state.mockupPointer={mode:'pan',startClient:remaining,initialPan:{x:state.mockupPanX,y:state.mockupPanY}};return;}if(pointers.size)return;const changed=state.mockupPointer;
+      if(e.type==='pointerup'&&changed?.mode==='crop'&&changed.moved)moveMockupCropPointer(changed,point(e));
+      if(e.type==='pointerup'&&changed?.mode==='brush'){
+        const layer=mockupLayers().find(item=>item.key===changed.key);
+        if(layer)moveMockupSurfacePointer(changed,point(e),layer);
+      }
+      state.mockupPointer=null;if(e.pointerType==='touch'||e.type==='pointercancel'){state.mockupBrushHover=null;syncMockupBrushCursor(canvas);}if(changed?.deselectOnClick&&!changed.moved&&e.type==='pointerup'){clearMockupSelection();return;}if(changed?.key){renderProductionSelectedDesigns();calcProductionBuilderCost();}refreshMockupPreview().catch(()=>{});};viewport.addEventListener('pointerup',stop);viewport.addEventListener('pointercancel',stop);viewport.addEventListener('lostpointercapture',event=>{if(pointers.has(event.pointerId))stop(event);});window.addEventListener('blur',()=>{pointers.clear();state.mockupPointer=null;state.mockupSpacePressed=false;state.mockupBrushHover=null;syncMockupBrushCursor(canvas);});qs('#productionDialog')?.addEventListener('close',()=>{pointers.clear();state.mockupPointer=null;state.mockupBrushHover=null;syncMockupBrushCursor(canvas);});
   }
   function renderMockupAssetList(){renderProductionPhotos();}
   function mockupAssetCategory(asset){return asset.asset_type==='background'?'Fondo':asset.gender==='Producto'||asset.asset_type==='cap'?'Producto':'Persona';}
@@ -2438,7 +2756,11 @@
     if(field==='view')label=({front:'Frente',back:'Espalda',side:'Perfil',both:'Ambas vistas'})[item.pose]||'Sin vista';
     return {key:key||String(label).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLocaleLowerCase('es-AR'),label};
   }
-  function galleryAssociatedModels(item){const models=state.mockupAssets.filter(asset=>mockupAssetCategory(asset)==='Persona'),names=[];for(const model of models){let ids=model.associated_product_ids;try{ids??=JSON.parse(model.associated_products_json||'[]');}catch{ids=[];}if(ids.map(Number).includes(Number(item.id))&&model.model_name)names.push(model.model_name);}let legacy=item.associated_models;try{legacy??=JSON.parse(item.associated_models_json||'[]');}catch{legacy=[];}for(const name of legacy||[])if(!models.some(model=>model.model_name===name&&Number(model.associated_products_explicit)))names.push(name);return uniqOptions(names);}
+  function galleryAssociatedModels(item){
+    const familyIds=new Set(garmentPhotoMembership(item).flatMap(row=>row.modelIds));
+    const models=state.mockupAssets.filter(asset=>mockupAssetCategory(asset)==='Persona');
+    if(familyIds.size)return uniqOptions(models.filter(model=>familyIds.has(Number(model.id))).map(model=>model.model_name));
+    const names=[];for(const model of models){let ids=model.associated_product_ids;try{ids??=JSON.parse(model.associated_products_json||'[]');}catch{ids=[];}if(ids.map(Number).includes(Number(item.id))&&model.model_name)names.push(model.model_name);}let legacy=item.associated_models;try{legacy??=JSON.parse(item.associated_models_json||'[]');}catch{legacy=[];}for(const name of legacy||[])if(!models.some(model=>model.model_name===name&&Number(model.associated_products_explicit)))names.push(name);return uniqOptions(names);}
   function galleryLayoutValues(item,field,layout){
     if(field==='model'&&item.asset_type&&mockupAssetCategory(item)==='Producto'){
       const names=galleryAssociatedModels(item);if(names.length)return layout.includeAssociated===false?[]:names.map(name=>({key:name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLocaleLowerCase('es-AR'),label:name}));
@@ -2544,6 +2866,7 @@
   async function loadMontagePhotos(){
     await Promise.all([
       loadMockupAssets(),
+      loadGarmentPhotos(),
       ensureAdminOptionSettings(),
       state.materials.length?null:api('/api/admin/materials').then(data=>{state.materials=data.items||[];})
     ]);
@@ -2559,6 +2882,8 @@
     return MONTAGE_SECTIONS.some(([value])=>value===section)?section:'other';
   }
   function montageAudiences(asset,section){
+    const assigned=garmentPhotoAudience(asset);
+    if(assigned.length)return assigned;
     const audiences=photoAudiences33(asset);
     if(audiences.length)return audiences;
     if(photoLine25(asset)==='SALMOS Kids')return ['Kids'];
@@ -2622,9 +2947,11 @@
       view:section==='background'?[]:[MONTAGE_VIEWS[mockupAssetCategory(asset)==='Persona'?0:1]],
       audience:isGarment||section==='book'||section==='cap'?MONTAGE_AUDIENCES.filter(([value])=>audiences.includes(value)):[],
       collection:section==='book'?montageBookCollections(asset,details.type,collections):[],
-      fit:isGarment?[[fit||'sin corte',fitLabel]]:[],
+      fit:isGarment?(garmentPhotoMembership(asset).length?
+        [...new Map(garmentPhotoMembership(asset).map(row=>[photoFit(row.fit),row.fit]))]:[[fit||'sin corte',fitLabel]]):[],
       model:isGarment?galleryLayoutValues(asset,'model',{includeAssociated:true}).map(model=>[key(model.label),model.label]):[],
-      color:color?[[photoColor(color),materialColorName(color)||color,color]]:[],
+      color:uniqOptions(garmentPhotoMembership(asset).length?garmentPhotoMembership(asset).map(row=>row.color):[color])
+        .map(value=>[photoColor(value),materialColorName(value)||value,value]),
       capAge:section==='cap'?MONTAGE_CAP_AGES.filter(([value])=>value==='kids'?audiences.includes('Kids'):audiences.some(audience=>audience!=='Kids')):[],
       capStyle:style?[MONTAGE_CAP_STYLES.find(([value])=>value===style)||['unknown','Sin especificar']]:[]
     };
@@ -2834,6 +3161,7 @@
       <div class="admin-actions">
         <button type="button" class="btn btn-ghost" data-montage-batch-visible>Marcar visibles</button>
         <button type="button" class="btn btn-ghost" data-montage-batch-clear ${batch.ids.size?'':'disabled'}>Desmarcar todas</button>
+        <button type="button" class="btn btn-ghost" data-garment-family-editor data-family-from-batch ${batch.ids.size?'':'disabled'}>Vincular a prenda</button>
         <button type="button" class="btn btn-primary" data-montage-batch-edit ${batch.ids.size?'':'disabled'}>Editar seleccionadas (${batch.ids.size})</button>
       </div>
     </div>`;
@@ -2858,6 +3186,8 @@
     const edit=qs('[data-montage-batch-edit]'),clear=qs('[data-montage-batch-clear]');
     edit.textContent=`Editar seleccionadas (${batch.ids.size})`;
     edit.disabled=clear.disabled=!batch.ids.size;
+    const link=qs('[data-family-from-batch]',edit.parentElement);
+    if(link)link.disabled=!batch.ids.size;
   }
   function montageMetadataApi(body,method='POST'){
     return api('/api/admin/mockup-assets/metadata',{method,body:JSON.stringify(body)});
@@ -2961,6 +3291,7 @@
       <label><input type="checkbox" name="replace"> Reemplazar las características de cada foto por las seleccionadas</label>
       <div class="notice" data-montage-save-status role="status" hidden></div>
       <div class="admin-actions"><button type="button" class="btn btn-ghost" data-close-review-dialog>Cancelar</button>
+        ${photos.some(isGarmentPhoto)?'<button type="button" class="btn btn-ghost" data-garment-family-editor data-family-from-batch>Vincular a prenda</button>':''}
         <button type="submit" class="btn btn-primary">Revisar y guardar</button></div>
     </form>`;
     const form=qs('form',dialog),status=qs('[data-montage-save-status]',form),save=qs('[type="submit"]',form);
@@ -2986,6 +3317,7 @@
         if(materialChoices===null||!dialog.open)return;
         const data=await montageMetadataApi({...body,token:preview.token,materialChoices},'PATCH');
         applyMontageMetadata(data);
+        await loadGarmentPhotos();
         batch.ids.clear();
         dialog.close();
         renderProductionPhotos();
@@ -3004,7 +3336,7 @@
     const photos=state.mockupAssets.filter(asset=>asset.asset_type!=='background'&&used.has(Number(asset.id)));
     if(!photos.length)return true;
     const explicit=state.materials.some(material=>Number(material.id)===materialId);
-    const linked=photos.some(asset=>asset.material_id||asset.material_ids?.length||asset.associated_product_ids?.length);
+    const linked=photos.some(asset=>asset.material_id||asset.material_ids?.length||asset.associated_product_ids?.length||garmentPhotoMembership(asset).length);
     if(!explicit&&!linked)return true;
     const ids=photos.map(asset=>Number(asset.id));
     const pairs=explicit?ids.map(photoId=>({photoId,materialId})):[];
@@ -3022,6 +3354,211 @@
     renderProductionPhotos({resetScroll:true});
     qs('[data-montage-missing]')?.focus({preventScroll:true});
   });
+
+  function garmentFamilyTitle(row){
+    return [materialTypeLabel(row.type),row.fit,row.color,row.line==='kids'?'Kids':'Adultos'].filter(Boolean).join(' · ');
+  }
+  function montageAssignmentButton(){
+    return '<button type="button" class="icon-btn" data-garment-family-editor aria-label="Organizar prendas y modelos" title="Organizar prendas y modelos"><i class="fa-solid fa-shirt" aria-hidden="true"></i></button>';
+  }
+  async function openGarmentFamilyEditor(selectedIds=[]){
+    await loadGarmentPhotos();
+    const data=state.garmentPhotos;
+    if(!data)throw new Error('Actualizá el Worker de SALMOS para guardar los vínculos.');
+    const assets=galleryOrder('photos',state.mockupAssets.filter(isGarmentPhoto));
+    const byPhoto=new Map(assets.map(photo=>[Number(photo.id),photo]));
+    const selected=selectedIds.map(id=>byPhoto.get(Number(id))).filter(Boolean);
+    const types=new Set(selected.map(photo=>photo.product_type));
+    const rows=new Map([...data.suggestions,...data.families]);
+    const suggestedBySelection=[...data.suggestions.values()].find(row=>selected.length&&selected.every(photo=>
+      [...row.hangerIds,...row.modelIds].includes(Number(photo.id))));
+    const drafts=new Map();
+    const dialog=ensureAdminDialog('garmentFamilyDialog','Organizar prendas y modelos');
+    dialog.classList.add('garment-family-dialog');
+    const body=qs('.dialog-body',dialog);
+    const legacyCount=data.legacyModelLinks.size,unlinkedCount=data.unlinkedModelIds.size;
+    let mode='all',active=suggestedBySelection&&rows.has(suggestedBySelection.key)?suggestedBySelection.key:'';
+    let candidateView=selected.some(photo=>!isHangerPhoto(photo))?'models':'hangers',includeAll=false,query='',clean=false;
+    const formOption=(row,label=garmentFamilyTitle(row))=>`<option value="${escapeHtml(row.key)}">${escapeHtml(label)}</option>`;
+    const editorForm=`<form class="montage-metadata-form">
+      <div class="garment-family-toolbar">
+        <label class="field">Ver<select class="select" data-family-mode>
+          <option value="all">Todas las prendas</option><option value="missing">Prendas sin percha</option>
+          <option value="legacy">Modelos vinculados a Compras (${legacyCount})</option><option value="unlinked">Modelos sin prenda (${unlinkedCount})</option>
+        </select></label>
+        <label class="field">Prenda base<select class="select" data-family-select></select></label>
+        <button type="button" class="btn btn-ghost" data-family-create>Nueva prenda</button>
+      </div>
+      <div class="garment-family-new" hidden>
+        <label class="field">Rubro<select class="select" data-family-type>${currentPurchaseTypes().filter(([type])=>materialIsGarment(type)).map(([type,label])=>`<option value="${type}">${escapeHtml(label)}</option>`).join('')}</select></label>
+        <label class="field">Corte<select class="select" data-family-cut>${uniqOptions([...purchaseFitOptions(),...assets.map(asset=>asset.garment_style)]).map(fit=>`<option>${escapeHtml(fit)}</option>`).join('')}</select></label>
+        <label class="field">Color<select class="select" data-family-color>${uniqOptions([...purchaseColorOptions(),...assets.map(asset=>asset.color)]).map(color=>`<option>${escapeHtml(color)}</option>`).join('')}</select></label>
+        <div class="garment-family-new-lines"><label><input type="checkbox" value="adult" data-family-line checked> Adultos</label><label><input type="checkbox" value="kids" data-family-line> Kids</label></div>
+        <button type="button" class="btn btn-ghost" data-family-add>Agregar</button>
+      </div>
+      ${selected.length?`<div class="notice">${selected.length} foto${selected.length===1?'':'s'} marcada${selected.length===1?'':'s'} en la galería.</div>`:''}
+      <div data-family-content></div>
+      <label class="garment-family-clean"><input type="checkbox" data-family-clean> Quitar de Compras los modelos vinculados a una prenda</label>
+      <div class="notice" data-family-status role="status" hidden></div>
+      <div class="admin-actions"><button type="button" class="btn btn-ghost" data-close-review-dialog>Volver</button>
+        <button type="submit" class="btn btn-primary">Guardar vínculos</button></div>
+    </form>`;
+    body.innerHTML=editorForm;
+    const form=qs('form',body),picker=qs('[data-family-select]',form),status=qs('[data-family-status]',form);
+    const content=qs('[data-family-content]',form);
+    const draftFor=(key,field)=>{
+      if(!drafts.has(key)){
+        const row=rows.get(key),stored=data.families.get(key);
+        drafts.set(key,{...row,hangerIds:[...(stored?.hangerIds||[])],modelIds:[...(stored?.modelIds||[])],changed:new Set()});
+      }
+      const draft=drafts.get(key);
+      if(field)draft.changed.add(field);
+      return draft;
+    };
+    const needsReview=id=>mode==='legacy'?data.legacyModelLinks.has(id):mode==='unlinked'&&data.unlinkedModelIds.has(id);
+    const suggestedModels=new Set([...data.suggestions.values()].flatMap(row=>row.modelIds));
+    const reviewIds=()=>assets.filter(photo=>(!types.size||types.has(photo.product_type))&&!isHangerPhoto(photo)&&needsReview(Number(photo.id)));
+    const showStatus=message=>{status.textContent=message;status.hidden=!message;};
+    function render(){
+      const review=reviewIds(),unclassified=review.filter(photo=>!suggestedModels.has(Number(photo.id)));
+      const matches=[...rows.values()].filter(row=>{
+        if(types.size&&!types.has(row.type))return false;
+        if(mode==='missing')return !(drafts.get(row.key)||data.families.get(row.key))?.hangerIds.length;
+        if(mode==='legacy'||mode==='unlinked')return data.suggestions.get(row.key)?.modelIds.some(needsReview)
+          ||unclassified.some(photo=>photo.product_type===row.type);
+        return true;
+      }).sort((a,b)=>garmentFamilyTitle(a).localeCompare(garmentFamilyTitle(b),'es'));
+      if(!matches.some(row=>row.key===active))active=matches[0]?.key||'';
+      picker.innerHTML=matches.map(row=>formOption(row)).join('')||'<option value="">Sin prendas en este filtro</option>';
+      picker.value=active;
+      qs('[data-family-mode]',form).value=mode;
+      const cleanup=qs('[data-family-clean]',form);
+      cleanup.checked=clean;cleanup.closest('label').hidden=!data.legacyModelLinks.size;
+      if(!active){
+        content.innerHTML='<p class="muted">Podés elegir otro filtro o crear una prenda aunque todavía no tengas stock.</p>'+
+          (review.length?`<div class="garment-family-photos">${review.map(photo=>`<div class="model-product-choice">
+          <img src="${escapeHtml(mockupAssetUrl(photo))}" alt="" loading="lazy"><strong>${escapeHtml(photo.name)}</strong></div>`).join('')}</div>`:'');
+        return;
+      }
+      const row=drafts.get(active)||data.families.get(active)||{hangerIds:[],modelIds:[]};
+      const family=rows.get(active),suggestions=data.suggestions.get(active)||{hangerIds:[],modelIds:[]};
+      const field=candidateView==='hangers'?'hangerIds':'modelIds',isHanger=candidateView==='hangers';
+      const candidates=assets.filter(asset=>{
+        if(asset.product_type!==family.type||isHangerPhoto(asset)!==isHanger)return false;
+        const id=Number(asset.id);
+        const marked=selected.some(photo=>Number(photo.id)===id);
+        const search=productionDesignSearchText([asset.name,asset.model_name,asset.color,asset.garment_style].join(' '));
+        return (includeAll||marked||row[field].includes(id)||suggestions[field].includes(id)||needsReview(id))&&search.includes(query);
+      });
+      const transferable=isHanger&&row.hangerIds.length;
+      content.innerHTML=`<div class="garment-family-photo-controls">
+        <div role="group" aria-label="Tipo de foto" class="admin-actions">
+          <button type="button" class="btn btn-ghost" data-family-view="hangers" aria-pressed="${isHanger}">En percha (${row.hangerIds.length})</button>
+          <button type="button" class="btn btn-ghost" data-family-view="models" aria-pressed="${!isHanger}">Modelos (${row.modelIds.length})</button>
+        </div>
+        <label class="field">Buscar foto<input class="input" type="search" data-family-search value="${escapeHtml(query)}"></label>
+        <label><input type="checkbox" data-family-show-all ${includeAll?'checked':''}> Ver todas las fotos del rubro</label>
+      </div>
+      <div class="admin-actions garment-family-actions">
+        <button type="button" class="btn btn-ghost" data-family-suggested ${suggestions[field].length?'':'disabled'}>Marcar sugeridas</button>
+        ${selected.some(photo=>photo.product_type===family.type&&isHangerPhoto(photo)===isHanger)?'<button type="button" class="btn btn-ghost" data-family-selected>Marcar las de la galería</button>':''}
+        ${transferable?`<button type="button" class="btn btn-ghost" data-family-share>Usar esta percha también en ${family.line==='kids'?'Adultos':'Kids'}</button>`:''}
+        <button type="button" class="btn btn-ghost" data-family-clear ${row[field].length?'':'disabled'}>Desmarcar todas</button>
+      </div>
+      <div class="garment-family-photos">
+        ${candidates.map(asset=>{
+          const id=Number(asset.id),checked=row[field].includes(id),legacy=data.legacyModelLinks.has(id);
+          return `<button type="button" class="model-product-choice ${checked?'selected':''}" data-family-photo="${id}" aria-pressed="${checked}">
+            <img src="${escapeHtml(mockupAssetUrl(asset))}" alt="" loading="lazy">
+            <span class="model-product-check" aria-hidden="true">${checked?'✓':''}</span>
+            <strong>${escapeHtml(asset.model_name&&asset.gender!=='Producto'?asset.model_name:asset.name)}</strong>
+            <small>${escapeHtml([asset.pose==='back'?'Dorso':'Frente',legacy?'Vinculada a Compras':''].filter(Boolean).join(' · '))}</small>
+          </button>`;
+        }).join('')||'<p class="muted">No hay fotos para esta selección.</p>'}
+      </div>`;
+    }
+    form.addEventListener('change',event=>{
+      if(event.target.matches('[data-family-mode]')){
+        mode=event.target.value;active='';
+        if(mode==='legacy'||mode==='unlinked')candidateView='models';
+        if(mode==='missing')candidateView='hangers';
+      }
+      else if(event.target===picker)active=picker.value;
+      else if(event.target.matches('[data-family-show-all]'))includeAll=event.target.checked;
+      else if(event.target.matches('[data-family-clean]')){clean=event.target.checked;return;}
+      else return;
+      render();
+    });
+    form.addEventListener('input',event=>{
+      if(!event.target.matches('[data-family-search]'))return;
+      const value=event.target.value,caret=event.target.selectionStart;
+      query=productionDesignSearchText(value);render();
+      const search=qs('[data-family-search]',form);search.value=value;search.focus({preventScroll:true});
+      search.setSelectionRange(caret,caret);
+    });
+    form.addEventListener('click',event=>{
+      const button=event.target.closest('button');if(!button)return;
+      if(button.hasAttribute('data-family-create')){
+        const box=qs('.garment-family-new',form);box.hidden=!box.hidden;
+        if(!box.hidden&&types.size===1)qs('[data-family-type]',form).value=[...types][0];
+        return;
+      }
+      if(button.hasAttribute('data-family-add')){
+        const type=qs('[data-family-type]',form).value,fit=qs('[data-family-cut]',form).value,color=qs('[data-family-color]',form).value;
+        const lines=qsa('[data-family-line]:checked',form).map(input=>input.value);
+        if(!lines.length){showStatus('Elegí Adultos, Kids o las dos líneas.');return;}
+        const next=lines.map(line=>garmentFamilyFields({type,fit,color,line})).filter(Boolean);
+        if(!next.length){showStatus('Elegí corte y color.');return;}
+        for(const family of next){
+          if(!rows.has(family.key))rows.set(family.key,{...family,hangerIds:[],modelIds:[]});
+          draftFor(family.key);
+        }
+        types.add(type);active=next[0].key;mode='all';qs('.garment-family-new',form).hidden=true;showStatus('');render();return;
+      }
+      if(button.dataset.familyView){candidateView=button.dataset.familyView;query='';render();return;}
+      if(!active||!button.matches('[data-family-photo],[data-family-selected],[data-family-suggested],[data-family-clear],[data-family-share]'))return;
+      const field=candidateView==='hangers'?'hangerIds':'modelIds';
+      const row=button.hasAttribute('data-family-share')?(drafts.get(active)||data.families.get(active)):draftFor(active,field);
+      if(button.hasAttribute('data-family-share')){
+        const line=row.line==='kids'?'adult':'kids',target=garmentFamilyFields({...row,line});
+        if(!rows.has(target.key))rows.set(target.key,{...target,hangerIds:[],modelIds:[]});
+        const sibling=draftFor(target.key,'hangerIds');sibling.hangerIds=[...new Set([...sibling.hangerIds,...row.hangerIds])];
+      }else if(button.hasAttribute('data-family-clear'))row[field]=[];
+      else if(button.hasAttribute('data-family-selected')){
+        const choices=selected.filter(photo=>photo.product_type===row.type&&isHangerPhoto(photo)===(candidateView==='hangers'));
+        row[field]=[...new Set([...row[field],...choices.map(photo=>Number(photo.id))])];
+      }else if(button.hasAttribute('data-family-suggested')){
+        row[field]=[...new Set([...row[field],...(data.suggestions.get(active)?.[field]||[])])];
+      }else{
+        const id=Number(button.dataset.familyPhoto);
+        row[field]=row[field].includes(id)?row[field].filter(value=>value!==id):[...row[field],id];
+      }
+      if(!row[field].length)mode='all';
+      render();showStatus('');
+    });
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();const button=qs('[type="submit"]',form);if(button.disabled)return;
+      const effective=new Map([...data.families,...drafts]);
+      const detached=clean?[...new Set([...effective.values()].flatMap(row=>row.modelIds))].filter(id=>data.legacyModelLinks.has(id)):[];
+      if(!drafts.size&&!detached.length){showStatus('Marcá fotos o agregá una prenda para guardar.');return;}
+      button.disabled=true;showStatus('');
+      try{
+        const result=await api('/api/admin/mockup-assets/garment-families',{method:'PATCH',body:JSON.stringify({
+          revision:data.revision,families:[...drafts.values()].map(({changed,hangerIds,modelIds,...row})=>({
+            ...row,...(changed.has('hangerIds')?{hangerIds}:{}),...(changed.has('modelIds')?{modelIds}:{})
+          })),detachModelIds:detached
+        })});
+        garmentPhotoAssignmentsData(result);
+        if(detached.length){state.mockupAssetsLoaded=false;await loadMockupAssets(true);}
+        dialog.close();renderProductionPhotos();
+        if(qs('#productionDialog')?.open){renderProductionMaterialGallery();renderMockupStudioOptions();}
+        if(state.view==='purchases')renderPurchasesContent();
+        toast('Vínculos de las prendas guardados.','success');
+      }catch(error){showStatus(error.message);}
+      finally{button.disabled=false;}
+    });
+    render();dialog.showModal();
+  }
 
   const MOCKUP_CATALOG_DEFAULT={models:[],garments:['Remera clásica','Remera oversize','Remera crop','Chomba','Buzo'],products:[],variants:['Blanca','Interior de color'],colors:[...PURCHASE_BASIC_COLORS]};
   async function ensureMockupCatalog(){let stored=state.mockupCatalog||{};if(!state.mockupCatalog){try{const data=await api('/api/admin/settings');stored=JSON.parse(data.settings?.mockup_catalog||'{}')||{}}catch(err){if(err.status===401||err.status===503)throw err;}}const existing={models:state.mockupAssets.filter(a=>mockupAssetCategory(a)==='Persona').map(a=>a.model_name),garments:state.mockupAssets.map(a=>a.garment_style),variants:state.mockupAssets.map(a=>a.variant_label),colors:state.mockupAssets.map(a=>a.color)};state.mockupCatalog=Object.fromEntries(Object.entries(MOCKUP_CATALOG_DEFAULT).map(([key,defaults])=>[key,stored.managedLists?.[key]&&Array.isArray(stored[key])?uniqOptions(stored[key]):uniqOptions([...defaults,...(Array.isArray(stored[key])?stored[key]:[]),...(existing[key]||[]).filter(Boolean)])]));state.mockupCatalog.managedLists={...(stored.managedLists||{})};state.mockupCatalog.variantProducts=structuredClone(stored.variantProducts||{});state.mockupCatalog.photoLines25=structuredClone(stored.photoLines25||{});state.mockupCatalog.photoAudiences33=structuredClone(stored.photoAudiences33||{});for(const a of state.mockupAssets){if(a.variant_label&&!state.mockupCatalog.managedLists.variantProducts?.[a.product_type]){const list=state.mockupCatalog.variantProducts[a.product_type]??=[];for(const label of mockupMultiValues(a.variant_label))if(!list.includes(label))list.push(label);}}}
@@ -3104,7 +3641,10 @@
     qs('[data-product-list-rows]',dialog).onclick=event=>{const button=event.target.closest('[data-product-list-remove]');if(button)button.closest('.product-list-option').remove();};qs('[data-product-list-add]',dialog).onclick=()=>{qs('[data-product-list-rows]',dialog).insertAdjacentHTML('beforeend',selectedKind==='colors'?colorRow(''):'<div class="product-list-option"><input class="input" data-product-list-value maxlength="160"><button type="button" class="icon-btn" data-product-list-remove aria-label="Quitar opción"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div>');qsa('[data-product-list-value]',dialog).at(-1)?.focus();};qs('[data-product-list-cancel]',dialog).onclick=()=>dialog.close();
     qs('[data-product-list-save]',dialog).onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{if(selectedKind==='colors'){const entries=qsa('.product-list-color',dialog).map(row=>({name:qs('[data-product-list-value]',row).value.trim(),color:qs('[data-product-list-color]',row).value})).filter(row=>row.name);const merged=[...(window.SalmosColors?.catalog()||[]).filter(entry=>!entries.some(row=>row.name.toLocaleLowerCase('es')===entry.name.toLocaleLowerCase('es'))),...entries];await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{named_color_catalog:JSON.stringify(merged),admin_purchase_options_v2:JSON.stringify({...state.purchaseOptions,colorCatalog:entries.map(row=>row.name)})}})});window.SalmosColors?.setCatalog(merged);state.settings.named_color_catalog=JSON.stringify(merged);}const saved=selectedKind==='colors'?(state.purchaseOptions.colorCatalog=uniqOptions(readValues().map(value=>value.trim()).filter(Boolean))):await saveProductList(selectedKind,readValues(),{materialClass:selectedClass,type:selectedType});drafts.set(draftKey(),saved);refreshManagedSizeSelectors();if(qs('#purchaseDialog')?.open){qsa('[data-purchase-row]').forEach(syncPurchaseRowFromDom);renderPurchaseItems();}if(qs('#mockupAssetDialog')?.open){captureMockupQueue();renderMockupUploadQueue();renderMockupCatalogEditor();}if(qs('#productionDialog')?.open){if(selectedKind==='variants'){window.SalmosBook.render();renderMockupStudioOptions();}renderProductionMaterialGallery();renderProductionVariantStock();}if(state.view==='products')renderUnifiedProducts();renderProductionPhotos();dialog.close();toast('Lista guardada','success');}catch(error){qs('[data-product-list-status]',dialog).textContent=error.message;}finally{button.disabled=false;}};render();dialog.showModal();
   }
-  function mockupProductAssociationField(values,recordId){let ids=[];try{ids=JSON.parse(values.associatedProductsJson||'[]');}catch{}return `<div class="field mockup-product-association" data-associated-products-field><label>Productos asociados al modelo</label><input type="hidden" data-mockup-field="associatedProductsJson" value="${escapeHtml(JSON.stringify(ids))}"><button type="button" class="btn btn-ghost" data-choose-model-products="${recordId}"><i class="fa-solid fa-images"></i> Elegir productos · ${ids.length}</button></div>`;}
+  function mockupProductAssociationField(values,recordId){
+    const record=state.mockupUploadQueue.find(row=>Number(row.id)===Number(recordId));
+    const link=record?.assetId?`<button type="button" class="btn btn-ghost" data-garment-family-editor data-family-photo-id="${record.assetId}">Vincular a prenda</button>`:'';
+    let ids=[];try{ids=JSON.parse(values.associatedProductsJson||'[]');}catch{}return `<div class="field mockup-product-association" data-associated-products-field><label>Productos asociados al modelo</label><input type="hidden" data-mockup-field="associatedProductsJson" value="${escapeHtml(JSON.stringify(ids))}"><button type="button" class="btn btn-ghost" data-choose-model-products="${recordId}"><i class="fa-solid fa-images"></i> Elegir productos · ${ids.length}</button>${link}</div>`;}
   function mockupProductFamilies(){const groups=new Map();for(const asset of state.mockupAssets.filter(asset=>mockupAssetCategory(asset)==='Producto')){const details=photoProductDetails(asset),key=JSON.stringify([details.type,details.variant,photoColor(details.color),details.features.map(productionDesignSearchText).sort()]);if(!groups.has(key))groups.set(key,{key,items:[],details});groups.get(key).items.push(asset);}return [...groups.values()];}
   function openModelProductPicker(recordId){captureMockupQueue();const record=state.mockupUploadQueue.find(row=>String(row.id)===String(recordId));if(!record)return;let ids=[];try{ids=JSON.parse(record.values.associatedProductsJson||'[]');}catch{}const groups=mockupProductFamilies(),live=new Set(groups.flatMap(group=>group.items.map(item=>Number(item.id)))),selected=new Set(groups.filter(group=>group.items.some(item=>ids.map(Number).includes(Number(item.id)))).flatMap(group=>group.items.map(item=>Number(item.id))).filter(id=>live.has(id))),dialog=ensureAdminDialog('modelProductPickerDialog','Productos del modelo');dialog.classList.add('model-product-picker');qs('.dialog-body',dialog).innerHTML='<label class="field">Buscar productos<input class="input" type="search" data-model-product-search placeholder="Nombre, corte, color o características"></label><div class="model-product-gallery"></div><div class="admin-actions"><button type="button" class="btn btn-primary" data-model-products-done>Aplicar selección</button></div>';
     const render=()=>{const query=productionDesignSearchText(qs('[data-model-product-search]',dialog).value);qs('.model-product-gallery',dialog).innerHTML=groups.filter(group=>productionDesignSearchText([group.items[0].name,materialTypeLabel(group.details.type),group.details.variant,group.details.color,...group.details.features].join(' ')).includes(query)).map(group=>{const item=group.items.find(item=>item.pose==='front')||group.items[0],checked=group.items.some(item=>selected.has(Number(item.id)));return `<button type="button" class="model-product-choice ${checked?'selected':''}" data-model-product-family="${escapeHtml(group.key)}" aria-pressed="${checked}"><img src="${escapeHtml(mockupAssetUrl(item))}" alt="${escapeHtml(item.name)}" loading="lazy"><span class="model-product-check" aria-hidden="true">${checked?'✓':''}</span><strong>${escapeHtml(item.name||materialTypeLabel(group.details.type))}</strong><span>${escapeHtml([group.items[0].garment_style||group.details.variant,group.details.color].filter(Boolean).join(' · '))}</span><small>${escapeHtml(group.details.features.join(' · '))}</small></button>`;}).join('')||'<p>Sin productos en este filtro.</p>';};
@@ -3146,7 +3686,12 @@
     const scale=(state.mockupPhotoFit||1)*zoom;if(img.naturalWidth){img.style.width=`${Math.max(1,Math.round(img.naturalWidth*scale))}px`;img.style.height=`${Math.max(1,Math.round(img.naturalHeight*scale))}px`;}
     qs('#mockupPhotoZoomValue').textContent=`${Math.round(zoom*100)}%`;stage.scrollLeft=Math.max(0,left);stage.scrollTop=Math.max(0,top);
   }
-  function syncMockupUploadCard(card){if(!card)return;const category=qs('[data-mockup-field="category"]',card)?.value,person=category==='Persona',garment=materialIsGarment(qs('[data-mockup-field="productType"]',card)?.value),pose=qs('[data-mockup-field="pose"]',card);qsa('[data-line-field]',card).forEach(el=>el.hidden=category==='Fondo');qsa('[data-person-field]',card).forEach(el=>el.classList.toggle('hidden',!person));qsa('[data-product-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-cut-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'||!['shirt','chomba','hoodie'].includes(qs('[data-mockup-field="productType"]',card)?.value)));qsa('[data-base-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-colored-field]',card).forEach(el=>{el.classList.remove('hidden');qs('label',el).textContent=category==='Fondo'?'Color predominante':'Color';});if(pose){pose.options[0].textContent=(person||garment)?'Frente':'Lado A';pose.options[1].textContent=(person||garment)?'Espalda':'Lado B';}qsa('[data-material-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-associated-products-field]',card).forEach(field=>field.hidden=category!=='Persona');const type=qs('[data-mockup-field="productType"]',card)?.value,variant=qs('[data-mockup-field="variantLabel"]',card),record=state.mockupUploadQueue?.find(r=>String(r.id)===card.dataset.mockupUpload);if(record){const typeChanged=record.lastProductType&&record.lastProductType!==type;if(typeChanged)qs('[data-mockup-field="featuresText"]',card).value='';if(variant&&variant.dataset.variantType!==type){variant.innerHTML=mockupVariantOptions(type,typeChanged?'':variant.value);variant.dataset.variantType=type;}for(const key of ['featuresText']){const input=qs(`[data-mockup-field="${key}"]`,card),choices=key==='featuresText'?mockupMaterialChoices(type):mockupVariantsFor(type),selected=mockupMultiValues(input.value),host=qs(`[data-mockup-options="${key}"]`,card);host.innerHTML=mockupMultiOptions(key,choices,selected);qs('summary span',input.parentElement).textContent=selected.join(' · ')||'Elegir';}record.lastProductType=type;}const color=qs('[data-mockup-field="color"]',card),custom=qs('[data-mockup-field="customColor"]',card);custom?.classList.toggle('hidden',color?.value!=='__custom__');}
+  function syncMockupUploadCard(card){if(!card)return;const category=qs('[data-mockup-field="category"]',card)?.value,person=category==='Persona',garment=materialIsGarment(qs('[data-mockup-field="productType"]',card)?.value),pose=qs('[data-mockup-field="pose"]',card);qsa('[data-line-field]',card).forEach(el=>el.hidden=category==='Fondo');qsa('[data-person-field]',card).forEach(el=>el.classList.toggle('hidden',!person));qsa('[data-product-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-cut-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'||!['shirt','chomba','hoodie'].includes(qs('[data-mockup-field="productType"]',card)?.value)));qsa('[data-base-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-colored-field]',card).forEach(el=>{el.classList.remove('hidden');qs('label',el).textContent=category==='Fondo'?'Color predominante':'Color';});if(pose){pose.options[0].textContent=(person||garment)?'Frente':'Lado A';pose.options[1].textContent=(person||garment)?'Espalda':'Lado B';}qsa('[data-material-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-associated-products-field]',card).forEach(field=>{
+      const link=qs('[data-family-photo-id]',field),legacy=qs('[data-choose-model-products]',field);
+      field.hidden=category!=='Persona'&&!(category==='Producto'&&garment&&link);
+      legacy.hidden=garment&&Boolean(link);
+      if(link)link.hidden=!garment;
+    });const type=qs('[data-mockup-field="productType"]',card)?.value,variant=qs('[data-mockup-field="variantLabel"]',card),record=state.mockupUploadQueue?.find(r=>String(r.id)===card.dataset.mockupUpload);if(record){const typeChanged=record.lastProductType&&record.lastProductType!==type;if(typeChanged)qs('[data-mockup-field="featuresText"]',card).value='';if(variant&&variant.dataset.variantType!==type){variant.innerHTML=mockupVariantOptions(type,typeChanged?'':variant.value);variant.dataset.variantType=type;}for(const key of ['featuresText']){const input=qs(`[data-mockup-field="${key}"]`,card),choices=key==='featuresText'?mockupMaterialChoices(type):mockupVariantsFor(type),selected=mockupMultiValues(input.value),host=qs(`[data-mockup-options="${key}"]`,card);host.innerHTML=mockupMultiOptions(key,choices,selected);qs('summary span',input.parentElement).textContent=selected.join(' · ')||'Elegir';}record.lastProductType=type;}const color=qs('[data-mockup-field="color"]',card),custom=qs('[data-mockup-field="customColor"]',card);custom?.classList.toggle('hidden',color?.value!=='__custom__');}
   function syncMockupAssetForm(){qsa('[data-mockup-upload]').forEach(syncMockupUploadCard)}
   function mockupUploadContextItem(){
     if(Number.isInteger(state.mockupUploadFromPurchaseRow))return state.purchaseItems[state.mockupUploadFromPurchaseRow];
@@ -3195,7 +3740,11 @@
     try{for(const r of queue){const card=qs(`[data-mockup-upload="${r.id}"]`),values=mockupCardValues(card),field=name=>String(values[name]||'').trim(),category=field('category'),name=field('name')||(r.file?.name||r.fileName||'Foto').replace(/\.[^.]+$/,''),color=field('color')==='__custom__'?field('customColor'):field('color');
       if(r.needsFile)throw new Error(`Elegí la foto para ${name}.`);if(category!=='Fondo'&&(category==='Producto'?!field('productType'):!field('modelName')))throw new Error(`Completá ${category==='Producto'?'el tipo de producto':'el nombre del modelo'} para ${name}.`);if(field('color')==='__custom__'&&!color)throw new Error(`Escribí el color de ${name}.`);
       const payload={assetType:category==='Fondo'?'background':r.assetType==='cap'&&category==='Producto'&&field('productType')==='cap'?'cap':'base',name,gender:category==='Fondo'?'':category==='Persona'?field('gender'):'Producto',modelName:category==='Fondo'?'':category==='Producto'?qs('[data-mockup-field="productType"] option:checked',card)?.textContent||field('productType'):field('modelName'),productType:category==='Fondo'?'background':field('productType')||'shirt',pose:category==='Fondo'?'front':field('pose')||'front',garmentStyle:category==='Fondo'?'':field('garmentStyle'),capStyle:category==='Persona'?field('capStyle'):'none',variantLabel:category==='Fondo'?'':field('variantLabel'),associatedProductsJson:category==='Persona'?(values.associatedProductsJson||'[]'):'[]',color,featuresJson:JSON.stringify(category==='Fondo'?[]:uniqOptions(field('featuresText').split(/\s*·\s*|\n/).filter(Boolean)))};
-      const linkedItem=mockupUploadContextItem();if(category!=='Fondo'&&(Number.isInteger(state.mockupUploadFromPurchaseRow)||state.mockupUploadContext?.materialId)&&linkedItem&&(payload.assetType!=='base'||payload.productType!==linkedItem.materialType))throw new Error(`La foto de ${name} debe corresponder a ${materialTypeLabel(linkedItem.materialType).toLowerCase()}.`);
+      const linkedItem=mockupUploadContextItem();
+      if(linkedItem&&materialIsGarment(linkedItem.materialType)&&(Number.isInteger(state.mockupUploadFromPurchaseRow)||state.mockupUploadContext?.materialId&&!state.mockupUploadContext?.production)&&category!=='Producto'){
+        throw new Error('En Compras elegí Producto para subir la foto en percha. Los modelos se cargan en Fotos de montaje.');
+      }
+      if(category!=='Fondo'&&(Number.isInteger(state.mockupUploadFromPurchaseRow)||state.mockupUploadContext?.materialId)&&linkedItem&&(payload.assetType!=='base'||payload.productType!==linkedItem.materialType))throw new Error(`La foto de ${name} debe corresponder a ${materialTypeLabel(linkedItem.materialType).toLowerCase()}.`);
       if(r.saved&&JSON.stringify(payload)===JSON.stringify(r.savedPayload)&&(!r.file||r.lastSavedFile===r.file))continue;const editingId=r.assetId||r.saved?.id;
       let body,method;
       if ((r.file&&r.lastSavedFile!==r.file) || (r.copyFromId&&!editingId)) {
@@ -3209,18 +3758,24 @@
       const index=state.mockupAssets.findIndex(a=>Number(a.id)===Number(saved.item.id));if(index<0)state.mockupAssets.push(saved.item);else state.mockupAssets[index]={...state.mockupAssets[index],...saved.item};
       invalidateMockupAsset(saved.item.id);
       qs('[data-mockup-status]',card).textContent='Verificando cambios…';if(color&&!state.mockupCatalog.colors.includes(color))state.mockupCatalog.colors.push(color);if(category==='Persona'){const n=field('modelName');if(n&&!state.mockupCatalog.models.includes(n))state.mockupCatalog.models.push(n)}
-    }const verified=await api('/api/admin/mockup-assets',{cache:'no-store'});for(const record of queue){const actual=(verified.items||[]).find(asset=>Number(asset.id)===Number(record.saved.id));if(!actual||!mockupSavedMatches(actual,record.savedPayload)||record.file&&!(record.uploadToken&&String(actual.image_version||'').startsWith(record.uploadToken+'-')||record.uploadContentHash&&actual.content_hash===record.uploadContentHash)){record.savedPayload=null;throw new Error('Los cambios de la foto no pudieron verificarse. Conservamos los datos en este panel para reintentar.');}record.saved=actual;}state.mockupAssets=verified.items||[];state.mockupAssetsLoaded=true;await savePhotoLines25(queue);await persistMockupCatalog();
+    }const verified=await api('/api/admin/mockup-assets',{cache:'no-store'});for(const record of queue){const actual=(verified.items||[]).find(asset=>Number(asset.id)===Number(record.saved.id));if(!actual||!mockupSavedMatches(actual,record.savedPayload)||record.file&&!(record.uploadToken&&String(actual.image_version||'').startsWith(record.uploadToken+'-')||record.uploadContentHash&&actual.content_hash===record.uploadContentHash)){record.savedPayload=null;throw new Error('Los cambios de la foto no pudieron verificarse. Conservamos los datos en este panel para reintentar.');}record.saved=actual;}state.mockupAssets=verified.items||[];state.mockupAssetsLoaded=true;await loadGarmentPhotos();await savePhotoLines25(queue);await persistMockupCatalog();
       const purchaseRow=state.mockupUploadFromPurchaseRow;if(Number.isInteger(purchaseRow)&&state.purchaseItems[purchaseRow]){const item=state.purchaseItems[purchaseRow],row=qs(`[data-purchase-row="${purchaseRow}"]`);if(row)syncPurchaseRowFromDom(row);item.imageAssetIds=[...new Set([...purchasePhotoIds(item),...queue.map(row=>Number(row.saved.id))])];item.imageAssetId=item.imageAssetIds[0]||null;item._imageTouched=true;refreshPurchasePhotoField(purchaseRow);}
       const context=state.mockupUploadContext;if(context?.materialId){
-        const ids=queue.filter(row=>row.saved.asset_type!=='background').map(row=>Number(row.saved.id));if(ids.length){const result=await api(`/api/admin/materials/${Number(context.materialId)}/photos`,{method:'POST',body:JSON.stringify({ids})});
+        const ids=queue.filter(row=>row.saved.asset_type!=='background'&&(!isGarmentPhoto(row.saved)||isHangerPhoto(row.saved))).map(row=>Number(row.saved.id));if(ids.length){const result=await api(`/api/admin/materials/${Number(context.materialId)}/photos`,{method:'POST',body:JSON.stringify({ids})});
         if(Array.isArray(result.photos))state.mockupAssets=result.photos;
-        if(Number(state.materialEditor?.material.id)===Number(context.materialId)){const editor=state.materialEditor;editor.imageAssetIds=[...new Set([...editor.imageAssetIds,...ids])];editor.originalImageAssetIds=materialPhotos(context.materialId).map(asset=>Number(asset.id));renderMaterialEditorPhotos();}}
+        if(result.garmentPhotos)garmentPhotoAssignmentsData(result.garmentPhotos);
+        if(Number(state.materialEditor?.material.id)===Number(context.materialId)){
+          const editor=state.materialEditor;
+          editor.imageAssetIds=materialIsGarment(editor.material.material_type)?purchaseGarmentPhotos(editor.material).map(asset=>Number(asset.id))
+            :[...new Set([...editor.imageAssetIds,...ids])];
+          editor.originalImageAssetIds=materialPhotos(context.materialId).map(asset=>Number(asset.id));renderMaterialEditorPhotos();
+        }}
       }
       renderMockupAssetList();if(qs('#productionDialog')?.open){if(context?.production&&queue.some(row=>row.saved.asset_type!=='background')){state.productionLimitMaterialPhotos=!!context.materialId;state.mockupVariantFilters={};}renderMockupStudioOptions();renderProductionMaterialGallery();if(context?.production&&!context.editingAsset){const first=queue.find(row=>row.saved.asset_type==='base');if(first){await preserveCurrentProductView();selectMockupVariant(first.saved.id);}}await refreshMockupPreview().catch(()=>{});}
       toast(queue.some(r=>r.assetId)?'Foto actualizada':'Fotos guardadas','success');qs('#mockupAssetDialog').close();releaseMockupQueue();
     }finally{controls.forEach(([control,disabled])=>control.disabled=disabled);state.mockupUploadBusy=false;button.disabled=false;}
   }
-  async function removeMockupAsset(id){if(!confirm('¿Eliminar esta imagen reutilizable?'))return;await api(`/api/admin/mockup-assets/${Number(id)}`,{method:'DELETE'});state.mockupAssets=state.mockupAssets.filter(a=>Number(a.id)!==Number(id));invalidateMockupAsset(Number(id));renderMockupAssetList();if(qs('#productionDialog')?.open){renderMockupStudioOptions();renderProductionMaterialGallery();await refreshMockupPreview();}}
+  async function removeMockupAsset(id){if(!confirm('¿Eliminar esta imagen reutilizable?'))return;await api(`/api/admin/mockup-assets/${Number(id)}`,{method:'DELETE'});state.mockupAssets=state.mockupAssets.filter(a=>Number(a.id)!==Number(id));invalidateMockupAsset(Number(id));await loadGarmentPhotos();renderMockupAssetList();if(qs('#productionDialog')?.open){renderMockupStudioOptions();renderProductionMaterialGallery();await refreshMockupPreview();}}
   function mockupExportSnapshot(view={}){
     const reference=qs('#productionMockupCanvas'),base=mockupBaseAsset(view.baseId??qs('#mockupBaseSelect')?.value),background=state.mockupAssets.find(a=>a.asset_type==='background'&&Number(a.id)===Number(view.backgroundId??qs('#mockupBackgroundSelect')?.value)),side=base?.pose==='back'?'back':'front',viewKey=mockupViewKey(base?.id);
     if(!reference||!base)throw new Error('Elegí una foto para esta vista.');
@@ -3501,7 +4056,7 @@
     const base=mockupBaseAsset(),primary=productionPrimaryMaterial();
     const photo=base&&!base.source_media_id?photoProductDetails(base):null;
     const features=photo?.features.length?photo.features:primary?itemFeatures(primary):[];
-    const fit=materialIsGarment(qs('#productionMaterialType')?.value)?photoFit(photo?.variant||primary?.fit):'';
+    const fit=materialIsGarment(qs('#productionMaterialType')?.value)?photoFit(primary?.fit||photo?.variant):'';
     const fitName=({clasico:'clásico',oversize:'oversize',crop:'crop',boxy:'boxy'})[fit]||fit;
     const lines=[...features];
     if(fitName&&!lines.some(feature=>productionDesignSearchText(feature).startsWith('corte ')))lines.splice(Math.min(1,lines.length),0,'Corte '+fitName);
@@ -3558,6 +4113,7 @@
         <div class="admin-actions production-page-actions">
           <button type="button" class="btn btn-ghost" id="clearMontageFiltersBtn" aria-label="Quitar todos los filtros" hidden>Quitar filtros</button>
           <button type="button" class="icon-btn" data-open-product-lists aria-label="Administrar listas de productos" title="Administrar listas de productos"><i class="fa-solid fa-text-height" aria-hidden="true"></i></button>
+          ${montageAssignmentButton()}
           <button type="button" class="icon-btn" id="montageBatchBtn" aria-pressed="false" aria-label="Seleccionar y editar varias fotos" title="Seleccionar y editar varias fotos"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button>
           <button type="button" class="icon-btn" id="expandMontageGalleryBtn" aria-haspopup="dialog" aria-label="Ver galería a pantalla completa" title="Ver galería a pantalla completa"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
           <button type="button" class="btn btn-primary" id="newMontagePhotosBtn">+ Subir foto</button>
@@ -3591,7 +4147,7 @@
     const colors=uniqOptions(products.filter(product=>productionListMatches(product,null,true)||state.productionJobs.some(job=>Number(job.product_id)===Number(product.id)&&productionListMatches(product,job,true))).flatMap(product=>productionListVariants(product).map(variant=>variant.color))).sort((a,b)=>a.localeCompare(b,'es'));qs('#productionQuickColors').innerHTML=colors.map(color=>`<button type="button" class="product-quick-color ${photoColor(filter.color)===photoColor(color)?'active':''}" data-production-list-color="${escapeHtml(color)}" aria-pressed="${photoColor(filter.color)===photoColor(color)}" title="${escapeHtml(color)}" aria-label="${escapeHtml(color)}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(color))}" aria-hidden="true"></span></button>`).join('');qs('#productionListCount').textContent=`${jobs.length} trabajos · ${saved.length} productos armados`;qsa('[data-production-list-color-option]').forEach(button=>button.setAttribute('aria-pressed',String(photoColor(button.dataset.productionListColorOption)===photoColor(filter.color))));prepareProductionTables();
   }
   async function renderProduction(){const seq=state.productionPageSeq=(state.productionPageSeq||0)+1;if(state.productionSection==='photos'){await loadMontagePhotos();if(seq===state.productionPageSeq)renderProductionPhotosPage();return;}const [jobs,products,stock]=await Promise.all([api('/api/admin/production'),api('/api/admin/products'),api('/api/admin/stock')]);if(seq!==state.productionPageSeq)return;state.productionJobs=jobs.items||[];state.products=products.items||[];state.productionListStock=stock.items||[];state.stockItems=state.productionListStock;qs('#adminContent').innerHTML=`${productionPageHeader()}${productionListFiltersHtml()}<div id="productionListContent"></div>`;const toolbar=qs('.production-page-toolbar'),bar=qs('.production-list-filter-bar');if(toolbar&&bar)toolbar.insertBefore(bar,qs('.production-page-actions',toolbar));renderProductionListContent();}
-  async function openProductionDialog(showDialog=true){clearTimeout(productionDraftTimer);productionDraftOfferPending=false;delete state.productionDraftKey;state.productionBaselineFingerprint='';state.productionStockDrafts={};delete qs('#productionQuantity').dataset.stockDraftKey;state.mockupClipboard=null;state.mockupChoosingCenter=false;state.mockupHistory=[];state.mockupFuture=[];state.productionPrintRateDirty=false;qs('#productionPrintType').value='dtf_textile';qs('#productionPrintRate').value='10000';state.productionAutoName='';state.productionAutoDescription='';state.productionDescriptionDirty=false;delete state.mockupPreferredBaseId;delete state.mockupPreferredBackgroundId;state.productionEditingProduct=null;state.productionBook=null;state.productionAudiences=[];state.productionAudienceDirty=false;state.productionQueuedDesigns=[];state.productionVirtualMaterial=null;state.productionEditingJob=null;state.productionCreatedProductId=null;state.productionCreatedJobId=null;state.productionPendingStart=null;state.productionSavedPhotoBases=[];state.productionMountViews={};state.mockupVisibleLayerIds=null;state.productionRemovedMediaIds=[];state.productionMountRevision=0;state.productionMountSaveToken=crypto.randomUUID();state.productionLimitMaterialPhotos=true;qs('#productionDialogTitle').textContent='Armar producto terminado';qs('#productionStockNote').textContent='Stock físico descuenta la materia prima al iniciar producción. Stock virtual conserva el catálogo de variantes.';await Promise.all([ensureCategories(),ensureCostingData(true),loadMockupAssets(true),api('/api/admin/products').then(d=>{state.products=d.items||[]})]);syncProductionCustomTypes();state.productionMaterialFilters={};(state.designTagFilters??={}).production=[];state.productionDesignSearch='';state.productionDesignSearchOpen=false;state.productionDesignSalmosOnly=false;state.productionMaterialsSelected=[];state.productionDesignsSelected=[];state.productionTextLayers=[];state.mockupCapDesign=null;state.mockupSelectedLayer='';state.productionPriceDirty=false;state.productionAutoPrice=null;state.productionShippingDirty=false;state.mediaItems=[];state.newFiles=[];state.mediaHostId='productionMediaOrderList';qs('#productionQuantity').value='1';qs('#productionWaste').value='10';qs('#productionSalePrice').value='';qs('#productionNotes').value='';qs('#productionProductName').value='';qs('#productionPublicationVariant').value='';qs('#productionCategory').value='';qs('#productionStockKind').value='physical';qs('#productionStatus').value='published';state.mockupVariantFilters={};state.mockupPointer=null;state.mockupTool='move';state.mockupCalibration=null;state.productionMeasureEditIndex=null;qs('#mockupBaseSelect').value='';qs('#mockupBackgroundSelect').value='';qs('#mockupCapSalePrice').value='';qs('#mockupCapMaterialSelect').value='';state.mockupZoom=1;state.mockupPanX=0;state.mockupPanY=0;applyMockupZoom();['productionDescription','productionMeaning','productionVerse','productionVerseReference','productionCapacity','productionWeight','productionHeight','productionWidth','productionDepth'].forEach(id=>{const el=qs(`#${id}`);if(el)el.value=''});['productionIsNew','productionFeatured','productionBestseller'].forEach(id=>{const el=qs(`#${id}`);if(el)el.checked=false});renderProductionMaterialGallery();renderProductionSelectedMaterials();renderProductionDesignGallery();renderProductionSelectedDesigns();renderMockupStudioOptions();refreshMockupPreview().catch(()=>{});applyProductionShippingDefaults(true);renderProductionVariantStock();prepareProductionTables();setProductionTab(1);window.SalmosBook.load(null);window.SalmosBookDigitalAdmin.load(null);renderProductionAudiences();if(showDialog){await prepareProductionEditor();}}
+  async function openProductionDialog(showDialog=true){clearTimeout(productionDraftTimer);productionDraftOfferPending=false;delete state.productionDraftKey;state.productionBaselineFingerprint='';state.productionStockDrafts={};delete qs('#productionQuantity').dataset.stockDraftKey;state.mockupClipboard=null;state.mockupChoosingCenter=false;state.mockupHistory=[];state.mockupFuture=[];state.productionPrintRateDirty=false;qs('#productionPrintType').value='dtf_textile';qs('#productionPrintRate').value='10000';state.productionAutoName='';state.productionAutoDescription='';state.productionDescriptionDirty=false;delete state.mockupPreferredBaseId;delete state.mockupPreferredBackgroundId;state.productionEditingProduct=null;state.productionBook=null;state.productionAudiences=[];state.productionAudienceDirty=false;state.productionQueuedDesigns=[];state.productionVirtualMaterial=null;state.productionEditingJob=null;state.productionCreatedProductId=null;state.productionCreatedJobId=null;state.productionPendingStart=null;state.productionSavedPhotoBases=[];state.productionMountViews={};state.mockupVisibleLayerIds=null;state.productionRemovedMediaIds=[];state.productionMountRevision=0;state.productionMountSaveToken=crypto.randomUUID();state.productionLimitMaterialPhotos=true;qs('#productionDialogTitle').textContent='Armar producto terminado';qs('#productionStockNote').textContent='Stock físico descuenta la materia prima al iniciar producción. Stock virtual conserva el catálogo de variantes.';await Promise.all([ensureCategories(),ensureCostingData(true),loadMockupAssets(true),loadGarmentPhotos(),api('/api/admin/products').then(d=>{state.products=d.items||[]})]);syncProductionCustomTypes();state.productionMaterialFilters={};(state.designTagFilters??={}).production=[];state.productionDesignSearch='';state.productionDesignSearchOpen=false;state.productionDesignSalmosOnly=false;state.productionMaterialsSelected=[];state.productionDesignsSelected=[];state.productionTextLayers=[];state.mockupCapDesign=null;state.mockupSelectedLayer='';state.productionPriceDirty=false;state.productionAutoPrice=null;state.productionShippingDirty=false;state.mediaItems=[];state.newFiles=[];state.mediaHostId='productionMediaOrderList';qs('#productionQuantity').value='1';qs('#productionWaste').value='10';qs('#productionSalePrice').value='';qs('#productionNotes').value='';qs('#productionProductName').value='';qs('#productionPublicationVariant').value='';qs('#productionCategory').value='';qs('#productionStockKind').value='physical';qs('#productionStatus').value='published';state.mockupVariantFilters={};state.mockupPointer=null;state.mockupTool='move';state.mockupCalibration=null;state.productionMeasureEditIndex=null;qs('#mockupBaseSelect').value='';qs('#mockupBackgroundSelect').value='';qs('#mockupCapSalePrice').value='';qs('#mockupCapMaterialSelect').value='';state.mockupZoom=1;state.mockupPanX=0;state.mockupPanY=0;applyMockupZoom();['productionDescription','productionMeaning','productionVerse','productionVerseReference','productionCapacity','productionWeight','productionHeight','productionWidth','productionDepth'].forEach(id=>{const el=qs(`#${id}`);if(el)el.value=''});['productionIsNew','productionFeatured','productionBestseller'].forEach(id=>{const el=qs(`#${id}`);if(el)el.checked=false});renderProductionMaterialGallery();renderProductionSelectedMaterials();renderProductionDesignGallery();renderProductionSelectedDesigns();renderMockupStudioOptions();refreshMockupPreview().catch(()=>{});applyProductionShippingDefaults(true);renderProductionVariantStock();prepareProductionTables();setProductionTab(1);window.SalmosBook.load(null);window.SalmosBookDigitalAdmin.load(null);renderProductionAudiences();if(showDialog){await prepareProductionEditor();}}
   async function ensureProductionPreviewMedia(){
     snapshotActiveMockupView();for(const [key,view] of Object.entries(state.productionMountViews||{}))if(mockupViewHasOutput(view,key))await captureMockupView(view.baseId);
   }
@@ -5054,7 +5610,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(e.target.closest('[data-close-material-editor]')){if(state.materialEditorBusy)return;qs('#materialEditorDialog')?.close();state.materialEditor=null;return;}
       if(e.target.id==='saveMaterialEditorBtn'){try{await saveMaterialEditor(e.target)}catch(err){toast(err.message,'error')}return;}
       if(e.target.closest('[data-material-add-feature]')){const editor=state.materialEditor,field=qs('[data-material-new-feature]');if(editor&&field?.value.trim()){const value=normalizeOption(field.value);editor.featureOptions=uniqOptions([...editor.featureOptions,value]);editor.features=uniqOptions([...editor.features,value]);qs('#materialEditorFeatures').innerHTML=materialEditorFeaturesHtml();}return;}
-      const materialPhoto=e.target.closest('[data-choose-material-photo]');if(materialPhoto){const editor=state.materialEditor,id=Number(materialPhoto.dataset.chooseMaterialPhoto);if(editor){editor.imageAssetIds=editor.imageAssetIds.includes(id)?editor.imageAssetIds.filter(value=>value!==id):[...editor.imageAssetIds,id];renderMaterialEditorPhotos();}return;}
+      const materialPhoto=e.target.closest('[data-choose-material-photo]');if(materialPhoto){const editor=state.materialEditor,id=Number(materialPhoto.dataset.chooseMaterialPhoto);if(editor){editor.imageAssetIds=editor.imageAssetIds.includes(id)?editor.imageAssetIds.filter(value=>value!==id):[...editor.imageAssetIds,id];editor.photosTouched=true;renderMaterialEditorPhotos();}return;}
       if(e.target.closest('[data-upload-editor-material-photo]')){if(state.materialEditor)try{await openMockupAssetDialog(null,null,{materialId:state.materialEditor.material.id})}catch(err){toast(err.message,'error')}return;}
       const retry=e.target.closest('[data-retry-preview]');if(retry){retry.closest('[data-sheet-preview],#designPreviewStage')?._retryImage?.();return;}
 
@@ -5130,9 +5686,14 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(e.target.id==='cancelProductionMeasureBtn'||e.target.id==='closeProductionMeasureBtn'){state.productionMeasureQueue=[];qs('#productionMeasureDialog').close();return;}
       const copyDesign=e.target.closest('[data-copy-production-design]');if(copyDesign){duplicateProductionDesign(Number(copyDesign.dataset.copyProductionDesign));return;}
       const duplicateDesign=e.target.closest('[data-duplicate-production-design]');if(duplicateDesign){duplicateProductionDesign(Number(duplicateDesign.dataset.duplicateProductionDesign),true);return;}
+      const brushStep=e.target.closest('[data-mockup-brush-step]');
+      if(brushStep){
+        state.mockupBrushDiameter=Math.max(4,Math.min(200,mockupBrushDiameter()+4*Number(brushStep.dataset.mockupBrushStep)));
+        syncMockupMobileControls();return;
+      }
       if(e.target.closest('[data-apply-mockup-crop]')){applyMockupCrop();return;}if(e.target.closest('[data-reset-mockup-crop]')){applyMockupCrop(true);return;}if(e.target.closest('[data-cancel-mockup-crop]')){state.mockupCropDraft=null;state.mockupTool='move';renderMockupLayerControls();refreshMockupPreview().catch(()=>{});return;}const tool=e.target.closest('[data-mockup-tool]');if(tool){state.mockupCropDraft=null;state.mockupTool=state.mockupTool===tool.dataset.mockupTool?'move':tool.dataset.mockupTool;state.mockupCalibration=null;renderMockupLayerControls();refreshMockupPreview().catch(()=>{});return;}
       if(e.target.closest('[data-mockup-calibrate]')){checkpointMockup();const cm=Number(state.mockupPendingReferenceCm||qs('[data-mockup-reference-width]')?.value||mockupReferenceDefault());if(!(cm>0&&cm<=10000)){toast('Ingresá una distancia real en centímetros.','error');return;}state.mockupTool='move';state.mockupCalibration={cm};toast('Marcá el primer extremo de la distancia conocida.');return;}
-      const artwork=e.target.closest('[data-edit-production-artwork]');if(artwork){await openProductionArtworkEditor(artwork.dataset.editProductionArtwork);return;}if(e.target.closest('[data-mockup-mask-undo],[data-mockup-surface-reset]')){const layer=mockupLayers().find(l=>l.key===state.mockupSelectedLayer);if(layer){if(e.target.closest('[data-mockup-mask-undo]'))layer.item.surface?.strokes?.pop();else layer.item.surface={};renderMockupLayerControls();refreshMockupPreview().catch(()=>{});}return;}
+      const artwork=e.target.closest('[data-edit-production-artwork]');if(artwork){await openProductionArtworkEditor(artwork.dataset.editProductionArtwork);return;}if(e.target.closest('[data-mockup-mask-undo],[data-mockup-surface-reset]')){const layer=mockupLayers().find(l=>l.key===state.mockupSelectedLayer);if(layer){if(e.target.closest('[data-mockup-mask-undo]')){undoMockupBrush();return;}else layer.item.surface={};renderMockupLayerControls();refreshMockupPreview().catch(()=>{});}return;}
       if(e.target.closest('[data-mockup-undo],[data-mockup-undo-all]')){undoMockupChange(Boolean(e.target.closest('[data-mockup-undo-all]')));return;}const turn=e.target.closest('[data-mockup-turn]');if(turn){const key=turn.dataset.layer||state.mockupSelectedLayer,layer=mockupLayers().find(x=>x.key===key);if(layer){const delta=Number(turn.dataset.mockupTurn);setMockupRotation(key,delta?(layer.item.mockupPlacement?.rotation||0)+delta:0);}return;}
       if(e.target.id==='showAllMockupVariants'){state.productionLimitMaterialPhotos=false;state.mockupVariantFilters={kind:''};renderMockupStudioOptions();return;}
       const changeMeasure=e.target.closest('[data-change-production-measure]');if(changeMeasure){const row=state.productionDesignsSelected[Number(changeMeasure.dataset.index)];openProductionMeasureDialog(Number(changeMeasure.dataset.changeProductionMeasure),row?.printSide||'front',Number(changeMeasure.dataset.index));return;}
@@ -5215,6 +5776,14 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const productionSection=e.target.closest('[data-production-section]');if(productionSection){state.productionSection=productionSection.dataset.productionSection;try{await renderProduction()}catch(err){toast(err.message,'error')}return;}
       if(e.target.closest('#expandMontageGalleryBtn')){openMontageFullscreen();return;}
       if(e.target.closest('#montageBatchBtn')){toggleMontageBatch();return;}
+      const familyEditor=e.target.closest('[data-garment-family-editor]');
+      if(familyEditor){
+        if(qs('#garmentFamilyDialog')?.open)return;
+        const ids=familyEditor.dataset.familyPhotoId?[Number(familyEditor.dataset.familyPhotoId)]
+          :familyEditor.hasAttribute('data-family-from-batch')?[...(state.montageBatch?.ids||[])]:[];
+        try{await openGarmentFamilyEditor(ids);}catch(error){toast(error.message,'error');}
+        return;
+      }
       const batchSelect=e.target.closest('[data-montage-batch-select]');
       if(batchSelect){updateMontageBatchSelection(batchSelect);return;}
       if(e.target.closest('[data-montage-batch-edit]')){openMontageBatchEditor();return;}
@@ -5413,7 +5982,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const material=state.materials.find(m=>Number(m.id)===Number(item.material_id)),data={...material,...item},linked=materialPhotos(item.material_id);
     // A sheet belongs to DTF, never to the garment's photo preview.
     if(materialIsDtf(data.material_type||data.materialType)&&item.sheet_asset_id&&(item.sheet_mime_type||item.sheet_name||state.designAssets.some(a=>Number(a.id)===Number(item.sheet_asset_id))))return [{url:apiUrl(`/api/admin/design-assets/${Number(item.sheet_asset_id)}/file?display=1`),name:item.sheet_name||item.material_name}];
-    return (linked.length?linked:photosForItem(data)).map(a=>({url:mockupAssetUrl(a),name:item.material_name}));
+    const photos=materialIsGarment(data.material_type||data.materialType)?purchaseGarmentPhotos(data):linked.length?linked:photosForItem(data);
+    return photos.map(a=>({url:mockupAssetUrl(a),name:item.material_name}));
   }
   function purchaseQuantitySummary(items=[]){
     const groups=new Map(),labels={shirt:['remera','remeras'],hoodie:['buzo','buzos'],chomba:['chomba','chombas'],cap:['gorra','gorras'],mug:['taza','tazas'],glass:['vaso','vasos'],thermos:['termo','termos'],bag:['bolso','bolsos']};
