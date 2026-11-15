@@ -324,33 +324,167 @@ body #productionDialog.production-editor-fullscreen [data-production-panel="2"] 
   pointer-events: none;
   z-index: 12;
 }
-#mockupBrushCursor[hidden], .mockup-brush-controls[hidden], .garment-family-new[hidden] { display: none !important; }
+#mockupBrushCursor[hidden], .mockup-brush-controls[hidden], [data-associated-products-field][hidden] { display: none !important; }
 #productionDialog .mockup-brush-controls { display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: wrap; }
 .mockup-brush-controls output { min-width: 116px; text-align: center; }
-#garmentFamilyDialog { width: min(1100px, calc(100% - 24px)); }
-.garment-family-toolbar, .garment-family-new, .garment-family-photo-controls {
-  display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px;
+.product-inventory-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
 }
-.garment-family-toolbar > label { flex: 1 1 220px; min-width: 0; }
-.garment-family-new {
-  padding: 10px; border: 1px solid var(--line, #75405b); border-radius: 10px;
+.purchased-material-toolbar {
+  justify-content: start;
+  margin-bottom: 10px;
 }
-.garment-family-new > .field, .garment-family-photo-controls > .field { flex: 1 1 150px; min-width: 0; }
-.garment-family-new-lines, .garment-family-actions, .garment-family-photo-controls .admin-actions { flex-wrap: wrap; }
-.garment-family-photo-controls, .garment-family-actions { margin-bottom: 8px; }
-#garmentFamilyDialog [data-family-view][aria-pressed="true"] { outline: 1px solid currentColor; }
-.garment-family-photos {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 138px), 1fr)); gap: 8px;
-  max-height: min(48dvh, 550px); overflow-y: auto;
+.purchased-material-toolbar > input { width: min(100%, 380px); }
+.purchased-material-image {
+  display: grid;
+  place-items: center;
+  height: 160px;
+  overflow: hidden;
 }
-.garment-family-photos .model-product-choice { position: relative; min-width: 0; }
-.garment-family-photos .model-product-choice img { width: 100%; height: 112px; object-fit: contain; }
-.garment-family-photos .model-product-choice.selected { outline: 1px solid currentColor; outline-offset: -2px; }
-.garment-family-clean { display: flex; gap: 8px; align-items: center; }
-#montageWorkspace [data-garment-family-editor]:not([data-family-from-batch]) .fa-shirt {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  background: currentColor;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M8 4 3 6l-2 6 4 2 2-3v9h10v-9l2 3 4-2-2-6-5-2a4 4 0 0 1-8 0Z'/%3E%3C/svg%3E") center / contain no-repeat;
+.purchased-material-image img { width: 100%; height: 100%; object-fit: contain; }
+.purchased-material-image i { font-size: 26px; }
+.purchased-material-info { display: grid; align-content: start; gap: 6px; padding: 12px; }
+.purchased-material-info .btn { justify-self: start; }
+.material-purchase-variant {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line, #75405b);
+  border-radius: 10px;
 }
+.material-purchase-variant small, .material-purchase-ref small { display: block; }
+.material-purchase-ref {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line, #75405b);
+}
+.highlighted-purchase-source { outline: 2px solid #e7a6c2; outline-offset: -2px; }
+body #productionDialog .production-material-filters {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+}
+.montage-review-problems {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: .82em;
+}
+.montage-review-problems li {
+  padding: 4px 6px;
+  border: 1px solid var(--line, #75405b);
+  border-radius: 6px;
+  font-weight: 700;
+}
+[data-sheet-auto-detect] { justify-self: start; }
+
+#sheetDetectionDialog { width: min(1280px, calc(100% - 20px)); max-width: none; }
+#sheetDetectionDialog [hidden] { display: none !important; }
+#sheetDetectionDialog .dialog-body { overflow-y: auto; }
+.sheet-detection-toolbar, .sheet-detection-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.sheet-detection-toolbar .field { display: flex; align-items: center; margin-left: auto; }
+.sheet-detection-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-block: 10px;
+}
+.sheet-detection-viewport, .sheet-detection-sidebar {
+  max-height: min(64dvh, 680px);
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line, #75405b);
+  border-radius: 10px;
+}
+.sheet-detection-viewport { min-height: 220px; background: #2b1722; }
+.sheet-detection-frame { position: relative; margin: 0 auto; touch-action: pan-x pan-y; }
+.sheet-detection-frame[data-mode]:not([data-mode=""]) { touch-action: none; cursor: crosshair; }
+.sheet-detection-frame canvas { display: block; width: 100%; height: 100%; }
+.sheet-detection-boxes, .sheet-detection-boxes > * { position: absolute; }
+.sheet-detection-boxes { inset: 0; }
+.sheet-detection-box {
+  display: grid;
+  place-items: start end;
+  min-width: 0;
+  min-height: 0;
+  padding: 1px 3px;
+  overflow: hidden;
+  background: #2e122c33;
+  border: 1px solid #ffd5ed;
+  color: #fff;
+  text-shadow: 0 1px 3px #000, 0 0 4px #000;
+  line-height: 1;
+  font-size: .75rem;
+  text-align: right;
+  cursor: pointer;
+}
+.sheet-detection-box.active { border: 2px solid #ff9dd3; }
+.sheet-detection-box.checked, .sheet-detection-outline { background: #ffb6dd55; }
+.sheet-detection-outline { border: 2px dashed #ff9dd3; pointer-events: none; }
+.sheet-detection-saved { border: 1px dashed #b0b1b5; pointer-events: none; }
+.sheet-detection-sidebar { padding: 10px; }
+.sheet-detection-details { display: grid; gap: 8px; }
+.sheet-detection-details header, .sheet-detection-saved-measure { display: grid; gap: 2px; }
+.sheet-detection-thumb { display: grid; place-items: center; min-height: 80px; padding: 8px; border-radius: 8px; }
+.sheet-detection-thumb canvas { max-width: 100%; height: auto; }
+.sheet-detection-edit .btn { min-height: 32px; padding: 5px 9px; }
+.sheet-detection-edit { flex-wrap: wrap; }
+.sheet-detection-designs summary { color: inherit; cursor: pointer; }
+.sheet-detection-designs[open] input { margin-block: 6px; }
+[data-detection-choices] { display: grid; gap: 5px; max-height: 172px; overflow-y: auto; }
+[data-detection-choices] .btn { display: flex; justify-content: start; gap: 8px; text-align: left; }
+[data-detection-choices] small { display: block; }
+[data-detection-choices] [aria-pressed="true"], .sheet-detection-row.active {
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
+}
+.sheet-detection-rows {
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+.sheet-detection-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line, #75405b);
+  border-radius: 8px;
+}
+.sheet-detection-row button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-detection-row small { display: block; }
+.sheet-detection-footer { justify-content: flex-end; }
+
+@media (max-width: 680px) {
+  .sheet-detection-columns { grid-template-columns: minmax(0, 1fr); }
+  .sheet-detection-viewport { max-height: 43dvh; }
+  .sheet-detection-sidebar { max-height: none; }
+}
+.sheet-detection-row canvas { width: 38px; height: 38px; object-fit: contain; }
+.purchased-material-card { grid-template-rows: auto; align-items: center; }
+#purchasedMaterialsGrid { display: block; }
+.montage-batch-card .montage-photo-info > [data-edit-mockup-asset] { justify-self: start; }
