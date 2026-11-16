@@ -333,11 +333,6 @@ body #productionDialog.production-editor-fullscreen [data-production-panel="2"] 
   gap: 8px;
   margin-bottom: 14px;
 }
-.purchased-material-toolbar {
-  justify-content: start;
-  margin-bottom: 10px;
-}
-.purchased-material-toolbar > input { width: min(100%, 380px); }
 body .unified-product-main .stock-group-image.purchased-material-photo.no-photo {
   display: grid !important;
   min-height: 132px !important;
@@ -350,6 +345,7 @@ body .unified-product-main .stock-group-image.purchased-material-photo.no-photo 
 .purchased-stock-table thead th { font-weight: 500; color: var(--muted); }
 .purchased-stock-table td { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; text-align: center; }
 .purchased-material-gallery img { object-fit: contain; }
+.purchased-sheet-file { display: grid; place-items: center; gap: 7px; min-height: 130px; padding: 12px; }
 .material-purchase-variant {
   display: grid;
   gap: 8px;
@@ -386,6 +382,9 @@ body #productionDialog .production-material-filters {
 }
 #designUploadDialog .sheet-upload-row .field { gap: 3px; margin: 0; }
 #designUploadDialog .sheet-upload-row .field label { margin: 0; }
+#designUploadDialog .design-upload-files-field { flex: 0 1 185px; min-width: 0; }
+#designUploadDialog .design-upload-files-field .input { width: 100%; min-width: 0; padding: 4px; }
+#designUploadDialog .design-upload-files-field .input::file-selector-button { margin-inline-end: 5px; padding: 5px 8px; }
 #designUploadDialog .sheet-upload-row .design-upload-general-summary {
   display: flex;
   align-items: end;
@@ -400,6 +399,7 @@ body #productionDialog .production-material-filters {
   min-height: 36px;
 }
 #designUploadDialog .sheet-upload-print .icon-btn { min-height: 32px; width: 32px; }
+#designUploadMetaSummary { max-width: min(22vw,300px); overflow: hidden; text-overflow: ellipsis; }
 #designUploadDialog .sheet-upload-row :is(.input,.select) { min-height: 36px; }
 #designUploadDialog .sheet-upload-row [data-upload-sheet-only]:has(#designUploadName) { flex: 1 1 170px; }
 #designUploadDialog .sheet-upload-row [data-upload-sheet-only]:has(#designUploadScope) { flex: 0 1 166px; }
@@ -414,6 +414,37 @@ body #productionDialog .production-material-filters {
 #designUploadDialog .sheet-upload-printed { align-self: end; min-height: 36px; margin: 0; white-space: nowrap; }
 #designUploadDialog .sheet-composition { margin-top: 4px; padding-top: 8px; }
 .sheet-composition-heading { margin: 0 0 8px; }
+#designPreviewDialog.sheet-editor-open #designPreviewMeta > :is([data-readonly-sheet-background],.design-background-control,.design-quick-colors) {
+  display: none !important;
+}
+#designPreviewDialog.sheet-editor-open .design-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(110px,1fr) minmax(90px,.75fr) minmax(115px,1.2fr) max-content minmax(115px,1fr) minmax(95px,.75fr) minmax(130px,1.3fr);
+  gap: 8px;
+  align-items: end;
+  padding: 0;
+  margin-bottom: 8px;
+}
+#designPreviewDialog.sheet-editor-open .design-edit-grid > .field {
+  grid-column: auto;
+  min-width: 0;
+  margin: 0;
+  gap: 4px;
+}
+#designPreviewDialog.sheet-editor-open .design-edit-grid > .design-name-row { display: block; }
+#designPreviewDialog.sheet-editor-open .design-edit-grid .design-name-row > .field { margin: 0; gap: 4px; }
+#designPreviewDialog.sheet-editor-open .design-edit-grid :is(.select,.input,textarea) { min-width: 0; min-height: 38px; }
+#designPreviewDialog.sheet-editor-open .design-edit-grid textarea { height: 38px; padding-block: 8px; resize: vertical; }
+#designPreviewDialog.sheet-editor-open .design-edit-grid .design-measures { display: flex; align-items: center; gap: 5px; width: max-content; }
+#designPreviewDialog.sheet-editor-open .design-edit-grid .design-measures > :is(input,.number-control15) {
+  width: 78px !important;
+  min-width: 0;
+}
+#designPreviewDialog.sheet-editor-open .design-edit-grid .design-measures > .number-control15 { grid-template-columns: 18px minmax(0,1fr) 18px; }
+#designPreviewDialog.sheet-editor-open .design-edit-grid input[data-design-cost] { max-width: none; }
+@media (max-width: 1050px) {
+  #designPreviewDialog.sheet-editor-open .design-edit-grid { grid-template-columns: repeat(auto-fit,minmax(min(100%,168px),1fr)); }
+}
 
 :is(#designUploadDialog,#designDetailEditor) .design-tag-picker {
   grid-column: 1 / -1;
@@ -540,11 +571,44 @@ body #productionDialog .production-material-filters {
   border-radius: 0 !important;
 }
 #sheetDesignGalleryDialog .sheet-picker-card { min-width: 0; }
-#sheetDesignGalleryDialog .sheet-picker-card span {
-  display: block;
-  padding: 5px 7px;
-  overflow-wrap: anywhere;
+.sheet-artwork-tile { position: relative; min-width: 0; }
+.sheet-artwork-tile > .sheet-sample { display: grid; place-items: center; aspect-ratio: 1; width: 100%; overflow: hidden; }
+.sheet-artwork-tile > .sheet-sample img { width: 100%; height: 100%; object-fit: contain; }
+.sheet-added-artwork { display: inline-flex; flex: none; }
+.sheet-artwork-tile .sheet-artwork-zoom {
+  position: absolute;
+  z-index: 2;
+  inset: 3px 3px auto auto;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--text);
+  background: var(--surface-2);
 }
+.sheet-added-artwork .sheet-artwork-zoom { inset: auto -3px -3px auto; width: 23px; min-width: 23px; height: 23px; min-height: 23px; }
+@media (hover: hover) {
+  .sheet-artwork-tile .sheet-artwork-zoom { opacity: 0; }
+  .sheet-artwork-tile:is(:hover,:focus-within) .sheet-artwork-zoom { opacity: 1; }
+}
+#sheetArtworkZoomDialog {
+  width: min(920px,calc(100vw - 24px)) !important;
+  max-width: none !important;
+  max-height: calc(100dvh - 24px) !important;
+}
+.sheet-artwork-viewer {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: min(60dvh,500px);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sheet-artwork-viewer img { display: block; width: 100%; height: min(74dvh,760px); object-fit: contain; }
+.sheet-artwork-viewer [data-image-status] { position: absolute; inset: 8px auto auto 8px; }
 :is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen {
   inset: 0 !important;
   width: 100vw !important;
@@ -578,6 +642,9 @@ body #productionDialog .production-material-filters {
 .sheet-added-column .sheet-component-row .admin-actions > :is(.btn,.icon-btn) { min-height: 29px; padding: 4px 7px; font-size: .76rem; white-space: normal; }
 .sheet-mark-status { margin: 0; color: var(--muted); font-size: .82rem; }
 .sheet-mark-status:empty { display: none; }
+.sheet-crop-tools:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sheet-crop-tools > input { flex: 1 1 180px; min-width: 0; max-width: 330px; }
+.sheet-library-actions [data-start-sheet-crop][aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
 .sheet-library-column { display: flex; flex-direction: column; gap: 6px; }
 .sheet-library-column .sheet-library-heading { margin: 0; }
 .sheet-library-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
@@ -647,12 +714,14 @@ body #productionDialog .production-material-filters {
   flex-direction: column;
   align-self: stretch;
   min-height: 0;
+  max-height: none !important;
   overflow: hidden;
 }
-:is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen .sheet-preview-viewport {
-  flex: 1;
-  height: auto;
-  min-height: 0;
+:is(#designUploadDialog.sheet-fullscreen,#designPreviewDialog.sheet-editor-open.sheet-fullscreen) .sheet-preview-viewport {
+  flex: 1 1 0;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
   overflow: hidden;
   touch-action: none;
 }

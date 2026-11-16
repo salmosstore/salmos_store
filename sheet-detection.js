@@ -522,7 +522,9 @@
     const scale=Math.min(1,1280/Math.max(width,height));
     const work=canvas(Math.round(width*scale),Math.round(height*scale));
     work.getContext('2d').drawImage(image,0,0,work.width,work.height);
-    const result=detect(work,size).then(found=>({work,candidates:found.candidates,templatesBySeed:new WeakMap()}));
+    const result=detect(work,size).then(found=>({
+      work,candidates:found.candidates,templatesBySeed:new WeakMap(),fingerprintsByRect:new WeakMap()
+    }));
     occurrenceSamples.set(image,{key,result});
     try{return await result;}
     catch(error){
@@ -530,10 +532,31 @@
       throw error;
     }
   }
+  function sampleFingerprints(sample,rect){
+    if(!sample.fingerprintsByRect.has(rect))sample.fingerprintsByRect.set(rect,fingerprints(sample.work,rect));
+    return sample.fingerprintsByRect.get(rect);
+  }
+  function freeOccurrence(occupied,rect){
+    return !occupied.some(old=>overlapArea(old,rect)>Math.min(boxArea(old),boxArea(rect))*.25);
+  }
+  function confirmOccurrences(image,work,hits,templates,occupied,limit){
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    const confirmed=[],padding=Math.ceil(Math.max(width/work.width,height/work.height));
+    for(const hit of hits.sort((a,b)=>a.score-b.score).slice(0,limit)){
+      const estimated=normalizedBox(hit.rect,work.width,work.height);
+      for(const margin of [padding,0]){
+        const rect=inkBounds(image,normalizedRect(estimated,width,height,margin));
+        if(!rect||!freeOccurrence(occupied,normalizedRect(normalizedBox(rect,width,height),work.width,work.height)))continue;
+        const result=match(fingerprints(image,rect),templates);
+        if(result){confirmed.push({...result,rect,score:result.score+hit.score*.2});break;}
+      }
+    }
+    return confirmed.sort((a,b)=>a.score-b.score);
+  }
   async function findOccurrence(image,size,seed,point,used){
     const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
     if(!width||!height)return null;
-    const {work,candidates,templatesBySeed}=await occurrenceSample(image,size);
+    const sample=await occurrenceSample(image,size),{work,candidates,templatesBySeed}=sample;
     if(!templatesBySeed.has(seed)){
       const bounds=inkBounds(image,normalizedRect(seed,width,height));
       if(!bounds)return null;
@@ -543,31 +566,80 @@
     const px=point.x*work.width,py=point.y*work.height;
     const occupied=used.map(box=>normalizedRect(box,work.width,work.height));
     if(occupied.some(rect=>px>=rect.left&&px<=rect.right&&py>=rect.top&&py<=rect.bottom))return null;
-    const free=rect=>!occupied.some(old=>overlapArea(old,rect)>Math.min(boxArea(old),boxArea(rect))*.25);
     const hits=[];
     for(const rect of candidates){
-      if(px<rect.left||px>rect.right||py<rect.top||py>rect.bottom||!free(rect))continue;
-      const hit=match(fingerprints(work,rect),templates);
+      if(px<rect.left||px>rect.right||py<rect.top||py>rect.bottom||!freeOccurrence(occupied,rect))continue;
+      const hit=match(sampleFingerprints(sample,rect),templates);
       if(hit)hits.push({...hit,rect});
     }
-    const confirmed=[];
-    for(const hit of hits.sort((a,b)=>a.score-b.score).slice(0,12)){
-      const estimated=normalizedBox(hit.rect,work.width,work.height);
-      const padding=Math.ceil(Math.max(width/work.width,height/work.height));
-      for(const margin of [padding,0]){
-        const rect=inkBounds(image,normalizedRect(estimated,width,height,margin));
-        if(!rect||!free(normalizedRect(normalizedBox(rect,width,height),work.width,work.height)))continue;
-        const result=match(fingerprints(image,rect),templates);
-        if(result)confirmed.push({...result,rect,score:result.score+hit.score*.2});
-        if(result)break;
-      }
-    }
-    confirmed.sort((a,b)=>a.score-b.score);
+    const confirmed=confirmOccurrences(image,work,hits,templates,occupied,12);
     const best=confirmed[0];
     if(!best||confirmed.slice(1).some(row=>row.score-best.score<.035&&
       overlapArea(row.rect,best.rect)<.7*Math.max(boxArea(row.rect),boxArea(best.rect))))return null;
     return {...normalizedBox(best.rect,width,height),rotation:((Number(seed.rotation)||0)+best.rotation)%360};
   }
+  async function findDesignOnSheet(image,size,template,used,signal){
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    if(!width||!height||!template)return null;
+    const sample=await occurrenceSample(image,size),{work,candidates}=sample;
+    const occupied=used.map(box=>normalizedRect(box,work.width,work.height));
+    const templates=[{id:1,signature:template}],hits=[];
+    for(let i=0;i<candidates.length;i++){
+      if(i%30===0){signal?.throwIfAborted();await nextFrame();}
+      const rect=candidates[i],aspect=rectWidth(rect)/rectHeight(rect);
+      if(rectWidth(rect)/work.width<.005||rectHeight(rect)/work.height<.005||!freeOccurrence(occupied,rect))continue;
+      const agrees=value=>Math.min(Math.abs(Math.log(value/aspect)),Math.abs(Math.log(value*aspect)))<=.21;
+      if(!agrees(template.aspect)&&!(template.alternate&&agrees(template.alternate.aspect)))continue;
+      const hit=match(sampleFingerprints(sample,rect),templates);
+      if(hit)hits.push({...hit,rect});
+    }
+    signal?.throwIfAborted();
+    const [best]=confirmOccurrences(image,work,hits,templates,occupied,6);
+    return best&&best.score<.185?{...normalizedBox(best.rect,width,height),rotation:best.rotation}:null;
+  }
+  function pngDensityChunk(x,y){
+    const chunk=new Uint8Array(21),view=new DataView(chunk.buffer);
+    view.setUint32(0,9);
+    chunk.set([112,72,89,115],4);
+    view.setUint32(8,x);
+    view.setUint32(12,y);
+    chunk[16]=1;
+    let crc=0xffffffff;
+    for(const byte of chunk.subarray(4,17)){
+      crc^=byte;
+      for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+    }
+    view.setUint32(17,crc^0xffffffff);
+    return chunk;
+  }
+  async function applyPngDensity(blob,x,y){
+    const bytes=new Uint8Array(await blob.slice(0,65536).arrayBuffer()),view=new DataView(bytes.buffer);
+    const density=pngDensityChunk(x,y);
+    for(let offset=33;offset+12<=bytes.length;){
+      const length=view.getUint32(offset),tag=String.fromCharCode(...bytes.subarray(offset+4,offset+8));
+      if(tag==='pHYs'&&length===9)return new Blob([blob.slice(0,offset),density,blob.slice(offset+21)],{type:'image/png'});
+      if(tag==='IDAT'||offset+12+length>bytes.length)break;
+      offset+=length+12;
+    }
+    return new Blob([blob.slice(0,33),density,blob.slice(33)],{type:'image/png'});
+  }
+  async function cropArtwork(image,box,size){
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    if(!width||!height||!(size.width>0&&size.height>0))throw new Error('Elegí una plancha con medidas válidas.');
+    const rect=normalizedRect(box,width,height),w=rectWidth(rect),h=rectHeight(rect);
+    if(w<1||h<1)throw new Error('Marcá el contorno completo de la estampa.');
+    const work=canvas(w,h),context=work.getContext('2d');
+    context.imageSmoothingEnabled=false;
+    try{
+      context.drawImage(image,rect.left,rect.top,w,h,0,0,w,h);
+      const png=await new Promise((resolve,reject)=>work.toBlob(blob=>
+        blob?resolve(blob):reject(new Error('No se pudo preparar el PNG de la estampa.')),'image/png'));
+      return {
+        blob:await applyPngDensity(png,Math.round(width/size.width*100),Math.round(height/size.height*100)),
+        box:normalizedBox(rect,width,height)
+      };
+    }finally{work.width=0;}
+  }
 
-  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,assetSignature,match,selectMatches,overlapArea,findOccurrence,occurrenceRotation};
+  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,assetSignature,match,selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,cropArtwork};
 })();
