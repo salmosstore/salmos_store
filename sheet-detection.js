@@ -84,11 +84,11 @@
       if (rectWidth(rect) >= minWidth || rectHeight(rect) >= minHeight) regions.push(rect);
     }
     // A detached detail may be inside the footprint of the same print.
-    if (regions.length > 1800) throw new Error('Hay demasiados fragmentos. Podés marcar las estampas sobre la plancha.');
+    if (regions.length > 1800) return [];
     const grouped = [];
     for (let rect of regions) {
       for (let index = grouped.length - 1; index >= 0; index--) {
-        if (!overlapArea(rect, grouped[index])) continue;
+        if (overlapArea(rect,grouped[index]) < Math.min(boxArea(rect),boxArea(grouped[index]))*.33) continue;
         rect = union(rect, grouped[index]);
         grouped.splice(index, 1);
         index = grouped.length;
@@ -98,45 +98,171 @@
     return grouped.sort((a,b) => a.top-b.top || a.left-b.left);
   }
 
-  async function detect(bitmap, size, progress = () => {}, signal) {
-    const {width, height} = bitmap;
-    const step = Math.ceil(Math.max(width,height) / 1450);
-    const cols = Math.ceil(width / step), rows = Math.ceil(height / step);
-    const grid = {cols,rows,left:new Uint32Array(cols*rows),top:new Uint32Array(cols*rows),
-      right:new Uint32Array(cols*rows),bottom:new Uint32Array(cols*rows)};
-    grid.left.fill(width);
-    grid.top.fill(height);
-    const work = canvas(width,96);
-    const context = work.getContext('2d',{willReadFrequently:true});
-    let clear = 0;
-    try {
-      for (let y = 0; y < height; y += work.height) {
-        signal?.throwIfAborted();
-        const count = Math.min(height-y,work.height);
-        context.clearRect(0,0,width,count);
-        context.drawImage(bitmap,0,y,width,count,0,0,width,count);
-        const {data} = context.getImageData(0,0,width,count);
-        let offset = 3;
-        for (let dy = 0; dy < count; dy++) {
-          const row = Math.floor((y+dy)/step)*cols;
-          for (let x = 0; x < width; x++, offset += 4) {
-            if (!data[offset]) {clear++;continue;}
-            const cell = row + Math.floor(x/step);
-            grid.left[cell] = Math.min(grid.left[cell],x);
-            grid.top[cell] = Math.min(grid.top[cell],y+dy);
-            grid.right[cell] = Math.max(grid.right[cell],x+1);
-            grid.bottom[cell] = Math.max(grid.bottom[cell],y+dy+1);
+  const sheetFormats = [
+    {width:58,height:100},{width:58,height:50},{width:100,height:58},{width:50,height:58}
+  ];
+  function formatForAspect(width,height) {
+    return width>0&&height>0 ? sheetFormats.find(size=>Math.abs((width/height)/(size.width/size.height)-1)<.012)||null : null;
+  }
+  async function pngSheetFormat(blob) {
+    const bytes = new Uint8Array(await blob.slice(0,65536).arrayBuffer());
+    if(bytes.length<33||!PNG_HEADER.every((byte,index)=>bytes[index]===byte))return null;
+    const header=new DataView(bytes.buffer),width=header.getUint32(16),height=header.getUint32(20);
+    const format=formatForAspect(width,height);
+    if(!format)return null;
+    let pxPerCmX=300/2.54,pxPerCmY=pxPerCmX;
+    for(let offset=33;offset+12<=bytes.length;){
+      const length=header.getUint32(offset),tag=String.fromCharCode(...bytes.slice(offset+4,offset+8));
+      if(tag==='IDAT'||offset+12+length>bytes.length)break;
+      if(tag==='pHYs'&&length===9&&bytes[offset+16]===1){
+        const x=header.getUint32(offset+8)/100,y=header.getUint32(offset+12)/100;
+        if(x>=50&&y>=50&&Math.abs(width/x-format.width)<.65&&Math.abs(height/y-format.height)<.8)return {...format};
+        break;
+      }
+      offset+=12+length;
+    }
+    if(Math.abs(width/pxPerCmX-format.width)<.38&&Math.abs(height/pxPerCmY-format.height)<.5)return {...format};
+    return /(?:^|[\s_-])plancha(?:[\s_.-]|$)/i.test(blob.name||'')?{...format}:null;
+  }
+
+  function boxArea(rect) {
+    return (rect.right-rect.left)*(rect.bottom-rect.top);
+  }
+  function coversSheet(rect,width,height) {
+    return (rect.right-rect.left)/width>=.91&&(rect.bottom-rect.top)/height>=.91;
+  }
+  function cellsToPixels(grid,rect) {
+    const out={left:Infinity,top:Infinity,right:0,bottom:0};
+    let ink=0;
+    for(let y=rect.top;y<rect.bottom;y++){
+      for(let x=rect.left;x<rect.right;x++){
+        const i=y*grid.cols+x;
+        if(!grid.right[i])continue;
+        ink++;
+        out.left=Math.min(out.left,grid.left[i]);out.top=Math.min(out.top,grid.top[i]);
+        out.right=Math.max(out.right,grid.right[i]);out.bottom=Math.max(out.bottom,grid.bottom[i]);
+      }
+    }
+    return ink?out:null;
+  }
+  function whitespaceCuts(grid,rect,axis,minBlank,minSide) {
+    const vertical=axis==='x',start=vertical?rect.left:rect.top,end=vertical?rect.right:rect.bottom;
+    const otherStart=vertical?rect.top:rect.left,otherEnd=vertical?rect.bottom:rect.right;
+    const densities=new Uint32Array(end-start);
+    for(let k=start;k<end;k++){
+      for(let i=otherStart;i<otherEnd;i++){
+        densities[k-start]+=Number(grid.right[vertical?i*grid.cols+k:k*grid.cols+i]>0);
+      }
+    }
+    let first=0,last=densities.length;
+    while(first<last&&!densities[first])first++;
+    while(last>first&&!densities[last-1])last--;
+    if(last-first<minSide*2)return [];
+    const maxDensity=Math.max(...densities),floor=Math.floor(Math.min(maxDensity*.035,(otherEnd-otherStart)*.025));
+    const cuts=[];
+    for(let i=first+minSide;i<last-minSide;){
+      if(densities[i]>floor){i++;continue;}
+      const begin=i;
+      let occupied=0;
+      while(i<last-minSide&&densities[i]<=floor)occupied+=densities[i++];
+      const span=i-begin;
+      if(span<minBlank)continue;
+      const at=Math.floor((i+begin)/2)+start;
+      const balance=Math.min(at-(start+first),start+last-at)/(last-first);
+      cuts.push({axis,at,score:Math.log1p(span)*(.7+balance)-occupied/(span*(maxDensity||1))});
+    }
+    return cuts;
+  }
+  function partitionSheet(grid,step,bitmap,size) {
+    const pxPerCm=(bitmap.width/size.width+bitmap.height/size.height)/2;
+    const minSide=Math.max(4,Math.ceil(.42*pxPerCm/step));
+    const gap=Math.max(1,Math.round(.09*pxPerCm/step));
+    const bounds={left:0,top:0,right:grid.cols,bottom:grid.rows};
+    const candidates=[],leaves=[],seen=new Set();
+    function keep(rect){
+      if(!rect||coversSheet(rect,bitmap.width,bitmap.height))return false;
+      if(Math.min(rect.right-rect.left,rect.bottom-rect.top)<.19*pxPerCm||
+        boxArea(rect)<.12*pxPerCm*pxPerCm||candidates.length>=640)return false;
+      const key=[rect.left,rect.top,rect.right,rect.bottom].join(',');
+      if(!seen.has(key)){seen.add(key);candidates.push(rect);}
+      return true;
+    }
+    function divide(rect,depth,primary){
+      const ink=cellsToPixels(grid,rect);
+      if(!ink)return;
+      const valid=keep(ink);
+      if(depth>=10||candidates.length>=590){
+        if(primary&&valid)leaves.push(ink);
+        return;
+      }
+      const interior={left:Math.max(rect.left,Math.floor(ink.left/step)),top:Math.max(rect.top,Math.floor(ink.top/step)),
+        right:Math.min(rect.right,Math.ceil(ink.right/step)),bottom:Math.min(rect.bottom,Math.ceil(ink.bottom/step))};
+      const cuts=[...whitespaceCuts(grid,interior,'x',gap,minSide),...whitespaceCuts(grid,interior,'y',gap,minSide)]
+        .sort((a,b)=>b.score-a.score);
+      if(!cuts.length){if(primary&&valid)leaves.push(ink);return;}
+      function children(cut){
+        const vertical=cut.axis==='x';
+        return [{...interior,[vertical?'right':'bottom']:cut.at},{...interior,[vertical?'left':'top']:cut.at}];
+      }
+      for(const child of children(cuts[0]))divide(child,depth+1,primary);
+      // Try a few alternative gutters before committing to word-like fragments.
+      if(primary&&depth<3){
+        for(const cut of cuts.slice(1,4)){
+          for(const child of children(cut)){
+            keep(cellsToPixels(grid,child));
+            if(depth===0&&cut.axis!==cuts[0].axis)divide(child,depth+1,false);
           }
         }
-        if (y % (work.height*6) === 0) {
-          progress(Math.round((y+count)/height * 100));
-          await nextFrame();
-        }
       }
-    } finally {work.width = 0;}
-    if (!clear) throw new Error('La plancha tiene fondo opaco. Usá un PNG con fondo transparente.');
-    const pxPerCm = (width / size.width + height / size.height) / 2;
-    return separateRegions(grid,Math.max(1,Math.round(.18*pxPerCm/step)),.04*width/size.width,.04*height/size.height);
+    }
+    divide(bounds,0,true);
+    for(const component of separateRegions(grid,Math.max(1,Math.round(.04*pxPerCm/step)),.1*pxPerCm,.1*pxPerCm))keep(component);
+    const ordered=(a,b)=>a.top-b.top||a.left-b.left;
+    return {boxes:leaves.sort(ordered),candidates:candidates.sort(ordered)};
+  }
+  async function detect(bitmap,size,progress=()=>{},signal) {
+    const {width,height}=bitmap, step=Math.ceil(Math.max(width,height)/1400);
+    const cols=Math.ceil(width/step),rows=Math.ceil(height/step),length=cols*rows;
+    const grid={cols,rows,left:new Uint32Array(length),top:new Uint32Array(length),right:new Uint32Array(length),bottom:new Uint32Array(length)};
+    grid.left.fill(width);grid.top.fill(height);
+    const work=canvas(width,96);
+    const context=work.getContext('2d',{willReadFrequently:true});
+    let transparent=0;
+    try{
+      for(let y=0;y<height;y+=work.height){
+        signal?.throwIfAborted();
+        const count=Math.min(height-y,work.height);
+        context.clearRect(0,0,width,count);context.drawImage(bitmap,0,y,width,count,0,0,width,count);
+        const {data}=context.getImageData(0,0,width,count);
+        let offset=3;
+        for(let dy=0;dy<count;dy++){
+          const row=Math.floor((y+dy)/step)*cols, yy=y+dy;
+          for(let x=0;x<width;x++,offset+=4){
+            const alpha=data[offset];
+            if(alpha<18){transparent++;continue;}
+            const i=row+Math.floor(x/step);
+            const left=grid.left[i],top=grid.top[i],right=grid.right[i],bottom=grid.bottom[i];
+            if(x<left)grid.left[i]=x;
+            if(yy<top)grid.top[i]=yy;
+            if(x>=right)grid.right[i]=x+1;
+            if(yy>=bottom)grid.bottom[i]=yy+1;
+          }
+        }
+        if(y%(work.height*6)===0){progress(Math.round((y+count)/height*100));await nextFrame();}
+      }
+    }finally{work.width=0;}
+    if(!transparent)throw new Error('Usá el PNG original con fondo transparente.');
+    return partitionSheet(grid,step,bitmap,size);
+  }
+
+  function selectMatches(matches,width,height) {
+    const overlaps=(a,b)=>overlapArea(a,b)/Math.min(boxArea(a),boxArea(b))>.22;
+    const chosen=[];
+    for(const row of [...matches].sort((a,b)=>a.score-b.score||boxArea(b.rect)-boxArea(a.rect))){
+      if(coversSheet(row.rect,width,height)||chosen.some(item=>overlaps(item.rect,row.rect)))continue;
+      chosen.push(row);
+    }
+    return chosen;
   }
 
   function inkBounds(bitmap, rect) {
@@ -154,7 +280,7 @@
         let offset = 3;
         for (let dy = 0; dy < count; dy++) {
           for (let x = 0; x < width; x++, offset += 4) {
-            if (!data[offset]) continue;
+            if (data[offset]<18) continue;
             found.left = Math.min(found.left,x);
             found.top = Math.min(found.top,y+dy);
             found.right = Math.max(found.right,x+1);
@@ -174,6 +300,7 @@
     target.width = swapped ? height : width;
     target.height = swapped ? width : height;
     const context = target.getContext('2d');
+    context.imageSmoothingQuality='high';
     context.translate(target.width/2,target.height/2);
     context.rotate(rotation*Math.PI/180);
     context.drawImage(image,rect.left,rect.top,sourceWidth,sourceHeight,-width/2,-height/2,width,height);
@@ -187,23 +314,40 @@
     context.drawImage(work,0,0,SIGNATURE_SIZE,SIGNATURE_SIZE);
     const rgba=context.getImageData(0,0,SIGNATURE_SIZE,SIGNATURE_SIZE).data;
     const normalized=new Uint8Array(rgba.length);
-    for (let i=0;i<rgba.length;i+=4) {
-      const alpha=rgba[i+3]/255;
-      normalized[i]=Math.round(rgba[i]*alpha);
-      normalized[i+1]=Math.round(rgba[i+1]*alpha);
-      normalized[i+2]=Math.round(rgba[i+2]*alpha);
-      normalized[i+3]=rgba[i+3];
+    for(let y=0;y<SIGNATURE_SIZE;y++){
+      for(let x=0;x<SIGNATURE_SIZE;x++){
+        const sums=[0,0,0,0];
+        for(let dy=-1;dy<=1;dy++){
+          for(let dx=-1;dx<=1;dx++){
+            if(x+dx<0||x+dx>=SIGNATURE_SIZE||y+dy<0||y+dy>=SIGNATURE_SIZE)continue;
+            const offset=((y+dy)*SIGNATURE_SIZE+x+dx)*4,weight=(dx===0?2:1)*(dy===0?2:1);
+            const alpha=Math.max(0,(rgba[offset+3]-12)*255/243);
+            for(let channel=0;channel<3;channel++)sums[channel]+=rgba[offset+channel]*alpha*weight/255;
+            sums[3]+=alpha*weight;
+          }
+        }
+        const start=(y*SIGNATURE_SIZE+x)*4;
+        for(let channel=0;channel<4;channel++)normalized[start+channel]=Math.round(sums[channel]/16);
+      }
     }
-    return {aspect:work.width/work.height,data:normalized};
+    const aspect=work.width/work.height;
+    work.width=0;compact.width=0;
+    return {aspect,data:normalized};
   }
 
   async function assetSignature(blob) {
-    const bitmap=await createImageBitmap(blob);
+    const bitmap=await createImageBitmap(blob,{colorSpaceConversion:'none'});
     try {
+      const {width,height}=bitmap,full={left:0,top:0,right:width,bottom:height};
       const work=canvas(1,1);
-      drawRegion(work,bitmap,{left:0,top:0,right:bitmap.width,bottom:bitmap.height},0,160);
+      drawRegion(work,bitmap,full,0,512);
       const bounds=inkBounds(work,{left:0,top:0,right:work.width,bottom:work.height});
-      return bounds?signature(work,bounds):null;
+      const rect=bounds&&{
+        left:Math.floor(bounds.left*width/work.width),top:Math.floor(bounds.top*height/work.height),
+        right:Math.ceil(bounds.right*width/work.width),bottom:Math.ceil(bounds.bottom*height/work.height)
+      };
+      work.width=0;
+      return rect?signature(bitmap,rect):null;
     } finally {bitmap.close();}
   }
 
@@ -214,60 +358,23 @@
       for (let i=0;i<signatures.length;i++) {
         const reference=signatures[i];
         const aspectError=Math.abs(Math.log(candidate.signature.aspect/reference.aspect));
-        if (aspectError>.18) continue;
+        if (aspectError>.2) continue;
         let difference=0,ink=0;
         for (let p=0;p<reference.data.length;p+=4) {
-          for (let channel=0;channel<4;channel++) difference+=Math.abs(reference.data[p+channel]-candidate.signature.data[p+channel]);
-          ink+=Math.max(reference.data[p+3],candidate.signature.data[p+3]);
+          const alpha=reference.data[p+3],templateAlpha=candidate.signature.data[p+3];
+          difference+=Math.abs(alpha-templateAlpha)*.75;
+          for (let channel=0;channel<3;channel++) difference+=Math.abs(reference.data[p+channel]-candidate.signature.data[p+channel])*.083333333;
+          ink+=Math.max(alpha,templateAlpha);
         }
-        const distance=difference/(4*ink||1)+aspectError*.45;
+        const distance=difference/(ink||1)+aspectError*.35;
         if (distance<score) {score=distance;rotation=i*90;}
       }
       if (Number.isFinite(score)) scores.push({id:candidate.id,score,rotation});
     }
     scores.sort((a,b)=>a.score-b.score);
     const best=scores[0];
-    return best&&best.score<.125&&(!scores[1]||scores[1].score-best.score>.028)?best:null;
+    return best&&best.score<.19&&(!scores[1]||scores[1].score-best.score>.025)?best:null;
   }
 
-  // Canvas PNGs can carry the browser's default DPI. Use the calibrated sheet scale instead.
-  async function withPrintDensity(blob, xPerMeter, yPerMeter) {
-    const chunk=new Uint8Array(21), view=new DataView(chunk.buffer);
-    view.setUint32(0,9);
-    chunk.set([112,72,89,115],4);
-    view.setUint32(8,Math.round(xPerMeter));
-    view.setUint32(12,Math.round(yPerMeter));
-    chunk[16]=1;
-    let crc=0xffffffff;
-    for (let i=4;i<17;i++) {
-      crc^=chunk[i];
-      for (let bit=0;bit<8;bit++) crc=(crc>>>1)^(crc&1?0xedb88320:0);
-    }
-    view.setUint32(17,(crc^0xffffffff)>>>0);
-    let offset=33;
-    while (offset+12<=blob.size) {
-      const bytes=new Uint8Array(await blob.slice(offset,offset+8).arrayBuffer());
-      const type=String.fromCharCode(...bytes.slice(4));
-      const length=new DataView(bytes.buffer).getUint32(0);
-      if (type==='pHYs') return new Blob([blob.slice(0,offset),chunk,blob.slice(offset+length+12)],{type:'image/png'});
-      if (type==='IDAT') break;
-      offset+=length+12;
-    }
-    return new Blob([blob.slice(0,33),chunk,blob.slice(33)],{type:'image/png'});
-  }
-
-  async function cropPng(bitmap, rect, rotation, size) {
-    const work=canvas(1,1);
-    try {
-      drawRegion(work,bitmap,rect,rotation);
-      const blob=await new Promise((resolve,reject)=>work.toBlob(value=>{
-        if(value)resolve(value);
-        else reject(new Error('No se pudo crear el PNG de la estampa.'));
-      },'image/png'));
-      const x=bitmap.width/size.width*100,y=bitmap.height/size.height*100;
-      return await withPrintDensity(blob,rotation%180?y:x,rotation%180?x:y);
-    } finally {work.width=0;}
-  }
-
-  window.SalmosSheetDetection = {openPng,detect,inkBounds,drawRegion,signature,assetSignature,match,cropPng,union,overlapArea};
+  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,assetSignature,match,selectMatches,overlapArea};
 })();
