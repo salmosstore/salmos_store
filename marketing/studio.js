@@ -50,10 +50,93 @@
   function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
   const filename=()=>String(project.title||'SALMOS-reel').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]+/gi,'-').slice(0,70);
   async function poster(final=false){if(final)return productFrame();pause();await prepareMedia();const previous=time,oldEdit=editingStamp;editingStamp=false;if(final){const at=C.sceneAt(project.scenes,time);time=at.start+at.scene.duration*.95;}draw();await new Promise(resolve=>canvas.toBlob(blob=>{if(blob)download(blob,filename()+(final?'-para-IA':'-imagen')+'.png');resolve();},'image/png'));time=previous;editingStamp=oldEdit;draw();}
-  function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open('salmos-reels-v1',3);r.onupgradeneeded=()=>{for(const name of ['projects','posts','exports','assets'])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-  async function dbAction(store,mode,action){const database=await db();return new Promise((resolve,reject)=>{const tx=database.transaction(store,mode),r=action(tx.objectStore(store));tx.oncomplete=()=>{database.close();resolve(r?.result);};tx.onerror=()=>{database.close();reject(tx.error);};});}
+  const REEL_DATABASE='salmos-reels-v1';
+  function openReelDatabase(version){return new Promise((resolve,reject)=>{
+    const request=version?indexedDB.open(REEL_DATABASE,version):indexedDB.open(REEL_DATABASE);
+    request.onupgradeneeded=()=>{
+      for(const name of ['projects','posts','exports','assets']){
+        if(!request.result.objectStoreNames.contains(name))request.result.createObjectStore(name,{keyPath:'id'});
+      }
+    };
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });}
+  async function db(){
+    try{return await openReelDatabase(3);}
+    catch(error){if(error.name!=='VersionError')throw error;return openReelDatabase();}
+  }
+  async function dbAction(store,mode,action){
+    const database=await db();
+    return new Promise((resolve,reject)=>{
+      try{
+        const tx=database.transaction(store,mode),request=action(tx.objectStore(store));
+        tx.oncomplete=()=>{database.close();resolve(request?.result);};
+        tx.onabort=()=>{database.close();reject(tx.error||new Error('No se pudo completar el acceso a los reels guardados.'));};
+      }catch(error){database.close();reject(error);}
+    });
+  }
   async function saveRecord(id=project.id){const copy=structuredClone(project);restoreEffectFields(copy);try{copy.cover=projectCover(copy);}catch{}if(musicTrial)Object.assign(copy.audio,musicTrial);await dbAction('projects','readwrite',store=>store.put({...copy,id,originalId:project.id,savedAt:Date.now()}));}
-  async function loadSaved(){const all=await dbAction('projects','readonly',s=>s.getAll()),host=$('#savedProjects');host.replaceChildren();const latest=new Map();for(const p of all.filter(p=>Array.isArray(p.scenes)&&p.scenes.length).sort((a,b)=>(b.savedAt||0)-(a.savedAt||0))){const id=p.originalId||p.id;if(!latest.has(id))latest.set(id,p);}for(const p of latest.values()){const row=document.createElement('article');row.className='saved-card';const cover=new Image();cover.className='project-cover';cover.alt=p.title;cover.src=p.cover||p.scenes[0]?.thumbnail||p.scenes[0]?.final||p.scenes[0]?.base||'';const title=document.createElement('strong');title.textContent=p.title;const small=document.createElement('small');small.textContent=(p.status==='draft'?'Borrador · ':'')+p.scenes.length+' escenas · '+C.formatTime(C.totalDuration(p.scenes));const actions=document.createElement('div');actions.className='project-actions';const open=document.createElement('button');open.textContent='Editar';open.onclick=()=>openSavedProject(p);cover.onclick=open.onclick;const down=document.createElement('button');down.textContent='↓ Video';down.title='Descargar video';down.onclick=()=>projectVideoAction(p,false);const share=document.createElement('button');share.textContent='Compartir';share.onclick=()=>projectVideoAction(p,true);const copy=document.createElement('button');copy.textContent='Duplicar';copy.title='Duplicar proyecto';copy.onclick=()=>duplicateProject13(p);const del=document.createElement('button');del.textContent='×';del.title='Eliminar proyecto';del.onclick=async()=>{if(!confirm('¿Eliminar este proyecto guardado?'))return;await dbAction('projects','readwrite',s=>{for(const item of all)if((item.originalId||item.id)===(p.originalId||p.id))s.delete(item.id);});await dbAction('exports','readwrite',s=>s.delete(p.originalId||p.id));loadSaved();};actions.append(open,down,share,copy,del);row.append(cover,title,small,actions);host.append(row);}if(!host.childElementCount)host.textContent='Todavía no guardaste proyectos.';}
+  function reelRecord(raw){
+    const data=raw?.project||raw;
+    if(!Array.isArray(data?.scenes))return null;
+    const scenes=data.scenes.filter(scene=>scene&&typeof scene==='object'&&!Array.isArray(scene));
+    if(!scenes.length)return null;
+    return {...data,scenes,id:raw.id??data.id,
+      originalId:data.originalId??raw.originalId??data.id??raw.id,
+      savedAt:Number(raw.savedAt||data.savedAt||data.updatedAt)||0,
+      title:data.title||raw.title||'Reel sin título',cover:data.cover||raw.cover,
+      status:data.status||raw.status};
+  }
+  function latestReelRecords(rows){
+    const latest=new Map();
+    for(const raw of rows){
+      const record=reelRecord(raw);
+      if(!record||record.originalId==null)continue;
+      const previous=latest.get(record.originalId);
+      if(!previous||record.savedAt>previous.savedAt||
+        record.savedAt===previous.savedAt&&record.id===record.originalId)latest.set(record.originalId,record);
+    }
+    return [...latest.values()].sort((a,b)=>b.savedAt-a.savedAt);
+  }
+  async function loadSaved(){
+    const host=$('#savedProjects');
+    let all;
+    try{all=await dbAction('projects','readonly',store=>store.getAll());}
+    catch(error){
+      if(!host.querySelector('.saved-card'))host.textContent='No se pudieron leer los proyectos de este navegador. Usá Buscar borradores o Abrir respaldo.';
+      throw error;
+    }
+    const entries=latestReelRecords(all),cards=document.createDocumentFragment();
+    for(const p of entries){
+      const row=document.createElement('article');row.className='saved-card';
+      const cover=new Image();cover.className='project-cover';cover.alt=p.title;
+      const first=p.scenes[0],source=p.cover||first.thumbnail||first.final||first.base;
+      if(source)cover.src=source;
+      const title=document.createElement('strong');title.textContent=p.title;
+      const small=document.createElement('small');
+      const count=p.scenes.length;
+      small.textContent=(p.status==='draft'?'Borrador · ':'')+count+(count===1?' escena · ':' escenas · ')+C.formatTime(C.totalDuration(p.scenes));
+      const actions=document.createElement('div');actions.className='project-actions';
+      const open=document.createElement('button');open.textContent='Editar';
+      open.onclick=()=>openSavedProject(p).catch(error=>notify(error.message,'error'));cover.onclick=open.onclick;
+      const down=document.createElement('button');down.textContent='↓ Video';down.title='Descargar video';down.onclick=()=>projectVideoAction(p,false);
+      const share=document.createElement('button');share.textContent='Compartir';share.onclick=()=>projectVideoAction(p,true);
+      const copy=document.createElement('button');copy.textContent='Duplicar';copy.onclick=()=>duplicateProject13(p);
+      const del=document.createElement('button');del.textContent='×';del.title='Eliminar proyecto';
+      del.onclick=async()=>{
+        if(!confirm('¿Eliminar este proyecto guardado?'))return;
+        await dbAction('projects','readwrite',store=>{
+          const get=store.getAll();
+          get.onsuccess=()=>{for(const item of get.result)if(reelRecord(item)?.originalId===p.originalId)store.delete(item.id);};
+        });
+        await dbAction('exports','readwrite',store=>store.delete(p.originalId));
+        await loadSaved();
+      };
+      actions.append(open,down,share,copy,del);row.append(cover,title,small,actions);cards.append(row);
+    }
+    host.replaceChildren(cards);
+    if(!entries.length)host.textContent='En este navegador todavía no hay proyectos visibles. Podés buscar borradores o abrir un respaldo.';
+  }
 
   function csvCell(x){let v=String(x??'');if(/^[=+@-]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"';}
   function csv(rows,name){download(new Blob(['\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),name);}
@@ -307,7 +390,15 @@
   const stopSoundV4=stopSound;stopSound=function(){stopSoundV4();for(const node of soundNodes.values())node.audio.pause();};
   let activeDock='effects',blankPreview=false,viewZoom=1;
   function openDock(id){activeDock=id;document.querySelectorAll('[data-drawer]').forEach(el=>el.hidden=el.dataset.drawer!==id);document.querySelectorAll('[data-dock]').forEach(el=>el.classList.toggle('active',el.dataset.dock===id));}
-  async function homeView(){cancelEffectTrial();closeWanPreview();pause();const save=editorActive13;editorActive13=false;if(save){clearTimeout(autosaveTimer);await cancelMusicTrial();try{await saveRecord(project.id);}catch(e){notify(e.message,'error');}}$('#studioHome').hidden=false;$('.workspace').hidden=true;document.body.classList.add('reel-home');await loadSaved().catch(e=>notify(e.message,'error'));}
+  async function homeView(){
+    cancelEffectTrial();closeWanPreview();pause();
+    if(editorActive13){
+      editorActive13=false;clearTimeout(autosaveTimer);
+      try{await cancelMusicTrial();await saveRecord();}catch(error){notify(error.message,'error');}
+    }
+    $('#studioHome').hidden=false;$('.workspace').hidden=true;document.body.classList.add('reel-home');
+    await loadSaved().catch(error=>notify(error.message,'error'));
+  }
 
   function editorView(ai=false){editorActive13=true;closeWanPreview();document.body.classList.remove('reel-home');document.body.classList.toggle('wan-mode',ai);$('#studioHome').hidden=true;$('.workspace').hidden=false;document.querySelectorAll('[data-main-mode]').forEach(b=>b.classList.toggle('active',(b.dataset.mainMode==='wan')===ai));if(ai){$('#wanPrompt').closest('[data-drawer]').hidden=false;openDock('wan');}else openDock(activeDock==='wan'?'effects':activeDock);draw();}
   function installProductionLayout(){
@@ -349,7 +440,24 @@
   let shareAfterExport=false;
   const giphyRuntime=new Map();
   function projectCover(source=project){const out=document.createElement('canvas');out.width=360;out.height=450;const c=out.getContext('2d'),first=source.scenes[0],geometry=componentGeometry,last=lastGeometry;if(!first)return '';const h=dimensions(360).h,tmp=document.createElement('canvas');tmp.width=360;tmp.height=h;paintScene(tmp.getContext('2d'),first,.75,360,h,false);c.fillStyle='#301a29';c.fillRect(0,0,360,450);const k=Math.min(360/tmp.width,450/tmp.height);c.drawImage(tmp,(360-tmp.width*k)/2,(450-tmp.height*k)/2,tmp.width*k,tmp.height*k);const result=out.toDataURL('image/jpeg',.86);componentGeometry=geometry;lastGeometry=last;return result;}
-  async function openSavedProject(p){pause();selectedMusic10=null;auditionTrack=null;musicTrial=null;selectCurrentSceneScope();selectedSceneIds.clear();checkpoint();project=structuredClone({...p,id:p.originalId||p.id});normalizeProject();active=0;time=0;await prepareMedia().catch(e=>notify(e.message,'error'));syncForm();editorView();draw();}
+  async function openSavedProject(record){
+    const saved=reelRecord(record);
+    if(!saved)throw new Error('Este proyecto no tiene escenas para abrir.');
+    pause();clearTimeout(autosaveTimer);
+    selectedMusic10=null;auditionTrack=null;musicTrial=null;selectCurrentSceneScope();selectedSceneIds.clear();
+    selectedComponent=null;editingStamp=false;blankPreview=false;history.length=0;future.length=0;
+    const defaults=newProject();
+    project=structuredClone({...defaults,...saved,id:saved.originalId??saved.id??defaults.id,
+      audio:{...defaults.audio,...saved.audio}});
+    for(const scene of project.scenes){
+      scene.id??=C.uid();
+      scene.template||='clean';
+      scene.duration=Number(scene.duration)||5;
+    }
+    normalizeProject();active=0;time=0;
+    await prepareMedia().catch(error=>notify(error.message,'error'));
+    syncForm();editorView();
+  }
   async function projectVideoAction(p,sharing){try{const stored=await dbAction('exports','readonly',s=>s.get(p.originalId||p.id));if(stored&&stored.updatedAt>=(p.updatedAt||0)){if(sharing)shareVideoDialog(stored.blob,stored.name,p.title,p.audio?.musicCredit);else download(stored.blob,stored.name);return;}await openSavedProject(p);shareAfterExport=sharing;$('#exportDialog').showModal();}catch(e){notify(e.message,'error');}}
   function shareVideoDialog(blob,name,titleText=project.title,musicCredit=project.audio.musicCredit){const d=document.createElement('dialog');d.className='share-video-dialog';const title=document.createElement('h2');title.textContent='Compartir video';const file=new File([blob],name,{type:blob.type}),share=document.createElement('button');share.textContent='Compartir en redes';share.onclick=async()=>{try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:titleText,text:projectShareText13(titleText,musicCredit)});else{notify('Este navegador no permite compartir archivos directamente. Podés usar Descargar video.');return;}d.close();}catch(e){if(e.name==='AbortError')d.close();else notify(e.message,'error');}};const down=document.createElement('button');down.textContent='Descargar video';down.onclick=()=>download(blob,name);const text=document.createElement('button');text.textContent='Copiar texto';text.onclick=()=>copyText(projectShareText13(titleText,musicCredit));const close=document.createElement('button');close.textContent='Cancelar';close.onclick=()=>d.close();d.append(title,share,down,text,close);d.onclose=()=>d.remove();document.body.append(d);d.showModal();}
   function soundCue(event){const index=project.scenes.findIndex(s=>s.id===event.sceneId);if(index<0)return Math.max(0,event.start||0);const scene=project.scenes[index],layer=scene.components.find(l=>l.id===event.componentId);return project.scenes.slice(0,index).reduce((n,s)=>n+s.duration,0)+(layer?T.effects({...layer,effect:layer.inheritSceneEffect?scene.effect:layer.effect}).start:0)+(event.start||0);}
@@ -667,7 +775,181 @@
   function installReelsV10(){const form=$('#effectSettingsBody .form-grid');for(const[id,title,kind]of[['previewEffect','Aplicar efecto','check'],['resetEffect','Restablecer efecto','eraser']]){const b=$('#'+id);b.innerHTML=icon10(kind);b.title=title;b.setAttribute('aria-label',title);b.classList.add('icon-action10');form.append(b);}const controls=document.createElement('div');controls.id='musicSelectionControls';controls.className='selection-controls';controls.hidden=true;const name=document.createElement('strong');name.id='musicSelectionName';const ok=document.createElement('button');ok.id='confirmMusic10';ok.innerHTML=icon10('check');ok.title='Aplicar música';ok.setAttribute('aria-label','Aplicar música');const mix=$('[data-drawer=music] .mix-inline');controls.append(name,mix,ok);$('#musicResults').after(controls);const own=$('#ownMusicTools'),ownMix=document.createElement('div');ownMix.className='own-music-mix';for(const[id,label,key,min,max,step]of[['ownVolume10','Volumen','musicVolume',0,2,.05],['ownRate10','Velocidad','musicRate',.5,1.75,.05]]){const l=document.createElement('label'),i=document.createElement('input');l.textContent=label;i.id=id;i.type='number';i.min=min;i.max=max;i.step=step;i.value=project.audio[key]??1;i.oninput=()=>{project.audio[key]=Number(i.value);$('#'+key).value=i.value;changed();};l.append(i);ownMix.append(l);}own.append(ownMix);const upload=$('#musicFile').closest('label');for(const n of [...upload.childNodes])if(n.nodeType===3)n.remove();const text=document.createElement('span');text.textContent='＋ Subir mi canción';upload.prepend(text);upload.classList.add('upload-song10');const support=document.createElement('div');support.className='ground-controls10';for(const[id,label]of[['none','Sin apoyo'],['shadow','Piso y sombra'],['near','Encuadre cercano']]){const b=document.createElement('button');b.textContent=label;b.dataset.ground10=id;b.onclick=()=>{pause();checkpoint();current().groundSupport=id==='shadow'?'shadow':null;current().framing=id==='near'?1.35:1;support.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));changed();};support.append(b);}$('[data-drawer=background]').prepend(support);compactNumbers();musicCatalog();}
 
   function applyViewZoom(value){viewZoom=C.clamp(value,1,5);const viewport=$('#stageViewport'),shell=$('.canvas-shell'),ratio=project.ratio.split(':').map(Number);viewport.classList.toggle('zoomed',viewZoom>1.01);shell.style.transform='';if(viewZoom>1.01){shell.style.maxHeight='none';shell.style.maxWidth='none';shell.style.height=viewport.clientHeight*viewZoom+'px';shell.style.width=viewport.clientHeight*ratio[0]/ratio[1]*viewZoom+'px';}else{shell.style.height='100%';shell.style.width='auto';shell.style.maxHeight='100%';shell.style.maxWidth='100%';viewport.scrollTop=viewport.scrollLeft=0;}}
-  async function selectProductsForReel(fresh=true){let dialog;try{const items=await requestParent('catalog');dialog=document.createElement('dialog');dialog.className='source-dialog';const title=document.createElement('h2');title.textContent='Elegí los productos del reel';const search=document.createElement('input');search.placeholder='Buscar producto';search.type='search';const grid=document.createElement('div');grid.className='source-grid';const picked=new Set(),apply=document.createElement('button');apply.className='primary';apply.textContent='Crear reel';const status=document.createElement('output');const paint=()=>{grid.replaceChildren();for(const p of items.filter(x=>String(x.name).toLowerCase().includes(search.value.toLowerCase()))){const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=picked.has(p.id);check.onchange=()=>check.checked?picked.add(p.id):picked.delete(p.id);const thumb=p.thumbnail||p.image_url||'';if(thumb){const image=new Image();image.src=thumb;image.alt=p.name;label.append(image);}label.title=p.name;check.setAttribute('aria-label',p.name);label.append(check);grid.append(label);}};search.oninput=paint;apply.onclick=async()=>{if(!picked.size)return;apply.disabled=true;try{if(fresh){if(project.scenes.some(s=>!s.demo))await saveRecord().catch(()=>{});project=newProject();selectCurrentSceneScope();selectedSceneIds.clear();selectedMusic10=null;auditionTrack=null;project.scenes=[];project.title=items.filter(p=>picked.has(p.id)).map(p=>p.name).join(' · ');history.length=0;future.length=0;}for(const id of picked){const data=await requestParent('productViews',{productId:id});for(const v of data.views){if(project.scenes.length>=36)break;status.textContent='Preparando '+data.name+' · '+v.name;const payload=await requestParent('product',{productId:id,imageId:v.id,mode:v.viewKey?'layers':'final'});project.scenes.push({...defaultScene(),components:[],demo:false});active=project.scenes.length-1;await importPayload(payload);current().duration=5;current().shotTitle=v.name;current().thumbnail=v.url;}}if(!project.scenes.length)project.scenes=[{...defaultScene(),components:[],demo:false}];active=0;selectedComponent=null;time=0;blankPreview=false;await prepareMedia();syncForm();changed();editorView();dialog.close();}catch(e){status.textContent=e.message;}finally{apply.disabled=false;}};const close=document.createElement('button');close.textContent='Cancelar';close.onclick=()=>dialog.close();const footer=document.createElement('footer');footer.className='product-picker-footer';footer.append(status,close,apply);dialog.append(title,search,grid,footer);dialog.onclose=()=>dialog.remove();document.body.append(dialog);paint();dialog.showModal();}catch(e){dialog?.remove();notify(e.message,'error');}}
+  const REEL_SCENE_LIMIT=36;
+  const REEL_FILE_TYPES={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',mp4:'video/mp4',webm:'video/webm'};
+  const REEL_SCENE_FILES=Object.keys(REEL_FILE_TYPES).map(extension=>'.'+extension).join(',');
+  function selectInsertedReelScene(index){
+    selectCurrentSceneScope();
+    selectedComponent=null;editingStamp=false;blankPreview=false;
+    active=index;
+    time=C.totalDuration(project.scenes.slice(0,active));
+    if(index>0&&project.transition!=='cut')time+=Math.min(current().duration*.8,project.transitionDuration||1.1);
+    syncForm();changed();editorView();
+  }
+  async function appendReelFileScenes(files,fresh=false){
+    if(!files.length)return;
+    const previous=project,available=REEL_SCENE_LIMIT-(fresh?0:previous.scenes.length);
+    if(files.length>available)throw new Error('El máximo es de 36 escenas por reel.');
+    const scenes=[];
+    for(const input of files){
+      const extension=input.name.split('.').pop().toLowerCase();
+      const mime=Object.values(REEL_FILE_TYPES).includes(input.type)?input.type:REEL_FILE_TYPES[extension];
+      if(!mime)throw new Error('Elegí una imagen PNG, JPG, WebP o GIF, o un video MP4 o WebM.');
+      const file=input.type===mime?input:new File([input],input.name,{type:mime});
+      const video=/^video\/(mp4|webm)$/i.test(file.type);
+      const src=await fileData(file,video?'video':'image');
+      const clip=asset(src,video);
+      await clip._ready;
+      const name=file.name.replace(/\.[^.]+$/,'');
+      const scene={...defaultScene(),shotTitle:name.slice(0,80),baseName:file.name,components:[],
+        template:'clean',demo:false,headline:'',detail:'',cta:''};
+      if(video){
+        scene.video=src;
+        scene.videoFullFrame21=true;
+        scene.duration=C.clamp(Math.round((Number(clip.duration)||5)*10)/10,2,30);
+        if(clip.videoWidth&&clip.videoHeight){
+          const thumb=document.createElement('canvas');
+          thumb.width=160;thumb.height=Math.max(1,Math.round(160*clip.videoHeight/clip.videoWidth));
+          thumb.getContext('2d').drawImage(clip,0,0,thumb.width,thumb.height);
+          scene.thumbnail=thumb.toDataURL('image/jpeg',.8);
+        }
+      }else{
+        scene.final=src;
+        scene.fullFrameImage21=true;
+      }
+      scenes.push(scene);
+    }
+    if(project!==previous)return;
+    pause();cancelEffectTrial();
+    if(fresh){
+      if(editorActive13&&previous.scenes.some(scene=>!scene.demo))await saveRecord(previous.id);
+      if(project!==previous)return;
+      clearTimeout(autosaveTimer);
+      await cancelMusicTrial();
+      project=newProject();
+      project.title=scenes[0].shotTitle||'Nuevo reel';
+      project.scenes=[];
+      selectedSceneIds.clear();selectedMusic10=null;auditionTrack=null;
+      history.length=0;future.length=0;syncUndo();
+    }else{
+      if(project.scenes.length+scenes.length>REEL_SCENE_LIMIT)throw new Error('El máximo es de 36 escenas por reel.');
+      checkpoint();
+    }
+    const index=project.scenes.length;
+    project.scenes.push(...scenes);
+    selectInsertedReelScene(index);
+  }
+  async function selectProductsForReel(fresh=true,allowBlank=false){
+    const dialog=document.createElement('dialog');
+    dialog.className='source-dialog';
+    const title=document.createElement('h2');
+    title.textContent=fresh?'Nuevo reel':allowBlank?'Agregar escena':'Agregar productos';
+    const sources=document.createElement('div');
+    sources.className='button-row reel-scene-sources';
+    const input=document.createElement('input');
+    input.type='file';input.accept=REEL_SCENE_FILES;input.multiple=true;input.hidden=true;
+    const upload=document.createElement('button');
+    upload.textContent='Subir de la PC';upload.onclick=()=>input.click();
+    sources.append(upload,input);
+    const blank=allowBlank?document.createElement('button'):null;
+    if(blank){
+      blank.textContent='Escena en blanco';
+      blank.onclick=()=>{
+        if(project.scenes.length>=REEL_SCENE_LIMIT){status.textContent='El máximo es de 36 escenas por reel.';return;}
+        pause();cancelEffectTrial();checkpoint();
+        const index=project.scenes.length;
+        project.scenes.push({...defaultScene(),components:[],template:'clean',demo:false,headline:'Tu próxima escena',detail:'',cta:current().cta});
+        selectInsertedReelScene(index);dialog.close();
+      };
+      sources.append(blank);
+    }
+    const search=document.createElement('input');
+    search.placeholder='Buscar producto';search.type='search';search.setAttribute('aria-label','Buscar producto');
+    const grid=document.createElement('div');
+    grid.className='source-grid';
+    const status=document.createElement('output');
+    status.setAttribute('role','status');
+    const picked=new Set(),apply=document.createElement('button'),close=document.createElement('button');
+    apply.className='primary';apply.textContent=fresh?'Crear con productos':'Agregar productos';apply.disabled=true;
+    close.textContent='Cancelar';close.onclick=()=>dialog.close();
+    let items=[],busy=false;
+    const setBusy=value=>{
+      busy=value;
+      upload.disabled=close.disabled=search.disabled=value;
+      if(blank)blank.disabled=value;
+      for(const control of grid.querySelectorAll('input'))control.disabled=value;
+      apply.disabled=value||!picked.size;
+    };
+    const paint=()=>{
+      grid.replaceChildren();
+      const query=search.value.toLowerCase();
+      for(const product of items.filter(item=>String(item.name).toLowerCase().includes(query))){
+        const label=document.createElement('label'),check=document.createElement('input');
+        check.type='checkbox';check.checked=picked.has(product.id);check.disabled=busy;
+        check.onchange=()=>{
+          if(check.checked)picked.add(product.id);
+          else picked.delete(product.id);
+          apply.disabled=busy||!picked.size;
+        };
+        const thumb=product.thumbnail||product.image_url;
+        if(thumb){const image=new Image();image.src=thumb;image.alt=product.name;label.append(image);}
+        label.title=product.name;check.setAttribute('aria-label',product.name);label.append(check);grid.append(label);
+      }
+    };
+    search.oninput=paint;
+    input.onchange=async()=>{
+      const files=[...input.files];input.value='';
+      if(!files.length||busy)return;
+      setBusy(true);status.textContent='Preparando archivos…';
+      try{await appendReelFileScenes(files,fresh);dialog.close();}
+      catch(error){status.textContent=error.message;}
+      finally{setBusy(false);}
+    };
+    apply.onclick=async()=>{
+      if(!picked.size||busy)return;
+      setBusy(true);
+      try{
+        if(fresh){
+          if(project.scenes.some(scene=>!scene.demo))await saveRecord().catch(()=>{});
+          project=newProject();
+          selectCurrentSceneScope();selectedSceneIds.clear();selectedMusic10=null;auditionTrack=null;
+          project.scenes=[];
+          project.title=items.filter(item=>picked.has(item.id)).map(item=>item.name).join(' · ');
+          history.length=0;future.length=0;
+        }
+        for(const id of picked){
+          if(project.scenes.length>=REEL_SCENE_LIMIT)break;
+          const data=await requestParent('productViews',{productId:id});
+          for(const view of data.views){
+            if(project.scenes.length>=REEL_SCENE_LIMIT)break;
+            status.textContent='Preparando '+data.name+' · '+view.name;
+            const payload=await requestParent('product',{productId:id,imageId:view.id,mode:view.viewKey?'layers':'final'});
+            project.scenes.push({...defaultScene(),components:[],demo:false});
+            active=project.scenes.length-1;
+            await importPayload(payload);
+            current().duration=5;current().shotTitle=view.name;current().thumbnail=view.url;
+          }
+        }
+        if(!project.scenes.length)project.scenes=[{...defaultScene(),components:[],demo:false}];
+        active=0;selectedComponent=null;time=0;blankPreview=false;
+        await prepareMedia();syncForm();changed();editorView();dialog.close();
+      }catch(error){status.textContent=error.message;}
+      finally{setBusy(false);}
+    };
+    const footer=document.createElement('footer');
+    footer.className='product-picker-footer';
+    footer.append(status,close,apply);dialog.append(title,sources,search,grid,footer);
+    dialog.oncancel=event=>{if(busy)event.preventDefault();};
+    dialog.onclose=()=>dialog.remove();
+    document.body.append(dialog);dialog.showModal();
+    grid.textContent='Cargando productos…';
+    try{
+      items=await requestParent('catalog');
+      if(dialog.open){paint();if(!items.length)grid.textContent='Todavía no hay productos en el catálogo.';}
+    }catch{
+      if(dialog.open)grid.textContent='No se pudo cargar el catálogo.';
+    }
+  }
   function syncStageAssets(){if(!$('#sourceAssets')||!current())return;$('.canvas-shell').style.aspectRatio=project.ratio.replace(':','/');const ratio=project.ratio.split(':').map(Number);document.body.style.setProperty('--reel-preview-ratio',String(ratio[0]/ratio[1]));const host=$('#sourceAssets');host.replaceChildren();for(const l of current().components.filter(x=>x.kind==='print')){const b=document.createElement('button');b.className='asset-chip';const im=document.createElement('img');im.src=componentThumb(l);im.alt=l.name||'Estampa';b.append(im);b.title=l.name;b.onclick=()=>{setSelection(l.id);openDock('effects');};host.append(b);}$('#showBlank').classList.toggle('active',blankPreview);$('#showFinished').classList.toggle('active',!blankPreview);}
   function componentThumb(l){if(l.kind==='text')return l.render||'';const im=componentImage(l);if(!im?.complete)return l.src||l.render||'';if(!l.baked)return l.src;const b=l.bounds||{x:0,y:0,w:1,h:1},c=document.createElement('canvas');c.width=90;c.height=90;const x=b.x*im.width,y=b.y*im.height,w=b.w*im.width,h=b.h*im.height,k=Math.min(90/w,90/h);c.getContext('2d').drawImage(im,x,y,w,h,(90-w*k)/2,(90-h*k)/2,w*k,h*k);return c.toDataURL();}
   const syncComponentsV4=syncComponents;syncComponents=function(){syncComponentsV4();if(!document.body.classList.contains('production-reels'))return;const buttons=[...$('#componentList').children];for(let i=1;i<buttons.length;i++){const l=current().components[i-1],image=new Image();image.src=componentThumb(l);image.alt='';buttons[i].prepend(image);buttons[i].title=l.production?String(l.widthCm||'')+' × '+String(l.heightCm||'')+' cm':l.text||l.name;}
@@ -705,13 +987,31 @@
       });
     }
     const templateHost=$('#templates');C.templates.forEach(t=>{const b=document.createElement('button');b.type='button';b.dataset.template=t.id;b.title=t.description;const strong=document.createElement('strong');strong.textContent=t.name;const small=document.createElement('small');small.textContent=t.id==='pencil'?'Tu idea inicial':'Sin créditos de IA';b.append(strong,small);b.onclick=()=>{pause();checkpoint();current().template=t.id;editingStamp=false;focusPicking=false;time=project.scenes.slice(0,active).reduce((v,s)=>v+s.duration,0)+current().duration*.55;syncForm();changed();};templateHost.append(b);});
-    for(const [id,key] of [['baseFile','base'],['stampFile','stamp'],['finalFile','final'],['backgroundFile','background'],['videoFile','video']])$('#'+id).onchange=async e=>{try{await setFile(e.target.files[0],key);}catch(err){notify(err.message,'error');}e.target.value='';};$('#galleryFiles').onchange=async e=>{try{const files=[...e.target.files];if(project.scenes.length+files.length>36)throw new Error('Podés usar hasta 12 escenas por proyecto.');checkpoint();for(const file of files){const data=await fileData(file);await asset(data)._ready;project.scenes.push({...defaultScene(),base:null,final:data,baseName:file.name,template:'zoom',demo:false,headline:project.scenes[0].headline,duration:5});}active=project.scenes.length-1;time=project.scenes.slice(0,active).reduce((v,s)=>v+s.duration,0)+current().duration*.8;syncForm();changed();}catch(err){notify(err.message,'error');}e.target.value='';};
+    for(const [id,key] of [['baseFile','base'],['stampFile','stamp'],['finalFile','final'],['backgroundFile','background'],['videoFile','video']])$('#'+id).onchange=async e=>{try{await setFile(e.target.files[0],key);}catch(err){notify(err.message,'error');}e.target.value='';};$('#galleryFiles').onchange=async event=>{
+      const files=[...event.target.files];
+      event.target.value='';
+      event.target.disabled=true;
+      try{await appendReelFileScenes(files);}catch(error){notify(error.message,'error');}
+      finally{event.target.disabled=false;}
+    };
     for(const kind of ['music','voice'])$('#'+kind+'File').onchange=async e=>{try{await setAudio(e.target.files[0],kind);}catch(err){notify(err.message,'error');}e.target.value='';};for(const kind of ['Music','Voice'])$('#remove'+kind).onclick=async()=>{pause();checkpoint();project.audio[kind.toLowerCase()]=null;project.audio[kind.toLowerCase()+'Name']='';await setupAudioElements();syncForm();changed();};$('#removeVideo').onclick=()=>{pause();checkpoint();current().video=null;syncForm();changed();};$('#removeBackground').onclick=()=>{checkpoint();current().background=null;delete current().giphy;current().bgMotion='';syncForm();changed();};$('#logoFile').onchange=async e=>{try{const src=await fileData(e.target.files[0]);await asset(src)._ready;checkpoint();project.logo=src;changed();}catch(err){notify(err.message,'error');}e.target.value='';};$('#removeLogo').onclick=()=>{checkpoint();project.logo=null;changed();};
     $('#play').onclick=()=>playing?pause():play();$('#restart').onclick=()=>{pause();time=0;draw();};$('#seek').oninput=()=>{pause();time=Number($('#seek').value);const next=C.sceneAt(project.scenes,time).index;if(next!==active){selectCurrentSceneScope();selectedComponent=null;}active=next;syncForm();draw();};$('#guides').onchange=draw;$('#poster').onclick=()=>poster().catch(e=>notify(e.message,'error'));$('#aiFrame').onclick=()=>poster(true).catch(e=>notify(e.message,'error'));$('#undo').onclick=async()=>{if(!history.length)return;pause();future.push(structuredClone(project));project=history.pop();normalizeProject();active=Math.min(active,project.scenes.length-1);await prepareMedia();syncForm();changed();};$('#redo').onclick=async()=>{if(!future.length)return;pause();history.push(structuredClone(project));project=future.pop();normalizeProject();active=Math.min(active,project.scenes.length-1);await prepareMedia();syncForm();changed();};
-    $('#addScene').onclick=()=>{checkpoint();selectCurrentSceneScope();selectedComponent=null;project.scenes.push({...defaultScene(),template:'clean',demo:false,headline:'Tu próxima escena',detail:'',cta:current().cta});active=project.scenes.length-1;time=project.scenes.slice(0,active).reduce((v,s)=>v+s.duration,0);syncForm();changed();};$('#duplicateScene').onclick=()=>{if(project.scenes.length>=36)return notify('El máximo es de 12 escenas.','error');checkpoint();selectCurrentSceneScope();selectedComponent=null;project.scenes.splice(active+1,0,{...structuredClone(current()),id:C.uid()});active++;time=project.scenes.slice(0,active).reduce((v,s)=>v+s.duration,0)+current().duration*.8;syncForm();changed();};$('#deleteScene').textContent='Eliminar escenas';$('#deleteScene').onclick=()=>{
+    $('#addScene').onclick=()=>selectProductsForReel(false,true);$('#duplicateScene').onclick=()=>{if(project.scenes.length>=REEL_SCENE_LIMIT)return notify('El máximo es de 36 escenas.','error');checkpoint();selectCurrentSceneScope();selectedComponent=null;project.scenes.splice(active+1,0,{...structuredClone(current()),id:C.uid()});active++;time=project.scenes.slice(0,active).reduce((v,s)=>v+s.duration,0)+current().duration*.8;syncForm();changed();};$('#deleteScene').textContent='Eliminar escenas';$('#deleteScene').onclick=()=>{
       if(project.scenes.length>1)pickScenes13('Marcá las escenas para eliminar',[current().id],removeReelScenes,{confirmLabel:'Eliminar seleccionadas',removing:true});
     };for(const [id,delta] of [['previousScene',-1],['nextScene',1]])$('#'+id).onclick=()=>{const next=active+delta;if(next<0||next>=project.scenes.length)return;checkpoint();[project.scenes[active],project.scenes[next]]=[project.scenes[next],project.scenes[active]];active=next;time=project.scenes.slice(0,active).reduce((v,s)=>v+s.duration,0);syncForm();changed();};
-    $('#saveProject').onclick=async()=>{cancelEffectTrial();await cancelMusicTrial();await saveRecord(project.id);notify('Proyecto guardado.');};$('#saveLocal').onclick=async()=>{try{await saveRecord();await loadSaved();notify('Proyecto guardado en este equipo.');}catch(e){notify(e.message,'error');}};$('#projectFile').onchange=async e=>{try{const f=e.target.files[0];if(f.size>220*1024*1024)throw new Error('Ese proyecto es demasiado grande para abrirlo.');const data=C.validateProject(JSON.parse(await f.text()));pause();checkpoint();project=data;normalizeProject();active=0;time=0;await prepareMedia();syncForm();changed();setTab('editor');}catch(err){notify(err.message,'error');}e.target.value='';};$('#newProject').onclick=async()=>{await saveRecord().catch(()=>{});checkpoint();pause();project=newProject();active=0;time=0;syncForm();changed(true);setTab('editor');};
+    $('#saveProject').onclick=async()=>{cancelEffectTrial();await cancelMusicTrial();await saveRecord(project.id);notify('Proyecto guardado.');};$('#saveLocal').onclick=async()=>{try{await saveRecord();await loadSaved();notify('Proyecto guardado en este equipo.');}catch(e){notify(e.message,'error');}};$('#projectFile').onchange=async event=>{
+      const input=event.target,file=input.files[0];
+      input.value='';
+      if(!file)return;
+      try{
+        if(file.size>220*1024*1024)throw new Error('Ese proyecto es demasiado grande para abrirlo.');
+        const raw=JSON.parse(await file.text()),data=C.validateProject(raw.project||raw),id=C.uid();
+        const copy={...data,id,originalId:id,savedAt:Date.now()};
+        await dbAction('projects','readwrite',store=>store.add(copy));
+        await openSavedProject(copy);
+        notify('Respaldo abierto y guardado como proyecto.');
+      }catch(error){notify(error.message,'error');}
+    };$('#newProject').onclick=async()=>{await saveRecord().catch(()=>{});checkpoint();pause();project=newProject();active=0;time=0;syncForm();changed(true);setTab('editor');};
     C.niches.forEach(n=>$('#niche').add(new Option(n.name,n.id)));$('#niche').add(new Option('Mi propio público','custom'));$('#ideaFormat').add(new Option('Varios enfoques','all'));C.formats.forEach(f=>$('#ideaFormat').add(new Option(f.name,f.id)));$('#generateIdeas').onclick=generateIdeas;$('#nextIdeas').onclick=()=>{ideaOffset=(ideaOffset+4)%C.formats.length;$('#ideaFormat').value='all';generateIdeas();};$('#downloadIdeas').onclick=()=>{const rows=[['Público','Enfoque','Producto','Frase','Guion visual','Guion de voz','Texto para publicar']];for(const n of C.niches)for(const f of C.formats){const i=C.idea(n.id,f.id,$('#ideaProduct').value);rows.push([i.niche,i.format,$('#ideaProduct').value,i.headline,i.story,i.narration,i.caption]);}csv(rows,'SALMOS-240-ideas.csv');};
     $('#record').onclick=toggleRecord;$('#connectLocal').onclick=connectLocal;$('#tts').onclick=()=>generateTts(false);$('#aiMotion').onchange=updatePrompt;$('#copyPrompt').onclick=()=>copyText($('#aiPrompt').value);$('#export').onclick=async()=>{cancelEffectTrial();shareAfterExport=false;await cancelMusicTrial();$('#exportDialog').showModal();};$('#startExport').onclick=doExport;$('#cancelExport').onclick=()=>cancelled=true;$('#postDate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires'}).format(new Date());$('#savePost').onclick=async()=>{try{if(!$('#postDate').value)throw new Error('Elegí una fecha.');await dbAction('posts','readwrite',s=>s.put({id:C.uid(),title:project.title,date:$('#postDate').value,channel:$('#postChannel').value,url:$('#postUrl').value,inquiries:Math.max(0,Number($('#postInquiries').value)||0),notes:$('#postNotes').value}));await loadLog();notify('Publicación anotada.');}catch(e){notify(e.message,'error');}};$('#downloadLog').onclick=async()=>{const all=await loadLog();csv([['Fecha','Proyecto','Canal','Enlace','Consultas','Notas'],...all.map(p=>[p.date,p.title,p.channel,p.url,p.inquiries,p.notes])],'SALMOS-registro-publicaciones.csv');};
     $('#importProduction').onclick=async()=>{try{await importPayload(await requestParent('composition'));}catch(e){notify(e.message,'error');}};
@@ -847,19 +1147,99 @@
   function installMusic20(){const panel=$('#aiMusic19'),oldName=$('#aiMusicName19');oldName.closest('label').hidden=true;const genres=$('#aiStyleChoices19');genres.replaceChildren();const group=(host,data,attribute,multi=false)=>{for(const[id,[title]]of Object.entries(data)){const b=document.createElement('button');b.dataset[attribute]=id;b.textContent=title;b.onclick=()=>{if(multi)b.classList.toggle('active');else for(const x of host.children)x.classList.toggle('active',x===b);persistAi19();};host.append(b);}};group(genres,musicGenres20,'aiStyle19');const heading=document.createElement('strong');heading.className='inline-section-title20';heading.textContent='Género';genres.before(heading);let after=genres;for(const[data,label,attr,multi]of[[musicMoods20,'Carácter','aiMood20',false],[musicRhythms20,'Ritmo','aiRhythm20',false],[musicInstruments20,'Instrumentos','aiInstrument20',true]]){const block=document.createElement('div'),h=document.createElement('strong'),row=document.createElement('div');block.className='music-options20';h.textContent=label;row.className='choice-buttons';row.setAttribute('aria-label',label);group(row,data,attr,multi);block.append(h,row);after.after(block);after=block;}restoreAi19();$('#aiMusicTracks19').classList.add('song-gallery20');$('#aiMusicGenerate19').addEventListener('click',()=>{project.audio.aiMusic19=aiSettings19();});}
 
   async function saveDraft20(){pause();clearTimeout(autosaveTimer);cancelEffectTrial();await cancelMusicTrial();project.status='draft';await saveRecord();const snapshot=structuredClone(project);snapshot.savedAt=Date.now();notify('Borrador guardado.');try{await helperFetch('/api/projects/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snapshot)});notify('Borrador guardado con copia en tu disco.');}catch{}return snapshot;}
-  async function recoverDrafts20(){const button=$('#recoverDrafts20');button.disabled=true;let count=0;try{const candidates=[];if(indexedDB.databases){for(const info of await indexedDB.databases()){if(info.name==='salmos-reels-v1'||!/^salmos[-_](reels|marketing)/i.test(info.name))continue;const rows=await new Promise(resolve=>{const r=indexedDB.open(info.name);r.onupgradeneeded=()=>{r.transaction.abort();resolve([]);};r.onerror=()=>resolve([]);r.onsuccess=()=>{const database=r.result,stores=[...database.objectStoreNames].filter(n=>/projects|drafts|reels/i.test(n));if(!stores.length){database.close();resolve([]);return;}const tx=database.transaction(stores,'readonly'),out=[];for(const name of stores){const req=tx.objectStore(name).getAll();req.onsuccess=()=>out.push(...req.result);}tx.oncomplete=()=>{database.close();resolve(out);};tx.onerror=()=>{database.close();resolve([]);};};});candidates.push(...rows);}}
-      try{const remote=await(await helperFetch('/api/projects')).json();for(const row of remote.projects||[])candidates.push(await(await helperFetch('/api/projects/'+encodeURIComponent(row.id))).json());}catch{}
-      const currentRows=await dbAction('projects','readonly',s=>s.getAll()),known=new Map(currentRows.map(p=>[p.originalId||p.id,p]));for(const raw of candidates){const p=raw.project||raw;if(!Array.isArray(p.scenes)||!p.scenes.length)continue;const id=p.originalId||p.id||C.uid(),existing=known.get(id);if(existing&&(existing.savedAt||0)>=(p.savedAt||0))continue;const record=structuredClone({...p,id,originalId:id});await dbAction('projects','readwrite',s=>s.put(record));known.set(id,record);count++;}await loadSaved();notify(count?count+' borrador(es) recuperado(s).':'No encontré más borradores en este navegador ni en la conexión local.');}catch(e){notify(e.message,'error');}finally{button.disabled=false;}}
+  function readReelDraftStores(name){return new Promise((resolve,reject)=>{
+    const request=indexedDB.open(name);
+    request.onupgradeneeded=()=>request.transaction.abort();
+    request.onerror=()=>reject(request.error);
+    request.onsuccess=()=>{
+      const database=request.result,rows=[];
+      const stores=[...database.objectStoreNames].filter(store=>
+        /projects|drafts|reels/i.test(store)&&(name!==REEL_DATABASE||store!=='projects'));
+      if(!stores.length){database.close();resolve(rows);return;}
+      const tx=database.transaction(stores,'readonly');
+      for(const store of stores){
+        const read=tx.objectStore(store).getAll();
+        read.onsuccess=()=>{for(const row of read.result)rows.push(row);};
+      }
+      tx.oncomplete=()=>{database.close();resolve(rows);};
+      tx.onabort=()=>{database.close();reject(tx.error);};
+    };
+  });}
+  async function readReelDraftsOnDisk(){
+    const list=await(await helperFetch('/api/projects')).json(),rows=[];
+    for(const entry of list.projects||[]){
+      try{
+        const result=await(await helperFetch('/api/projects/'+encodeURIComponent(entry.id))).json();
+        rows.push({...result,id:result.id??entry.id,savedAt:result.savedAt??entry.savedAt});
+      }catch{}
+    }
+    return rows;
+  }
+  async function restoreMissingReels(rows){
+    const candidates=latestReelRecords(rows);
+    if(!candidates.length)return 0;
+    let added=0;
+    await dbAction('projects','readwrite',store=>{
+      const request=store.getAll();
+      request.onsuccess=()=>{
+        const existing=latestReelRecords(request.result);
+        const identities=new Set(existing.map(row=>row.originalId));
+        const keys=new Set(request.result.map(row=>row.id));
+        for(const draft of candidates){
+          const id=draft.originalId;
+          if(identities.has(id)||keys.has(id))continue;
+          store.add({...draft,id,originalId:id});added++;
+        }
+      };
+    });
+    return added;
+  }
+  async function recoverDrafts20(){
+    const button=$('#recoverDrafts20');button.disabled=true;
+    try{
+      const disk=readReelDraftsOnDisk().catch(()=>null);
+      await loadSaved();
+      const databases=await indexedDB.databases?.().catch(()=>[])||[];
+      const names=new Set([REEL_DATABASE,...databases.map(info=>info.name).filter(name=>/^salmos[-_](reels|marketing)/i.test(name))]);
+      let count=0;
+      for(const name of names){
+        const rows=await readReelDraftStores(name).catch(()=>[]);
+        count+=await restoreMissingReels(rows);
+      }
+      if(count)await loadSaved();
+      const backups=await disk;
+      if(backups?.length){
+        count+=await restoreMissingReels(backups);
+        await loadSaved();
+      }
+      notify(count?`${count} ${count===1?'borrador recuperado':'borradores recuperados'}.`:
+        backups===null?'No encontré más borradores en este navegador. Podés abrir un respaldo guardado en tu PC.':
+          'No encontré más borradores en este navegador ni en el iniciador.');
+    }catch(error){notify(error.message,'error');}
+    finally{button.disabled=false;}
+  }
 
   loadWanClips=async function(){try{const data=await(await helperFetch('/api/wan/clips')).json(),host=$('#wanClips');openDock('wan');host.replaceChildren();if(!data.clips.length){host.textContent='Todavía no hay videos disponibles.';return;}for(const clip of data.clips){const card=document.createElement('article'),name=document.createElement('input'),view=document.createElement('button'),use=document.createElement('button'),del=document.createElement('button');card.className='wan-card20';name.value=clip.name;name.maxLength=100;name.setAttribute('aria-label','Nombre del video');name.onchange=async()=>{try{await helperFetch('/api/wan/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:clip.id,name:name.value})});clip.name=name.value;}catch(e){notify(e.message,'error');name.value=clip.name;}};view.textContent='▶ Ver';view.onclick=()=>showWanPreview(clip).catch(e=>notify(e.message,'error'));use.textContent='Usar';use.onclick=()=>useWanClip(clip).catch(e=>notify(e.message,'error'));del.innerHTML=icon10('eraser');del.title='Eliminar resultado';del.setAttribute('aria-label',del.title);del.onclick=async()=>{if(!confirm('¿Eliminar este resultado de WanGP del disco?'))return;try{closeWanPreview();await helperFetch('/api/wan/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:clip.id})});wanClipBlobs.delete(clip.id);await loadWanClips();}catch(e){notify(e.message,'error');}};const cut=document.createElement('button');cut.textContent='✂';cut.title='Recortar video';cut.setAttribute('aria-label',cut.title);cut.onclick=()=>trimClip24(clip).catch(e=>notify(e.message,'error'));card.append(name,view,use,cut,del);host.append(card);}}catch(e){$('#wanState').textContent=e.message;}};
   function installMotion20(){const presets={still:['Respiración','Hold the pose. Only gentle breathing. Natural face, closed relaxed mouth. Keep clothing and print unchanged.','Mantener la pose con una respiración muy suave.'],blink:['Parpadeo leve','The person holds the same pose and gaze. One gentle natural blink, closing both eyelids briefly and reopening them. No smile, no speaking, no head movement. Locked camera. Preserve clothing and artwork.','Un solo parpadeo natural, sin sonreír ni mover la cabeza.'],smile:['Sonrisa','The person gradually changes from a neutral expression to a clear warm natural smile. The corners of the mouth visibly lift and the cheeks rise. Hold the smile at the end. Keep the same identity and natural eyes. No speaking. Camera remains completely stationary, no zoom, no pan. Preserve the clothing and printed artwork.','Pasar de una expresión neutra a una sonrisa visible y natural. Cámara fija, sin acercamiento.'],camera:['Acercamiento','Slow subtle camera push-in. The person remains still, with unchanged face and clothing. Preserve printed artwork.','Acercamiento suave de cámara; la persona permanece quieta.']},bar=$('[data-wan-preset]').parentElement;bar.replaceChildren();let chosen='still';const choose=id=>{chosen=id;const data=presets[id];$('#wanPrompt').value=data[2];$('#wanPrompt').dataset.display=data[2];$('#wanPrompt').dataset.engine=data[1];for(const b of bar.children)b.classList.toggle('active',b.dataset.wanPreset===id);};for(const[id,[name]]of Object.entries(presets)){const b=document.createElement('button');b.dataset.wanPreset=id;b.textContent=name;b.onclick=()=>choose(id);bar.append(b);}choose('still');const start=$('#wanGenerate');start.onclick=async()=>{start.disabled=true;try{if(!wanSource)await $('#wanCapture').onclick();if(!wanSource)return;const response=await helperFetch('/api/wan/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:wanSource,prompt:$('#wanPrompt').value===$('#wanPrompt').dataset.display?$('#wanPrompt').dataset.engine:$('#wanPrompt').value,negative:'distorted eyes, asymmetric eyes, deformed mouth, talking, extra fingers, changing artwork, unreadable letters, face morphing, shaking, jagged silhouette, changing garment edges'+(chosen==='blink'?'':', excessive blinking')})});renderWanState(await response.json());wanPoll=setTimeout(pollWan,2500);}catch(e){$('#wanState').textContent=e.message;}finally{start.disabled=false;}};}
   let imageShelfPromise20=null,imageShelfRows20=[];
   async function rememberImage20(src,name='Imagen'){if(!src||!/^data:image\//.test(src))return;const existing=imageShelfRows20.find(x=>x.src===src);if(existing)return existing;const entry={id:'reel-image20-'+C.uid(),kind:'reel-image20',src,name,createdAt:Date.now()};await dbAction('assets','readwrite',s=>s.put(entry));imageShelfRows20.unshift(entry);return entry;}
-  async function refreshImageShelf20(){if(imageShelfPromise20)return imageShelfPromise20;imageShelfPromise20=(async()=>{const[assets,records]=await Promise.all([dbAction('assets','readonly',s=>s.getAll()),dbAction('projects','readonly',s=>s.getAll())]);imageShelfRows20=assets.filter(x=>x.kind==='reel-image20');for(const p of [project,...records])for(const scene of p.scenes||[])for(const layer of scene.components||[])if(layer.overlay&&layer.kind!=='text')await rememberImage20(layer.originalSrc14||layer.src,layer.name||'Imagen');renderImageShelf20();})().finally(()=>imageShelfPromise20=null);return imageShelfPromise20;}
+  async function refreshImageShelf20(){if(imageShelfPromise20)return imageShelfPromise20;imageShelfPromise20=(async()=>{const[assets,records]=await Promise.all([dbAction('assets','readonly',s=>s.getAll()),dbAction('projects','readonly',s=>s.getAll())]);imageShelfRows20=assets.filter(x=>x.kind==='reel-image20');for(const p of [project,...latestReelRecords(records)])for(const scene of p.scenes||[])for(const layer of scene.components||[])if(layer.overlay&&layer.kind!=='text')await rememberImage20(layer.originalSrc14||layer.src,layer.name||'Imagen');renderImageShelf20();})().finally(()=>imageShelfPromise20=null);return imageShelfPromise20;}
   function renderImageShelf20(){const host=$('#reelImageShelf20');if(!host)return;host.replaceChildren();for(const item of [...imageShelfRows20].sort((a,b)=>(b.lastUsed||b.createdAt||0)-(a.lastUsed||a.createdAt||0))){const b=document.createElement('button'),im=new Image(),label=document.createElement('small');b.type='button';b.dataset.savedImage20=item.id;b.title='Agregar '+item.name;b.setAttribute('aria-label',b.title);im.loading='lazy';im.src=item.src;im.alt=item.name;label.textContent=item.name;b.append(im,label);b.onclick=async()=>{b.disabled=true;try{await addPrint(item.src,item.name,true);item.lastUsed=Date.now();await dbAction('assets','readwrite',s=>s.put(item));syncForm();changed();openDock('add');}catch(e){notify(e.message,'error');}finally{b.disabled=false;}};host.append(b);}if(!host.childElementCount)host.textContent='Las imágenes que agregues aparecerán acá.';}
   function installImageShelf20(){const input=$('#imageLayerFile12'),upload=input.onchange,host=document.createElement('div');host.id='reelImageShelf20';host.className='reel-image-shelf20';host.setAttribute('aria-label','Mis imágenes para reels');input.closest('label').after(host);input.onchange=async event=>{const file=event.target.files[0];await upload(event);const layer=selectedLayer();if(file&&layer?.overlay){await refreshImageShelf20();await rememberImage20(layer.originalSrc14||layer.src,file.name);renderImageShelf20();}};refreshImageShelf20().catch(e=>notify('No se pudo cargar la galería de imágenes.','error'));}
 
-  function installReelsV20(){arrangePanels20();installImageShelf20();installMusic20();installMotion20();const recover=document.createElement('button');recover.id='recoverDrafts20';recover.textContent='Buscar borradores';recover.onclick=recoverDrafts20;$('#createReel').before(recover);$('#saveDraft14').onclick=async()=>{const button=$('#saveDraft14');button.disabled=true;try{await saveDraft20();}catch(e){notify(e.message,'error');}finally{button.disabled=false;}};}
+  function installReelsV20(){
+    arrangePanels20();installImageShelf20();installMusic20();installMotion20();
+    const recover=document.createElement('button');recover.id='recoverDrafts20';
+    recover.textContent='Buscar borradores';recover.onclick=recoverDrafts20;
+    const open=document.createElement('button');open.textContent='Abrir respaldo';
+    open.onclick=()=>$('#projectFile').click();
+    $('#createReel').before(recover,open);
+    $('#saveDraft14').onclick=async()=>{
+      const button=$('#saveDraft14');button.disabled=true;
+      try{await saveDraft20();}catch(error){notify(error.message,'error');}
+      finally{button.disabled=false;}
+    };
+  }
 
   function wanSnapshot21(scene){const copy=structuredClone(scene);delete copy.beforeWan21;return{scene:copy,sounds:structuredClone((project.audio.sfx||[]).filter(e=>e.sceneId===scene.id))};}
   function productRect21(scene){const h=dimensions().h,im=scene.base?asset(scene.base):scene.final?asset(scene.final):null;const r=im?fitRect(im,25,65,670,h-130):{x:25,y:65,w:670,h:h-130};if(scene.framing>1){const k=scene.framing;r.x-=r.w*(k-1)/2;r.y-=r.h*(k-1)/2;r.w*=k;r.h*=k;}return r;}
@@ -912,7 +1292,15 @@
   const wanStatusBefore25=renderWanState;renderWanState=function(data){wanStatusBefore25(data);if(data.job)revealWan25();$('#wanCancel').disabled=data.job?.state!=='running';};
   function installReelsV25(){const host=$('[data-drawer=wan]'),top=document.createElement('div'),advanced=document.createElement('section'),actions=document.createElement('div'),download=host.querySelector('a[download]')||document.createElement('a'),presets=$('[data-wan-preset]').parentElement,prompt=$('#wanPrompt').closest('label'),clips=$('#wanClips'),status=$('#wanState'),progress=$('#wanProgress'),remove=$('#removeWanInPanel21');top.className='wan-start25';advanced.id='wanAdvanced25';advanced.hidden=!wanDownloaded25;actions.className='wan-actions25';download.href='INICIAR_SALMOS.bat?v=24.0';download.download='INICIAR_SALMOS.bat';download.className='button';download.textContent='Descargar iniciador';download.onclick=()=>{wanDownloaded25=true;try{localStorage.setItem('salmos-wan-downloaded25','1');}catch{}revealWan25();};$('#oldReelsPanels').append($('#wanCheck'),$('#wanCapture'));top.append(download,$('#wanRefreshClips'));actions.append($('#wanGenerate'),$('#wanCancel'));actions.querySelector('#wanCancel').disabled=true;advanced.append(presets,prompt,actions);if(remove)advanced.append(remove);status.textContent='';advanced.append(progress,status);host.replaceChildren(top,advanced,clips);}
 
-  async function init(){project=newProject();try{const records=await dbAction('projects','readonly',s=>s.getAll());const saved=records.sort((a,b)=>(b.savedAt||0)-(a.savedAt||0))[0];if(saved){project={...saved,id:saved.originalId||(saved.id!=='autosave'&&saved.id)||C.uid()};}}catch{}normalizeProject();if(project.savedAt)await saveRecord(project.id);bind();bindExtra();tidyEditor();installProductionLayout();installReelsV14();installReelsV19();installReelsV20();installReelsV21();installReelsV24();installReelsV25();await prepareMedia().catch(e=>notify(e.message,'error'));syncForm();generateIdeas();updatePrompt();draw();document.documentElement.dataset.studioReady='true';$('#studioBoot15')?.remove();if(parent!==window)parent.postMessage({type:'salmos-marketing-ready'},location.origin);}
+  async function init(){
+    project=newProject();normalizeProject();
+    bind();bindExtra();tidyEditor();installProductionLayout();installReelsV14();installReelsV19();installReelsV20();
+    installReelsV21();installReelsV24();installReelsV25();
+    await prepareMedia().catch(error=>notify(error.message,'error'));
+    syncForm();generateIdeas();updatePrompt();draw();
+    document.documentElement.dataset.studioReady='true';$('#studioBoot15')?.remove();
+    if(parent!==window)parent.postMessage({type:'salmos-marketing-ready'},location.origin);
+  }
   window.addEventListener('unhandledrejection',e=>{notify(e.reason?.message||'No se pudo completar esa operación.','error');});
   init().catch(e=>{console.error(e.stack);const b=$('#studioBoot15');if(b){b.querySelector('p').textContent='No se pudo abrir el editor. Tocá Reintentar.';b.querySelector('button').hidden=false;}notify(e.message,'error');});
 })();
