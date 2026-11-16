@@ -3,6 +3,7 @@
 
   const PNG_HEADER = [137, 80, 78, 71, 13, 10, 26, 10];
   const SIGNATURE_SIZE = 24;
+  const MAX_CANDIDATES = 960;
   const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
 
   function canvas(width, height) {
@@ -173,6 +174,67 @@
     }
     return cuts;
   }
+  function neighboringInkBounds(regions,keep){
+    if(regions.length>130)return;
+    for(const [start,end,crossStart,crossEnd] of [['left','right','top','bottom'],['top','bottom','left','right']]){
+      const ordered=[...regions].sort((a,b)=>a[start]-b[start]);
+      for(let i=0;i<ordered.length-1;i++){
+        let bounds=ordered[i],parts=1;
+        for(let j=i+1;j<ordered.length&&parts<9;j++){
+          const next=ordered[j],span=bounds[crossEnd]-bounds[crossStart],other=next[crossEnd]-next[crossStart];
+          const gap=next[start]-bounds[end];
+          if(gap>span*.48)break;
+          const aligned=Math.min(bounds[crossEnd],next[crossEnd])-Math.max(bounds[crossStart],next[crossStart]);
+          if(gap < -span*.15||aligned<Math.min(span,other)*.7||Math.max(span,other)>2.3*Math.min(span,other))continue;
+          bounds=union(bounds,next);
+          keep(bounds);
+          parts++;
+        }
+      }
+    }
+  }
+  function inkHue(r,g,b){
+    const high=Math.max(r,g,b),low=Math.min(r,g,b),spread=high-low;
+    if(spread<38||spread<high*.51)return -1;
+    const angle=high===r?(g-b)/spread:high===g?2+(b-r)/spread:4+(r-g)/spread;
+    return (Math.round(angle)+6)%6;
+  }
+  function chromaticRegions(bitmap,size,keep){
+    const {width,height}=bitmap,scale=Math.min(1,840/Math.max(width,height));
+    const work=canvas(Math.round(width*scale),Math.round(height*scale));
+    const context=work.getContext('2d',{willReadFrequently:true});
+    context.drawImage(bitmap,0,0,work.width,work.height);
+    const {data}=context.getImageData(0,0,work.width,work.height),{width:cols,height:rows}=work;
+    const hues=new Int8Array(cols*rows).fill(-1),counts=new Uint32Array(6);
+    for(let i=0,j=0;i<data.length;i+=4,j++){
+      if(data[i+3]<110)continue;
+      const hue=inkHue(data[i],data[i+1],data[i+2]);
+      if(hue>=0){hues[j]=hue;counts[hue]++;}
+    }
+    work.width=0;
+    const toOriginal=rect=>keep({
+      left:Math.floor(rect.left*width/cols),top:Math.floor(rect.top*height/rows),
+      right:Math.ceil(rect.right*width/cols),bottom:Math.ceil(rect.bottom*height/rows)
+    });
+    const pxPerCm=(cols/size.width+rows/size.height)/2;
+    const length=cols*rows;
+    const grid={cols,rows,left:new Uint16Array(length),right:new Uint16Array(length),top:new Uint16Array(length),bottom:new Uint16Array(length)};
+    for(let hue=0;hue<counts.length;hue++){
+      if(counts[hue]<20)continue;
+      grid.right.fill(0);
+      for(let i=0;i<length;i++){
+        if(hues[i]!==hue)continue;
+        const x=i%cols,y=Math.floor(i/cols);
+        grid.left[i]=x;grid.right[i]=x+1;grid.top[i]=y;grid.bottom[i]=y+1;
+      }
+      const radii=new Set([1,Math.max(1,Math.round(.22*pxPerCm)),Math.max(1,Math.round(.5*pxPerCm))]);
+      for(const radius of radii){
+        const regions=separateRegions(grid,radius,.18*pxPerCm,.18*pxPerCm);
+        for(const rect of regions)toOriginal(rect);
+        if(radius===1)neighboringInkBounds(regions,toOriginal);
+      }
+    }
+  }
   function partitionSheet(grid,step,bitmap,size) {
     const pxPerCm=(bitmap.width/size.width+bitmap.height/size.height)/2;
     const minSide=Math.max(4,Math.ceil(.42*pxPerCm/step));
@@ -182,7 +244,7 @@
     function keep(rect){
       if(!rect||coversSheet(rect,bitmap.width,bitmap.height))return false;
       if(Math.min(rect.right-rect.left,rect.bottom-rect.top)<.19*pxPerCm||
-        boxArea(rect)<.12*pxPerCm*pxPerCm||candidates.length>=640)return false;
+        boxArea(rect)<.12*pxPerCm*pxPerCm||candidates.length>=MAX_CANDIDATES)return false;
       const key=[rect.left,rect.top,rect.right,rect.bottom].join(',');
       if(!seen.has(key)){seen.add(key);candidates.push(rect);}
       return true;
@@ -206,8 +268,8 @@
       }
       for(const child of children(cuts[0]))divide(child,depth+1,primary);
       // Try a few alternative gutters before committing to word-like fragments.
-      if(primary&&depth<3){
-        for(const cut of cuts.slice(1,4)){
+      if(primary&&depth<5){
+        for(const cut of cuts.slice(1,depth<3?4:2)){
           for(const child of children(cut)){
             keep(cellsToPixels(grid,child));
             if(depth===0&&cut.axis!==cuts[0].axis)divide(child,depth+1,false);
@@ -216,7 +278,13 @@
       }
     }
     divide(bounds,0,true);
-    for(const component of separateRegions(grid,Math.max(1,Math.round(.04*pxPerCm/step)),.1*pxPerCm,.1*pxPerCm))keep(component);
+    const radii=new Set([1,Math.max(1,Math.round(.15*pxPerCm/step)),Math.max(1,Math.round(.32*pxPerCm/step))]);
+    for(const radius of radii){
+      const regions=separateRegions(grid,radius,.18*pxPerCm,.18*pxPerCm);
+      for(const component of regions)keep(component);
+      if(radius===1)neighboringInkBounds(regions,keep);
+    }
+    chromaticRegions(bitmap,size,keep);
     const ordered=(a,b)=>a.top-b.top||a.left-b.left;
     return {boxes:leaves.sort(ordered),candidates:candidates.sort(ordered)};
   }
@@ -335,6 +403,51 @@
     return {aspect,data:normalized};
   }
 
+  function fingerprints(image,rect){
+    const initial=signature(image,rect),variants=[initial],size=SIGNATURE_SIZE;
+    for(let turn=1;turn<4;turn++){
+      const previous=variants[turn-1],data=new Uint8Array(initial.data.length);
+      for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+        const from=(y*size+x)*4,to=(x*size+size-1-y)*4;
+        for(let c=0;c<4;c++)data[to+c]=previous.data[from+c];
+      }
+      variants.push({aspect:1/previous.aspect,data});
+    }
+    return variants;
+  }
+  function flatBackgroundSignature(work){
+    const {width,height}=work;
+    if(width<6||height<6)return null;
+    const context=work.getContext('2d',{willReadFrequently:true});
+    const frame=context.getImageData(0,0,width,height),{data}=frame;
+    const r=data[0],g=data[1],b=data[2];
+    const isBackground=index=>data[index+3]>=245&&
+      Math.max(Math.abs(data[index]-r),Math.abs(data[index+1]-g),Math.abs(data[index+2]-b))<=22;
+    let edge=0,flat=0;
+    for(let i=0;i<width*height;i++){
+      const x=i%width,y=Math.floor(i/width);
+      if(x!==0&&x!==width-1&&y!==0&&y!==height-1)continue;
+      edge++;
+      if(isBackground(i*4))flat++;
+    }
+    if(flat<edge*.96)return null;
+    let foreground=0;
+    const bounds={left:width,top:height,right:0,bottom:0};
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+      const i=(y*width+x)*4;
+      if(isBackground(i)){data[i+3]=0;continue;}
+      if(data[i+3]<18)continue;
+      foreground++;
+      bounds.left=Math.min(bounds.left,x);bounds.right=Math.max(bounds.right,x+1);
+      bounds.top=Math.min(bounds.top,y);bounds.bottom=Math.max(bounds.bottom,y+1);
+    }
+    if(foreground<width*height*.015||foreground>width*height*.86)return null;
+    const isolated=canvas(width,height);
+    isolated.getContext('2d').putImageData(frame,0,0);
+    const signatureWithoutBackground=signature(isolated,bounds);
+    isolated.width=0;
+    return signatureWithoutBackground;
+  }
   async function assetSignature(blob) {
     const bitmap=await createImageBitmap(blob,{colorSpaceConversion:'none'});
     try {
@@ -346,27 +459,34 @@
         left:Math.floor(bounds.left*width/work.width),top:Math.floor(bounds.top*height/work.height),
         right:Math.ceil(bounds.right*width/work.width),bottom:Math.ceil(bounds.bottom*height/work.height)
       };
+      const original=rect&&signature(bitmap,rect);
+      const alternate=original&&flatBackgroundSignature(work);
       work.width=0;
-      return rect?signature(bitmap,rect):null;
+      return alternate?{...original,alternate}:original;
     } finally {bitmap.close();}
   }
 
+  function signatureDistance(reference,template){
+    const aspectError=Math.abs(Math.log(template.aspect/reference.aspect));
+    if(aspectError>.2)return Infinity;
+    let difference=0,ink=0;
+    for(let p=0;p<reference.data.length;p+=4){
+      const alpha=reference.data[p+3],templateAlpha=template.data[p+3];
+      difference+=Math.abs(alpha-templateAlpha)*.75;
+      for(let channel=0;channel<3;channel++)difference+=Math.abs(reference.data[p+channel]-template.data[p+channel])*.083333333;
+      ink+=Math.max(alpha,templateAlpha);
+    }
+    return difference/(ink||1)+aspectError*.35;
+  }
   function match(signatures, candidates) {
     const scores=[];
     for (const candidate of candidates) {
       let score=Infinity,rotation=0;
       for (let i=0;i<signatures.length;i++) {
-        const reference=signatures[i];
-        const aspectError=Math.abs(Math.log(candidate.signature.aspect/reference.aspect));
-        if (aspectError>.2) continue;
-        let difference=0,ink=0;
-        for (let p=0;p<reference.data.length;p+=4) {
-          const alpha=reference.data[p+3],templateAlpha=candidate.signature.data[p+3];
-          difference+=Math.abs(alpha-templateAlpha)*.75;
-          for (let channel=0;channel<3;channel++) difference+=Math.abs(reference.data[p+channel]-candidate.signature.data[p+channel])*.083333333;
-          ink+=Math.max(alpha,templateAlpha);
-        }
-        const distance=difference/(ink||1)+aspectError*.35;
+        const reference=signatures[i],template=candidate.signature;
+        const original=signatureDistance(reference,template);
+        const distance=template.alternate?
+          Math.min(original<.035?original:Infinity,signatureDistance(reference,template.alternate)+.012):original;
         if (distance<score) {score=distance;rotation=i*90;}
       }
       if (Number.isFinite(score)) scores.push({id:candidate.id,score,rotation});
@@ -376,5 +496,78 @@
     return best&&best.score<.19&&(!scores[1]||scores[1].score-best.score>.025)?best:null;
   }
 
-  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,assetSignature,match,selectMatches,overlapArea};
+  const occurrenceSamples=new WeakMap();
+  function normalizedRect(box,width,height,padding=0){
+    return {
+      left:Math.max(0,Math.floor(box.x*width-padding)),top:Math.max(0,Math.floor(box.y*height-padding)),
+      right:Math.min(width,Math.ceil((box.x+box.width)*width+padding)),
+      bottom:Math.min(height,Math.ceil((box.y+box.height)*height+padding))
+    };
+  }
+  function normalizedBox(rect,width,height){
+    return {x:rect.left/width,y:rect.top/height,width:rectWidth(rect)/width,height:rectHeight(rect)/height};
+  }
+  function occurrenceRotation(image,seed,box){
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    const rotation=Number(seed.rotation)||0;
+    const template=signature(image,normalizedRect(seed,width,height));
+    const found=match(fingerprints(image,normalizedRect(box,width,height)),[{id:1,signature:template}]);
+    return (rotation+(found?.rotation||0))%360;
+  }
+  async function occurrenceSample(image,size){
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height,
+      source=image.currentSrc||image.src||'',key=[width,height,source,size.width,size.height].join(':');
+    const current=occurrenceSamples.get(image);
+    if(current?.key===key)return current.result;
+    const scale=Math.min(1,1280/Math.max(width,height));
+    const work=canvas(Math.round(width*scale),Math.round(height*scale));
+    work.getContext('2d').drawImage(image,0,0,work.width,work.height);
+    const result=detect(work,size).then(found=>({work,candidates:found.candidates,templatesBySeed:new WeakMap()}));
+    occurrenceSamples.set(image,{key,result});
+    try{return await result;}
+    catch(error){
+      if(occurrenceSamples.get(image)?.result===result)occurrenceSamples.delete(image);
+      throw error;
+    }
+  }
+  async function findOccurrence(image,size,seed,point,used){
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    if(!width||!height)return null;
+    const {work,candidates,templatesBySeed}=await occurrenceSample(image,size);
+    if(!templatesBySeed.has(seed)){
+      const bounds=inkBounds(image,normalizedRect(seed,width,height));
+      if(!bounds)return null;
+      templatesBySeed.set(seed,[{id:1,signature:signature(image,bounds)}]);
+    }
+    const templates=templatesBySeed.get(seed);
+    const px=point.x*work.width,py=point.y*work.height;
+    const occupied=used.map(box=>normalizedRect(box,work.width,work.height));
+    if(occupied.some(rect=>px>=rect.left&&px<=rect.right&&py>=rect.top&&py<=rect.bottom))return null;
+    const free=rect=>!occupied.some(old=>overlapArea(old,rect)>Math.min(boxArea(old),boxArea(rect))*.25);
+    const hits=[];
+    for(const rect of candidates){
+      if(px<rect.left||px>rect.right||py<rect.top||py>rect.bottom||!free(rect))continue;
+      const hit=match(fingerprints(work,rect),templates);
+      if(hit)hits.push({...hit,rect});
+    }
+    const confirmed=[];
+    for(const hit of hits.sort((a,b)=>a.score-b.score).slice(0,12)){
+      const estimated=normalizedBox(hit.rect,work.width,work.height);
+      const padding=Math.ceil(Math.max(width/work.width,height/work.height));
+      for(const margin of [padding,0]){
+        const rect=inkBounds(image,normalizedRect(estimated,width,height,margin));
+        if(!rect||!free(normalizedRect(normalizedBox(rect,width,height),work.width,work.height)))continue;
+        const result=match(fingerprints(image,rect),templates);
+        if(result)confirmed.push({...result,rect,score:result.score+hit.score*.2});
+        if(result)break;
+      }
+    }
+    confirmed.sort((a,b)=>a.score-b.score);
+    const best=confirmed[0];
+    if(!best||confirmed.slice(1).some(row=>row.score-best.score<.035&&
+      overlapArea(row.rect,best.rect)<.7*Math.max(boxArea(row.rect),boxArea(best.rect))))return null;
+    return {...normalizedBox(best.rect,width,height),rotation:((Number(seed.rotation)||0)+best.rotation)%360};
+  }
+
+  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,assetSignature,match,selectMatches,overlapArea,findOccurrence,occurrenceRotation};
 })();

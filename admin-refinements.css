@@ -338,16 +338,18 @@ body #productionDialog.production-editor-fullscreen [data-production-panel="2"] 
   margin-bottom: 10px;
 }
 .purchased-material-toolbar > input { width: min(100%, 380px); }
-.purchased-material-image {
-  display: grid;
-  place-items: center;
-  height: 160px;
-  overflow: hidden;
+body .unified-product-main .stock-group-image.purchased-material-photo.no-photo {
+  display: grid !important;
+  min-height: 132px !important;
+  padding: 8px !important;
 }
-.purchased-material-image img { width: 100%; height: 100%; object-fit: contain; }
-.purchased-material-image i { font-size: 26px; }
-.purchased-material-info { display: grid; align-content: start; gap: 6px; padding: 12px; }
-.purchased-material-info .btn { justify-self: start; }
+.purchased-material-photo .unified-product-preview { cursor: zoom-in; }
+.purchased-material-info { overflow-wrap: anywhere; }
+.purchased-stock-table { width: max-content; max-width: 100%; border-spacing: 0 3px; text-align: left; font-size: .78rem; }
+.purchased-stock-table th { padding: 0 10px 0 0; text-align: left; }
+.purchased-stock-table thead th { font-weight: 500; color: var(--muted); }
+.purchased-stock-table td { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; text-align: center; }
+.purchased-material-gallery img { object-fit: contain; }
 .material-purchase-variant {
   display: grid;
   gap: 8px;
@@ -373,7 +375,6 @@ body #productionDialog .production-material-filters {
 [data-sheet-auto-detect] { justify-self: start; }
 
 [data-photo-product-line][hidden], [data-model-products-status][hidden] { display: none !important; }
-.purchased-material-card { grid-template-rows: auto; align-items: center; }
 #purchasedMaterialsGrid { display: block; }
 
 #designUploadDialog .sheet-upload-row {
@@ -412,7 +413,7 @@ body #productionDialog .production-material-filters {
 #designUploadDialog .sheet-upload-row .design-measures .number-control15 { grid-template-columns: 20px minmax(0,1fr) 20px; }
 #designUploadDialog .sheet-upload-printed { align-self: end; min-height: 36px; margin: 0; white-space: nowrap; }
 #designUploadDialog .sheet-composition { margin-top: 4px; padding-top: 8px; }
-#designUploadDialog .sheet-composition-heading h3 { margin: 0; }
+.sheet-composition-heading { margin: 0 0 8px; }
 
 :is(#designUploadDialog,#designDetailEditor) .design-tag-picker {
   grid-column: 1 / -1;
@@ -554,19 +555,119 @@ body #productionDialog .production-material-filters {
   padding: 0;
   border-radius: 0 !important;
 }
-:is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen .sheet-preview-viewport { height: calc(100dvh - 158px); }
-:is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen .sheet-composition-layout {
-  grid-template-columns: minmax(0, 1.6fr) minmax(285px, 1fr);
-  align-items: start;
+:is(#designUploadDialog,#designPreviewDialog.sheet-editor-open) .sheet-composition-layout {
+  display: grid;
+  grid-template-columns: minmax(215px, .8fr) minmax(0, 2fr) minmax(238px, .88fr) !important;
+  align-items: stretch;
+  gap: 10px;
 }
-:is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen .sheet-composition-sidebar {
-  max-height: calc(100dvh - 105px);
-  overflow-y: auto;
+.sheet-composition-layout > :is(.sheet-added-column,.sheet-preview-column,.sheet-library-column) {
+  min-width: 0;
+  min-height: 0;
 }
+.sheet-added-column .sheet-selected-list { margin: 0; }
+.sheet-added-column .sheet-selected-list > [data-sheet-selected] { max-height: 55dvh; }
+.sheet-added-column .sheet-component-row { grid-template-columns: minmax(0,1fr); gap: 7px; }
+.sheet-added-column .sheet-component-row > * { grid-column: 1; }
+.sheet-added-column .sheet-component-identity { gap: 7px; min-width: 0; overflow-wrap: anywhere; }
+.sheet-added-column .design-small-image { width: 42px; height: 44px; }
+.sheet-added-column .sheet-exact-measure { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; }
+.sheet-added-column .sheet-exact-measure .field { min-width: 0; font-size: .75rem; }
+.sheet-added-column .sheet-exact-measure .number-control15 { min-width: 0; max-width: 100%; grid-template-columns: 18px minmax(0,1fr) 18px; }
+.sheet-added-column .sheet-component-row .admin-actions { flex-wrap: wrap; justify-content: start; gap: 4px; }
+.sheet-added-column .sheet-component-row .admin-actions > :is(.btn,.icon-btn) { min-height: 29px; padding: 4px 7px; font-size: .76rem; white-space: normal; }
+.sheet-mark-status { margin: 0; color: var(--muted); font-size: .82rem; }
+.sheet-mark-status:empty { display: none; }
+.sheet-library-column { display: flex; flex-direction: column; gap: 6px; }
+.sheet-library-column .sheet-library-heading { margin: 0; }
+.sheet-library-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.sheet-library-actions > input[type=search] { flex: 1 1 100%; min-width: 0; }
+.sheet-library-actions > .btn { min-height: 32px; padding: 5px 8px; white-space: normal; }
+.sheet-library-content { min-height: 0; max-height: 49dvh; overflow: auto; overscroll-behavior: contain; }
+.sheet-library-content .sheet-scan-results { margin: 6px 3px 10px; }
+.sheet-library-content > .sheet-missing-upload { padding: 0; margin: 0; border: 0; }
+.sheet-library-content .sheet-missing-upload:not(:has([data-missing-sheet-id])) { display: none; }
+.sheet-library-content .sheet-missing-file { display: flex; flex-wrap: wrap; }
+.sheet-library-content .sheet-missing-fields { flex: 1 1 130px; min-width: 0; }
+.sheet-library-content .sheet-missing-file-actions { flex: 1 0 100%; }
+.sheet-library-content .sheet-design-library { margin: 6px 0 0; }
+.sheet-library-content .sheet-sample-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(min(100%,76px),1fr));
+  gap: 6px;
+  padding: 2px;
+  overflow: visible;
+}
+.sheet-library-content .sheet-sample { width: 100%; max-width: none !important; padding: 3px; }
+.sheet-library-content .sheet-sample > span { height: auto; aspect-ratio: 1; overflow: hidden; }
+.sheet-library-content .sheet-sample img { width: 100%; height: 100%; object-fit: contain; }
+.sheet-composition-footer { display: flex; align-items: start; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.sheet-composition-footer [data-sheet-metrics] { flex: 1 1 280px; }
+.sheet-composition-footer .sheet-surface-summary { margin: 0; }
+.sheet-composition-footer .sheet-confirm-composition { display: flex; align-items: center; gap: 8px; }
+
+:is(#designUploadDialog.sheet-fullscreen,#designPreviewDialog.sheet-editor-open.sheet-fullscreen) > .dialog-shell {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+:is(#designUploadDialog.sheet-fullscreen,#designPreviewDialog.sheet-editor-open.sheet-fullscreen) > .dialog-shell > :not(.dialog-body),
+#designUploadDialog.sheet-fullscreen .dialog-body > :not([data-sheet-composition-host]),
+#designPreviewDialog.sheet-fullscreen .design-preview-layout > :not(#designPreviewMeta),
+#designPreviewDialog.sheet-fullscreen #designPreviewMeta > :not(#designDetailEditor),
+#designPreviewDialog.sheet-fullscreen #designDetailEditor > :not([data-sheet-composition-host]),
+.sheet-fullscreen :is(.sheet-composition-heading,.sheet-composition-footer,[data-sheet-size-notice]) { display: none !important; }
+
+:is(#designUploadDialog.sheet-fullscreen,#designPreviewDialog.sheet-editor-open.sheet-fullscreen) > .dialog-shell > .dialog-body {
+  box-sizing: border-box;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  padding: 10px !important;
+}
+.sheet-fullscreen :is(#designPreviewMeta,#designDetailEditor,[data-sheet-composition-host],.sheet-composition,.sheet-composition-layout) {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0;
+}
+.sheet-fullscreen .sheet-added-column .sheet-selected-list[open] { display: flex; flex-direction: column; height: 100%; }
+.sheet-fullscreen .sheet-added-column .sheet-selected-list > [data-sheet-selected],
+.sheet-fullscreen .sheet-library-content { max-height: none; min-height: 0; flex: 1; }
+.sheet-fullscreen .sheet-preview-column { display: flex; flex-direction: column; }
+:is(#designUploadDialog,#designPreviewDialog.sheet-editor-open).sheet-fullscreen .sheet-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+:is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen .sheet-preview-viewport {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+.sheet-fullscreen .sheet-preview-viewport.can-pan { cursor: grab; }
+.sheet-fullscreen .sheet-preview-viewport.can-pan .sheet-preview-canvas:not(.drawing) { cursor: grab; }
+.sheet-fullscreen .sheet-preview-viewport.is-panning :is(.sheet-preview-canvas,.sheet-preview-pin) { cursor: grabbing; }
 @media (max-width: 760px) {
   #designUploadDialog .sheet-upload-row { gap: 6px 8px; }
-  :is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen .sheet-preview-viewport { height: 62dvh; }
-  :is(#designUploadDialog,#designPreviewDialog).sheet-fullscreen .sheet-composition-sidebar { max-height: none; overflow: visible; }
+  :is(#designUploadDialog,#designPreviewDialog.sheet-editor-open) .sheet-composition-layout {
+    grid-template-columns: minmax(110px,.85fr) minmax(0,1.15fr) !important;
+  }
+  .sheet-composition-layout > .sheet-library-column { grid-column: 1/-1; }
+  .sheet-fullscreen .sheet-composition-layout { grid-template-rows: minmax(0,1.4fr) minmax(0,1fr); }
+  .sheet-added-column .sheet-exact-measure { grid-template-columns: 1fr; }
+  .sheet-library-actions > input[type=search] { flex: 1 1 125px; }
 }
 #sheetDesignGalleryDialog > .dialog-shell { width: 100%; height: 100%; min-height: 0; }
 #sheetDesignGalleryDialog .dialog-body { display: flex; flex-direction: column; min-height: 0; gap: 10px; overflow: hidden; }
