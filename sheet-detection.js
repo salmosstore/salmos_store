@@ -13,16 +13,23 @@
     return target;
   }
 
+  function sourceDimensions(image) {
+    return {width:image.naturalWidth||image.width,height:image.naturalHeight||image.height};
+  }
+
+  function checkSheetPixels(width,height) {
+    if (!width || !height || width * height > 120_000_000 || Math.max(width, height) > 16_384) {
+      throw new Error('La imagen es demasiado grande para medirla en el navegador. Revisá el tamaño de la plancha.');
+    }
+  }
+
   async function openPng(blob) {
     const bytes = new Uint8Array(await blob.slice(0, 24).arrayBuffer());
     if (bytes.length !== 24 || !PNG_HEADER.every((byte, index) => bytes[index] === byte)) {
       throw new Error('Elegí la plancha original en PNG con fondo transparente.');
     }
     const header = new DataView(bytes.buffer);
-    const width = header.getUint32(16), height = header.getUint32(20);
-    if (!width || !height || width * height > 120_000_000 || Math.max(width, height) > 16_384) {
-      throw new Error('La imagen es demasiado grande para medirla en el navegador. Revisá el tamaño de la plancha.');
-    }
+    checkSheetPixels(header.getUint32(16),header.getUint32(20));
     return await createImageBitmap(blob, {colorSpaceConversion: 'none'});
   }
 
@@ -200,7 +207,7 @@
     return (Math.round(angle)+6)%6;
   }
   function chromaticRegions(bitmap,size,keep){
-    const {width,height}=bitmap,scale=Math.min(1,840/Math.max(width,height));
+    const {width,height}=sourceDimensions(bitmap),scale=Math.min(1,840/Math.max(width,height));
     const work=canvas(Math.round(width*scale),Math.round(height*scale));
     const context=work.getContext('2d',{willReadFrequently:true});
     context.drawImage(bitmap,0,0,work.width,work.height);
@@ -236,13 +243,14 @@
     }
   }
   function partitionSheet(grid,step,bitmap,size) {
-    const pxPerCm=(bitmap.width/size.width+bitmap.height/size.height)/2;
+    const {width,height}=sourceDimensions(bitmap);
+    const pxPerCm=(width/size.width+height/size.height)/2;
     const minSide=Math.max(4,Math.ceil(.42*pxPerCm/step));
     const gap=Math.max(1,Math.round(.09*pxPerCm/step));
     const bounds={left:0,top:0,right:grid.cols,bottom:grid.rows};
     const candidates=[],leaves=[],seen=new Set();
     function keep(rect){
-      if(!rect||coversSheet(rect,bitmap.width,bitmap.height))return false;
+      if(!rect||coversSheet(rect,width,height))return false;
       if(Math.min(rect.right-rect.left,rect.bottom-rect.top)<.19*pxPerCm||
         boxArea(rect)<.12*pxPerCm*pxPerCm||candidates.length>=MAX_CANDIDATES)return false;
       const key=[rect.left,rect.top,rect.right,rect.bottom].join(',');
@@ -289,7 +297,9 @@
     return {boxes:leaves.sort(ordered),candidates:candidates.sort(ordered)};
   }
   async function detect(bitmap,size,progress=()=>{},signal) {
-    const {width,height}=bitmap, step=Math.ceil(Math.max(width,height)/1400);
+    const {width,height}=sourceDimensions(bitmap);
+    checkSheetPixels(width,height);
+    const step=Math.ceil(Math.max(width,height)/1400);
     const cols=Math.ceil(width/step),rows=Math.ceil(height/step),length=cols*rows;
     const grid={cols,rows,left:new Uint32Array(length),top:new Uint32Array(length),right:new Uint32Array(length),bottom:new Uint32Array(length)};
     grid.left.fill(width);grid.top.fill(height);
@@ -450,22 +460,26 @@
     isolated.width=0;
     return signatureWithoutBackground;
   }
-  async function assetSignature(blob) {
-    const bitmap=await createImageBitmap(blob,{colorSpaceConversion:'none'});
+  function imageSignature(image) {
+    const {width,height}=sourceDimensions(image),full={left:0,top:0,right:width,bottom:height};
+    if(!width||!height)return null;
+    const work=canvas(1,1);
     try {
-      const {width,height}=bitmap,full={left:0,top:0,right:width,bottom:height};
-      const work=canvas(1,1);
-      drawRegion(work,bitmap,full,0,512);
+      drawRegion(work,image,full,0,512);
       const bounds=inkBounds(work,{left:0,top:0,right:work.width,bottom:work.height});
       const rect=bounds&&{
         left:Math.floor(bounds.left*width/work.width),top:Math.floor(bounds.top*height/work.height),
         right:Math.ceil(bounds.right*width/work.width),bottom:Math.ceil(bounds.bottom*height/work.height)
       };
-      const original=rect&&signature(bitmap,rect);
+      const original=rect&&signature(image,rect);
       const alternate=original&&flatBackgroundSignature(work);
-      work.width=0;
       return alternate?{...original,alternate}:original;
-    } finally {bitmap.close();}
+    } finally {work.width=0;}
+  }
+  async function assetSignature(blob) {
+    const bitmap=await createImageBitmap(blob,{colorSpaceConversion:'none'});
+    try{return imageSignature(bitmap);}
+    finally{bitmap.close();}
   }
 
   function signatureDistance(reference,template){
@@ -702,6 +716,6 @@
     }finally{if(!edited)work.width=0;}
   }
 
-  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,assetSignature,match,
+  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,imageSignature,assetSignature,match,
     selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,proposeRegionAtPoint,cropArtworkCanvas,rotateArtworkCanvas,cropArtwork};
 })();

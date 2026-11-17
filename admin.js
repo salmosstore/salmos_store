@@ -486,6 +486,9 @@
       <button type="button" class="btn ${purchased?'btn-primary':'btn-ghost'}" data-product-inventory="purchased" aria-pressed="${purchased}">Materia prima comprada</button>
     </div>`;
   }
+  function productInventoryControls(toolbar){
+    return `<section class="product-inventory-controls" aria-label="Controles de inventario">${productInventoryTabs()}${toolbar}</section>`;
+  }
   function inventoryStockToolbar(search,f,fields,colors,sorts,groupBy,groups,extraFilters='',actions=''){
     const options=(choices,current)=>choices.map(([value,label])=>
       `<option value="${escapeHtml(value)}" ${current===value?'selected':''}>${escapeHtml(label)}</option>`).join('');
@@ -524,8 +527,8 @@
     qsa('[data-purchased-filter]',qs('#adminContent')).forEach(select=>select.value='');
     renderPurchasedMaterialCards();
   }
-  function purchasedStockToolbar(){
-    const rows=state.purchasedMaterials,f=purchasedFilters();
+  function purchasedStockToolbar(loaded=true){
+    const rows=state.purchasedMaterials||[],f=purchasedFilters();
     const choices=values=>uniqOptions(values).sort((a,b)=>a.localeCompare(b,'es',{numeric:true})).map(value=>[value,value]);
     const colors=choices(rows.map(row=>row.color)).map(([value])=>value);
     const fields=[
@@ -535,8 +538,10 @@
       ['audience','Línea',choices(rows.map(row=>row.material_class))],
       ['supplier','Proveedor',choices(rows.flatMap(row=>(row.purchase_refs||[]).map(ref=>ref.supplier)))]
     ].map(([key,label,values])=>[`data-purchased-filter="${key}"`,key,label,values]);
-    for(const [,key,,choices] of fields)if(f[key]&&!choices.some(([value])=>value===f[key]))f[key]='';
-    if(f.color&&!colors.some(color=>photoColor(color)===photoColor(f.color)))f.color='';
+    if(loaded){
+      for(const [,key,,choices] of fields)if(f[key]&&!choices.some(([value])=>value===f[key]))f[key]='';
+      if(f.color&&!colors.some(color=>photoColor(color)===photoColor(f.color)))f.color='';
+    }
     const sorts=[['updated','Última edición'],['product','Nombre A–Z'],['price_asc','Menor costo'],
       ['price_desc','Mayor costo'],['stock_desc','Mayor stock'],['stock_asc','Menor stock']];
     const groups=[['','Sin agrupar'],['category','Tipo de producto'],['fit','Corte'],['audience','Línea'],['color','Color']];
@@ -547,21 +552,22 @@
   }
   async function renderPurchasedProducts(sequence){
     const host=qs('#adminContent');
-    host.innerHTML=productInventoryTabs()+'<div class="notice">Cargando materia prima…</div>';
+    host.innerHTML=productInventoryControls(purchasedStockToolbar(false))+'<div class="notice" data-purchased-loading>Cargando materia prima…</div>';
+    const optional=Promise.allSettled([ensureAdminOptionSettings(),loadMockupAssets(),loadGarmentPhotos()]);
     syncAdminListButtons();
     try{
-      const [data]=await Promise.all([
-        api('/api/admin/materials/purchased',{cache:'no-store'}),
-        ensureAdminOptionSettings(),loadMockupAssets(),loadGarmentPhotos()
-      ]);
+      const data=await api('/api/admin/materials/purchased',{cache:'no-store'});
       if(sequence!==state.productRenderSequence||state.view!=='products')return;
       state.purchasedMaterials=data.items||[];
-      host.innerHTML=productInventoryTabs()+purchasedStockToolbar()+'<div id="purchasedMaterialsGrid" class="unified-products-grid"></div>';
+      host.innerHTML=productInventoryControls(purchasedStockToolbar())+'<div id="purchasedMaterialsGrid" class="unified-products-grid"></div>';
       renderPurchasedMaterialCards();
+      await optional;
+      if(sequence===state.productRenderSequence&&state.view==='products')renderPurchasedMaterialCards();
     }catch(error){
       if(sequence===state.productRenderSequence&&state.view==='products'){
-        host.innerHTML=productInventoryTabs()+'<div class="notice"></div>';
-        qs('.notice',host).textContent='No se pudo cargar la materia prima. '+error.message;
+        const loading=qs('[data-purchased-loading]',host);
+        if(loading)loading.textContent='No se pudo cargar la materia prima. '+error.message;
+        else toast(error.message,'error');
       }
     }
   }
@@ -876,7 +882,7 @@
     </div>`;
     const toolbar=inventoryStockToolbar(`<input class="input" id="adminProductSearch" type="search" aria-label="Buscar producto" placeholder="Buscar producto…" value="${escapeHtml(state.productSearch||'')}">`,
       f,fields,stockUnique('color'),sorts,state.productGroupBy,groups,publication,actions);
-    qs('#adminContent').innerHTML=productInventoryTabs()+toolbar+`
+    qs('#adminContent').innerHTML=productInventoryControls(toolbar)+`
       <section class="settings-card bulk-price-card ${state.productBulkMode?'':'hidden'}" id="bulkPricePanel">
         <div class="admin-section-head"><div><h3 style="margin:0">Ajustes masivos</h3></div><button class="btn btn-ghost" type="button" id="closeBulkPriceBtn">Cerrar</button></div>
         <div class="admin-actions"><button type="button" class="btn btn-ghost" data-bulk-visible-products>Marcar todos</button></div><div class="form-grid">
@@ -956,11 +962,11 @@
       sizes.get(size).push(item);
     }
     const colors=uniqOptions(available.map(row=>row.color)).sort((a,b)=>a.localeCompare(b,'es'));
-    summary.innerHTML=`<div class="product-quick-sizes">
+    summary.innerHTML=`<div class="product-quick-sizes" role="group" aria-label="Filtrar por talle o formato">
       <button type="button" class="stock-count-chip total" data-product-size-filter="" title="Stock físico total · Limpiar filtros"><span>Total</span><strong>${quantity(visible)}</strong></button>
       ${[...sizes].sort(([a],[b])=>stockSizeRank(a)-stockSizeRank(b)||a.localeCompare(b,'es',{numeric:true})).map(([size,rows])=>
         `<button type="button" class="stock-count-chip ${f.size===size?'active':''}" data-product-size-filter="${escapeHtml(size)}" aria-pressed="${f.size===size}"><span>${escapeHtml(size)}</span><strong>${quantity(rows)}</strong></button>`).join('')}
-    </div><div class="product-quick-colors">${colors.map(color=>
+    </div><div class="product-quick-colors" role="group" aria-label="Filtrar por color">${colors.map(color=>
       `<button type="button" class="product-quick-color" data-product-global-color="${escapeHtml(color)}" aria-label="${escapeHtml(color)}" title="${escapeHtml(color)}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(color))}" aria-hidden="true"></span></button>`).join('')}</div>`;
     qsa('[data-product-global-color]',qs('#adminContent')).forEach(button=>{
       const active=button.dataset.productGlobalColor===f.color;
@@ -5133,9 +5139,12 @@
       renderDesignUploadSummary();
     }
   }
-  async function sheetDesignSignatures(catalog,signal,onProgress){
+  async function sheetDesignSignatures(key,catalog,signal,onProgress){
     const detector=window.SalmosSheetDetection,cache=state.sheetSignatures??=new Map();
     const signatures=[];
+    const visibleImages=new Map(qsa('.sheet-design-library [data-add-sheet-design]',sheetRoot(key)).map(button=>[
+      Number(button.dataset.addSheetDesign),qs('img',button)
+    ]));
     for(let i=0;i<catalog.length;i+=4){
       signal.throwIfAborted();
       onProgress(i,catalog.length);
@@ -5143,6 +5152,12 @@
         const version=[asset.id,asset.preview_version,asset.file_name,asset.size_bytes].join(':');
         let signature=cache.get(version);
         if(signature)return {id:Number(asset.id),signature};
+        const image=visibleImages.get(Number(asset.id));
+        if(image?.naturalWidth){
+          try{signature=detector.imageSignature(image);}
+          catch{}
+          if(signature){cache.set(version,signature);return {id:Number(asset.id),signature};}
+        }
         const urls=[...new Set([designThumbnailUrl(asset),apiUrl(`/api/admin/design-assets/${asset.id}/file`)])];
         for(const url of urls){
           try{
@@ -5158,6 +5173,32 @@
       signatures.push(...group.filter(Boolean));
     }
     return signatures;
+  }
+  async function openSheetDetectionImage(key,source,detector,signal){
+    if(key==='upload')return detector.openPng(source);
+    const image=qs('[data-sheet-canvas] img',sheetRoot(key));
+    if(image&&!image.complete)await image.decode().catch(()=>{});
+    signal.throwIfAborted();
+    if(image?.naturalWidth)return image;
+
+    let response;
+    try{
+      const readSignal=typeof AbortSignal.any==='function'?AbortSignal.any([signal,AbortSignal.timeout(15000)]):signal;
+      response=await fetch(apiUrl(`/api/admin/design-assets/${source.id}/file`),{credentials:'include',signal:readSignal,cache:'reload',redirect:'manual'});
+    }catch{
+      signal.throwIfAborted();
+      throw new Error('Se interrumpió la carga del PNG. Tocá Reintentar en la vista de la plancha.');
+    }
+    if(response.type==='opaqueredirect'||response.status===401)throw adminSessionError();
+    if(response.status===404)throw new Error('Falta el PNG original de esta plancha. Volvé a cargar el archivo.');
+    if(!response.ok)throw new Error('No se pudo cargar el PNG. Tocá Reintentar en la vista de la plancha.');
+    let png;
+    try{png=await response.blob();}
+    catch{
+      signal.throwIfAborted();
+      throw new Error('La descarga del PNG se cortó. Tocá Reintentar en la vista de la plancha.');
+    }
+    return detector.openPng(png);
   }
   async function detectSheetDesigns(key){
     const detector=window.SalmosSheetDetection;
@@ -5175,29 +5216,23 @@
     renderSheetPreview(key);
     let bitmap;
     try{
-      let png=source;
-      if(key==='detail'){
-        const response=await fetch(apiUrl(`/api/admin/design-assets/${source.id}/file`),{credentials:'include',signal,redirect:'manual'});
-        if(response.type==='opaqueredirect'||response.status===401)throw adminSessionError();
-        if(!response.ok)throw new Error('No se pudo abrir el PNG original.');
-        png=await response.blob();
-      }
-      bitmap=await detector.openPng(png);
+      bitmap=await openSheetDetectionImage(key,source,detector,signal);
       signal.throwIfAborted();
-      const current=sheetSize(key),standard=detector.formatForAspect(bitmap.width,bitmap.height);
+      const pixels={width:bitmap.naturalWidth||bitmap.width,height:bitmap.naturalHeight||bitmap.height};
+      const current=sheetSize(key),standard=detector.formatForAspect(pixels.width,pixels.height);
       const hasMarks=(state.designSheetDrafts[key]||[]).some(row=>row.previewBoxes?.length);
-      const size=sheetAspectMatches(current,bitmap)?current:!hasMarks&&!state.sheetSizeManual?.[key]?standard:null;
+      const size=sheetAspectMatches(current,pixels)?current:!hasMarks&&!state.sheetSizeManual?.[key]?standard:null;
       if(!size)throw new Error('Revisá el ancho y alto de la plancha antes de detectar.');
       setSheetSizeFromImage(key,size);
       const found=await detector.detect(bitmap,size,percent=>report('Buscando estampas · '+percent+'%'),signal);
       signal.throwIfAborted();
       const saved=(state.designSheetDrafts[key]||[]).flatMap(row=>row.previewBoxes||[]);
-      const already=rect=>saved.some(box=>sheetBoxesDuplicate(box,detectedSheetBox(rect,bitmap)));
+      const already=rect=>saved.some(box=>sheetBoxesDuplicate(box,detectedSheetBox(rect,pixels)));
       const catalog=state.designAssets.filter(asset=>asset.kind==='individual'&&!Number(asset.hidden)&&
         String(asset.mime_type||'').startsWith('image/')&&['salmos','clients'].includes(asset.scope));
       const scope=sheetScope(key)?.value;
       catalog.sort((a,b)=>Number(b.scope===scope)-Number(a.scope===scope));
-      const signatures=found.candidates.length?await sheetDesignSignatures(catalog,signal,(done,total)=>report(`Comparando con la biblioteca · ${done} de ${total}`)):[];
+      const signatures=found.candidates.length?await sheetDesignSignatures(key,catalog,signal,(done,total)=>report(`Comparando con la biblioteca · ${done} de ${total}`)):[];
       const matches=[];
       for(let index=0;signatures.length&&index<found.candidates.length;index++){
         signal.throwIfAborted();
@@ -5208,23 +5243,26 @@
         }
         if(index%24===0)await new Promise(resolve=>requestAnimationFrame(resolve));
       }
-      const chosen=detector.selectMatches(matches,bitmap.width,bitmap.height);
+      const chosen=detector.selectMatches(matches,pixels.width,pixels.height);
       const unmatched=found.boxes.filter(rect=>!already(rect)&&!chosen.some(item=>detector.overlapArea(item.rect,rect)>0));
       const ordered=[...chosen,...unmatched.map(rect=>({rect}))].sort((a,b)=>a.rect.top-b.rect.top||a.rect.left-b.rect.left);
       const canvas=document.createElement('canvas');
       scan.items=ordered.slice(0,160).map(({rect,id,rotation},index)=>{
         detector.drawRegion(canvas,bitmap,rect,0,112);
-        return {id:index+1,label:index+1,box:detectedSheetBox(rect,bitmap),thumb:canvas.toDataURL(),designId:id,suggestedRotation:rotation};
+        return {id:index+1,label:index+1,box:detectedSheetBox(rect,pixels),thumb:canvas.toDataURL(),designId:id,suggestedRotation:rotation};
       });
       canvas.width=0;
       scan.active=scan.items[0]?.id;
       const matchCount=chosen.length;
-      report(matchCount?`${matchCount} ${matchCount===1?'posible coincidencia para revisar':'posibles coincidencias para revisar'}.`:
-        scan.items.length?'Elegí un diseño para las marcas que quieras añadir.': 'No se encontraron estampas separadas. Elegí un diseño y marcá su contorno sobre la plancha.');
+      const unavailable=found.candidates.length?catalog.length-signatures.length:0;
+      const summary=matchCount?`${matchCount} ${matchCount===1?'posible coincidencia para revisar':'posibles coincidencias para revisar'}.`:
+        scan.items.length?`${scan.items.length} ${scan.items.length===1?'recorte para revisar':'recortes para revisar'}.`:
+          'No se encontraron estampas separadas. Elegí un diseño y marcá su contorno sobre la plancha.';
+      report(summary+(unavailable?` ${unavailable} ${unavailable===1?'diseño de la biblioteca sin imagen disponible':'diseños de la biblioteca sin imagen disponible'}.`:''));
     }catch(error){
       if(!signal.aborted)report(error.message);
     }finally{
-      bitmap?.close();
+      bitmap?.close?.();
       scan.working=false;
       if(!signal.aborted){renderSheetDetections(key);renderSheetPreview(key);}
     }
@@ -5334,10 +5372,10 @@
             <input class="hidden" type="file" multiple accept="image/png,image/jpeg,image/webp,image/svg+xml" data-missing-sheet-file aria-label="Subir diseños individuales faltantes">
             <button type="button" class="btn btn-ghost" data-sheet-auto-detect="${key}">Detectar estampas</button>
             <button type="button" class="btn btn-ghost" data-start-sheet-crop="${key}" aria-pressed="false">Marcar y subir</button>
+            <small class="sheet-detection-status" data-sheet-detection-status aria-live="polite"></small>
           </div>
           <div class="sheet-library-content">
             ${sheetGalleryFilterHtml(key)}
-            <small class="sheet-detection-status" data-sheet-detection-status aria-live="polite"></small>
             <div data-sheet-detections></div>
             <div class="sheet-missing-upload">
               <div class="sheet-missing-queue" data-missing-sheet-queue aria-label="Diseños pendientes de subir"></div>

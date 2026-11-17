@@ -331,12 +331,25 @@ body #productionDialog.production-editor-fullscreen [data-production-panel="2"] 
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
+}
+.product-inventory-controls {
+  position: sticky;
+  top: var(--admin-topbar-height, 86px);
+  z-index: 30;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  min-width: 0;
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 body #adminContent .unified-product-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 6px 8px;
+  margin: 0;
   overflow: visible;
 }
 body #adminContent .unified-product-toolbar > #adminProductSearch { flex: 1 1 170px; min-width: 0; }
@@ -348,11 +361,15 @@ body #adminContent .unified-product-toolbar > #adminProductSearch { flex: 1 1 17
   gap: 6px;
   min-width: 0;
   max-width: 100%;
+  margin-left: auto;
 }
 .inventory-toolbar-controls > :is(.product-view-controls,.unified-product-actions) { flex-wrap: wrap; min-width: 0; }
+.inventory-toolbar-controls .unified-product-actions { margin-left: 0; max-width: 100%; }
 body #adminContent .unified-product-toolbar > .product-stock-summary { flex: 1 1 100%; flex-wrap: wrap; }
 @media (max-width: 760px) {
-  .inventory-toolbar-controls { justify-content: flex-start; }
+  .inventory-toolbar-controls { justify-content: flex-start; margin-left: 0; }
+  .product-inventory-tabs { gap: 4px; }
+  .product-inventory-tabs > button { min-height: 34px; padding: 4px 8px; font-size: .78rem; }
 }
 body .unified-product-main .stock-group-image.purchased-material-photo.no-photo {
   display: grid !important;
@@ -547,6 +564,7 @@ body #productionDialog .production-material-filters {
 .sheet-library-heading { margin: 6px 0 3px; }
 .sheet-library-heading .icon-btn { width: 34px; min-height: 32px; }
 .sheet-scan-heading > strong { margin-right: auto; }
+.sheet-detection-status { flex: 1 0 100%; color: var(--muted); overflow-wrap: anywhere; }
 .sheet-detection-status:empty { display: none; }
 .sheet-scan-results { display: grid; gap: 4px; }
 .sheet-scan-list { display: grid; gap: 3px; }
