@@ -1076,13 +1076,24 @@
       'Así queda el diseño terminado ✨ ¿Lo usarías en blanco o en negro? Escribinos y armamos el tuyo.',
       'Una palabra que inspira. Una prenda para llevarla con vos. Conocé los diseños de SALMOS: creer, amar, crear.',
       'Este es '+(project.title||'nuestro nuevo diseño')+' ♡ Mirá el frente y la espalda. ¿Qué detalle te gustó más?',
-      '¿Tenés una idea para tu remera, taza o gorra? Contanos qué imaginaste y consultanos por la personalización.'
+      '¿Tenés una idea para tu remera, taza o gorra? Contanos qué imaginaste y consultanos por la personalización.',
+      '¿Buscás un regalo con un mensaje especial? Decinos para quién es y te mostramos diseños SALMOS para esa persona.',
+      '¿Clásica u oversize? Si te cuesta elegir, mandanos por mensaje las medidas de una remera que ya te queda bien y te guiamos.',
+      'De la plancha al perchero. Mirá cómo queda la estampa de cerca y escribinos para consultar colores y talles.',
+      'Si esta frase te recordó a alguien, compartile el reel. Seguí a SALMOS para ver las próximas estampas y elegir cuál sacamos primero.',
+      '¿Comprás para tu grupo, feria o emprendimiento? Mandanos cuántas prendas necesitás y te pasamos las opciones por mayor.',
+      'Elegí un diseño para vos y otro para regalar. En el catálogo podés guardar tus favoritos y consultarnos por WhatsApp.'
     ],
     'Historias':[
       '1. Mostrá la prenda lisa: «De una idea…»\n2. Revelá la estampa: «…a algo que habla de vos».\n3. Producto final: «Consultanos por el tuyo ♡».',
       '1. Primer plano de la estampa: «¿Adivinás qué diseño es?»\n2. Mostrá el producto completo.\n3. «¿Frente pequeño o espalda protagonista?»',
       '1. Dos colores del mismo producto.\n2. «Hoy elegís vos».\n3. Publicá una encuesta y después compartí el favorito.',
-      '1. Mostrá una taza, una gorra y una remera.\n2. «Un mismo mensaje, distintas formas de llevarlo».\n3. «¿Cuál regalarías?»'
+      '1. Mostrá una taza, una gorra y una remera.\n2. «Un mismo mensaje, distintas formas de llevarlo».\n3. «¿Cuál regalarías?»',
+      '1. Mostrá la prenda puesta y en percha.\n2. Compará clásica y oversize de frente.\n3. Agregá el enlace a la guía de talles o invitá a consultar por WhatsApp.',
+      '1. Mostrá un pedido en preparación sin datos del cliente.\n2. Acercá la cámara al detalle de la estampa.\n3. «¿Querés ver el próximo diseño? Seguí a SALMOS».',
+      '1. Mostrá dos estampas que todavía estás preparando.\n2. Abrí una votación.\n3. Al día siguiente, mostrales cuál ganó y dejá el enlace al catálogo.',
+      '1. Mostrá tres ideas de regalo.\n2. Agregá una caja con «¿Para quién estás buscando?».\n3. Respondé con el enlace a la colección indicada.',
+      '1. Mostrá una agenda o un libro por dentro.\n2. Enseñá una actividad o detalle de la tapa.\n3. Usá el sticker de enlace para ir a la ficha del producto.'
     ],
     'Encuestas':[
       '¿Con cuál te quedás?\n🤍 Remera blanca / 🖤 Remera negra',
@@ -1090,7 +1101,13 @@
       '¿Qué corte usás más?\nClásica / Oversize',
       '¿Para quién sería tu próximo regalo?\nPara alguien especial / Para mí ♡',
       '¿Qué producto querés ver después?\nTazas / Gorras',
-      'Caja de preguntas: ¿Qué versículo te gustaría llevar en una remera?'
+      'Caja de preguntas: ¿Qué versículo te gustaría llevar en una remera?',
+      '¿Qué querés que mostremos mañana?\nCómo queda puesta / Cómo la estampamos',
+      'Para regalar, ¿cuál te gustaría recibir?\nUna agenda / Una remera',
+      '¿Qué te ayudaría a elegir?\nVer guía de talles / Ver más fotos',
+      '¿Qué diseño abrimos en la próxima colección?\nEl más discreto / El que ocupa toda la espalda',
+      '¿Cómo te gustaría ver los nuevos diseños?\nReel corto / Detalles en historias',
+      '¿Qué querés ver en Kids?\nRemeras estampadas / Libros para colorear'
     ]};let visual=null;const show=name=>{if(visual){$('#oldReelsPanels').append(visual);visual=null;}body.replaceChildren();for(const b of tabs.children)b.classList.toggle('active',b.textContent===name);if(name==='Ideas visuales'){visual=$('[data-panel=ideas]');visual.hidden=false;body.append(visual);buildStories();return;}for(const text of choices[name]){const card=document.createElement('article');card.className='story-card';const p=document.createElement('p');p.textContent=text;const cp=document.createElement('button');cp.textContent='Copiar';cp.onclick=()=>copyText(text);card.append(p,cp);body.append(card);}};for(const name of Object.keys(choices)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>show(name);tabs.append(b);}dialog.append(close,tabs,body);dialog.onclose=()=>{if(visual)$('#oldReelsPanels').append(visual);dialog.remove();};document.body.append(dialog);show('Ideas visuales');dialog.showModal();}
   function cropOverlay14(){const layer=selectedLayer();if(!layer?.overlay)return notify('Elegí la imagen que agregaste.');pause();const im=asset(layer.src),dialog=document.createElement('dialog');dialog.className='crop-dialog14';const title=document.createElement('h2');title.textContent='Recortar imagen';const c=document.createElement('canvas'),x=c.getContext('2d');const iw=im.naturalWidth||im.width,ih=im.naturalHeight||im.height,k=Math.min(1,680/iw,500/ih,innerWidth*.8/iw,innerHeight*.6/ih);c.width=Math.round(iw*k);c.height=Math.round(ih*k);c.style.width=c.width+'px';c.style.height=c.height+'px';let rect={x:0,y:0,w:c.width,h:c.height},start=null;const paint=()=>{x.clearRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);x.fillStyle='#24112188';x.fillRect(0,0,c.width,c.height);x.save();x.beginPath();x.rect(rect.x,rect.y,rect.w,rect.h);x.clip();x.drawImage(im,0,0,c.width,c.height);x.restore();x.strokeStyle='#ff86bc';x.lineWidth=2;x.strokeRect(rect.x,rect.y,rect.w,rect.h);};const point=e=>{const b=c.getBoundingClientRect();return{x:C.clamp((e.clientX-b.left)*c.width/b.width,0,c.width),y:C.clamp((e.clientY-b.top)*c.height/b.height,0,c.height)};};c.onpointerdown=e=>{start=point(e);c.setPointerCapture(e.pointerId);};c.onpointermove=e=>{if(!start)return;const p=point(e);rect={x:Math.min(start.x,p.x),y:Math.min(start.y,p.y),w:Math.abs(start.x-p.x),h:Math.abs(start.y-p.y)};paint();};c.onpointerup=()=>{start=null;};const reset=document.createElement('button');reset.textContent='Imagen completa';reset.onclick=()=>{rect={x:0,y:0,w:c.width,h:c.height};paint();};const cancel=document.createElement('button');cancel.textContent='Cancelar';cancel.onclick=()=>dialog.close();const ok=document.createElement('button');ok.textContent='Aplicar recorte';ok.className='primary';ok.onclick=async()=>{if(rect.w<4||rect.h<4)return;try{const out=document.createElement('canvas');out.width=Math.round(rect.w/k);out.height=Math.round(rect.h/k);out.getContext('2d').drawImage(im,rect.x/k,rect.y/k,rect.w/k,rect.h/k,0,0,out.width,out.height);const src=out.toDataURL('image/png');await asset(src)._ready;checkpoint();layer.originalSrc14=layer.originalSrc14||layer.src;layer.src=src;delete layer.bounds;delete layer.render;syncForm();changed();dialog.close();}catch(e){notify(e.message,'error');}};const footer=document.createElement('footer');footer.append(reset,cancel,ok);dialog.append(title,c,footer);dialog.onclose=()=>dialog.remove();document.body.append(dialog);paint();dialog.showModal();}
   function installReelsV14(){
