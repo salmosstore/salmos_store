@@ -190,3 +190,12 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 .production-reels .scene-duration .number-stepper{margin:0}
 .production-reels #deleteScene{white-space:normal;line-height:1.1}
 @media(max-width:800px){.production-reels .background-tools20 .scene-duration{grid-column:1/-1}}
+
+.production-reels:not(.reel-home) .top-title #reelSaveState:not(:empty) {
+  display: block;
+  color: var(--production-muted, inherit);
+  font-size: 11px;
+  line-height: 1.2;
+}
+#reelRetryBackup:not([hidden]) { padding: 2px 5px; font-size: 10px; }
+.production-reels.reel-home #reelRetryBackup { display: none; }

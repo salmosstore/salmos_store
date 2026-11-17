@@ -11,15 +11,22 @@
   function current(){return project.scenes[active];}
   function checkpoint(snapshot=project){const copy=structuredClone(snapshot);if(musicTrial)Object.assign(copy.audio,musicTrial);history.push(copy);if(history.length>12)history.shift();future.length=0;syncUndo();}
   function syncUndo(){$('#undo').disabled=!history.length||exporting;$('#redo').disabled=!future.length||exporting;}
+  let reelSaveDirty=false;
+  const reelLocalWrites=new Map();
   function flushReelAutosave(){
-    if(!autosaveTimer)return;
-    clearTimeout(autosaveTimer);autosaveTimer=null;
-    saveRecord().catch(()=>notify('No se pudo guardar el borrador. Revisá el espacio disponible en este navegador.','error'));
+    clearTimeout(autosaveTimer);
+    autosaveTimer=null;
+    return reelSaveDirty?saveRecord():reelLocalWrites.get(String(project?.id))||Promise.resolve();
+  }
+  function backgroundReelSave(){
+    flushReelAutosave().catch(error=>notify(error.message,'error'));
   }
   function changed(reload=false){
-    project.updatedAt=Date.now();
+    project.updatedAt=Math.max(Date.now(),Number(project.updatedAt||0)+1);
+    reelSaveDirty=true;
+    syncReelSaveState();
     clearTimeout(autosaveTimer);
-    autosaveTimer=setTimeout(flushReelAutosave,900);
+    autosaveTimer=setTimeout(backgroundReelSave,250);
     renderUsedItems();
     if(reload)prepareMedia().then(()=>draw()).catch(error=>notify(error.message,'error'));else draw();
     syncTimeline();
@@ -103,12 +110,194 @@
     });
   }
   async function saveRecord(id=project.id){
-    const copy=structuredClone(project),savedAt=Date.now();
+    const source=project,key=String(id);
+    const copy=structuredClone(source),updatedAt=source.updatedAt;
     restoreEffectFields(copy);
-    try{copy.cover=projectCover(copy);}catch{}
     if(musicTrial)Object.assign(copy.audio,musicTrial);
-    await dbAction('projects','readwrite',store=>store.put({...copy,id,originalId:copy.id,savedAt}));
+    try{copy.cover=projectCover(copy);}catch{}
+    source._reelWriter??=C.uid();
+    const snapshot={...copy,id:key,originalId:key,savedAt:Math.max(Date.now(),Number(source.savedAt||0)+1),
+      _reelRevision:C.uid(),_reelWriter:source._reelWriter,_reelBackupBase:reelBaseRevision(source)};
+    if(project===source)reelSaveDirty=false;
+    const earlier=reelLocalWrites.get(key);
+    const write=(async()=>{
+      if(earlier)await earlier.catch(()=>{});
+      await dbAction('projects','readwrite',store=>store.put(snapshot));
+      if(project===source){
+        source.savedAt=snapshot.savedAt;
+        source._reelRevision=snapshot._reelRevision;
+      }
+      queueReelBackup(snapshot);
+      return snapshot;
+    })();
+    reelLocalWrites.set(key,write);
+    syncReelSaveState();
+    try{return await write;}
+    catch{
+      if(project===source&&source.updatedAt===updatedAt)reelSaveDirty=true;
+      throw new Error('El navegador no pudo guardar el reel. Dejalo abierto y volvé a guardar.');
+    }finally{
+      if(reelLocalWrites.get(key)===write)reelLocalWrites.delete(key);
+      syncReelSaveState();
+    }
   }
+  const reelCloudEnabled=parent!==window;
+  const reelBackupQueue=new Map(),reelBackupErrors=new Map(),reelCloudRows=new Map();
+  let reelBackupTimer,reelBackupWork=null,reelCloudError=null;
+  const reelID=record=>String(record.originalId??record.id);
+  const reelDraftPath=(id='',suffix='')=>'/api/admin/reel-drafts'+(id?'/'+encodeURIComponent(id):'')+suffix;
+  function reelBackupReceipt(id){
+    try{return JSON.parse(localStorage.getItem('salmos_reel_receipt_'+id)||'null');}catch{return null;}
+  }
+  function reelBaseRevision(record,receipt=reelBackupReceipt(reelID(record))){
+    const current=reelCloudRows.get(reelID(record));
+    if(current?.revision&&current.revision===record._reelRevision)return current.revision;
+    if(receipt&&(receipt.revision===record._reelRevision||
+      !record._reelRevision&&receipt.savedAt===record.savedAt||
+      receipt.writer&&receipt.writer===record._reelWriter))return receipt.revision;
+    return record._reelBackupBase||'';
+  }
+  function setReelBackupReceipt(item,writer){
+    const previous=reelBackupReceipt(String(item.id));
+    reelCloudRows.set(String(item.id),item);
+    const snapshot={revision:item.revision,savedAt:item.savedAt,writer:writer||(previous?.revision===item.revision?previous.writer:'')};
+    try{localStorage.setItem('salmos_reel_receipt_'+item.id,JSON.stringify(snapshot));}catch{}
+  }
+  function syncReelSaveState(){
+    const status=$('#reelSaveState'),retry=$('#reelRetryBackup');if(!status||!project)return;
+    const id=String(project.id),error=reelBackupErrors.get(id),queued=reelBackupQueue.has(id),working=reelBackupWork?.id===id,m= reelCloudRows.get(id)||reelBackupReceipt(id);
+    status.textContent=reelSaveDirty?'Cambios por guardar':reelLocalWrites.has(id)?'Guardando reel…':
+      error?.status===409?'Hay dos versiones de este reel':error||queued&&!navigator.onLine?'Guardado acá · copia pendiente':
+      working||queued?'Guardado acá · respaldando…':m?.revision===project._reelRevision&&m?.revision?'Respaldo en SALMOS al día':
+      project.savedAt?'Guardado en este navegador':'';
+    if(retry)retry.hidden=!reelCloudEnabled||!error||error.status===409;
+  }
+  async function reelCloudRequest(path,{method='GET',body,timeout=35000,raw=false}={}){
+    const target=new URL(path,parent.SALMOS_CONFIG?.API_BASE_URL||location.origin);
+    const headers=body instanceof Blob?{'Content-Type':'application/octet-stream'}:body?{'Content-Type':'application/json'}:{};
+    const response=await fetch(target,{method,headers,body:body instanceof Blob?body:body?JSON.stringify(body):undefined,
+      credentials:'include',cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(timeout)});
+    if(response.type==='opaqueredirect'||response.status===401||response.status===403)throw new Error('Volvé a iniciar sesión en SALMOS para respaldar el reel.');
+    if(!response.ok){
+      const data=await response.json().catch(()=>null),error=new Error(data?.error||'No se pudo acceder al respaldo del reel.');
+      error.status=response.status;throw error;
+    }
+    return raw?response:response.status===204?null:await response.json();
+  }
+  function queueReelBackup(record){
+    const id=reelID(record);
+    if(!reelCloudEnabled||!/^[A-Za-z0-9_-]{1,128}$/.test(id))return;
+    const receipt=reelBackupReceipt(id);
+    if(record._reelRevision&&(reelCloudRows.get(id)?.revision===record._reelRevision||receipt?.revision===record._reelRevision))return;
+    const pending=reelBackupQueue.get(id);
+    if(pending&&pending.savedAt>=record.savedAt)return;
+    const next={...record,id,originalId:id,_reelRevision:record._reelRevision||C.uid()};
+    reelBackupQueue.set(id,next);
+    if(reelBackupErrors.get(id)?.status!==409)reelBackupErrors.delete(id);
+    clearTimeout(reelBackupTimer);reelBackupTimer=setTimeout(flushReelBackups,1500);
+    syncReelSaveState();
+  }
+  async function uploadReelBackup(record){
+    const id=reelID(record),current=reelCloudRows.get(id);
+    const revision=record._reelRevision,baseRevision=reelBaseRevision(record);
+    if(current?.revision===revision)return current;
+    if(current&&current.revision!==baseRevision){
+      const error=new Error('Hay dos versiones de este reel. Podés abrir ambas desde Proyectos.');
+      error.status=409;throw error;
+    }
+    const json=new Blob([JSON.stringify(record)],{type:'application/json'});
+    const gz=typeof CompressionStream==='function';
+    const file=gz?await new Response(json.stream().pipeThrough(new CompressionStream('gzip'))).blob():json;
+    const path=reelDraftPath(id,'/backup');
+    const start=await reelCloudRequest(path,{method:'POST',body:{revision,baseRevision,encoding:gz?'gzip':'json',size:file.size,
+      title:record.title,sceneCount:record.scenes.length,duration:C.totalDuration(record.scenes),savedAt:record.savedAt}});
+    if(start.item)return start.item;
+    const parts=[];
+    if(!start.readyToComplete){
+      if(!(start.partSize>0))throw new Error('El servidor todavía no confirmó el respaldo.');
+      for(let offset=0;offset<file.size;offset+=start.partSize){
+        const part=await reelCloudRequest(path+'/'+revision+'/'+(parts.length+1),{method:'PUT',body:file.slice(offset,offset+start.partSize),timeout:120000});
+        parts.push(part);
+      }
+    }
+    const result=await reelCloudRequest(path+'/'+revision,{method:'POST',body:{parts},timeout:120000});
+    if(result.item?.revision!==revision)throw new Error('El servidor todavía no confirmó el respaldo.');
+    return result.item;
+  }
+  function flushReelBackups(){
+    if(!reelCloudEnabled||!navigator.onLine||reelBackupWork)return;
+    const next=[...reelBackupQueue].find(([id])=>!reelBackupErrors.has(id));
+    if(!next)return;
+    const [id,snapshot]=next;
+    const promise=uploadReelBackup(snapshot).then(item=>{
+      setReelBackupReceipt(item,snapshot._reelWriter);
+      if(project?.id===id&&project._reelWriter===snapshot._reelWriter){
+        project._reelBackupBase=item.revision;
+        if(project.savedAt===snapshot.savedAt)project._reelRevision=item.revision;
+      }
+      const pending=reelBackupQueue.get(id);
+      if(pending!==snapshot&&pending?._reelWriter&&pending._reelWriter===snapshot._reelWriter)pending._reelBackupBase=item.revision;
+      if(reelBackupQueue.get(id)===snapshot)reelBackupQueue.delete(id);
+      for(const status of $$('#savedProjects [data-reel-saved-at]')){
+        if(status.dataset.reelId===id&&Number(status.dataset.reelSavedAt)===snapshot.savedAt)status.textContent='En SALMOS';
+      }
+    }).catch(error=>reelBackupErrors.set(id,error)).finally(()=>{
+      reelBackupWork=null;
+      syncReelSaveState();
+      flushReelBackups();
+    });
+    reelBackupWork={id,promise};
+    syncReelSaveState();
+  }
+  function retryReelBackups(){
+    for(const [id,error] of reelBackupErrors)if(error.status!==409)reelBackupErrors.delete(id);
+    flushReelBackups();
+  }
+  async function loadReelCloudEntries(){
+    if(!reelCloudEnabled)return null;
+    try{
+      const data=await reelCloudRequest(reelDraftPath(),{timeout:6500});
+      const entries=Array.isArray(data.items)?data.items:[];
+      reelCloudRows.clear();
+      for(const item of entries)reelCloudRows.set(String(item.id),item);
+      reelCloudError=null;
+      return entries;
+    }catch(error){reelCloudError=error;return null;}
+  }
+  async function downloadReelSnapshot(item,revision=item.revision){
+    const path=reelDraftPath(item.id,'/backup/'+revision),response=await reelCloudRequest(path,{raw:true,timeout:120000});
+    const raw=response.headers.get('Content-Type')==='application/gzip'?await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json():await response.json();
+    const record=reelRecord(raw);
+    if(!record||reelID(record)!==String(item.id))throw new Error('Este respaldo no tiene las escenas del reel.');
+    return {...record,id:String(item.id),originalId:String(item.id),_reelRevision:revision,_reelBackupBase:revision};
+  }
+  async function copyReelSnapshot(source,suffix){
+    const id=C.uid(),copy={...structuredClone(source),id,originalId:id,title:(source.title||'Reel')+suffix,savedAt:Date.now(),
+      _reelRevision:C.uid(),_reelBackupBase:'',_reelWriter:C.uid()};
+    await dbAction('projects','readwrite',store=>store.put(copy));
+    queueReelBackup(copy);
+    return copy;
+  }
+  async function restoreCloudReel(item){
+    let record;
+    try{record=await downloadReelSnapshot(item);}
+    catch(error){
+      if(!item.previousRevision||error.status&&error.status!==404)throw error;
+      const previous=await downloadReelSnapshot(item,item.previousRevision);
+      const recovered=await copyReelSnapshot(previous,' · recuperado');
+      notify('Se abrió la versión anterior como una copia.');
+      return recovered;
+    }
+    const local=await dbAction('projects','readonly',store=>store.get(item.id)).catch(()=>null),receipt=reelBackupReceipt(item.id);
+    if(local&&local._reelRevision!==item.revision&&local.savedAt>(receipt?.savedAt||0)){
+      await copyReelSnapshot(local,' · copia de este navegador');
+    }
+    reelBackupQueue.delete(item.id);reelBackupErrors.delete(item.id);
+    setReelBackupReceipt(item);
+    await dbAction('projects','readwrite',store=>store.put(record)).catch(()=>{});
+    return record;
+  }
+  window.addEventListener('online',retryReelBackups);
   function reelRecord(raw,fallbackId){
     const data=raw?.project||raw?.draft||raw;
     if(!Array.isArray(data?.scenes))return null;
@@ -133,56 +322,93 @@
     return [...latest.values()].sort((a,b)=>b.savedAt-a.savedAt);
   }
   async function loadSaved(){
-    const host=$('#savedProjects');
-    let all;
-    try{all=await dbAction('projects','readonly',store=>store.getAll());}
-    catch(error){
-      if(!host.querySelector('.saved-card'))host.textContent='No se pudieron leer los proyectos de este navegador. Usá Buscar borradores o Abrir respaldo.';
-      throw error;
-    }
-    let entries=latestReelRecords(all);
-    if(!entries.length&&!checkedBrowserDrafts){
+    const host=$('#savedProjects'),cloudPromise=loadReelCloudEntries();
+    let all=[],localError=null;
+    try{all=await dbAction('projects','readonly',store=>store.getAll());}catch(error){localError=error;}
+    let local=latestReelRecords(all);
+    if(!local.length&&!localError&&!checkedBrowserDrafts){
       checkedBrowserDrafts=true;
       try{
         const count=await restoreMissingReels(await readBrowserReelDrafts());
-        if(count)entries=latestReelRecords(await dbAction('projects','readonly',store=>store.getAll()));
+        if(count)local=latestReelRecords(await dbAction('projects','readonly',store=>store.getAll()));
       }catch(error){setReelRecoveryStatus(error.message);}
     }
+    const remote=await cloudPromise,entries=[],cloudById=new Map((remote||[]).map(item=>[String(item.id),item]));
+    for(const record of local){
+      const id=reelID(record),cloud=cloudById.get(id),receipt=reelBackupReceipt(id);
+      const synced=cloud&&(record._reelRevision===cloud.revision||!record._reelRevision&&cloud.savedAt===record.savedAt);
+      const conflict=cloud&&!synced&&cloud.revision!==reelBaseRevision(record,receipt);
+      if(synced){
+        setReelBackupReceipt(cloud,record._reelWriter);cloudById.delete(id);
+      }else if(conflict&&receipt?.savedAt===record.savedAt)continue;
+      else if(!conflict&&remote){
+        cloudById.delete(id);
+        queueReelBackup(record);
+      }
+      entries.push({...record,inCloud:Boolean(synced),localConflict:Boolean(conflict)});
+    }
+    for(const item of cloudById.values())entries.push({...item,originalId:item.id,cloudOnly:true,inCloud:true});
+    entries.sort((a,b)=>b.savedAt-a.savedAt);
     const cards=document.createDocumentFragment();
     for(const p of entries){
       const row=document.createElement('article');row.className='saved-card';
       const cover=new Image();cover.className='project-cover';cover.alt=p.title;
-      const first=p.scenes[0],source=p.cover||first.thumbnail||first.final||first.base;
-      if(source)cover.src=source;
+      const first=p.scenes?.[0],source=p.cover||first?.thumbnail||first?.final||first?.base;
+      if(source)cover.src=source;else{cover.hidden=true;}
       const title=document.createElement('strong');title.textContent=p.title;
-      const small=document.createElement('small');
-      const count=p.scenes.length;
-      small.textContent=(p.status==='draft'?'Borrador · ':'')+count+(count===1?' escena · ':' escenas · ')+C.formatTime(C.totalDuration(p.scenes));
+      const small=document.createElement('small'),count=p.scenes?.length??p.sceneCount;
+      const duration=p.cloudOnly?p.duration:C.totalDuration(p.scenes);
+      small.textContent=(p.status==='draft'?'Borrador · ':'')+count+(count===1?' escena · ':' escenas · ')+C.formatTime(duration)+' · ';
+      const location=document.createElement('span');
+      location.dataset.reelId=reelID(p);
+      location.dataset.reelSavedAt=String(p.savedAt);
+      location.textContent=p.inCloud?'En SALMOS':p.localConflict?'Edición de este navegador':'En este navegador';
+      small.append(location);
       const actions=document.createElement('div');actions.className='project-actions';
       const open=document.createElement('button');open.textContent='Editar';
       open.onclick=()=>openSavedProject(p).catch(error=>notify(error.message,'error'));cover.onclick=open.onclick;
       const down=document.createElement('button');down.textContent='↓ Video';down.title='Descargar video';down.onclick=()=>projectVideoAction(p,false);
       const share=document.createElement('button');share.textContent='Compartir';share.onclick=()=>projectVideoAction(p,true);
       const backup=document.createElement('button');backup.textContent='Respaldo';
-      backup.onclick=()=>{
-        const name=String(p.title).replace(/[^\p{L}\p{N}_-]+/gu,'-').slice(0,75)||'SALMOS-reel';
-        download(new Blob([JSON.stringify(p)],{type:'application/json'}),name+'.json');
+      backup.onclick=async()=>{
+        try{
+          const record=p.cloudOnly?await downloadReelSnapshot(p):p;
+          const name=String(p.title).replace(/[^\p{L}\p{N}_-]+/gu,'-').slice(0,75)||'SALMOS-reel';
+          download(new Blob([JSON.stringify(record)],{type:'application/json'}),name+'.json');
+        }catch(error){notify(error.message,'error');}
       };
       const copy=document.createElement('button');copy.textContent='Duplicar';copy.onclick=()=>duplicateProject13(p);
       const del=document.createElement('button');del.textContent='×';del.title='Eliminar proyecto';
       del.onclick=async()=>{
         if(!confirm('¿Eliminar este proyecto guardado?'))return;
-        await dbAction('projects','readwrite',store=>{
-          const get=store.getAll();
-          get.onsuccess=()=>{for(const item of get.result)if(reelRecord(item)?.originalId===p.originalId)store.delete(item.id);};
-        });
-        await dbAction('exports','readwrite',store=>store.delete(p.originalId));
-        await loadSaved();
+        del.disabled=true;
+        try{
+          const id=reelID(p);
+          reelBackupQueue.delete(id);
+          if(reelBackupWork?.id===id)await reelBackupWork.promise;
+          if(reelCloudEnabled&&!p.localConflict){
+            const remote=reelCloudRows.get(id);
+            const revision=p.cloudOnly?p.revision:remote?.revision||reelBackupReceipt(id)?.revision||'';
+            await reelCloudRequest(reelDraftPath(id)+'?revision='+encodeURIComponent(revision),{method:'DELETE'});
+            reelCloudRows.delete(id);
+          }
+          reelBackupErrors.delete(id);
+          await dbAction('projects','readwrite',store=>{
+            const get=store.getAll();
+            get.onsuccess=()=>{for(const item of get.result)if(String(reelRecord(item)?.originalId)===id&&
+              (!p.cloudOnly||item.savedAt<=p.savedAt||item._reelRevision===p.revision))store.delete(item.id);};
+          });
+          await dbAction('exports','readwrite',store=>store.delete(id));
+          await loadSaved();
+        }catch(error){notify(error.message,'error');}
+        finally{del.disabled=false;}
       };
       actions.append(open,down,share,backup,copy,del);row.append(cover,title,small,actions);cards.append(row);
     }
     host.replaceChildren(cards);
-    if(!entries.length)host.textContent='En este perfil de Chrome no aparecen proyectos guardados de SALMOS. Podés buscar borradores o abrir un respaldo.';
+    if(!entries.length)host.textContent=localError||reelCloudError?
+      'No se pudieron leer todas las copias. Volvé a abrir Proyectos cuando tengas conexión.' : 'Todavía no hay reels guardados. Podés buscar borradores o abrir un respaldo.';
+    if(reelCloudEnabled&&reelCloudError)setReelRecoveryStatus('Los respaldos de SALMOS están pendientes de cargar.');
     return entries.length;
   }
 
@@ -441,8 +667,9 @@
   async function homeView(){
     cancelEffectTrial();closeWanPreview();pause();
     if(editorActive13){
-      editorActive13=false;clearTimeout(autosaveTimer);autosaveTimer=null;
-      try{await cancelMusicTrial();await saveRecord();}catch(error){notify(error.message,'error');}
+      try{await cancelMusicTrial();await flushReelAutosave();}catch(error){notify(error.message,'error');return;}
+      editorActive13=false;
+      flushReelBackups();
     }
     $('#studioHome').hidden=false;$('.workspace').hidden=true;document.body.classList.add('reel-home');
     await loadSaved().catch(error=>notify(error.message,'error'));
@@ -489,14 +716,18 @@
   const giphyRuntime=new Map();
   function projectCover(source=project){const out=document.createElement('canvas');out.width=360;out.height=450;const c=out.getContext('2d'),first=source.scenes[0],geometry=componentGeometry,last=lastGeometry;if(!first)return '';const h=dimensions(360).h,tmp=document.createElement('canvas');tmp.width=360;tmp.height=h;paintScene(tmp.getContext('2d'),first,.75,360,h,false);c.fillStyle='#301a29';c.fillRect(0,0,360,450);const k=Math.min(360/tmp.width,450/tmp.height);c.drawImage(tmp,(360-tmp.width*k)/2,(450-tmp.height*k)/2,tmp.width*k,tmp.height*k);const result=out.toDataURL('image/jpeg',.86);componentGeometry=geometry;lastGeometry=last;return result;}
   async function openSavedProject(record){
-    const saved=reelRecord(record);
+    pause();
+    await flushReelAutosave();
+    const saved=reelRecord(record.cloudOnly?await restoreCloudReel(record):record);
     if(!saved)throw new Error('Este proyecto no tiene escenas para abrir.');
-    pause();flushReelAutosave();
+    reelSaveDirty=false;
     selectedMusic10=null;auditionTrack=null;musicTrial=null;selectCurrentSceneScope();selectedSceneIds.clear();
     selectedComponent=null;editingStamp=false;blankPreview=false;history.length=0;future.length=0;
     const defaults=newProject();
-    project=structuredClone({...defaults,...saved,id:saved.originalId??saved.id??defaults.id,
-      audio:{...defaults.audio,...saved.audio}});
+    project=structuredClone({...defaults,...saved,id:String(saved.originalId??saved.id??defaults.id),
+      _reelBackupBase:reelBaseRevision(saved),_reelWriter:C.uid(),audio:{...defaults.audio,...saved.audio}});
+    delete project.inCloud;
+    delete project.localConflict;
     for(const scene of project.scenes){
       scene.id??=C.uid();
       scene.template||='clean';
@@ -504,7 +735,7 @@
     }
     normalizeProject();active=0;time=0;
     await prepareMedia().catch(error=>notify(error.message,'error'));
-    syncForm();editorView();
+    syncForm();editorView();syncReelSaveState();
   }
   async function projectVideoAction(p,sharing){try{const stored=await dbAction('exports','readonly',s=>s.get(p.originalId||p.id));if(stored&&stored.updatedAt>=(p.updatedAt||0)){if(sharing)shareVideoDialog(stored.blob,stored.name,p.title,p.audio?.musicCredit);else download(stored.blob,stored.name);return;}await openSavedProject(p);shareAfterExport=sharing;$('#exportDialog').showModal();}catch(e){notify(e.message,'error');}}
   function shareVideoDialog(blob,name,titleText=project.title,musicCredit=project.audio.musicCredit){const d=document.createElement('dialog');d.className='share-video-dialog';const title=document.createElement('h2');title.textContent='Compartir video';const file=new File([blob],name,{type:blob.type}),share=document.createElement('button');share.textContent='Compartir en redes';share.onclick=async()=>{try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:titleText,text:projectShareText13(titleText,musicCredit)});else{notify('Este navegador no permite compartir archivos directamente. Podés usar Descargar video.');return;}d.close();}catch(e){if(e.name==='AbortError')d.close();else notify(e.message,'error');}};const down=document.createElement('button');down.textContent='Descargar video';down.onclick=()=>download(blob,name);const text=document.createElement('button');text.textContent='Copiar texto';text.onclick=()=>copyText(projectShareText13(titleText,musicCredit));const close=document.createElement('button');close.textContent='Cancelar';close.onclick=()=>d.close();d.append(title,share,down,text,close);d.onclose=()=>d.remove();document.body.append(d);d.showModal();}
@@ -726,7 +957,14 @@
   function jsonStore13(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}}
   function creditText13(credit){return credit?`${credit.title} — ${credit.creator||'Autor indicado en la fuente'} · ${credit.license.toUpperCase()} ${credit.version||''}\n${credit.source}\n${credit.licenseUrl}`:'';}
   function projectShareText13(title,credit=project.audio.musicCredit){return title+(credit?'\n\nMúsica: '+creditText13(credit):'');}
-  async function duplicateProject13(source){try{const copy=structuredClone(source),id=C.uid();copy.id=copy.originalId=id;copy.title=(source.title||'Reel')+' · copia';copy.savedAt=Date.now();await dbAction('projects','readwrite',s=>s.put(copy));await openSavedProject(copy);notify('Copia creada. El proyecto original se conserva.');}catch(e){notify(e.message,'error');}}
+  async function duplicateProject13(source){
+    try{
+      const snapshot=source.cloudOnly?await downloadReelSnapshot(source):source;
+      const copy=await copyReelSnapshot(snapshot,' · copia');
+      await openSavedProject(copy);
+      notify('Reel duplicado.');
+    }catch(error){notify(error.message,'error');}
+  }
   const channelGifs14=[{"id": "vybukiMzTZu4Fi2TXe", "title": "Textura clara dorada", "username": "salmosstore7", "url": "https://giphy.com/gifs/vybukiMzTZu4Fi2TXe", "images": {"original": {"url": "https://media2.giphy.com/media/vybukiMzTZu4Fi2TXe/giphy.gif", "mp4": "https://media2.giphy.com/media/vybukiMzTZu4Fi2TXe/giphy.mp4"}}}, {"id": "Do9U7jEHFM1enrj2xO", "title": "Mármol negro y oro", "username": "salmosstore7", "url": "https://giphy.com/gifs/Do9U7jEHFM1enrj2xO", "images": {"original": {"url": "https://media2.giphy.com/media/Do9U7jEHFM1enrj2xO/giphy.gif", "mp4": "https://media2.giphy.com/media/Do9U7jEHFM1enrj2xO/giphy.mp4"}}}, {"id": "KRueaGQ0tuaBzf3jQO", "title": "Textura marrón", "username": "salmosstore7", "url": "https://giphy.com/gifs/KRueaGQ0tuaBzf3jQO", "images": {"original": {"url": "https://media2.giphy.com/media/KRueaGQ0tuaBzf3jQO/giphy.gif", "mp4": "https://media2.giphy.com/media/KRueaGQ0tuaBzf3jQO/giphy.mp4"}}}, {"id": "GRiA8ZPrnbiWJPwMWE", "title": "Mármol blanco y oro", "username": "salmosstore7", "url": "https://giphy.com/gifs/GRiA8ZPrnbiWJPwMWE", "images": {"original": {"url": "https://media0.giphy.com/media/GRiA8ZPrnbiWJPwMWE/giphy.gif", "mp4": "https://media0.giphy.com/media/GRiA8ZPrnbiWJPwMWE/giphy.mp4"}}}];
   function ownGifs13(){return [...new Map([...jsonStore13('salmos-own-gifs',[]),...channelGifs14].map(g=>[g.id,g])).values()];}
   function rememberGif13(gif){if(!gif?.id)return;const rows=ownGifs13(),i=rows.findIndex(g=>g.id===gif.id);if(i>=0)rows[i]=gif;else rows.unshift(gif);try{localStorage.setItem('salmos-own-gifs',JSON.stringify(rows.slice(0,100)));}catch{}}
@@ -870,7 +1108,7 @@
     if(project!==previous)return;
     pause();cancelEffectTrial();
     if(fresh){
-      if(editorActive13&&previous.scenes.some(scene=>!scene.demo))await saveRecord(previous.id);
+      if(editorActive13)await flushReelAutosave();
       if(project!==previous)return;
       clearTimeout(autosaveTimer);autosaveTimer=null;
       await cancelMusicTrial();
@@ -958,7 +1196,7 @@
       setBusy(true);
       try{
         if(fresh){
-          if(project.scenes.some(scene=>!scene.demo))await saveRecord().catch(()=>{});
+          await flushReelAutosave();
           project=newProject();
           selectCurrentSceneScope();selectedSceneIds.clear();selectedMusic10=null;auditionTrack=null;
           project.scenes=[];
@@ -1059,7 +1297,7 @@
         await openSavedProject(copy);
         notify('Respaldo abierto y guardado como proyecto.');
       }catch(error){notify(error.message,'error');}
-    };$('#newProject').onclick=async()=>{await saveRecord().catch(()=>{});checkpoint();pause();project=newProject();active=0;time=0;syncForm();changed(true);setTab('editor');};
+    };$('#newProject').onclick=async()=>{try{await flushReelAutosave();}catch(error){notify(error.message,'error');return;}checkpoint();pause();project=newProject();active=0;time=0;syncForm();changed(true);setTab('editor');};
     C.niches.forEach(n=>$('#niche').add(new Option(n.name,n.id)));$('#niche').add(new Option('Mi propio público','custom'));$('#ideaFormat').add(new Option('Varios enfoques','all'));C.formats.forEach(f=>$('#ideaFormat').add(new Option(f.name,f.id)));$('#generateIdeas').onclick=generateIdeas;$('#nextIdeas').onclick=()=>{ideaOffset=(ideaOffset+4)%C.formats.length;$('#ideaFormat').value='all';generateIdeas();};$('#downloadIdeas').onclick=()=>{const rows=[['Público','Enfoque','Producto','Frase','Guion visual','Guion de voz','Texto para publicar']];for(const n of C.niches)for(const f of C.formats){const i=C.idea(n.id,f.id,$('#ideaProduct').value);rows.push([i.niche,i.format,$('#ideaProduct').value,i.headline,i.story,i.narration,i.caption]);}csv(rows,'SALMOS-240-ideas.csv');};
     $('#record').onclick=toggleRecord;$('#connectLocal').onclick=connectLocal;$('#tts').onclick=()=>generateTts(false);$('#aiMotion').onchange=updatePrompt;$('#copyPrompt').onclick=()=>copyText($('#aiPrompt').value);$('#export').onclick=async()=>{cancelEffectTrial();shareAfterExport=false;await cancelMusicTrial();$('#exportDialog').showModal();};$('#startExport').onclick=doExport;$('#cancelExport').onclick=()=>cancelled=true;$('#postDate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires'}).format(new Date());$('#savePost').onclick=async()=>{try{if(!$('#postDate').value)throw new Error('Elegí una fecha.');await dbAction('posts','readwrite',s=>s.put({id:C.uid(),title:project.title,date:$('#postDate').value,channel:$('#postChannel').value,url:$('#postUrl').value,inquiries:Math.max(0,Number($('#postInquiries').value)||0),notes:$('#postNotes').value}));await loadLog();notify('Publicación anotada.');}catch(e){notify(e.message,'error');}};$('#downloadLog').onclick=async()=>{const all=await loadLog();csv([['Fecha','Proyecto','Canal','Enlace','Consultas','Notas'],...all.map(p=>[p.date,p.title,p.channel,p.url,p.inquiries,p.notes])],'SALMOS-registro-publicaciones.csv');};
     $('#importProduction').onclick=async()=>{try{await importPayload(await requestParent('composition'));}catch(e){notify(e.message,'error');}};
@@ -1216,7 +1454,8 @@
     pause();clearTimeout(autosaveTimer);autosaveTimer=null;
     cancelEffectTrial();await cancelMusicTrial();project.status='draft';
     await saveRecord();
-    notify('Borrador guardado en Chrome.');
+    flushReelBackups();
+    notify('Borrador guardado en este navegador.');
     if(reelDiskConnected||localReady){
       const snapshot={...structuredClone(project),savedAt:Date.now()};
       try{
@@ -1421,13 +1660,30 @@
     project=newProject();normalizeProject();
     bind();bindExtra();tidyEditor();installProductionLayout();installReelsV14();installReelsV19();installReelsV20();
     installReelsV21();installReelsV24();installReelsV25();
+    const saveState=document.createElement('span');saveState.id='reelSaveState';saveState.setAttribute('role','status');
+    const retry=document.createElement('button');retry.id='reelRetryBackup';retry.type='button';retry.hidden=true;retry.textContent='Reintentar respaldo';retry.onclick=retryReelBackups;
+    $('.top-title').append(saveState,retry);
     await prepareMedia().catch(error=>notify(error.message,'error'));
     syncForm();generateIdeas();updatePrompt();draw();
     document.documentElement.dataset.studioReady='true';$('#studioBoot15')?.remove();
     if(parent!==window)parent.postMessage({type:'salmos-marketing-ready'},location.origin);
   }
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)flushReelAutosave();});
-  window.addEventListener('pagehide',flushReelAutosave);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)backgroundReelSave();else retryReelBackups();});
+  window.addEventListener('pagehide',backgroundReelSave);
+  window.addEventListener('beforeunload',event=>{
+    if(!reelSaveDirty&&!reelLocalWrites.size)return;
+    event.preventDefault();
+    event.returnValue='';
+  });
+  window.addEventListener('message',async event=>{
+    if(event.source!==parent||event.origin!==location.origin||event.data?.type!=='salmos-marketing-save-before-close')return;
+    const answer={type:'salmos-marketing-close-ready',id:event.data.id};
+    try{
+      do{await flushReelAutosave();}while(reelSaveDirty);
+      flushReelBackups();
+    }catch(error){answer.error=error.message;}
+    parent.postMessage(answer,location.origin);
+  });
   window.addEventListener('unhandledrejection',e=>{notify(e.reason?.message||'No se pudo completar esa operación.','error');});
   init().catch(e=>{console.error(e.stack);const b=$('#studioBoot15');if(b){b.querySelector('p').textContent='No se pudo abrir el editor. Tocá Reintentar.';b.querySelector('button').hidden=false;}notify(e.message,'error');});
 })();
