@@ -493,7 +493,8 @@
     const options=(choices,current)=>choices.map(([value,label])=>
       `<option value="${escapeHtml(value)}" ${current===value?'selected':''}>${escapeHtml(label)}</option>`).join('');
     return `<div class="unified-product-toolbar">
-      ${search}
+      <details class="inventory-search"><summary class="icon-btn" title="Buscar" aria-label="Buscar"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></summary><div class="inventory-search-popover">${search}</div></details>
+      <div id="productStockSummary" class="product-stock-summary"></div>
       <div class="inventory-toolbar-controls">
       <details class="product-filter-menu"><summary class="btn btn-ghost">Filtrar</summary>
         <div class="product-filter-fields">${fields.map(([attribute,key,label,choices])=>
@@ -510,7 +511,6 @@
         <label>Agrupar<select class="select" id="productGroupBy">${options(groups,groupBy)}</select></label>
       </div>${actions}
       </div>
-      <div id="productStockSummary" class="product-stock-summary"></div>
     </div>`;
   }
   function purchasedFilters(){
@@ -672,7 +672,7 @@
       const search=productionDesignSearchText([row.name,productionMaterialLabel(row),...refs.flatMap(ref=>[ref.supplier,ref.sheetName])].join(' '));
       return query.every(term=>search.includes(term));
     });
-    return {available,visible:available.filter(row=>(!f.color||photoColor(row.color)===photoColor(f.color))&&(!f.size||normalizeCatalogSize(row.size)===f.size)),query};
+    return {available,visible:available.filter(row=>(!f.color||photoColor(row.color)===photoColor(f.color))&&(!f.size||normalizeCatalogSize(row.size)===f.size)&&(!(f.physicalOnly||f.size)||Number(row.stock_qty)>0)),query};
   }
   function purchasedQuantity(rows){
     let units=0,meters=0,hasUnits=false,hasMeters=false;
@@ -790,7 +790,7 @@
     const plans=groupedPurchasedSheets(visible,f,query);
     const materials=groupedMaterialVariants(visible.filter(row=>row.material_type!=='dtf_textile'));
     const groups=[...materials,...plans];
-    const stock=group=>group.purchase?group.quantity:group.stock_qty,cost=group=>group.purchase?group.lineTotal:Number(group.average_cost_cents)||0;
+    const stock=group=>Number(group.stock_qty)||0,cost=group=>group.purchase?group.lineTotal:Number(group.average_cost_cents)||0;
     const title=group=>group.purchase?purchasedSheetName(group.purchase):[materialTypeLabel(group.material_type),group.fit,group.color,group.name].filter(Boolean).join(' · ');
     const date=group=>group.purchase?(parseAdminDate(group.purchase.date)?.getTime()||0):Math.max(...group.variants.map(row=>productEditedTime(row)));
     const order={stock_desc:(a,b)=>stock(b)-stock(a),stock_asc:(a,b)=>stock(a)-stock(b),
@@ -802,7 +802,7 @@
       if(!sections.has(label))sections.set(label,[]);
       sections.get(label).push(group);
     }
-    host.innerHTML=[...sections].sort(([a],[b])=>a.localeCompare(b,'es',{numeric:true})).map(([name,items])=>
+    host.innerHTML=inventoryOrderedGroups(sections,`purchased:${f.group}:`).map(([name,items])=>
       inventoryGroupSection(name,`purchased:${f.group}:${name}`,items,rows=>rows.map(row=>row.purchase?purchasedSheetCard(row):purchasedMaterialCard(row)).join(''))).join('')||
       '<div class="notice">No hay materia prima comprada para este filtro.</div>';
     state.purchasedMaterialGroups=new Map(materials.map(group=>[Number(group.id),group]));
@@ -918,18 +918,18 @@
     return `<article class="unified-product-card" data-stock-group="${key}" data-product-id="${p.id}">${state.productBulkMode?`<label class="icon-btn product-select-control" title="Marcar producto"><input type="checkbox" data-bulk-product="${p.id}" ${state.selectedProductIds?.has(Number(p.id))?'checked':''} aria-label="Marcar ${escapeHtml(p.name)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></label>`: ''}<header><span class="publication-dot ${p.status==='published'?'published':p.status==='draft'?'draft':'hidden-status'}" role="img" aria-label="${p.status==='published'?'Publicado':p.status==='draft'?'Borrador':'Oculto'}" title="${p.status==='published'?'Publicado':p.status==='draft'?'Borrador':'Oculto'}"></span><h3 title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</h3></header><div class="unified-product-main"><div class="unified-product-image-row"><div class="stock-group-image has-product-price">${photos.length?`<button type="button" class="unified-product-preview" data-open-production-photo="${p.id}" data-production-media-id="${Number(photos[active%photos.length].id)||0}" aria-label="Editar producción y publicación de ${escapeHtml(p.name)}"><img src="${escapeHtml(photos[active%photos.length].url)}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async"></button>`:'<span class="muted">Sin foto</span>'}${stockPhotoArrows(photos)}</div></div><div class="unified-product-side"><details class="product-card-colors" ${state.productColorMenusOpen?.[p.id]?'open':''}><summary><span>Colores</span><span class="product-color-dots">${colors.map(color=>`<span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(color))}"></span>`).join('')}</span><span class="color-arrow" aria-hidden="true">⌄</span></summary><div>${colors.map(color=>`<button type="button" class="btn btn-ghost ${selectedColor===color?'active':''}" data-product-color-filter="${p.id}" data-color="${escapeHtml(color)}" aria-pressed="${selectedColor===color}">${colorDetail(color)}</button>`).join('')}<button type="button" class="btn btn-ghost" data-open-product-lists data-product-list-kind="colors">Administrar colores…</button></div></details><div class="unified-product-details">${productStockColumns(visibleRows,editing,step)}</div><aside class="unified-product-card-actions"><button type="button" class="icon-btn" data-download-product-photos="${p.id}" aria-label="Descargar fotos" title="Descargar fotos"><i class="fa-solid fa-download" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-product-gallery="${p.id}" aria-label="Ver galería completa"><i class="fa-solid fa-expand"></i></button><button type="button" class="icon-btn ${editing?'active':''}" data-stock-edit-group aria-label="${editing?'Ocultar controles de stock':'Editar stock'}" title="Editar stock"><i class="fa-solid ${editing?'fa-circle-check':'fa-pen'}" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-edit-product="${p.id}" aria-label="Editar producto" title="Editar producto"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-duplicate-product="${p.id}" aria-label="Duplicar producto" title="Duplicar producto"><i class="fa-solid fa-copy" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-delete-card-product="${p.id}" aria-label="Eliminar producto" title="Eliminar producto"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></aside><div class="product-values17"><button type="button" class="product-price-button" data-edit-product-price="${p.id}" title="Editar precio">${money(p.price_cents)}</button><div class="product-cost-profit17"><span>Costo <b>${money(Number(p.cost_cents)||0)}</b></span><span>Ganancia <b>${money(Number(p.price_cents)-(Number(p.cost_cents)||0))}</b></span></div></div></div></div></article>`;
   }
   function renderUnifiedProducts(){
-    const host=qs('#adminProductsTable');if(!host)return;state.productColorMenusOpen??={};qsa('[data-product-id]',host).forEach(card=>{state.productColorMenusOpen[card.dataset.productId]=Boolean(qs('.product-card-colors',card)?.open);});const f=state.stockFilters,query=normalizeCategoryKey(state.productSearch||''),filtered=stockFilteredItems(),variantFilters=['size','color','fit','audience'].some(key=>f[key]);let products=state.products.filter(p=>(!query||normalizeCategoryKey(p.name+' '+p.category_name).includes(query))&&(!f.category||p.category_name===f.category)&&(!f.stage||filtered.some(x=>Number(x.product_id)===Number(p.id))||(!state.stockItems.some(x=>Number(x.product_id)===Number(p.id))&&productStageKey(p)===f.stage))&&(!state.productPublication||p.status===state.productPublication)&&(!variantFilters||filtered.some(x=>Number(x.product_id)===Number(p.id))));
+    const host=qs('#adminProductsTable');if(!host)return;state.productColorMenusOpen??={};qsa('[data-product-id]',host).forEach(card=>{state.productColorMenusOpen[card.dataset.productId]=Boolean(qs('.product-card-colors',card)?.open);});const f=state.stockFilters,query=normalizeCategoryKey(state.productSearch||''),filtered=stockFilteredItems(),variantFilters=f.physicalOnly||['size','color','fit','audience'].some(key=>f[key]);let products=state.products.filter(p=>(!query||normalizeCategoryKey(p.name+' '+p.category_name).includes(query))&&(!f.category||p.category_name===f.category)&&(!f.stage||filtered.some(x=>Number(x.product_id)===Number(p.id))||(!state.stockItems.some(x=>Number(x.product_id)===Number(p.id))&&productStageKey(p)===f.stage))&&(!state.productPublication||p.status===state.productPublication)&&(!variantFilters||filtered.some(x=>Number(x.product_id)===Number(p.id))));
     const stockTotal=p=>filtered.filter(x=>Number(x.product_id)===Number(p.id)).reduce((sum,x)=>sum+Number(x.stock||0),0),byName=(a,b)=>String(a.name).localeCompare(String(b.name),'es',{numeric:true,sensitivity:'base'});
     products.sort((a,b)=>f.sort==='display'?(Number(a.display_order??999999)-Number(b.display_order??999999)||byName(a,b)):f.sort==='stock_desc'?(stockTotal(b)-stockTotal(a)||byName(a,b)):f.sort==='stock_asc'?(stockTotal(a)-stockTotal(b)||byName(a,b)):f.sort==='price_asc'?(Number(a.price_cents)-Number(b.price_cents)||byName(a,b)):f.sort==='price_desc'?(Number(b.price_cents)-Number(a.price_cents)||byName(a,b)):f.sort==='product'?byName(a,b):recentProductFirst(a,b));
     const groupBy=state.productGroupBy||'',groups=new Map();for(const product of products){const name=productListGroup(product,groupBy);if(!groups.has(name))groups.set(name,[]);groups.get(name).push(product);}
     const cards=items=>items.map(p=>productInventoryCard(p,filtered.filter(x=>Number(x.product_id)===Number(p.id)))).join('');
     host.innerHTML=!groupBy?`<div class="product-category-grid product-recent-grid">${cards(products)||'<p>Sin productos en este filtro.</p>'}</div>`:
-      [...groups].sort(([a],[b])=>a.localeCompare(b,'es',{numeric:true})).map(([name,items])=>
+      inventoryOrderedGroups(groups,groupBy+':').map(([name,items])=>
         inventoryGroupSection(name,groupBy+':'+name,items,cards)).join('')||'<p>Sin productos en este filtro.</p>';
     const ids=new Set(products.map(p=>Number(p.id)));
     const summaryIds=new Set(state.products.filter(p=>(!query||normalizeCategoryKey(p.name+' '+p.category_name).includes(query))&&
       (!f.category||p.category_name===f.category)&&(!state.productPublication||p.status===state.productPublication)).map(p=>Number(p.id)));
-    const available=stockFilteredItems({size:'',color:''}).filter(row=>summaryIds.has(Number(row.product_id)));
+    const available=stockFilteredItems({size:'',color:'',physicalOnly:false}).filter(row=>summaryIds.has(Number(row.product_id)));
     renderInventoryStockSummary(available,filtered.filter(row=>ids.has(Number(row.product_id))),f,
       rows=>rows.reduce((sum,row)=>sum+Number(row.stock||0),0));
     refreshProductStockDialog();
@@ -941,10 +941,31 @@
   function inventoryGroupCollapsed(key){
     return state.productCategoryCollapsed?.[key]??adminListsCollapsed();
   }
+  function inventoryHeaderOrder(){
+    try{return JSON.parse(localStorage.getItem('salmos_inventory_header_order')||'[]');}catch{return [];}
+  }
+  function inventoryOrderedGroups(groups,prefix){
+    const positions=new Map(inventoryHeaderOrder().map((key,index)=>[key,index]));
+    return [...groups].sort(([a],[b])=>(positions.get(prefix+a)??Infinity)-(positions.get(prefix+b)??Infinity)||a.localeCompare(b,'es',{numeric:true}));
+  }
+  function moveInventoryHeader(from,to,after=false){
+    const section=to?.parentElement,grid=section?.parentElement;
+    if(!grid||!from||from===to)return;
+    const keys=qsa(':scope > [data-product-category]',grid).map(el=>el.dataset.productCategory);
+    const fromKey=from.parentElement.dataset.productCategory,toKey=section.dataset.productCategory;
+    if(!keys.includes(fromKey)||!keys.includes(toKey))return;
+    keys.splice(keys.indexOf(fromKey),1);
+    keys.splice(keys.indexOf(toKey)+(after?1:0),0,fromKey);
+    const rest=inventoryHeaderOrder().filter(key=>!keys.includes(key));
+    localStorage.setItem('salmos_inventory_header_order',JSON.stringify([...rest,...keys]));
+    renderInventoryCards();
+    qsa('[data-inventory-header]',grid).find(el=>el.parentElement.dataset.productCategory===fromKey)?.focus({preventScroll:true});
+  }
   function inventoryGroupSection(name,key,items,render){
     const collapsed=inventoryGroupCollapsed(key);
     return `<section class="product-category-section ${collapsed?'is-collapsed':''}" data-product-category="${escapeHtml(key)}">
-      <header class="product-category-head"><h2>${escapeHtml(name)} <small>${items.length}</small></h2>
+      <header class="product-category-head" ${collapsed?`data-inventory-header draggable="true" tabindex="0" aria-label="Mover ${escapeHtml(name)} con Alt y flechas"`:''}>
+        <h2>${collapsed?'<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i> ':''}${escapeHtml(name)} <small>${items.length}</small></h2>
         <button type="button" class="icon-btn" data-toggle-product-category="${escapeHtml(key)}" aria-label="${collapsed?'Mostrar':'Ocultar'} ${escapeHtml(name)}" aria-expanded="${!collapsed}">
           <i class="fa-solid ${collapsed?'fa-chevron-down':'fa-chevron-up'}" aria-hidden="true"></i>
         </button>
@@ -954,8 +975,9 @@
   function renderInventoryStockSummary(available,visible,f,quantity){
     const summary=qs('#productStockSummary');
     if(!summary)return;
-    const sizes=new Map();
+    const sizes=new Map(),stock=row=>Number(row.stock_qty??row.stock)||0;
     for(const item of available){
+      if(stock(item)<=0||f.color&&photoColor(item.color)!==photoColor(f.color))continue;
       const size=normalizeCatalogSize(item.size);
       if(!size)continue;
       if(!sizes.has(size))sizes.set(size,[]);
@@ -963,7 +985,7 @@
     }
     const colors=uniqOptions(available.map(row=>row.color)).sort((a,b)=>a.localeCompare(b,'es'));
     summary.innerHTML=`<div class="product-quick-sizes" role="group" aria-label="Filtrar por talle o formato">
-      <button type="button" class="stock-count-chip total" data-product-size-filter="" title="Stock físico total · Limpiar filtros"><span>Total</span><strong>${quantity(visible)}</strong></button>
+      <button type="button" class="stock-count-chip total ${f.physicalOnly&&!f.size?'active':''}" data-product-size-filter="" aria-pressed="${Boolean(f.physicalOnly&&!f.size)}" title="Mostrar solo stock real"><span>Stock real</span><strong>${quantity(visible.filter(row=>stock(row)>0))}</strong></button>
       ${[...sizes].sort(([a],[b])=>stockSizeRank(a)-stockSizeRank(b)||a.localeCompare(b,'es',{numeric:true})).map(([size,rows])=>
         `<button type="button" class="stock-count-chip ${f.size===size?'active':''}" data-product-size-filter="${escapeHtml(size)}" aria-pressed="${f.size===size}"><span>${escapeHtml(size)}</span><strong>${quantity(rows)}</strong></button>`).join('')}
     </div><div class="product-quick-colors" role="group" aria-label="Filtrar por color">${colors.map(color=>
@@ -1069,7 +1091,6 @@
     const next=(mode&&mode!==previousMode)?convertVariantsForMode(current,previousMode,mode):(current.length?current:defaultVariantsForMode(mode));
     renderVariantBuilder(mode,next);
     qs('#productFitField')?.classList.toggle('hidden',mode!=='sized');
-    qs('#productAudienceField')?.classList.remove('hidden');
     const title=qs('#variantSectionTitle');if(title)title.textContent=mode==='sized'?'Talles y stock':mode==='simple'?'Opciones y stock':'Variantes y stock';
     const help=qs('#variantSectionHelp');if(help)help.textContent=mode==='sized'?'Podés indicar stock real, en producción o a stockear por talle. La aclaración es opcional.':mode==='simple'?'Podés indicar el estado y la cantidad interna por color. Es opcional.':'Elegí una categoría para configurar el stock.';
     const add=qs('#addVariantBtn');if(add){add.classList.toggle('hidden',!mode);add.textContent=mode==='sized'?'+ Agregar talle / variante':'+ Agregar color / variante';}
@@ -1084,7 +1105,6 @@
   const PURCHASE_BASIC_COLORS=['Negro','Blanco','Crudo','Crema','Beige','Gris','Azul marino','Azul','Celeste','Rojo','Bordó','Verde','Rosa','Marrón','Amarillo','Fucsia'];
   const PURCHASE_BASIC_FITS=['Clásico','Oversize','Boxy fit','Crop','Babytee'];
   const PURCHASE_CLASSES=['ADULTOS','NIÑOS','ESPECIALES'];
-  const PURCHASE_GENDERS=['Hombre','Mujer','Unisex'];
   const PURCHASE_SIZES_BY_CLASS={ADULTOS:['S','M','L','XL','XXL'],NIÑOS:Array.from({length:16},(_,i)=>String(i+1)),ESPECIALES:['6','7','8','9','10']};
   const PURCHASE_COLOR_HEX={'Negro':'#151515','Blanco':'#f7f5ef','Crudo':'#eee2cf','Crema':'#f5ead3','Beige':'#d4bd9b','Gris':'#9da0a5','Azul marino':'#18233d','Azul':'#2454ae','Celeste':'#86cbea','Rojo':'#c63b46','Bordó':'#722632','Verde':'#3b824d','Rosa':'#f29bbc','Marrón':'#79513c','Amarillo':'#e4bc32','Fucsia':'#d84691'};
   const FINANCE_BASIC_REASONS=['Venta','Aporte','Publicidad','Servicio','Gasto','Inversión'];
@@ -1203,7 +1223,6 @@
         <div class="field"><label>Categoría</label><select class="select" name="category_id" required><option value="">Elegir...</option>${state.categories.map(c=>`<option value="${c.id}" ${Number(p.category_id)===Number(c.id)?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Estado de la publicación</label><select class="select" name="status"><option value="draft" ${p.status==='draft'?'selected':''}>Borrador</option><option value="published" ${p.status==='published'?'selected':''}>Publicado</option><option value="hidden" ${p.status==='hidden'?'selected':''}>Oculto</option></select></div>
         <div class="field ${initialVariantMode==='sized'?'':'hidden'}" id="productFitField"><label>Corte / fit</label><input class="input" name="fit" list="salmosFitOptions" placeholder="Elegí o escribí otro" value="${escapeHtml(p.fit||'')}"><datalist id="salmosFitOptions"><option value="Clásico"><option value="Oversize"><option value="Boxy fit"></datalist></div>
-        <div class="field full" id="productAudienceField">${window.SalmosAudience.html(p.audience||'','product')}</div>
         <div class="field"><label>Estado del producto</label><select class="select" name="inventory_stage" id="inventoryStage"><option value="finished" ${p.inventory_stage==='finished'||!p.inventory_stage?'selected':''}>Terminado</option><option value="to_print" ${p.inventory_stage==='to_print'?'selected':''}>En producción</option><option value="outlet" ${p.inventory_stage==='outlet'?'selected':''}>Outlet</option></select></div>
         <div class="field full internal-prep-box ${p.inventory_stage==='to_print'?'':'hidden'}" id="internalPrepBox"><div class="internal-prep-title">Solo administración · control de producción</div><div class="toggle-row"><label class="toggle-label"><input type="checkbox" name="garment_ready" ${Number(p.garment_ready)!==0?'checked':''}><span id="productBaseReadyLabel">${initialVariantMode==='sized'?'Prenda disponible':'Producto base disponible'}</span></label><label class="toggle-label"><input type="checkbox" name="print_ready" ${Number(p.print_ready)!==0?'checked':''}> Estampa disponible</label></div><small class="field-help">En producción podés indicar si ya está disponible el producto base y la estampa.</small></div>
         <div class="field"><label>Precio</label><input class="input" name="price" type="number" min="0" value="${isNewProduct?'':centsToPesos(p.price_cents)}"></div>
@@ -1227,7 +1246,7 @@
     let variants=collectVariantRows().map(v=>({...v,size:variantMode==='sized'?v.size:''})).filter(v=>v.id||v.color||v.size||v.stock>0);
     if(variantMode==='sized'&&variants.some(v=>!v.size))throw new Error('Completá el talle de cada variante de remera.');
     if(!variants.length)variants=defaultVariantsForMode(variantMode);
-    const family=selectedRecipeFamily(),recipe={baseMaterialType:family.type,baseMaterialName:family.name,wastePercent:Math.max(0,Number(qs('#productRecipeWaste')?.value)||0),extraCostCents:pesosToCents(qs('#productRecipeExtra')?.value||0),designs:collectRecipeDesigns(),materials:collectRecipeMaterials()};const payload={name:fd.get('name').trim(),category_id:Number(fd.get('category_id')),status:fd.get('status'),price_cents:pesosToCents(fd.get('price')),compare_at_cents:pesosToCents(fd.get('compare')),cost_cents:pesosToCents(fd.get('cost')),recipe,short_description:fd.get('short_description')||'',meaning_text:fd.get('meaning_text')||'',verse_text:fd.get('verse_text')||'',verse_reference:fd.get('verse_reference')||'',fit:variantMode==='sized'?(fd.get('fit')||''):'',audience:window.SalmosAudience.read(qs('#productAudienceField')),sale_mode:'stock',show_all_sizes:fd.get('show_all_sizes')?1:0,inventory_stage:fd.get('inventory_stage')||'finished',garment_ready:fd.get('garment_ready')?1:0,print_ready:fd.get('print_ready')?1:0,is_new:fd.get('is_new')?1:0,is_featured:fd.get('is_featured')?1:0,is_bestseller:fd.get('is_bestseller')?1:0,weight_grams:Number(fd.get('weight_grams'))||0,height_cm:Number(fd.get('height_cm'))||0,width_cm:Number(fd.get('width_cm'))||0,depth_cm:Number(fd.get('depth_cm'))||0,variants};
+    const family=selectedRecipeFamily(),recipe={baseMaterialType:family.type,baseMaterialName:family.name,wastePercent:Math.max(0,Number(qs('#productRecipeWaste')?.value)||0),extraCostCents:pesosToCents(qs('#productRecipeExtra')?.value||0),designs:collectRecipeDesigns(),materials:collectRecipeMaterials()};const payload={name:fd.get('name').trim(),category_id:Number(fd.get('category_id')),status:fd.get('status'),price_cents:pesosToCents(fd.get('price')),compare_at_cents:pesosToCents(fd.get('compare')),cost_cents:pesosToCents(fd.get('cost')),recipe,short_description:fd.get('short_description')||'',meaning_text:fd.get('meaning_text')||'',verse_text:fd.get('verse_text')||'',verse_reference:fd.get('verse_reference')||'',fit:variantMode==='sized'?(fd.get('fit')||''):'',audience:state.editingProduct?.audience||'',sale_mode:'stock',show_all_sizes:fd.get('show_all_sizes')?1:0,inventory_stage:fd.get('inventory_stage')||'finished',garment_ready:fd.get('garment_ready')?1:0,print_ready:fd.get('print_ready')?1:0,is_new:fd.get('is_new')?1:0,is_featured:fd.get('is_featured')?1:0,is_bestseller:fd.get('is_bestseller')?1:0,weight_grams:Number(fd.get('weight_grams'))||0,height_cm:Number(fd.get('height_cm'))||0,width_cm:Number(fd.get('width_cm'))||0,depth_cm:Number(fd.get('depth_cm'))||0,variants};
     const d=await api('/api/admin/products',{method:'POST',body:JSON.stringify(payload)});const productId=d.item.id;
     const orderedIds=[];
     for(const item of state.mediaItems){
@@ -1270,7 +1289,7 @@
   function stockUnique(field){const values=state.stockItems.filter(stockRowSizeAllowed).map(x=>field==='size'?normalizeCatalogSize(x.size):String(x[field]||'').trim()).filter(Boolean).filter(value=>field!=='color'||catalogColorAllowed(value));return uniqOptions(values).sort((a,b)=>field==='size'?stockSizeRank(a)-stockSizeRank(b)||a.localeCompare(b,'es',{numeric:true}):a.localeCompare(b,'es',{numeric:true,sensitivity:'base'}));}
   function stockSizeRank(v=''){const s=String(v).toUpperCase().replace(/\s+/g,'');const order=['XXXS','XXS','XS','S','M','L','XL','XXL','2XL','XXXL','3XL','4XL','5XL'];const i=order.indexOf(s);return i<0?999:i}
   function stockFilteredItems(overrides={}){
-    const f={...state.stockFilters,...overrides};let items=state.stockItems.filter(stockRowSizeAllowed).filter(x=>(!f.category||String(x.category_name||'')===f.category)&&(!f.stage||String(x.inventory_stage||'finished')===f.stage)&&(!f.size||normalizeCatalogSize(x.size)===normalizeCatalogSize(f.size))&&(!f.color||String(x.color||'')===f.color)&&(!f.fit||String(x.fit||'')===f.fit)&&(!f.audience||String(x.audience||'')===f.audience));
+    const f={...state.stockFilters,...overrides};let items=state.stockItems.filter(stockRowSizeAllowed).filter(x=>(!(f.size||f.physicalOnly)||Number(x.stock)>0)&&(!f.category||String(x.category_name||'')===f.category)&&(!f.stage||String(x.inventory_stage||'finished')===f.stage)&&(!f.size||normalizeCatalogSize(x.size)===normalizeCatalogSize(f.size))&&(!f.color||String(x.color||'')===f.color)&&(!f.fit||String(x.fit||'')===f.fit)&&(!f.audience||String(x.audience||'')===f.audience));
     const cmpText=(a,b)=>String(a||'').localeCompare(String(b||''),'es',{numeric:true,sensitivity:'base'});
     items=[...items].sort((a,b)=>{
       if(f.sort==='size'){const r=stockSizeRank(a.size)-stockSizeRank(b.size);return r||cmpText(a.size,b.size)||cmpText(a.product_name,b.product_name)}
@@ -1285,7 +1304,7 @@
   }
   function rememberStockLevels(row){const id=Number(row.dataset.stockLevelRow);(state.stockLevelDrafts??={})[id]={physical:Number(qs('[data-stock-level="physical"]',row).value),virtual:Number(qs('[data-stock-level="virtual"]',row).value)};}
   async function saveStockLevels(id){const item=state.stockItems.find(x=>Number(x.id)===id),draft=state.stockLevelDrafts?.[id];if(!item||!draft)return;for(const value of Object.values(draft))if(!Number.isSafeInteger(value)||value<0)throw new Error('Ingresá cantidades enteras desde cero.');
-    const delta=draft.physical-Number(item.stock);if(delta>0&&(state.view==='products'||confirm('¿Cargar este aumento como compra?'))){await openPurchaseDialog(null,'stock');const family=state.materials.find(m=>Number(m.id)===Number(item.material_id)),matches=m=>(!m.size||m.size===item.size)&&(!m.color||m.color===item.color)&&(!m.fit||m.fit===item.fit);const material=(family&&matches(family)?family:null)||state.materials.find(m=>matches(m)&&(family?(m.name===family.name&&m.material_type===family.material_type):m.material_type===(/buzo/i.test(item.category_name)?'hoodie':/taza/i.test(item.category_name)?'mug':'shirt')));state.purchaseItems=[material?{...purchaseDefaultItem(material.material_type),name:material.name,features:itemFeatures(material),fit:material.fit,size:material.size,color:material.color,materialClass:material.material_class,gender:material.gender,capacityMl:material.capacity_ml,quantity:delta,unitPricePesos:Number(material.average_cost_cents)/100,imageAssetIds:materialPhotos(material.id).map(a=>Number(a.id))}:{...purchaseDefaultItem(/buzo/i.test(item.category_name)?'hoodie':/taza/i.test(item.category_name)?'mug':'shirt'),name:item.product_name,features:[item.product_name],fit:item.fit,size:item.size,color:item.color,quantity:delta}];state.stockPurchaseDraft={variantId:id,virtual:draft.virtual,expectedVirtual:Number(item.virtual_stock??100)};renderPurchaseItems();return;}
+    const delta=draft.physical-Number(item.stock);if(delta>0&&state.view!=='products'&&confirm('¿Cargar este aumento como compra?')){await openPurchaseDialog(null,'stock');const family=state.materials.find(m=>Number(m.id)===Number(item.material_id)),matches=m=>(!m.size||m.size===item.size)&&(!m.color||m.color===item.color)&&(!m.fit||m.fit===item.fit);const material=(family&&matches(family)?family:null)||state.materials.find(m=>matches(m)&&(family?(m.name===family.name&&m.material_type===family.material_type):m.material_type===(/buzo/i.test(item.category_name)?'hoodie':/taza/i.test(item.category_name)?'mug':'shirt')));state.purchaseItems=[material?{...purchaseDefaultItem(material.material_type),name:material.name,features:itemFeatures(material),fit:material.fit,size:material.size,color:material.color,materialClass:material.material_class,gender:material.gender,capacityMl:material.capacity_ml,quantity:delta,unitPricePesos:Number(material.average_cost_cents)/100,imageAssetIds:materialPhotos(material.id).map(a=>Number(a.id))}:{...purchaseDefaultItem(/buzo/i.test(item.category_name)?'hoodie':/taza/i.test(item.category_name)?'mug':'shirt'),name:item.product_name,features:[item.product_name],fit:item.fit,size:item.size,color:item.color,quantity:delta}];state.stockPurchaseDraft={variantId:id,virtual:draft.virtual,expectedVirtual:Number(item.virtual_stock??100)};renderPurchaseItems();return;}
     await api(`/api/admin/stock/${id}/levels`,{method:'PATCH',body:JSON.stringify({...draft,expectedPhysical:Number(item.stock),expectedVirtual:Number(item.virtual_stock??100)})});delete state.stockLevelDrafts[id];toast('Stock actualizado','success');await renderStock();}
   function groupedStockHtml(items){
     const groups=new Map();for(const item of items){const key=[item.product_id,item.category_name,item.fit,item.color,item.audience,(item.features||itemFeatures(state.materials.find(m=>Number(m.id)===Number(item.material_id))||{}).join(' · '))].map(x=>String(x||'').trim().toLocaleLowerCase('es')).join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
@@ -1375,7 +1394,7 @@
 
   function purchaseDefaultItem(type='shirt'){
     const defaultCapacity=type==='mug'?330:(type==='glass'||type==='thermos'?500:0);
-    return {materialType:type,customTypeLabel:'',name:type==='dtf_textile'?'DTF textil':type==='dtf_uv'?'DTF UV':'',quantity:1,color:'',size:'',fit:'',materialClass:materialIsGarment(type)?'ADULTOS':'',gender:materialIsGarment(type)?'Unisex':'',capacityMl:defaultCapacity,widthCm:materialIsDtf(type)?58:0,unitPricePesos:type==='dtf_textile'?10000:type==='dtf_uv'?20000:'',_custom:{}};
+    return {materialType:type,customTypeLabel:'',name:type==='dtf_textile'?'DTF textil':type==='dtf_uv'?'DTF UV':'',quantity:1,color:'',size:'',fit:'',materialClass:materialIsGarment(type)?'ADULTOS':'',capacityMl:defaultCapacity,widthCm:materialIsDtf(type)?58:0,unitPricePesos:type==='dtf_textile'?10000:type==='dtf_uv'?20000:'',_custom:{}};
   }
   function currentPurchaseTypes(){
     if(Array.isArray(state.purchaseOptions.typeCatalog))return state.purchaseOptions.typeCatalog.map(row=>[row.code,row.label]);
@@ -1554,7 +1573,7 @@
     state.materialEditor={material:structuredClone(material),features:itemFeatures(material),featureOptions:[],imageAssetIds:[...displayed],originalImageAssetIds:[...photoIds]};
     let dialog=qs('#materialEditorDialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='materialEditorDialog';dialog.className='admin-dialog material-editor-dialog';dialog.addEventListener('cancel',event=>{if(state.materialEditorBusy)event.preventDefault()});document.body.append(dialog);}
     const choice=(name,label,value,options)=>`<label class="field"><span>${label}</span><select class="select" data-material-field="${name}"><option value="">Sin especificar</option>${mergePurchaseOptions(options,[value]).map(v=>`<option value="${escapeHtml(v)}" ${v===value?'selected':''}>${escapeHtml(v)}</option>`).join('')}${name==='fit'?'<option value="__manage_fits__">Administrar cortes…</option>':''}</select></label>`,field=(name,label,value,type='text')=>`<label class="field"><span>${label}</span><input class="input" data-material-field="${name}" type="${type}" ${type==='number'?'min="0" step=".01"':'maxlength="120"'} value="${escapeHtml(value??'')}"></label>`,garment=materialIsGarment(material.material_type);
-    dialog.innerHTML=`<div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">${escapeHtml(materialTypeLabel(material.material_type))}</div><h2>Editar materia prima</h2></div><button class="icon-btn" type="button" data-close-material-editor aria-label="Cerrar">×</button></div><div class="dialog-body"><div class="material-editor-stock">${Number(material.stock_qty).toLocaleString('es-AR',{maximumFractionDigits:3})} ${material.unit==='meter'?'m':'u'} disponibles · ${money(material.average_cost_cents)} por ${material.unit==='meter'?'metro':'unidad'}</div><div class="field" id="materialEditorFeatures">${materialEditorFeaturesHtml()}</div><div class="form-grid material-editor-fields">${materialUsesColor(material.material_type)?`<label class="field"><span>Color</span><div class="salmos-color-field"><input class="input" data-material-field="color" data-material-color-palette readonly aria-haspopup="dialog" value="${escapeHtml(material.color||'')}"><button class="salmos-color-button" type="button" data-material-color-palette style="--color-swatch:${escapeHtml(colorSwatch(material.color))}" aria-label="Elegir color desde la paleta"></button></div></label>`:''}${garment?choice('fit','Corte',material.fit,purchaseFitOptions())+choice('size','Talle',material.size,purchaseSizeOptions({materialClass:material.material_class}))+choice('materialClass','Clase',material.material_class,purchaseClassOptions())+choice('gender','Género',material.gender,['Unisex','Varón','Mujer']):''}${Number(material.capacity_ml)>0||['mug','glass','thermos','tumbler'].includes(material.material_type)?field('capacityMl','Capacidad (ml)',material.capacity_ml,'number'):''}${material.unit==='meter'?field('widthCm','Ancho (cm)',material.width_cm,'number'):''}${field('unitCostPesos',material.unit==='meter'?'Costo pagado por metro ($)':'Costo pagado por unidad ($)',centsToPesos(material.average_cost_cents),'number')}</div><div class="material-cost-history"><small class="field-help">Costo usado para la producción.</small><button type="button" class="btn btn-ghost" data-edit-material-purchase>Editar última compra y pago</button></div><section id="materialEditorPhotos"></section></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" data-close-material-editor>Cancelar</button><button class="btn btn-primary" type="button" id="saveMaterialEditorBtn">Guardar materia prima</button></div></div>`;
+    dialog.innerHTML=`<div class="dialog-shell"><div class="dialog-head"><div><div class="admin-eyebrow">${escapeHtml(materialTypeLabel(material.material_type))}</div><h2>Editar materia prima</h2></div><button class="icon-btn" type="button" data-close-material-editor aria-label="Cerrar">×</button></div><div class="dialog-body"><div class="material-editor-stock">${Number(material.stock_qty).toLocaleString('es-AR',{maximumFractionDigits:3})} ${material.unit==='meter'?'m':'u'} disponibles · ${money(material.average_cost_cents)} por ${material.unit==='meter'?'metro':'unidad'}</div><div class="field" id="materialEditorFeatures">${materialEditorFeaturesHtml()}</div><div class="form-grid material-editor-fields">${materialUsesColor(material.material_type)?`<label class="field"><span>Color</span><div class="salmos-color-field"><input class="input" data-material-field="color" data-material-color-palette readonly aria-haspopup="dialog" value="${escapeHtml(material.color||'')}"><button class="salmos-color-button" type="button" data-material-color-palette style="--color-swatch:${escapeHtml(colorSwatch(material.color))}" aria-label="Elegir color desde la paleta"></button></div></label>`:''}${garment?choice('fit','Corte',material.fit,purchaseFitOptions())+choice('size','Talle',material.size,purchaseSizeOptions({materialClass:material.material_class}))+choice('materialClass','Clase',material.material_class,purchaseClassOptions()):''}${Number(material.capacity_ml)>0||['mug','glass','thermos','tumbler'].includes(material.material_type)?field('capacityMl','Capacidad (ml)',material.capacity_ml,'number'):''}${material.unit==='meter'?field('widthCm','Ancho (cm)',material.width_cm,'number'):''}${field('unitCostPesos',material.unit==='meter'?'Costo pagado por metro ($)':'Costo pagado por unidad ($)',centsToPesos(material.average_cost_cents),'number')}</div><div class="material-cost-history"><small class="field-help">Costo usado para la producción.</small><button type="button" class="btn btn-ghost" data-edit-material-purchase>Editar última compra y pago</button></div><section id="materialEditorPhotos"></section></div><div class="dialog-foot"><button class="btn btn-ghost" type="button" data-close-material-editor>Cancelar</button><button class="btn btn-primary" type="button" id="saveMaterialEditorBtn">Guardar materia prima</button></div></div>`;
     renderMaterialEditorPhotos();document.body.append(dialog);if(!dialog.open)dialog.showModal();
   }
   async function saveMaterialEditor(button){
@@ -1627,7 +1646,6 @@
     const fitField=garment?purchaseChoiceField(x,'fit','Corte',purchaseFitOptions(),'Nuevo corte'):'';
     const classField=garment?purchaseChoiceField(x,'materialClass','Clase',purchaseClassOptions(),'Nueva clase'):'';
     const sizeField=garment?purchaseChoiceField(x,'size','Talle',purchaseSizeOptions(x),'Nuevo talle'):'';
-    const genderField=garment?`<div class="field purchase-gender"><label>Género</label><select class="select" data-purchase-choice="gender">${PURCHASE_GENDERS.map(v=>`<option value="${v}" ${(x.gender||'Unisex')===v?'selected':''}>${v}</option>`).join('')}</select></div>`:'';
     const colorField=color?purchaseColorField(x,i):'';
     const materialOptions=purchaseMaterialOptions(resolvedType);
     const bookMaterial=window.SalmosBook.isMaterial(resolvedType);
@@ -1636,7 +1654,7 @@
     return `<div class="purchase-item-row ${garment?'is-garment':''} ${dtf?'is-dtf':''} ${bookMaterial?'is-book-material':''}" data-purchase-row="${i}">
       <strong class="purchase-item-title" data-purchase-item-title>${escapeHtml(purchaseItemTitle(x,i))}</strong>
       ${purchaseTypeField(x,i)}
-      ${fitField}${classField}${sizeField}${genderField}${colorField}
+      ${fitField}${classField}${sizeField}${colorField}
       ${materialField}${capacityField}
       ${dtf?`<div class="field purchase-width"><label>Ancho del rollo (cm)</label><input class="input" data-purchase-field="widthCm" type="number" min="1" step=".1" value="${Number(x.widthCm)||58}"></div>`:''}
       ${window.SalmosPurchasePacks.render(x,i,resolvedType===window.SalmosBook.PAPER||resolvedType===window.SalmosBook.COVER?'hoja':'unidad')}
@@ -1655,8 +1673,13 @@
     return {type,value,surcharge,total:baseCents+surcharge,valid};
   }
   function renderSurchargeHelp(prefix,data){const el=qs(`#${prefix}SurchargeHelp`);if(el)el.textContent=data.type==='percent'?`${data.value||0}% sobre el importe base · ${money(data.surcharge)}`:`Importe fijo: ${money(data.surcharge)}`;}
+  const paymentLabels={cash:'Efectivo',transfer:'Transferencia',mixed:'Efectivo + transferencia',pending:'Pago pendiente',gift:'Regalo · Inversión / aporte',sheet_waste:'Desperdicio de plancha'};
+  const specialPayment=method=>['pending','gift','sheet_waste'].includes(method);
+  const paymentHelp=method=>method==='pending'?'Queda pendiente en Caja. Si sigue pendiente después de una semana, vas a recibir un aviso.':
+    method==='gift'?'Queda registrado como inversión / aporte.':'';
   function paymentSplit(prefix,total){
     const method=qs(`#${prefix}PaymentMethod`)?.value||'cash';
+    if(specialPayment(method))return {method,payments:[]};
     const cash=method==='transfer'?0:method==='cash'?total:pesosToCents(qs(`#${prefix}CashAmount`)?.value);
     const transfer=method==='cash'?0:method==='transfer'?total:pesosToCents(qs(`#${prefix}TransferAmount`)?.value);
     if(cash<0||transfer<0||cash+transfer!==total)throw new Error(`Efectivo + transferencia debe sumar ${money(total)}.`);
@@ -1669,12 +1692,15 @@
   function updateMovementPayment(){
     const form=qs('#movementForm'),method=qs('#movementPaymentMethod').value,base=pesosToCents(form.elements.amount.value),charge=surchargeData('movement',base);
     qs('#movementTotal').textContent=money(charge.total);qs('#movementTotalLabel').textContent=form.elements.type.value==='income'?'Total del ingreso':'Total del egreso';renderSurchargeHelp('movement',charge);
-    qsa('.movement-cash-field',form).forEach(x=>x.classList.toggle('hidden',method==='transfer'));
-    qsa('.movement-transfer-field',form).forEach(x=>x.classList.toggle('hidden',method==='cash'));
+    const special=specialPayment(method);
+    qsa('.movement-cash-field',form).forEach(x=>x.classList.toggle('hidden',special||method==='transfer'));
+    qsa('.movement-transfer-field',form).forEach(x=>x.classList.toggle('hidden',special||method==='cash'));
+    if(special)qs('#movementCreditEnabled').checked=false;
+    syncMovementCredit();
     if(method==='cash')qs('#movementCashAmount').value=centsToPesos(charge.total);
     if(method==='transfer')qs('#movementTransferAmount').value=centsToPesos(charge.total);
     qs('#movementCashAmount').readOnly=method!=='mixed';qs('#movementTransferAmount').readOnly=method!=='mixed';
-    qs('#movementPaymentHelp').textContent=method==='mixed'?'Efectivo + transferencia debe coincidir con el total.':'El total incluye el recargo indicado.';
+    qs('#movementPaymentHelp').textContent=paymentHelp(method)||(method==='mixed'?'Efectivo + transferencia debe coincidir con el total.':'El total incluye el recargo indicado.');
   }
   function setManualSaleMode(enabled){state.manualSaleMode=Boolean(enabled);const dialog=qs('#movementDialog');dialog.classList.toggle('manual-sale-mode',state.manualSaleMode);if(state.manualSaleMode){qs('#movementType').value='income';qs('#movementSaleEnabled').checked=true;renderFinanceReasonSelector('Venta');qs('#movementCreditEnabled').checked=false;syncMovementCredit();}const credit=qs('#movementCredit');if(credit)credit.hidden=state.manualSaleMode;}
   async function loadMovementSale(m={}){
@@ -1790,17 +1816,19 @@
   function purchaseSubtotalCents(){return state.purchaseItems.reduce((sum,x)=>sum+purchaseLineCents(x),0);}
   function updatePurchasePaymentVisibility(){
     const method=qs('#purchasePaymentMethod')?.value||'cash';
-    qsa('.payment-cash-field',qs('#purchaseForm')).forEach(x=>x.classList.toggle('hidden',method==='transfer'));
-    qsa('.payment-transfer-field',qs('#purchaseForm')).forEach(x=>x.classList.toggle('hidden',method==='cash'));
+    const special=specialPayment(method);
+    qsa('.payment-cash-field',qs('#purchaseForm')).forEach(x=>x.classList.toggle('hidden',special||method==='transfer'));
+    qsa('.payment-transfer-field',qs('#purchaseForm')).forEach(x=>x.classList.toggle('hidden',special||method==='cash'));
+    const funding=qs('#purchaseFunding');if(funding)funding.hidden=special;
     const breakdown=qs('#purchasePaidBreakdown');if(breakdown)breakdown.dataset.method=method;
     const subtotal=purchaseSubtotalCents(),surcharge=surchargeData('purchase',subtotal).surcharge,grand=subtotal+surcharge,cash=qs('#purchaseCashAmount'),transfer=qs('#purchaseTransferAmount');
     if(method==='cash'&&cash)cash.value=centsToPesos(grand);
     if(method==='transfer'&&transfer)transfer.value=centsToPesos(grand);
     if(cash)cash.readOnly=method!=='mixed';if(transfer)transfer.readOnly=method!=='mixed';renderSurchargeHelp('purchase',surchargeData('purchase',subtotal));
     const help=qs('#purchasePaymentHelp');
-    if(help)help.textContent=method==='mixed'
+    if(help)help.textContent=paymentHelp(method)||(method==='mixed'
       ?'Efectivo + transferencia debe coincidir con el total. Al guardar la compra, el pago se registra automáticamente en Caja.'
-      :'Al guardar la compra, el pago se registra automáticamente en Caja.';
+      :'Al guardar la compra, el pago se registra automáticamente en Caja.');
   }
   function updatePurchaseTotal(){const automatic=qs('#purchaseFundingAmount');if(automatic?.dataset.automatic==='1'&&qs('#purchaseFundingMode')?.value==='new'&&!qs('#purchaseFundingKeep')?.checked)automatic.value=centsToPesos(surchargeData('purchase',purchaseSubtotalCents()).total);updatePurchaseQuantitySummary();qsa('[data-purchase-line-total]').forEach(el=>{const item=state.purchaseItems[Number(el.dataset.purchaseLineTotal)];if(item)el.textContent=`Total: ${money(purchaseLineCents(item))}`;});const subtotal=purchaseSubtotalCents(),surcharge=surchargeData('purchase',subtotal).surcharge,grand=subtotal+surcharge;const a=qs('#purchaseSubtotal'),b=qs('#purchaseTotal');if(a)a.textContent=money(subtotal);if(b)b.textContent=money(grand);updatePurchasePaymentVisibility();}
   function renderPurchaseItems(){const host=qs('#purchaseItems');if(!host)return;updatePurchaseSupplierSuggestion();host.innerHTML=`<datalist id="purchaseAccountOptions"><option value="Mercado Pago"><option value="Banco"><option value="Caja SALMOS"></datalist>${state.purchaseItems.map(purchaseItemRow).join('')}`;state.purchaseItems.forEach((item,index)=>window.SalmosPurchasePacks.summary(item,index));updatePurchaseTotal();}
@@ -1873,20 +1901,20 @@
     reset();
     requestAnimationFrame(()=>{if(dialog.open)reset();});
   }
-  async function openPurchaseDialog(purchase=null,context='purchases'){await Promise.all([ensureCostingData(),loadMockupAssets(),loadGarmentPhotos()]);state.stockPurchaseDraft=null;state.purchaseContext=context;state.editingPurchaseId=purchase?Number(purchase.id):null;state.purchaseOriginalOccurredAt=purchase?.occurred_at||null;state.purchaseSupplierAutoValue='';const f=qs('#purchaseForm');f.reset();refreshSupplierPickers(purchase?.supplier||'');const title=qs('#purchaseDialogTitle');if(title)title.textContent=purchase?`Editar compra #${purchase.id}`:'Nueva compra';if(purchase){state.purchaseItems=(purchase.items||[]).map(i=>({sourceItemId:Number(i.id),materialType:i.material_type,purchaseMode:i.pack_json?'pack':'unit',pack:window.SalmosPurchasePacks.fromRecord(i),name:i.material_name,features:itemFeatures(i),quantity:Number(i.quantity)||1,color:i.color||'',size:i.size||'',fit:i.fit||'',materialClass:i.material_class||'',gender:i.gender||'Unisex',capacityMl:Number(i.capacity_ml)||0,widthCm:Number(i.width_cm)||0,unitPricePesos:(Number(i.unit_price_cents)||0)/100,sheetAssetId:Number(i.sheet_asset_id)||null,lineTotalCents:Number(i.line_total_cents),imageAssetIds:materialPhotos(i.material_id).map(a=>Number(a.id)),imageAssetId:Number(materialPhotos(i.material_id)[0]?.id)||null,_imageTouched:false,_custom:{}}));f.elements.date.value=today(parseAdminDate(purchase.occurred_at)||new Date());f.elements.supplier.value=purchase.supplier||'';f.elements.reference.value=purchase.reference||'';f.elements.notes.value=purchase.notes||'';qs('#purchaseSurchargeType').value=purchase.surcharge_type||'fixed';qs('#purchaseSurcharge').value=purchase.surcharge_value??((Number(purchase.surcharge_cents)||0)/100);const pays=purchase.payments||[],cash=pays.filter(p=>p.method!=='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0),tr=pays.filter(p=>p.method==='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0);qs('#purchasePaymentMethod').value=cash&&tr?'mixed':tr?'transfer':'cash';qs('#purchaseCashAmount').value=cash/100||'';qs('#purchaseTransferAmount').value=tr/100||'';const tp=pays.find(p=>p.method==='transfer');qs('#purchaseTransferOrigin').value=tp?.origin||'';qs('#purchaseTransferDestination').value=tp?.destination||'';qs('#purchaseTransferReference').value=tp?.reference||'';qs('#purchaseTransferDetails').value=tp?.details||'';}else{state.purchaseItems=[purchaseDefaultItem(context==='production'&&qs('#productionDialog')?.open?(qs('#productionMaterialType')?.value||'shirt'):'shirt')];f.elements.date.value=today();qs('#purchasePaymentMethod').value='cash';qs('#purchaseSurcharge').value='';}await setupPurchaseFunding(purchase);let receipts=qs('#purchaseExistingReceipts');if(!receipts){receipts=document.createElement('section');receipts.id='purchaseExistingReceipts';qs('[name="attachments"]',f).closest('.field').append(receipts);}receipts.innerHTML=purchaseReceiptHtml(purchase?.attachments||[],true)+purchaseFundingSummary(purchase);renderPurchaseItems();showPurchaseEditor();}
+  async function openPurchaseDialog(purchase=null,context='purchases'){await Promise.all([ensureCostingData(),loadMockupAssets(),loadGarmentPhotos()]);state.stockPurchaseDraft=null;state.purchaseContext=context;state.editingPurchaseId=purchase?Number(purchase.id):null;state.purchaseOriginalOccurredAt=purchase?.occurred_at||null;state.purchaseSupplierAutoValue='';const f=qs('#purchaseForm');f.reset();refreshSupplierPickers(purchase?.supplier||'');const title=qs('#purchaseDialogTitle');if(title)title.textContent=purchase?`Editar compra #${purchase.id}`:'Nueva compra';if(purchase){state.purchaseItems=(purchase.items||[]).map(i=>({sourceItemId:Number(i.id),materialType:i.material_type,purchaseMode:i.pack_json?'pack':'unit',pack:window.SalmosPurchasePacks.fromRecord(i),name:i.material_name,features:itemFeatures(i),quantity:Number(i.quantity)||1,color:i.color||'',size:i.size||'',fit:i.fit||'',materialClass:i.material_class||'',gender:i.gender||'Unisex',capacityMl:Number(i.capacity_ml)||0,widthCm:Number(i.width_cm)||0,unitPricePesos:(Number(i.unit_price_cents)||0)/100,sheetAssetId:Number(i.sheet_asset_id)||null,lineTotalCents:Number(i.line_total_cents),imageAssetIds:materialPhotos(i.material_id).map(a=>Number(a.id)),imageAssetId:Number(materialPhotos(i.material_id)[0]?.id)||null,_imageTouched:false,_custom:{}}));f.elements.date.value=today(parseAdminDate(purchase.occurred_at)||new Date());f.elements.supplier.value=purchase.supplier||'';f.elements.reference.value=purchase.reference||'';f.elements.notes.value=purchase.notes||'';qs('#purchaseSurchargeType').value=purchase.surcharge_type||'fixed';qs('#purchaseSurcharge').value=purchase.surcharge_value??((Number(purchase.surcharge_cents)||0)/100);const pays=purchase.payments||[],cash=pays.filter(p=>p.method!=='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0),tr=pays.filter(p=>p.method==='transfer').reduce((s,p)=>s+Number(p.amount_cents??p.amountCents??0),0);qs('#purchasePaymentMethod').value=specialPayment(pays[0]?.method)?pays[0].method:cash&&tr?'mixed':tr?'transfer':'cash';qs('#purchaseCashAmount').value=cash/100||'';qs('#purchaseTransferAmount').value=tr/100||'';const tp=pays.find(p=>p.method==='transfer');qs('#purchaseTransferOrigin').value=tp?.origin||'';qs('#purchaseTransferDestination').value=tp?.destination||'';qs('#purchaseTransferReference').value=tp?.reference||'';qs('#purchaseTransferDetails').value=tp?.details||'';}else{state.purchaseItems=[purchaseDefaultItem(context==='production'&&qs('#productionDialog')?.open?(qs('#productionMaterialType')?.value||'shirt'):'shirt')];f.elements.date.value=today();qs('#purchasePaymentMethod').value='cash';qs('#purchaseSurcharge').value='';}await setupPurchaseFunding(purchase);let receipts=qs('#purchaseExistingReceipts');if(!receipts){receipts=document.createElement('section');receipts.id='purchaseExistingReceipts';qs('[name="attachments"]',f).closest('.field').append(receipts);}receipts.innerHTML=purchaseReceiptHtml(purchase?.attachments||[],true)+purchaseFundingSummary(purchase);renderPurchaseItems();showPurchaseEditor();}
   async function savePurchase(){
     const form=qs('#purchaseForm');qsa('[data-purchase-row]',form).forEach(syncPurchaseRowFromDom);const fd=new FormData(form);
     for(const x of state.purchaseItems){if(x.materialType==='__other__'){const label=normalizeOption(x.customTypeLabel);if(!label)throw new Error('Escribí el nombre del nuevo tipo.');const code=safeCustomTypeCode(label);x.materialType=code;if(!customTypeEntries().some(t=>t.code===code))state.purchaseOptions.types.push({code,label});}}
     const items=state.purchaseItems.map(x=>({sourceItemId:Number(x.sourceItemId)||null,materialType:x.materialType,name:itemFeatures(x).join(' · '),features:itemFeatures(x),quantity:Number(x.quantity)||0,color:String(x.color||'').trim(),size:normalizeCatalogSize(x.size),fit:String(x.fit||'').trim(),materialClass:String(x.materialClass||'').trim(),gender:String(x.gender||'').trim(),capacityMl:Number(x.capacityMl)||0,widthCm:Number(x.widthCm)||0,unit:materialIsDtf(x.materialType)?'meter':'unit',unitPriceCents:pesosToCents(x.unitPricePesos),...(x.purchaseMode==='pack'?{pack:window.SalmosPurchasePacks.apply(x,true),lineTotalCents:Number(x.lineTotalCents)}:{}),sheetAssetId:Number(x.sheetAssetId)||null,...(x.sheetAssetId&&Number.isSafeInteger(Number(x.lineTotalCents))?{lineTotalCents:Number(x.lineTotalCents)}:{}),...(x._imageTouched?{imageAssetIds:purchasePhotoIds(x),imageAssetId:Number(x.imageAssetId)||null}:{})}));if(!items.length)throw new Error('Agregá al menos un producto o material.');for(const [i,item] of items.entries()){if(!item.name)throw new Error(`Elegí el material del renglón ${i+1}.`);if(!Number.isFinite(item.quantity)||item.quantity<=0)throw new Error(`Revisá la cantidad del renglón ${i+1}.`);if(!Number.isSafeInteger(item.unitPriceCents)||(item.pack?item.unitPriceCents<0:item.unitPriceCents<=0))throw new Error(`Ingresá un precio mayor a cero en el renglón ${i+1}.`);}
     const subtotal=purchaseSubtotalCents(),charge=surchargeData('purchase',subtotal),surcharge=charge.surcharge,grand=charge.total;
     if(!charge.valid)throw new Error('Ingresá un recargo válido, mayor o igual a cero.');
-    const {payments}=paymentSplit('purchase',grand);for(const payment of payments)if(payment.method==='cash')payment.destination=String(fd.get('supplier')||'').trim();
-    const occurredAt=recordDateTime(String(fd.get('date')),state.purchaseOriginalOccurredAt);const purchaseUrl=state.editingPurchaseId?`/api/admin/purchases/${state.editingPurchaseId}`:'/api/admin/purchases';const saved=await api(purchaseUrl,{method:state.editingPurchaseId?'PUT':'POST',body:JSON.stringify({funding:collectPurchaseFunding(),supplier:fd.get('supplier'),reference:fd.get('reference'),notes:fd.get('notes'),surchargeCents:surcharge,surchargeType:charge.type,surchargeValue:charge.value,payments,occurredAt,items})});if(saved.item?.id){state.editingPurchaseId=Number(saved.item.id);state.purchaseOriginalOccurredAt=saved.item.occurred_at||occurredAt;}if(state.stockPurchaseDraft){const pending=state.stockPurchaseDraft,delta=Number(state.purchaseItems[0]?.quantity);await api(`/api/admin/stock/${pending.variantId}/levels`,{method:'PATCH',body:JSON.stringify({purchaseId:state.editingPurchaseId,purchaseQuantity:delta,virtual:pending.virtual,expectedVirtual:pending.expectedVirtual})});delete state.stockLevelDrafts?.[pending.variantId];state.stockPurchaseDraft=null;}state.costingLoaded=false;const previousOptions=JSON.stringify(state.purchaseOptions);collectPurchaseCustomOptions();if(JSON.stringify(state.purchaseOptions)!==previousOptions){try{await persistAdminOptionSettings()}catch{}}const files=[...(form.elements.attachments?.files||[])];if(state.editingPurchaseId&&files.length){const up=new FormData();files.forEach(file=>up.append('files',file));await api(`/api/admin/purchases/${state.editingPurchaseId}/attachments`,{method:'POST',body:up});form.elements.attachments.value='';}state.costingLoaded=false;state.mockupAssetsLoaded=false;const verified=await api(`/api/admin/purchases/${state.editingPurchaseId}`,{cache:'no-store'});const index=state.purchases.findIndex(x=>Number(x.id)===state.editingPurchaseId);if(index>=0)state.purchases[index]=verified.item;return {...saved.item,...verified.item};
+    const {method,payments}=paymentSplit('purchase',grand);for(const payment of payments)if(payment.method==='cash')payment.destination=String(fd.get('supplier')||'').trim();
+    const occurredAt=recordDateTime(String(fd.get('date')),state.purchaseOriginalOccurredAt);const purchaseUrl=state.editingPurchaseId?`/api/admin/purchases/${state.editingPurchaseId}`:'/api/admin/purchases';const saved=await api(purchaseUrl,{method:state.editingPurchaseId?'PUT':'POST',body:JSON.stringify({funding:specialPayment(method)?undefined:collectPurchaseFunding(),payment_method:method,supplier:fd.get('supplier'),reference:fd.get('reference'),notes:fd.get('notes'),surchargeCents:surcharge,surchargeType:charge.type,surchargeValue:charge.value,payments,occurredAt,items})});if(saved.item?.id){state.editingPurchaseId=Number(saved.item.id);state.purchaseOriginalOccurredAt=saved.item.occurred_at||occurredAt;}if(state.stockPurchaseDraft){const pending=state.stockPurchaseDraft,delta=Number(state.purchaseItems[0]?.quantity);await api(`/api/admin/stock/${pending.variantId}/levels`,{method:'PATCH',body:JSON.stringify({purchaseId:state.editingPurchaseId,purchaseQuantity:delta,virtual:pending.virtual,expectedVirtual:pending.expectedVirtual})});delete state.stockLevelDrafts?.[pending.variantId];state.stockPurchaseDraft=null;}state.costingLoaded=false;const previousOptions=JSON.stringify(state.purchaseOptions);collectPurchaseCustomOptions();if(JSON.stringify(state.purchaseOptions)!==previousOptions){try{await persistAdminOptionSettings()}catch{}}const files=[...(form.elements.attachments?.files||[])];if(state.editingPurchaseId&&files.length){const up=new FormData();files.forEach(file=>up.append('files',file));await api(`/api/admin/purchases/${state.editingPurchaseId}/attachments`,{method:'POST',body:up});form.elements.attachments.value='';}state.costingLoaded=false;state.mockupAssetsLoaded=false;const verified=await api(`/api/admin/purchases/${state.editingPurchaseId}`,{cache:'no-store'});const index=state.purchases.findIndex(x=>Number(x.id)===state.editingPurchaseId);if(index>=0)state.purchases[index]=verified.item;return {...saved.item,...verified.item};
   }
   async function openProductionMaterialPurchase(){return openPurchaseDialog(null,'production');}
   async function refreshProductionAfterPurchase(purchase={}){
     const [materials]=await Promise.all([api('/api/admin/materials'),loadMockupAssets(true)]);state.materials=materials.items||[];syncProductionCustomTypes();const editor=state.materialEditor,edited=editor&&state.materials.find(m=>Number(m.id)===Number(editor.material.id));if(edited&&qs('#materialEditorDialog')?.open){editor.material=structuredClone(edited);const cost=qs('[data-material-field="unitCostPesos"]');if(cost)cost.value=centsToPesos(edited.average_cost_cents);const summary=qs('.material-editor-stock');if(summary)summary.textContent=`${Number(edited.stock_qty)} ${edited.unit==='meter'?'m':'u'} disponibles · ${money(edited.average_cost_cents)} por ${edited.unit==='meter'?'metro':'unidad'}`;}
-    if(qs('#productionDialog')?.open){const purchased=(purchase.materialIds||[]).map(id=>state.materials.find(material=>Number(material.id)===Number(id))).find(material=>material?.material_type===qs('#productionMaterialType')?.value);if(purchased&&!state.productionMaterialsSelected.some(item=>Number(item.materialId)===Number(purchased.id)))state.productionMaterialsSelected.unshift({materialId:Number(purchased.id),quantity:1});renderProductionMaterialGallery();renderProductionSelectedMaterials();renderMockupStudioOptions();await refreshMockupPreview();if(purchased)requestAnimationFrame(()=>{const group=[...(state.productionMaterialGroups?.values()||[])].find(group=>group.variants.some(material=>material.id===purchased.id));
+    if(qs('#productionDialog')?.open){const purchased=(purchase.materialIds||[]).map(id=>state.materials.find(material=>Number(material.id)===Number(id))).find(material=>material?.material_type===qs('#productionMaterialType')?.value);if(purchased&&!productionVirtualStock()&&!state.productionMaterialsSelected.some(item=>Number(item.materialId)===Number(purchased.id)))state.productionMaterialsSelected.unshift({materialId:Number(purchased.id),quantity:1});renderProductionMaterialGallery();renderProductionSelectedMaterials();renderMockupStudioOptions();await refreshMockupPreview();if(purchased)requestAnimationFrame(()=>{const group=[...(state.productionMaterialGroups?.values()||[])].find(group=>group.variants.some(material=>material.id===purchased.id));
       const card=group?qs(`[data-open-production-material-sizes="${group.id}"]`):qs(`[data-add-production-material="${purchased.id}"]`);card?.scrollIntoView?.({block:'nearest',inline:'center',behavior:'smooth'});card?.classList.add('new-material-highlight');});}
     else if(state.view==='production')await renderProduction();
   }
@@ -1920,7 +1948,7 @@
     const {item:purchase}=await api(`/api/admin/purchases/${Number(id)}`,{cache:'no-store'});if(!purchase)throw new Error('Compra no encontrada.');await Promise.all([loadMockupAssets(),ensureCostingData(),loadGarmentPhotos()]);
     const items=(purchase.items||[]).map(item=>({photos:[...new Map(purchaseListPhotos(item).map(p=>[p.url,p])).values()],index:0}));
     state.purchaseReview={id:purchase.id,items,activeItem:0};const dialog=ensureAdminDialog('purchaseReviewDialog',`Compra #${purchase.id}`);
-    qs('.dialog-body',dialog).innerHTML=`<div class="purchase-review-layout per-item-purchase"><div class="purchase-review-info"><header><button type="button" class="icon-btn" data-delete-purchase="${purchase.id}" aria-label="Eliminar compra"><i class="fa-solid fa-trash-can"></i></button><strong>${escapeHtml(purchase.supplier||'Sin proveedor')}</strong><button type="button" class="icon-btn" data-edit-reviewed-purchase="${purchase.id}" aria-label="Editar compra"><i class="fa-solid fa-pen" aria-hidden="true"></i></button></header><div>${adminDateTimeHtml(purchase.occurred_at)}</div>${(purchase.items||[]).map((i,index)=>`<section class="purchase-review-item"><button type="button" class="purchase-item-preview" data-purchase-item-photos="${index}" aria-label="Fotos de ${escapeHtml(i.material_name)}" ${state.purchaseReview.items[index].photos.length?'':'disabled'}>${state.purchaseReview.items[index].photos.length?`<img src="${escapeHtml(state.purchaseReview.items[index].photos[0].url)}" alt="${escapeHtml(i.material_name)}" loading="lazy">`:'<i class="fa-regular fa-image" aria-hidden="true"></i>'}</button><div class="purchase-review-item-detail">${colorDetail(i.color)}<strong>${escapeHtml([i.size,i.fit,i.material_name,i.material_class,i.gender,Number(i.capacity_ml)>0?i.capacity_ml+' ml':''].filter(Boolean).join(' · '))}</strong></div><div class="purchase-review-item-quantity"><b>${Number(i.quantity).toLocaleString('es-AR')}</b>${i.unit==='meter'?'<small>m</small>':''}</div><div class="purchase-review-item-price"><b>${purchaseReviewMoney(i.line_total_cents)}</b><small>${purchaseReviewMoney(i.unit_price_cents)} / ${i.unit==='meter'?'m':'u'}</small></div></section>`).join('')}<div>Subtotal ${purchaseWholeMoney(purchase.subtotal_cents??Number(purchase.total_cents)-Number(purchase.surcharge_cents||0))}</div>${Number(purchase.surcharge_cents)>0?`<div>Recargo ${purchaseWholeMoney(purchase.surcharge_cents)}</div>`:''}<h3>Total ${purchaseWholeMoney(purchase.total_cents)}</h3>${(purchase.payments||[]).map(payment=>`<section><strong>${payment.method==='transfer'?'Transferencia':'Efectivo'} ${purchaseWholeMoney(payment.amount_cents)}</strong><div>${escapeHtml([payment.origin,payment.destination,payment.reference,payment.details].filter(Boolean).join(' · '))}</div></section>`).join('')}${purchaseFundingSummary(purchase)}${purchaseReceiptHtml(purchase.attachments)}${purchase.reference?`<p>${escapeHtml(purchase.reference)}</p>`:''}${purchase.notes?`<p>${escapeHtml(purchase.notes)}</p>`:''}</div></div>`;dialog.showModal();
+    qs('.dialog-body',dialog).innerHTML=`<div class="purchase-review-layout per-item-purchase"><div class="purchase-review-info"><header><button type="button" class="icon-btn" data-delete-purchase="${purchase.id}" aria-label="Eliminar compra"><i class="fa-solid fa-trash-can"></i></button><strong>${escapeHtml(purchase.supplier||'Sin proveedor')}</strong><button type="button" class="icon-btn" data-edit-reviewed-purchase="${purchase.id}" aria-label="Editar compra"><i class="fa-solid fa-pen" aria-hidden="true"></i></button></header><div>${adminDateTimeHtml(purchase.occurred_at)}</div>${(purchase.items||[]).map((i,index)=>`<section class="purchase-review-item"><button type="button" class="purchase-item-preview" data-purchase-item-photos="${index}" aria-label="Fotos de ${escapeHtml(i.material_name)}" ${state.purchaseReview.items[index].photos.length?'':'disabled'}>${state.purchaseReview.items[index].photos.length?`<img src="${escapeHtml(state.purchaseReview.items[index].photos[0].url)}" alt="${escapeHtml(i.material_name)}" loading="lazy">`:'<i class="fa-regular fa-image" aria-hidden="true"></i>'}</button><div class="purchase-review-item-detail">${colorDetail(i.color)}<strong>${escapeHtml([i.size,i.fit,i.material_name,i.material_class,i.gender,Number(i.capacity_ml)>0?i.capacity_ml+' ml':''].filter(Boolean).join(' · '))}</strong></div><div class="purchase-review-item-quantity"><b>${Number(i.quantity).toLocaleString('es-AR')}</b>${i.unit==='meter'?'<small>m</small>':''}</div><div class="purchase-review-item-price"><b>${purchaseReviewMoney(i.line_total_cents)}</b><small>${purchaseReviewMoney(i.unit_price_cents)} / ${i.unit==='meter'?'m':'u'}</small></div></section>`).join('')}<div>Subtotal ${purchaseWholeMoney(purchase.subtotal_cents??Number(purchase.total_cents)-Number(purchase.surcharge_cents||0))}</div>${Number(purchase.surcharge_cents)>0?`<div>Recargo ${purchaseWholeMoney(purchase.surcharge_cents)}</div>`:''}<h3>Total ${purchaseWholeMoney(purchase.total_cents)}</h3>${(purchase.payments||[]).map(payment=>`<section><strong>${paymentLabels[payment.method]||'Pago'} ${purchaseWholeMoney(payment.amount_cents)}</strong><div>${escapeHtml([payment.origin,payment.destination,payment.reference,payment.details].filter(Boolean).join(' · '))}</div></section>`).join('')}${purchaseFundingSummary(purchase)}${purchaseReceiptHtml(purchase.attachments)}${purchase.reference?`<p>${escapeHtml(purchase.reference)}</p>`:''}${purchase.notes?`<p>${escapeHtml(purchase.notes)}</p>`:''}</div></div>`;dialog.showModal();
   }
   function purchaseReviewMoney(cents){return purchaseWholeMoney(cents);}
 
@@ -1953,11 +1981,16 @@
     for(const type of types){if(!type||window.SalmosBook.isMaterial(type)||['dtf_textile','dtf_uv','packaging','background'].includes(type)||[...select.options].some(option=>option.value===type))continue;select.add(new Option(materialTypeLabel(type),type));}
   }
   function productionVirtualStock(){return qs('#productionStockKind')?.value==='to_stock';}
+  function virtualMaterialDescription(material){
+    if(!material)return null;
+    const {id,sourceMaterialId,stock_qty,physicalStock,gender,...details}=material;
+    return {...details,virtual:true,size:''};
+  }
   function productionPrimaryMaterial(){
     const type=qs('#productionMaterialType')?.value||'shirt',selected=state.productionMaterialsSelected.map(x=>state.materials.find(m=>Number(m.id)===Number(x.materialId))).find(material=>material?.material_type===type)||null;
     if(!productionVirtualStock())return selected;
-    if(state.productionVirtualMaterial?.material_type===type)return state.productionVirtualMaterial;
-    if(selected)return {...selected,virtual:true,size:''};
+    if(state.productionVirtualMaterial?.material_type===type)return virtualMaterialDescription(state.productionVirtualMaterial);
+    if(selected)return virtualMaterialDescription(selected);
     const base=mockupBaseAsset();if(base?.product_type===type)return productionVirtualMaterialFromPhoto(base);
     const product=state.productionEditingProduct,catalog=product?.production_catalog||{};
     return product?{virtual:true,material_type:type,name:product.recipe?.base_material_name||'',fit:product.fit||catalog.fit||'',color:product.variants?.find(variant=>variant.active!==0&&variant.color)?.color||catalog.colors?.[0]||'',material_class:catalog.materialClass||'',size:'',capacity_ml:Number(product.capacity_ml)||0,average_cost_cents:null}:null;
@@ -1969,11 +2002,7 @@
     if(!state.productionMaterialsSelected.length)throw new Error('Elegí al menos una materia prima para el stock físico.');
   }
   function purchaseItemAudiences(item){
-    const audience=window.SalmosAudience.parse(item.materialClass||item.material_class||'');
-    if(audience.includes('Kids'))return ['Kids'];
-    if(femaleGarmentFit(item.fit))return ['Mujer'];
-    const gender=window.SalmosAudience.parse(item.gender);
-    return gender.length?gender:audience;
+    return kidClass25(item.materialClass||item.material_class)?['Kids']:['Hombre','Mujer'];
   }
   function productionMaterialMatchesAudience(material){
     const wanted=state.productionAudiences||[];
@@ -2004,42 +2033,37 @@
     return JSON.stringify([material.material_type,photoFit(material.fit),photoColor(material.color),
       normalizePurchaseClass(material.material_class||'ADULTOS'),Number(material.capacity_ml)||0,
       [...new Set(itemFeatures(material).map(montageFeatureKey))].sort(),
-      productionDesignSearchText(material.gender),Number(material.width_cm)||0,material.unit||'unit',
+      Number(material.width_cm)||0,material.unit||'unit',
       !materialIsGarment(material.material_type)&&material.material_type!=='cap'?String(material.size||''):'']);
   }
   function productionVirtualCatalog(type){
-    const groups=new Map(),familiesWithArticle=new Set(),fallbackKeys=new Set();
-    const articleKey=material=>JSON.stringify([material.material_type,photoFit(material.fit),photoColor(material.color),
-      normalizePurchaseClass(material.material_class||'ADULTOS'),Number(material.capacity_ml)||0]);
+    const groups=new Map(),familiesWithArticle=new Set();
     for(const material of galleryOrder('materials',state.materials.filter(material=>material.material_type===type&&productionMaterialMatchesAudience(material)))){
       const photos=state.mockupAssets.filter(asset=>productionPhotoMatchesItem(asset,material)
         &&productionPhotoMatchesAudience(asset,state.productionAudiences?.length?state.productionAudiences:purchaseItemAudiences(material)));
       const preferred=materialIsGarment(type)?purchaseGarmentPhotos(material).find(asset=>photos.includes(asset)):null;
-      const asset=preferred||photos.find(asset=>[asset.material_id,...asset.material_ids||[]].map(Number).includes(Number(material.id)))||photos[0];
-      const key=materialVariantKey(material),family=garmentFamilyFields(material);
+      const asset=preferred||photos.find(isHangerPhoto)||photos.find(photo=>mockupAssetCategory(photo)==='Producto');
+      const article=virtualMaterialDescription(material),key=materialVariantKey(article),family=garmentFamilyFields(material);
       if(family)familiesWithArticle.add(family.key);
-      fallbackKeys.add(articleKey(material));
-      if(groups.has(key)){groups.get(key).physicalStock+=Number(material.stock_qty)||0;continue;}
-      groups.set(key,{...material,virtual:true,virtualKey:'material:'+material.id,sourceMaterialId:Number(material.id),
-        sourcePhotoId:Number(asset?.id)||0,size:'',material_class:material.material_class||'ADULTOS',physicalStock:Number(material.stock_qty)||0});
+      if(groups.has(key))continue;
+      groups.set(key,{...article,virtualKey:'article:'+key,fromPurchaseCatalog:true,
+        sourcePhotoId:Number(asset?.id)||0,material_class:material.material_class||'ADULTOS'});
     }
     const photos=orderedProductPhotos(state.mockupAssets.filter(asset=>['base','cap'].includes(asset.asset_type)&&asset.product_type===type));
     const productPhotos=photos.filter(asset=>mockupAssetCategory(asset)==='Producto');
-    const modelPhotos=photos.filter(asset=>mockupAssetCategory(asset)==='Persona');
-    for(const asset of [...productPhotos,...modelPhotos]){
+    for(const asset of productPhotos){
       const linked=garmentPhotoMembership(asset);
       for(const family of linked.length?linked:[null]){
-        const material={...productionVirtualMaterialFromPhoto(asset,family),virtualKey:'photo:'+asset.id+':'+(family?.key||''),physicalStock:0};
-        const key=materialVariantKey(material),fallback=articleKey(material);
-        const person=mockupAssetCategory(asset)==='Persona';
-        if(groups.has(key)||!productionMaterialMatchesAudience(material)||person&&fallbackKeys.has(fallback))continue;
-        if(family&&familiesWithArticle.has(family.key)&&!person){
-          const matches=[...groups.values()].some(item=>item.sourceMaterialId&&garmentFamilyFields(item)?.key===family.key&&
+        const material={...productionVirtualMaterialFromPhoto(asset,family),virtualKey:'photo:'+asset.id+':'+(family?.key||'')};
+        const key=materialVariantKey(material);
+        if(groups.has(key)||!productionMaterialMatchesAudience(material))continue;
+        if(family&&familiesWithArticle.has(family.key)){
+          const matches=[...groups.values()].some(item=>item.fromPurchaseCatalog&&garmentFamilyFields(item)?.key===family.key&&
             (!photoProductDetails(asset).features.length||itemFeatures(item).map(montageFeatureKey).sort().join('|')===itemFeatures(material).map(montageFeatureKey).sort().join('|')));
           if(matches)continue;
         }
         if(family)familiesWithArticle.add(family.key);
-        if(!person)fallbackKeys.add(fallback);
+
         groups.set(key,material);
       }
     }
@@ -2047,7 +2071,7 @@
       if(family.type!==type||familiesWithArticle.has(family.key)||family.hangerIds.length||family.modelIds.length)continue;
       const material={virtual:true,virtualKey:'prenda:'+family.key,material_type:type,name:materialTypeLabel(type),
         fit:family.fit,color:family.color,size:'',material_class:family.line==='kids'?'NIÑOS':'ADULTOS',
-        physicalStock:0,average_cost_cents:null};
+        average_cost_cents:null};
       if(productionMaterialMatchesAudience(material))groups.set(materialVariantKey(material),material);
     }
     return [...groups.values()];
@@ -2057,11 +2081,11 @@
   }
   function productionVirtualMaterialCard(material){
     const source=state.mockupAssets.find(asset=>Number(asset.id)===Number(material.sourcePhotoId));
-    const asset=materialCardPhoto({...material,id:material.sourceMaterialId})||(source&&mockupAssetCategory(source)==='Producto'?source:null),selected=productionVirtualStock()&&materialVariantKey(state.productionVirtualMaterial||{})===materialVariantKey(material),knownCost=virtualMaterialCost(material).cents;return `<article class="production-picker-card ${selected?'selected':''}"><button type="button" class="production-material-select" data-production-virtual-material="${escapeHtml(material.virtualKey)}" aria-label="Elegir ${escapeHtml(productionMaterialLabel(material))}">${asset?`<img class="production-material-thumb" src="${escapeHtml(mockupAssetUrl(asset))}" alt="${escapeHtml(material.name)}" loading="lazy">`:''}<strong>${escapeHtml([materialTypeLabel(material.material_type),material.fit].filter(Boolean).join(' · '))}</strong><div class="material-feature-chips">${materialFeatureChips(itemFeatures(material))}</div>${material.color?colorDetail(material.color):''}${Number(material.capacity_ml)>0?`<small>${Number(material.capacity_ml)} ml</small>`:''}<small>Stock físico: ${Number(material.physicalStock)||0}</small><small>Stock virtual</small><b>${knownCost==null?'Costo editable al armar el producto':'Costo del sistema: '+money(knownCost)}</b></button>${material.sourceMaterialId?`<button type="button" class="btn btn-ghost" data-edit-production-material="${material.sourceMaterialId}">Editar</button>`:''}</article>`;}
+    const asset=source||materialCardPhoto(material),selected=productionVirtualStock()&&materialVariantKey(state.productionVirtualMaterial||{})===materialVariantKey(material),knownCost=virtualMaterialCost(material).cents;return `<article class="production-picker-card ${selected?'selected':''}"><button type="button" class="production-material-select" data-production-virtual-material="${escapeHtml(material.virtualKey)}" aria-label="Elegir ${escapeHtml(productionMaterialLabel(material))}">${asset?`<img class="production-material-thumb" src="${escapeHtml(mockupAssetUrl(asset))}" alt="${escapeHtml(material.name)}" loading="lazy">`:''}<strong>${escapeHtml([materialTypeLabel(material.material_type),material.fit].filter(Boolean).join(' · '))}</strong><div class="material-feature-chips">${materialFeatureChips(itemFeatures(material))}</div>${material.color?colorDetail(material.color):''}${Number(material.capacity_ml)>0?`<small>${Number(material.capacity_ml)} ml</small>`:''}<b>${knownCost==null?'Costo editable al armar el producto':'Costo del sistema: '+money(knownCost)}</b></button></article>`;}
   function renderProductionVirtualMaterial(){const host=qs('#productionSelectedMaterials'),material=productionVirtualStock()?state.productionVirtualMaterial:null;if(!host||!material)return;host.insertAdjacentHTML('afterbegin',`<div class="production-selected-row"><div><strong>${escapeHtml(productionMaterialLabel({...material,size:''}))}</strong><small>Stock virtual · ${materialIsGarment(material.material_type)?'todos los talles':'100 unidades'}</small></div><button class="icon-btn" type="button" data-remove-production-virtual-material aria-label="Quitar artículo virtual">×</button></div>`);}
   function productionCatalogData(){
     if(window.SalmosBook.isBookType(qs('#productionMaterialType')?.value))return {version:1,materialType:window.SalmosBook.BOOK,materialClass:'',fit:'',colors:[],sizes:[''],book:structuredClone(window.SalmosBook.current())};
-    const primary=productionPrimaryMaterial(),type=qs('#productionMaterialType')?.value||'shirt',colors=uniqOptions([primary?.color,...Object.entries(state.productionMountViews||{}).filter(([key,view])=>mockupViewHasOutput(view,key)).map(([,view])=>mockupBaseAsset(view.baseId)).filter(asset=>asset&&productionPhotoMatchesMaterial(asset,primary)).map(asset=>garmentPhotoMembership(asset).find(row=>row.key===garmentFamilyFields(primary||{})?.key)?.color||asset.color)].filter(Boolean)),klass=primary?.material_class||'ADULTOS',sizes=materialIsGarment(type)?uniqOptions(purchaseSizeOptions({materialClass:klass})):[''];
+    const primary=productionPrimaryMaterial(),type=qs('#productionMaterialType')?.value||'shirt',colors=uniqOptions([primary?.color,...Object.entries(state.productionMountViews||{}).filter(([key,view])=>mockupViewHasOutput(view,key)).map(([,view])=>mockupBaseAsset(view.baseId)).filter(asset=>asset&&productionPhotoMatchesMaterial(asset,primary)).map(asset=>garmentPhotoMembership(asset).find(row=>row.key===garmentFamilyFields(primary||{})?.key)?.color||asset.color)].filter(Boolean)),klass=(productionVirtualStock()?state.productionAudiences?.length===1&&state.productionAudiences[0]==='Kids'?'NIÑOS':primary?.material_class&&!kidClass25(primary.material_class)?primary.material_class:'ADULTOS':primary?.material_class)||'ADULTOS',sizes=materialIsGarment(type)?uniqOptions(purchaseSizeOptions({materialClass:klass})):[''];
     return {version:1,materialType:type,materialClass:klass,fit:primary?.fit||state.productionEditingProduct?.fit||'',colors,sizes:sizes.length?sizes:['S','M','L','XL','XXL']};
   }
 
@@ -2074,8 +2098,8 @@
     if(category&&Number(category.active)!==1&&status==='published'){const result=await api('/api/admin/categories/'+Number(category.id),{method:'PATCH',body:JSON.stringify({active:true})});Object.assign(category,result.item||result,{active:1});}
     return category;
   }
-  function productionMaterialLabel(m){return uniqOptions([materialTypeLabel(m.material_type),...itemFeatures(m),m.fit,m.size,m.material_class,m.gender,m.color,Number(m.capacity_ml)>0?`${Number(m.capacity_ml)} ml`:''].filter(Boolean)).join(' · ');}
-  function productionMaterialCard(source){const m=productionVirtualStock()?{...source,size:''}:source,selected=state.productionMaterialsSelected.some(x=>Number(x.materialId)===Number(m.id)),stock=Number(m.stock_qty)||0,preview=materialCardPhoto(m);return `<article class="production-picker-card ${selected?'selected':''} ${stock<=0?'out-of-stock':''}"><button type="button" class="production-material-select" data-add-production-material="${m.id}" ${sortablePhotoAttrs(m.id,'catalog-materials')} aria-label="Elegir ${escapeHtml(productionMaterialLabel(m))}">${sortablePhotoHandle()}${preview?`<img class="production-material-thumb" src="${escapeHtml(mockupAssetUrl(preview))}" alt="Vista de ${escapeHtml(m.name)}" loading="lazy">`:''}<strong>${escapeHtml([materialTypeLabel(m.material_type),materialIsGarment(m.material_type)?m.fit:'',materialIsGarment(m.material_type)?m.size:''].filter(Boolean).join(' · '))}</strong><div class="material-feature-chips">${materialFeatureChips(itemFeatures(m))}</div><span>${escapeHtml([m.fit,m.size,m.material_class,m.gender,Number(m.capacity_ml)>0?`${Number(m.capacity_ml)} ml`:''].filter(Boolean).join(' · '))}</span>${m.color?colorDetail(m.color):''}<small>${stock>0?`Disponible: ${stock.toLocaleString('es-AR',{maximumFractionDigits:3})} ${m.unit==='meter'?'m':'u'}`:'Sin stock físico · disponible para stock virtual'}</small><b>${money(m.average_cost_cents)} / ${m.unit==='meter'?'m':'u'}</b></button><button class="btn btn-ghost" type="button" data-edit-production-material="${m.id}">Editar</button></article>`;}
+  function productionMaterialLabel(m){return uniqOptions([materialTypeLabel(m.material_type),...itemFeatures(m),m.fit,m.size,m.material_class,m.color,Number(m.capacity_ml)>0?`${Number(m.capacity_ml)} ml`:''].filter(Boolean)).join(' · ');}
+  function productionMaterialCard(source){const m=productionVirtualStock()?{...source,size:''}:source,selected=state.productionMaterialsSelected.some(x=>Number(x.materialId)===Number(m.id)),stock=Number(m.stock_qty)||0,preview=materialCardPhoto(m);return `<article class="production-picker-card ${selected?'selected':''} ${stock<=0?'out-of-stock':''}"><button type="button" class="production-material-select" data-add-production-material="${m.id}" ${sortablePhotoAttrs(m.id,'catalog-materials')} aria-label="Elegir ${escapeHtml(productionMaterialLabel(m))}">${sortablePhotoHandle()}${preview?`<img class="production-material-thumb" src="${escapeHtml(mockupAssetUrl(preview))}" alt="Vista de ${escapeHtml(m.name)}" loading="lazy">`:''}<strong>${escapeHtml([materialTypeLabel(m.material_type),materialIsGarment(m.material_type)?m.fit:'',materialIsGarment(m.material_type)?m.size:''].filter(Boolean).join(' · '))}</strong><div class="material-feature-chips">${materialFeatureChips(itemFeatures(m))}</div><span>${escapeHtml([m.fit,m.size,m.material_class,Number(m.capacity_ml)>0?`${Number(m.capacity_ml)} ml`:''].filter(Boolean).join(' · '))}</span>${m.color?colorDetail(m.color):''}<small>${stock>0?`Disponible: ${stock.toLocaleString('es-AR',{maximumFractionDigits:3})} ${m.unit==='meter'?'m':'u'}`:'Sin stock físico · disponible para stock virtual'}</small><b>${money(m.average_cost_cents)} / ${m.unit==='meter'?'m':'u'}</b></button><button class="btn btn-ghost" type="button" data-edit-production-material="${m.id}">Editar</button></article>`;}
   function productionMaterialGroupCard(group){
     const selected=group.variants.some(material=>state.productionMaterialsSelected.some(row=>Number(row.materialId)===Number(material.id)));
     const photo=group.variants.map(materialCardPhoto).find(Boolean);
@@ -2086,7 +2110,7 @@
         ${photo?`<img class="production-material-thumb" src="${escapeHtml(mockupAssetUrl(photo))}" alt="" loading="lazy">`:''}
         <strong>${escapeHtml(title)}</strong>
         <div class="material-feature-chips">${materialFeatureChips(itemFeatures(group))}</div>
-        <small>${escapeHtml([group.material_class,group.gender].filter(Boolean).join(' · '))}</small>
+        <small>${escapeHtml(group.material_class||'')}</small>
         ${group.color?colorDetail(group.color):''}
         <small>Disponible · ${materialStockLabel(group)}</small>
         <b>Elegir talle</b>
@@ -2148,7 +2172,7 @@
     }):`<div class="notice">${available.length||catalog.length?'No hay materia prima que coincida con los filtros.':'No hay '+escapeHtml(materialTypeLabel(type).toLowerCase())+' cargadas. Ingresalas desde Compras.'}</div>`;
     mountGalleryLayoutButton(host,'production-materials');
   }
-  function renderProductionSelectedMaterials(){const host=qs('#productionSelectedMaterials');if(!host)return;host.innerHTML=state.productionMaterialsSelected.length?`<div class="production-selected-title">Materia prima elegida</div>${state.productionMaterialsSelected.map((x,i)=>{const m=state.materials.find(a=>Number(a.id)===Number(x.materialId));if(!m)return'';return `<div class="production-selected-row"><div><strong>${escapeHtml(productionMaterialLabel(productionVirtualStock()?{...m,size:''}:m))}</strong><small>${money(m.average_cost_cents)} por ${m.unit==='meter'?'metro':'unidad'}</small><button class="link-action" type="button" data-edit-production-material="${m.id}">Editar</button></div><div class="purchase-stepper compact-stepper"><button type="button" data-prod-material-step="-1" data-index="${i}">−</button><input class="input" value="${Number(x.quantity)||1}" readonly><button type="button" data-prod-material-step="1" data-index="${i}">+</button></div><button class="icon-btn" type="button" data-remove-production-material="${i}">×</button></div>`}).join('')}`:'';renderProductionVirtualMaterial();syncProductionPublicationDefaults();calcProductionBuilderCost();}
+  function renderProductionSelectedMaterials(){const host=qs('#productionSelectedMaterials');if(!host)return;host.innerHTML=state.productionMaterialsSelected.length?`<div class="production-selected-title">Materia prima elegida</div>${state.productionMaterialsSelected.map((x,i)=>{const m=state.materials.find(a=>Number(a.id)===Number(x.materialId));if(!m||productionVirtualStock()&&m.material_type===qs('#productionMaterialType').value)return '';return `<div class="production-selected-row"><div><strong>${escapeHtml(productionMaterialLabel(productionVirtualStock()?{...m,size:''}:m))}</strong><small>${money(m.average_cost_cents)} por ${m.unit==='meter'?'metro':'unidad'}</small><button class="link-action" type="button" data-edit-production-material="${m.id}">Editar</button></div><div class="purchase-stepper compact-stepper"><button type="button" data-prod-material-step="-1" data-index="${i}">−</button><input class="input" value="${Number(x.quantity)||1}" readonly><button type="button" data-prod-material-step="1" data-index="${i}">+</button></div><button class="icon-btn" type="button" data-remove-production-material="${i}">×</button></div>`}).join('')}`:'';renderProductionVirtualMaterial();syncProductionPublicationDefaults();calcProductionBuilderCost();}
   function productionDesignCard(d){const uses=productionDesignUses33(d.id).length,queued=(state.productionQueuedDesigns||[]).some(item=>Number(item.id)===Number(d.id)),selected=uses>0||queued,busy=state.productionDesignAdding?.has(mockupViewKey()+':'+Number(d.id)),url=designThumbnailUrl(d),name=escapeHtml(d.name||d.file_name);return `<button type="button" class="production-design-card ${selected?'selected':''} ${busy?'is-loading':''}" data-add-production-design="${d.id}" ${sortablePhotoAttrs(d.id,'catalog-designs')} ${designVisualAttrs(d)} aria-pressed="${selected}" aria-busy="${Boolean(busy)}" ${busy?'disabled':''} title="${name}" aria-label="${selected?'Seleccionar diseño agregado':'Agregar diseño'} ${name}">${sortablePhotoHandle()}${String(d.mime_type||'').startsWith('image/')?`<img crossorigin="use-credentials" src="${url}" alt="${name}" loading="lazy">`:`<span class="design-file-placeholder">${escapeHtml((d.file_name||'ARCHIVO').split('.').pop().toUpperCase())}</span>`}${busy?'<span class="production-design-feedback" role="status">Cargando…</span>':selected?`<span class="production-design-feedback">✓ ${queued&&!uses?'Elegido':uses>1?uses+' en esta vista':'Agregado'}</span>`:''}</button>`;}
 
   function productionDesignSearchText(value){return String(value??'').normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');}
@@ -2389,9 +2413,6 @@
     if(materialIsGarment(type)){
       const base=mockupBaseAsset(Number(state.mockupPreferredBaseId));
       state.productionMaterialFilters[type]=productionEditedGarmentFilters(product,primary,base,mainVariant);
-      if(!state.productionAudiences.length&&kidClass25(primary?.material_class||product.production_catalog?.materialClass)){
-        state.productionAudiences=['Kids'];state.productionAudienceDirty=true;
-      }
     }
     renderProductionAudiences();
     qs('#mockupCapSalePrice').value=project?.capSalePrice||'';qs('#mockupCapMaterialSelect').value=String(project?.capMaterialId||'');
@@ -2422,7 +2443,7 @@
       quantity.min='1';quantity.value=drafts[key]??state.productionPendingStart.quantity;quantity.dataset.stockDraftKey=key;
       return;
     }
-    const variants=(state.productionEditingProduct?.variants||[]).filter(v=>v.active!==0&&stockRowSizeAllowed({...v,product_id:state.productionEditingProduct?.id,category_name:state.productionEditingProduct?.category_name})),changed=productionStockModeChanged(),kind=qs('#productionStockKind').value,virtual=kind==='to_stock',multiple=!virtual&&(!state.productionEditingJob||changed)&&variants.length>1;host.hidden=virtual&&!variants.length;quantity.closest('.field').hidden=virtual||multiple;qs('.production-top-grid')?.classList.toggle('virtual-production',virtual);if(virtual){host.innerHTML=variants.length?`<details class="production-physical-stock"><summary>Stock físico <i class="fa-solid fa-pen" aria-hidden="true"></i><button type="button" class="btn btn-ghost small" data-open-product-lists data-product-list-kind="sizes">Administrar talles…</button></summary><div class="production-variant-stock">${variants.map(variant=>`<label class="production-variant-stock-row"><span>${escapeHtml([variant.color,normalizeCatalogSize(variant.size)].filter(Boolean).join(' · ')||'Única')}</span><input class="input" type="number" min="0" step="1" data-production-variant-stock="${variant.id}" data-stock-draft-key="physical:${variant.id}" value="${drafts['physical:'+variant.id]??(Number(variant.physical_qty??variant.stock)||0)}" aria-label="Stock físico ${escapeHtml([variant.color,normalizeCatalogSize(variant.size)].filter(Boolean).join(' '))}"></label>`).join('')}</div></details>`:'';quantity.closest('.field').classList.add('hidden');qs('#productionStockKind').disabled=false;return;}
+    const variants=(state.productionEditingProduct?.variants||[]).filter(v=>v.active!==0&&stockRowSizeAllowed({...v,product_id:state.productionEditingProduct?.id,category_name:state.productionEditingProduct?.category_name})),changed=productionStockModeChanged(),kind=qs('#productionStockKind').value,virtual=kind==='to_stock',multiple=!virtual&&(!state.productionEditingJob||changed)&&variants.length>1;host.hidden=virtual&&!variants.length;quantity.closest('.field').hidden=virtual||multiple;qs('.production-top-grid')?.classList.toggle('virtual-production',virtual);if(virtual){host.hidden=true;host.replaceChildren();delete quantity.dataset.stockDraftKey;return;}
     const value=v=>{const target='physical',key=target+':'+v.id;return {key,quantity:drafts[key]??(target==='to_stock'?Number(v.prepare_qty)||0:Number(v.physical_qty??v.stock)||0),label:'Stock físico'};};
     host.innerHTML=multiple?`<div class="production-variant-stock"><strong>Cantidades por variante</strong>${variants.map(v=>{const current=value(v);return `<label class="production-variant-stock-row"><span>${escapeHtml([v.color,v.size,v.sku].filter(Boolean).join(' · ')||'Única')} · ${current.label}</span><input class="input" type="number" min="0" step="1" data-production-variant-stock="${v.id}" data-stock-draft-key="${current.key}" value="${current.quantity}" aria-label="Cantidad ${escapeHtml([v.color,v.size].join(' '))}"></label>`;}).join('')}</div>`:'';
     quantity.closest('.field').classList.toggle('hidden',multiple);qs('#productionStockKind').disabled=false;quantity.min=state.productionEditingProduct&&(!state.productionEditingJob||changed)?'0':'1';
@@ -2432,7 +2453,7 @@
     if(!productionStockModeChanged())return undefined;const variants=(state.productionEditingProduct.variants||[]).filter(v=>v.active!==0),multiple=variants.length>1;
     return {stockKind:qs('#productionStockKind').value,keepPhysical:true,variants:variants.map(v=>{const quantity=productionVirtualStock()?Number(qs(`[data-production-variant-stock="${v.id}"]`)?.value??v.physical_qty??v.stock??0):Number(multiple?qs(`[data-production-variant-stock="${v.id}"]`)?.value??state.productionStockDrafts?.['physical:'+v.id]??v.physical_qty??v.stock??0:qs('#productionQuantity').value);if(!Number.isSafeInteger(quantity)||quantity<0)throw new Error('Revisá las cantidades de las variantes.');return {id:Number(v.id),stockKind:v.stock_kind||'physical',stock:Number(v.stock)||0,physicalQuantity:Number(v.physical_qty??v.stock)||0,prepareQuantity:Number(v.prepare_qty)||0,quantity};})};
   }
-  function productionVariantUpdates(){if(!state.productionEditingProduct||state.productionEditingJob&&!productionVirtualStock()||productionStockModeChanged())return undefined;const variants=(state.productionEditingProduct.variants||[]).filter(v=>v.active!==0),multiple=variants.length>1;return variants.map(v=>{const stockKind=v.stock_kind||'physical',expected=Number(v.physical_qty??v.stock)||0,field=qs(`[data-production-variant-stock="${v.id}"]`),value=Number(multiple||productionVirtualStock()?field?.value??state.productionStockDrafts?.['physical:'+v.id]??expected:qs('#productionQuantity').value);if(!Number.isSafeInteger(value)||value<0)throw new Error('Revisá las cantidades de las variantes.');return{id:Number(v.id),stockKind,level:'physical',quantity:value,expectedQuantity:expected};}).filter(v=>v.quantity!==v.expectedQuantity);}
+  function productionVariantUpdates(){if(productionVirtualStock()||!state.productionEditingProduct||state.productionEditingJob||productionStockModeChanged())return undefined;const variants=(state.productionEditingProduct.variants||[]).filter(v=>v.active!==0),multiple=variants.length>1;return variants.map(v=>{const stockKind=v.stock_kind||'physical',expected=Number(v.physical_qty??v.stock)||0,field=qs(`[data-production-variant-stock="${v.id}"]`),value=Number(multiple||productionVirtualStock()?field?.value??state.productionStockDrafts?.['physical:'+v.id]??expected:qs('#productionQuantity').value);if(!Number.isSafeInteger(value)||value<0)throw new Error('Revisá las cantidades de las variantes.');return{id:Number(v.id),stockKind,level:'physical',quantity:value,expectedQuantity:expected};}).filter(v=>v.quantity!==v.expectedQuantity);}
   async function productionMediaRequest(path,form){
     for(let attempt=0;;attempt++)try{return await api(path,{method:'POST',body:form});}catch(error){const transient=error instanceof TypeError||[502,503,504].includes(error.status)||error.status===500&&/D1_ERROR|internal error|temporar|database.*busy/i.test(error.message);if(!transient||attempt>=2)throw error;await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));}
   }
@@ -3224,7 +3245,54 @@
   }
   function renderMockupAssetList(){renderProductionPhotos();}
   function mockupAssetCategory(asset){return asset.asset_type==='background'?'Fondo':asset.gender==='Producto'||asset.asset_type==='cap'?'Producto':'Persona';}
-  function montagePhotoCard(a){return `<article class="montage-photo-card"><button type="button" class="montage-photo-thumb checkerboard" data-edit-mockup-asset="${a.id}" ${sortablePhotoAttrs(a.id,'catalog-photos')} aria-label="Editar ${escapeHtml(a.name)}">${sortablePhotoHandle()}<img draggable="false" src="${escapeHtml(mockupAssetUrl(a))}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async"></button><div class="montage-photo-info"><strong>${escapeHtml(photoProductLabel(a))}</strong><small>${a.asset_type==='background'?'':escapeHtml([a.model_name,a.pose==='both'?'Ambos':a.pose==='back'?'Espalda':a.pose==='side'?'Perfil':'Frente'].filter(Boolean).join(' · '))}</small>${a.color?`<span class="montage-photo-color"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(a.color))}"></span>${escapeHtml(a.color)}</span>`:''}<div class="admin-actions"><button type="button" class="icon-btn" data-edit-mockup-asset="${a.id}" aria-label="Editar foto" title="Editar foto"><i class="fa-solid fa-pen" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-copy-mockup-asset="${a.id}" aria-label="Duplicar foto" title="Duplicar foto"><i class="fa-solid fa-copy" aria-hidden="true"></i></button><button type="button" class="icon-btn btn-danger" data-delete-mockup-asset="${a.id}" aria-label="Eliminar foto" title="Eliminar foto"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div></div></article>`;}
+  function montageLinkedModels(product){
+    if(mockupAssetCategory(product)!=='Producto')return '';
+    const catalog=new Map(state.mockupAssets.map(asset=>[Number(asset.id),asset]));
+    const models=state.mockupAssets.filter(photo=>mockupAssetCategory(photo)==='Persona'&&linkedModelProducts(photo,catalog).includes(Number(product.id)));
+    return `<div class="montage-card-models">${models.map(model=>`<button type="button" class="montage-model-thumb" data-edit-mockup-asset="${model.id}" title="${escapeHtml(model.name)}" aria-label="Editar ${escapeHtml(model.name)}"><img src="${escapeHtml(mockupAssetUrl(model))}" alt="" loading="lazy" decoding="async"></button>`).join('')}
+      <button type="button" class="icon-btn" data-add-model-for-photo="${product.id}" title="Agregar modelo" aria-label="Agregar modelo"><i class="fa-solid fa-user-plus" aria-hidden="true"></i></button></div>`;
+  }
+  function addModelToMontageProduct(product){
+    const dialog=ensureAdminDialog('montageProductModelsDialog','Modelos · '+product.name),body=qs('.dialog-body',dialog);
+    const catalog=new Map(state.mockupAssets.map(asset=>[Number(asset.id),asset])),productId=Number(product.id);
+    const details=photoProductDetails(product);
+    const options=state.mockupAssets.filter(asset=>{
+      if(mockupAssetCategory(asset)!=='Persona'||asset.product_type!==details.type||linkedModelProducts(asset,catalog).includes(productId))return false;
+      const model=photoProductDetails(asset);
+      return (!model.variant||!details.variant||photoFit(model.variant)===photoFit(details.variant))&&
+        (!model.color||!details.color||photoColor(model.color)===photoColor(details.color));
+    });
+    body.innerHTML=`<form><button type="button" class="btn btn-primary" data-upload-product-model>+ Subir modelo</button>
+      ${options.length?`<div class="montage-model-link-grid" aria-label="Modelos compatibles">
+        ${options.map(asset=>`<label><img class="checkerboard" src="${escapeHtml(mockupAssetUrl(asset))}" alt="" loading="lazy">
+          <span><input type="checkbox" value="${asset.id}"> ${escapeHtml(asset.model_name||asset.name)} · ${asset.pose==='back'?'Espalda':'Frente'}</span></label>`).join('')}
+      </div><button type="submit" class="btn btn-ghost">Vincular modelos elegidos</button>`:''}
+      <p role="status" data-montage-models-status></p></form>`;
+    qs('[data-upload-product-model]',body).onclick=async ()=>{
+      try{
+        const {productType,garmentStyle,featuresText,color,variantLabel,capStyle,pose}=mockupUploadValues(product);
+        await openMockupAssetDialog(null,null,{galleryDefaults:{category:'Persona',productType,garmentStyle,featuresText,color,variantLabel,capStyle,pose,
+          associatedProductsJson:JSON.stringify([productId])}});
+        dialog.close();
+        qs('#mockupAssetFile')?.focus();
+      }catch(error){qs('[data-montage-models-status]',body).textContent=error.message;}
+    };
+    qs('form',body).onsubmit=async event=>{
+      event.preventDefault();
+      const links=qsa('input:checked',body).map(input=>({modelId:Number(input.value),productIds:[productId]})),status=qs('[data-montage-models-status]',body);
+      if(!links.length){status.textContent='Elegí al menos un modelo.';return;}
+      const submit=qs('[type="submit"]',body);submit.disabled=true;
+      try{
+        applyMontageMetadata(await api('/api/admin/mockup-assets/model-products',{method:'PATCH',body:JSON.stringify({links})}));
+        dialog.close();
+        await loadGarmentPhotos();
+        renderProductionPhotos();
+      }catch(error){status.textContent=error.message;toast(error.message,'error');}
+      finally{submit.disabled=false;}
+    };
+    dialog.showModal();
+  }
+  function montagePhotoCard(a){return `<article class="montage-photo-card"><button type="button" class="montage-photo-thumb checkerboard" data-edit-mockup-asset="${a.id}" ${sortablePhotoAttrs(a.id,'catalog-photos')} aria-label="Editar ${escapeHtml(a.name)}">${sortablePhotoHandle()}<img draggable="false" src="${escapeHtml(mockupAssetUrl(a))}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async"></button><div class="montage-photo-info"><strong>${escapeHtml(photoProductLabel(a))}</strong><small>${a.asset_type==='background'?'':escapeHtml([a.model_name,a.pose==='both'?'Ambos':a.pose==='back'?'Espalda':a.pose==='side'?'Perfil':'Frente'].filter(Boolean).join(' · '))}</small>${a.color?`<span class="montage-photo-color"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(a.color))}"></span>${escapeHtml(a.color)}</span>`:''}${montageLinkedModels(a)}<div class="admin-actions"><button type="button" class="icon-btn" data-edit-mockup-asset="${a.id}" aria-label="Editar foto" title="Editar foto"><i class="fa-solid fa-pen" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-copy-mockup-asset="${a.id}" aria-label="Duplicar foto" title="Duplicar foto"><i class="fa-solid fa-copy" aria-hidden="true"></i></button><button type="button" class="icon-btn btn-danger" data-delete-mockup-asset="${a.id}" aria-label="Eliminar foto" title="Eliminar foto"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div></div></article>`;}
   function adminListCollapseKey(){return state.view==='products'&&state.productInventoryView==='purchased'?'purchased-products':state.view;}
   function adminListsCollapsed(){return Boolean(state.adminListCollapseByView?.[adminListCollapseKey()]);}
   function syncAdminListButtons(){
@@ -3387,7 +3455,6 @@
   const MONTAGE_AUDIENCES=[['Hombre','Hombres'],['Mujer','Mujeres'],['Kids','Niños']];
   const MONTAGE_GARMENTS=['shirt','hoodie','chomba'];
   const MONTAGE_CAP_AGES=[['adult','Adultos'],['kids','Niños']];
-  const MODEL_PHOTO_KINDS=[['Hombre','Hombre'],['Mujer','Mujer'],['Niño','Niño'],['Niña','Niña'],['Kids','Kids · sin indicar']];
   const MONTAGE_SUBJECTS=[['Hombre','Hombres'],['Mujer','Mujeres'],['Kids','Kids']];
   const MONTAGE_KIDS=[['Niño','Varones'],['Niña','Nenas']];
   const MONTAGE_FIELDS=['section','view','subject','kidsModel','bookAudience','collection','fit','model','color','capAge','capStyle'];
@@ -3795,6 +3862,7 @@
     if(qs('#productionDialog')?.open)suggestProductionDescription();
   }
   function reviewMontageDifferences(conflicts,action='Guardar fotos'){
+    conflicts=conflicts.map(row=>({...row,fields:row.fields.filter(field=>field.field!=='audience')})).filter(row=>row.fields.length);
     if(!conflicts.length)return Promise.resolve([]);
     const dialog=ensureAdminDialog('montageDifferencesDialog','Revisar diferencias con Compras');
     const groups=new Map();
@@ -3868,6 +3936,7 @@
     });
   }
   async function reviewProductionPhotoMaterials(){
+    if(productionVirtualStock())return true;
     const primary=productionPrimaryMaterial(),materialId=Number(primary?.sourceMaterialId||primary?.id);
     const base=mockupBaseAsset(),views=Object.values(state.productionMountViews||{});
     const used=new Set([base?.id,...views.filter(view=>!view.removed&&view.included).map(view=>view.baseId)].map(Number));
@@ -3923,8 +3992,18 @@
     return `<div class="mockup-color-picker salmos-color-field"><input class="input" data-mockup-field="color" value="${escapeHtml(value)}" data-mockup-palette="${id}" readonly aria-haspopup="dialog" placeholder="Elegir color"><button type="button" class="salmos-color-button" data-mockup-palette="${id}" style="--color-swatch:${escapeHtml(value?colorSwatch(value):'transparent')}" aria-label="Elegir color desde la paleta"></button></div>`;
   }
   function mockupUploadValues(asset){return {ageGroup:isProductCapPhoto(asset)?capPhotoUse(asset):'both',name:asset.name,category:mockupAssetCategory(asset),gender:mockupAssetCategory(asset)==='Persona'?modelPhotoKind(asset):'',modelName:asset.model_name||'',productType:asset.product_type||'shirt',garmentStyle:asset.garment_style||'',pose:asset.pose||'front',color:asset.color||'',capStyle:asset.cap_style||'none',variantLabel:asset.variant_label||'',associatedModelsJson:JSON.stringify(asset.associated_models||[]),associatedProductsJson:JSON.stringify(linkedModelProducts(asset)),featuresText:photoProductDetails(asset).features.join(' · ')};}
+  function mockupPersonFields(kind){
+    const child=['Niño','Niña','Kids'].includes(kind);
+    const person=['Hombre','Niño'].includes(kind)?'Hombre':['Mujer','Niña'].includes(kind)?'Mujer':'';
+    return `<label class="field" data-person-field>Persona<select class="select" data-mockup-person>
+      <option value="">Sin indicar</option><option ${person==='Hombre'?'selected':''}>Hombre</option><option ${person==='Mujer'?'selected':''}>Mujer</option></select></label>
+      <label class="field" data-person-field>Edad<select class="select" data-mockup-person-age><option value="adult">Adulto</option><option value="child" ${child?'selected':''}>Niño / niña</option></select></label>`;
+  }
   function mockupCardValues(card){
-    return Object.fromEntries(qsa('[data-mockup-field]',card).map(el=>[el.dataset.mockupField,el.value]));
+    const values=Object.fromEntries(qsa('[data-mockup-field]',card).map(el=>[el.dataset.mockupField,el.value]));
+    const person=qs('[data-mockup-person]',card)?.value||'';
+    values.gender=values.category==='Persona'?(qs('[data-mockup-person-age]',card)?.value==='child'?({Hombre:'Niño',Mujer:'Niña'}[person]||'Kids'):person):'';
+    return values;
   }
   function captureMockupQueue(){for(const r of state.mockupUploadQueue||[]){const card=qs(`[data-mockup-upload="${r.id}"]`);if(card)r.values={...r.values,...mockupCardValues(card)};}}
   function mockupDefaultGarment(item){
@@ -4074,7 +4153,7 @@
     host.innerHTML=(state.mockupUploadQueue||[]).map(r=>{
       if(!r.values){const item=mockupUploadContextItem(),person=!item;r.values={ageGroup:'both',name:(r.file?.name||r.fileName||'Foto').replace(/\.[^.]+$/,''),category:person?'Persona':'Producto',gender:'',modelName:person?(state.mockupCatalog?.models?.[0]||''):'',productType:item?.materialType||'shirt',garmentStyle:item&&materialIsGarment(item.materialType)?item.fit||mockupDefaultGarment(item):'',pose:'front',color:item?.color||'',capStyle:'none',variantLabel:state.mockupUploadContext?.production&&window.SalmosBook.isBookType(item?.materialType)?window.SalmosBook.current().kind:item?.bookMaterial?.kind||item?.variantLabel||'',featuresText:(item?.features||[]).join(' · '),...(state.mockupUploadContext?.galleryDefaults||{})};}
       const v=r.values,color=v.color==='__custom__'?v.customColor:v.color,custom=color&&!colors.includes(color),select=(key,options)=>options.map(([value,label])=>`<option value="${escapeHtml(value)}" ${v[key]===value?'selected':''}>${escapeHtml(label)}</option>`).join(''),garments=uniqOptions([...purchaseFitOptions(),v.garmentStyle].filter(Boolean));if(v.productType&&!products.has(v.productType))products.set(v.productType,materialTypeLabel(v.productType));
-      return `<div class="mockup-upload-card" data-mockup-upload="${r.id}"><button type="button" class="mockup-upload-photo checkerboard" data-open-mockup-queue="${r.id}" aria-label="Ampliar ${escapeHtml(v.name)}"><img src="${escapeHtml(r.url)}" alt="${escapeHtml(v.name)}"><span>Ampliar / zoom</span></button><div class="mockup-upload-fields"><label class="field">Nombre<input class="input" data-mockup-field="name" value="${escapeHtml(v.name)}"></label><label class="field">Qué es<select class="select" data-mockup-field="category">${select('category',[['Persona','Persona'],['Producto','Producto'],['Fondo','Fondo']])}</select></label><label class="field" data-person-field>Quién aparece<select class="select" data-mockup-field="gender">${select('gender',[['','Sin indicar'],...MODEL_PHOTO_KINDS])}</select></label><label class="field" data-photo-product-line hidden>Edad de la gorra<select class="select" data-mockup-field="ageGroup">${select('ageGroup',[['both','Adultos y Kids'],['adult','Adultos'],['kids','Kids']])}</select></label><label class="field" data-person-field><span class="mockup-model-label">Nombre del modelo</span><select class="select" data-mockup-field="modelName"><option value="" hidden></option>${uniqOptions([...(state.mockupCatalog?.models||[]),...(state.mockupCatalog?.managedLists?.models?[]:state.mockupAssets.filter(a=>mockupAssetCategory(a)==='Persona').map(a=>a.model_name)),v.modelName]).map(name=>`<option value="${escapeHtml(name)}" ${v.modelName===name?'selected':''}>${escapeHtml(name)}</option>`).join('')}</select><button class="btn btn-ghost" type="button" data-add-mockup-model="${r.id}">+ Agregar modelo</button></label><label class="field" data-product-field>Tipo de producto<select class="select" data-mockup-field="productType">${select('productType',[...products])}</select></label><label class="field" data-cut-field>Corte / prenda<select class="select" data-mockup-field="garmentStyle">${select('garmentStyle',[['','Sin especificar'],...garments.map(x=>[x,x])])}<option value="__manage_fits__">Administrar cortes…</option></select></label><label class="field" data-product-field>Variante<select class="select" data-mockup-field="variantLabel">${mockupVariantOptions(v.productType,v.variantLabel)}</select></label>${mockupMultiPicker(r,"featuresText","Materiales / características",mockupMaterialChoices(v.productType),"data-material-field")}<label class="field" data-base-field>Vista<select class="select" data-mockup-field="pose">${select('pose',[['front','Frente'],['back','Espalda'],['side','Perfil'],['both','Ambos']])}</select></label><div class="field" data-colored-field><label>Color</label>${mockupColorPickerHtml(r.id,custom?'__custom__':v.color,custom?color:v.customColor||'')}</div><label class="field" data-person-field>Gorra en la foto<select class="select" data-mockup-field="capStyle">${select('capStyle',[['none','Sin gorra'],['mesh','Gorra con red'],['solid','Gorra sin red']])}</select></label>${mockupProductAssociationField(v,r.id)}<div class="mockup-upload-actions"><button class="btn btn-ghost" type="button" data-mockup-copy-info="${r.id}" aria-label="Copiar datos o duplicar ficha" title="Copiar datos a las siguientes; si no hay otra, duplicar ficha">⧉</button><label class="mockup-card-file-action" title="Elegir foto para esta ficha"><span>Foto</span><input type="file" accept="image/png,image/jpeg,image/webp" data-mockup-replace-file="${r.id}" aria-label="Cambiar foto de esta ficha"></label><small data-mockup-status>${r.needsFile?'Elegí la foto de esta ficha':r.saved?'Guardado ✓':r.assetId?'Editar foto':'Pendiente'}</small>${r.assetId?'':`<button type="button" class="icon-btn" data-mockup-remove="${r.id}" aria-label="Quitar foto">×</button>`}</div></div></div>`;
+      return `<div class="mockup-upload-card" data-mockup-upload="${r.id}"><button type="button" class="mockup-upload-photo checkerboard" data-open-mockup-queue="${r.id}" aria-label="Ampliar ${escapeHtml(v.name)}"><img src="${escapeHtml(r.url)}" alt="${escapeHtml(v.name)}"><span>Ampliar / zoom</span></button><div class="mockup-upload-fields"><label class="field">Nombre<input class="input" data-mockup-field="name" value="${escapeHtml(v.name)}"></label><label class="field">Qué es<select class="select" data-mockup-field="category">${select('category',[['Persona','Persona'],['Producto','Producto'],['Fondo','Fondo']])}</select></label>${mockupPersonFields(v.gender)}<input type="hidden" data-mockup-field="ageGroup" value="${escapeHtml(v.ageGroup||'both')}"><label class="field" data-person-field><span class="mockup-model-label">Nombre del modelo</span><select class="select" data-mockup-field="modelName"><option value="" hidden></option>${uniqOptions([...(state.mockupCatalog?.models||[]),...(state.mockupCatalog?.managedLists?.models?[]:state.mockupAssets.filter(a=>mockupAssetCategory(a)==='Persona').map(a=>a.model_name)),v.modelName]).map(name=>`<option value="${escapeHtml(name)}" ${v.modelName===name?'selected':''}>${escapeHtml(name)}</option>`).join('')}</select><button class="btn btn-ghost" type="button" data-add-mockup-model="${r.id}">+ Agregar modelo</button></label><label class="field" data-product-field>Tipo de producto<select class="select" data-mockup-field="productType">${select('productType',[...products])}</select></label><label class="field" data-cut-field>Corte / prenda<select class="select" data-mockup-field="garmentStyle">${select('garmentStyle',[['','Sin especificar'],...garments.map(x=>[x,x])])}<option value="__manage_fits__">Administrar cortes…</option></select></label><label class="field" data-product-field>Variante<select class="select" data-mockup-field="variantLabel">${mockupVariantOptions(v.productType,v.variantLabel)}</select></label>${mockupMultiPicker(r,"featuresText","Materiales / características",mockupMaterialChoices(v.productType),"data-material-field")}<label class="field" data-base-field>Vista<select class="select" data-mockup-field="pose">${select('pose',[['front','Frente'],['back','Espalda'],['side','Perfil'],['both','Ambos']])}</select></label><div class="field" data-colored-field><label>Color</label>${mockupColorPickerHtml(r.id,custom?'__custom__':v.color,custom?color:v.customColor||'')}</div><label class="field" data-person-field>Gorra en la foto<select class="select" data-mockup-field="capStyle">${select('capStyle',[['none','Sin gorra'],['mesh','Gorra con red'],['solid','Gorra sin red']])}</select></label>${mockupProductAssociationField(v,r.id)}<div class="mockup-upload-actions"><button class="btn btn-ghost" type="button" data-mockup-copy-info="${r.id}" aria-label="Copiar datos o duplicar ficha" title="Copiar datos a las siguientes; si no hay otra, duplicar ficha">⧉</button><label class="mockup-card-file-action" title="Elegir foto para esta ficha"><span>Foto</span><input type="file" accept="image/png,image/jpeg,image/webp" data-mockup-replace-file="${r.id}" aria-label="Cambiar foto de esta ficha"></label><small data-mockup-status>${r.needsFile?'Elegí la foto de esta ficha':r.saved?'Guardado ✓':r.assetId?'Editar foto':'Pendiente'}</small>${r.assetId?'':`<button type="button" class="icon-btn" data-mockup-remove="${r.id}" aria-label="Quitar foto">×</button>`}</div></div></div>`;
     }).join('')+`<datalist id="mockupModelNames">${mockupCatalogOptions('models')}</datalist><datalist id="mockupVariants">${mockupCatalogOptions('variants')}</datalist><datalist id="mockupColorNames">${mockupColorChoices().map(color=>`<option value="${escapeHtml(color)}"></option>`).join('')}</datalist>`;
     for(const card of qsa('[data-mockup-upload]',host)){const record=state.mockupUploadQueue.find(row=>String(row.id)===card.dataset.mockupUpload);if(record&&!record.values.ageGroup)record.values.ageGroup='both';for(const select of qsa('select[data-mockup-field]',card))select.value=record?.values?.[select.dataset.mockupField]||'';syncMockupUploadCard(card);}
   }
@@ -4104,7 +4183,7 @@
     const scale=(state.mockupPhotoFit||1)*zoom;if(img.naturalWidth){img.style.width=`${Math.max(1,Math.round(img.naturalWidth*scale))}px`;img.style.height=`${Math.max(1,Math.round(img.naturalHeight*scale))}px`;}
     qs('#mockupPhotoZoomValue').textContent=`${Math.round(zoom*100)}%`;stage.scrollLeft=Math.max(0,left);stage.scrollTop=Math.max(0,top);
   }
-  function syncMockupUploadCard(card){if(!card)return;const category=qs('[data-mockup-field="category"]',card)?.value,person=category==='Persona',garment=materialIsGarment(qs('[data-mockup-field="productType"]',card)?.value),pose=qs('[data-mockup-field="pose"]',card);qsa('[data-photo-product-line]',card).forEach(el=>el.hidden=category!=='Producto'||qs('[data-mockup-field="productType"]',card)?.value!=='cap');qsa('[data-person-field]',card).forEach(el=>el.classList.toggle('hidden',!person));qsa('[data-product-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-cut-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'||!['shirt','chomba','hoodie'].includes(qs('[data-mockup-field="productType"]',card)?.value)));qsa('[data-base-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-colored-field]',card).forEach(el=>{el.classList.remove('hidden');qs('label',el).textContent=category==='Fondo'?'Color predominante':'Color';});if(pose){pose.options[0].textContent=(person||garment)?'Frente':'Lado A';pose.options[1].textContent=(person||garment)?'Espalda':'Lado B';}qsa('[data-material-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-associated-products-field]',card).forEach(field=>{
+  function syncMockupUploadCard(card){if(!card)return;const category=qs('[data-mockup-field="category"]',card)?.value,person=category==='Persona',garment=materialIsGarment(qs('[data-mockup-field="productType"]',card)?.value),pose=qs('[data-mockup-field="pose"]',card);qsa('[data-person-field]',card).forEach(el=>el.classList.toggle('hidden',!person));qsa('[data-product-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-cut-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'||!['shirt','chomba','hoodie'].includes(qs('[data-mockup-field="productType"]',card)?.value)));qsa('[data-base-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-colored-field]',card).forEach(el=>{el.classList.remove('hidden');qs('label',el).textContent=category==='Fondo'?'Color predominante':'Color';});if(pose){pose.options[0].textContent=(person||garment)?'Frente':'Lado A';pose.options[1].textContent=(person||garment)?'Espalda':'Lado B';}qsa('[data-material-field]',card).forEach(el=>el.classList.toggle('hidden',category==='Fondo'));qsa('[data-associated-products-field]',card).forEach(field=>{
       field.hidden=!person;
     });const type=qs('[data-mockup-field="productType"]',card)?.value,variant=qs('[data-mockup-field="variantLabel"]',card),record=state.mockupUploadQueue?.find(r=>String(r.id)===card.dataset.mockupUpload);if(record){const typeChanged=record.lastProductType&&record.lastProductType!==type;if(typeChanged){
       qs('[data-mockup-field="featuresText"]',card).value='';
@@ -4157,7 +4236,7 @@
   async function saveMockupAsset(form,button){
     if(state.mockupUploadBusy)return;const queue=state.mockupUploadQueue||[];if(!queue.length)throw new Error('Elegí una o más fotos.');const controls=qsa('input,select,textarea,button',qs('#mockupAssetDialog')).map(control=>[control,control.disabled]);controls.forEach(([control])=>control.disabled=true);state.mockupUploadBusy=true;button.disabled=true;
     try{for(const r of queue){const card=qs(`[data-mockup-upload="${r.id}"]`),values=mockupCardValues(card),field=name=>String(values[name]||'').trim(),category=field('category'),name=field('name')||(r.file?.name||r.fileName||'Foto').replace(/\.[^.]+$/,''),color=field('color')==='__custom__'?field('customColor'):field('color');
-      if(category==='Persona'&&field('gender')==='Hombre'&&femaleGarmentFit(field('garmentStyle')))throw new Error(`${name}: elegí un modelo compatible con el corte Crop o Babytee.`);
+      if(category==='Persona'&&['Hombre','Niño'].includes(field('gender'))&&femaleGarmentFit(field('garmentStyle')))throw new Error(`${name}: elegí un modelo compatible con el corte Crop o Babytee.`);
       if(r.needsFile)throw new Error(`Elegí la foto para ${name}.`);if(category!=='Fondo'&&(category==='Producto'?!field('productType'):!field('modelName')))throw new Error(`Completá ${category==='Producto'?'el tipo de producto':'el nombre del modelo'} para ${name}.`);if(field('color')==='__custom__'&&!color)throw new Error(`Escribí el color de ${name}.`);
       const payload={assetType:category==='Fondo'?'background':r.assetType==='cap'&&category==='Producto'&&field('productType')==='cap'?'cap':'base',name,gender:category==='Fondo'?'':category==='Persona'?field('gender'):'Producto',modelName:category==='Fondo'?'':category==='Producto'?qs('[data-mockup-field="productType"] option:checked',card)?.textContent||field('productType'):field('modelName'),productType:category==='Fondo'?'background':field('productType')||'shirt',pose:category==='Fondo'?'front':field('pose')||'front',garmentStyle:category==='Fondo'?'':field('garmentStyle'),capStyle:category==='Persona'?field('capStyle'):'none',variantLabel:category==='Fondo'?'':field('variantLabel'),associatedProductsJson:category==='Persona'?(values.associatedProductsJson||'[]'):'[]',color,featuresJson:JSON.stringify(category==='Fondo'?[]:uniqOptions(field('featuresText').split(/\s*·\s*|\n/).filter(Boolean)))};
       const linkedItem=mockupUploadContextItem();
@@ -4369,8 +4448,29 @@
     for(const source of option?.sources||[]){const sheet=state.designAssets.find(a=>Number(a.id)===Number(source.sheetAssetId));if(!sheet?.sheet_metrics)continue;const i=(sheet.components||[]).findIndex(c=>Number(c.designAssetId)===Number(design.id)&&String(c.measureOptionId)===String(option.id));if(i>=0)return Math.round((sheet.sheet_metrics.componentCostsCents?.[i]||0)/Math.max(1,Number(sheet.components[i].quantity)||1));}
     const material=designPrintMaterial(design);if(!material)return null;const area=Math.max(0,Number(width)||0)*Math.max(0,Number(height)||0);return Math.round(area/(100*designPrintRollWidth(design))*(Number(material.average_cost_cents)||0));
   }
-  function designOriginCostCents(design,option,source){const sheet=state.designAssets.find(a=>Number(a.id)===Number(source?.sheetAssetId));if(!sheet)return null;const i=(sheet.components||[]).findIndex(c=>Number(c.designAssetId)===Number(design.id)&&String(c.measureOptionId)===String(option?.id));if(i<0)return null;return Math.round((sheet.sheet_metrics?.componentCostsCents?.[i]||0)/Math.max(1,Number(sheet.components[i].quantity)||1));}
-  function designMeasuresOriginsHtml(design,options){return `<div class="design-origin-costs">${options.map(option=>{const sources=option.sources||[],size=`${Number(option.widthCm)} × ${Number(option.heightCm)} cm`;return `<section><strong>${escapeHtml(designMeasureLabel(option))}</strong>${sources.length?sources.map(source=>{const sheet=state.designAssets.find(a=>Number(a.id)===Number(source.sheetAssetId)),cost=designOriginCostCents(design,option,source);return `<div class="design-origin-cost-row">${designSmallImage(sheet||design)}<span><small>${sheet?`Plancha ${Number(sheet.width_cm)||'—'} × ${Number(sheet.height_cm)||'—'} cm · `:''}Diseño ${size}</small></span><strong>${cost===null?'Costo pendiente':printMoney(cost)} / diseño</strong></div>`}).join(''):`<small>Sin origen de plancha registrado${designPrintCostCents(design,option.widthCm,option.heightCm,option.id)===null?' · costo DTF pendiente':` · costo estimado ${printMoney(designPrintCostCents(design,option.widthCm,option.heightCm,option.id))}`}</small>`}</section>`}).join('')}</div>`}
+  function designOriginCostCents(design,option,source){
+    const sheet=state.designAssets.find(asset=>Number(asset.id)===Number(source?.sheetAssetId));
+    return sheet?proportionalPrintCost(option.widthCm,option.heightCm,sheet.width_cm,sheet.height_cm,Number(sheet.cost_cents)||0):null;
+  }
+  function standaloneDesignMeasureCost(design,option){
+    if(design.print_material_type==='none')return 0;
+    const material=designPrintMaterial(design),rate=Number(design.print_rate_cents),length=Number(design.print_length_cm);
+    const knownRate=length>0&&rate>=0;
+    const uv=design.print_material_type==='dtf_uv';
+    return proportionalPrintCost(option.widthCm,option.heightCm,designPrintRollWidth(design),knownRate?length:material?100:uv?50:100,
+      knownRate?rate:Number(material?.average_cost_cents)||(uv?1200000:1000000))??0;
+  }
+  function designMeasuresOriginsHtml(design,options){
+    return `<div class="design-origin-costs">${options.map(option=>{
+      const sources=(option.sources||[]).map(source=>({source,cost:designOriginCostCents(design,option,source)})).filter(row=>row.cost!==null);
+      return `<section><strong>${escapeHtml(designMeasureLabel(option))}</strong>
+        ${sources.length?sources.map(({source,cost})=>`<div class="design-origin-cost-row">
+          ${designSmallImage(state.designAssets.find(asset=>Number(asset.id)===Number(source.sheetAssetId))||design)}
+          <span>${escapeHtml(source.name||source.fileName||'Plancha de origen')}</span><strong>${printMoney(cost)} / estampa</strong>
+        </div>`).join(''):`<small>${printMoney(standaloneDesignMeasureCost(design,option))} / estampa · tarifa de impresión</small>`}
+      </section>`;
+    }).join('')}</div>`;
+  }
   function designOriginHtml(option){const sources=(option?.sources||[]).slice(0,4);return sources.length?`<span class="design-origin-thumbs">${sources.map(s=>`<a href="${apiUrl(`/api/admin/design-assets/${Number(s.sheetAssetId)}/file`)}" target="_blank" rel="noopener" title="Plancha de origen: ${escapeHtml(s.name||s.fileName||'Abrir plancha')}"><img src="${apiUrl(`/api/admin/design-assets/${Number(s.sheetAssetId)}/file`)}" alt="Plancha de origen" loading="lazy"></a>`).join('')}</span>`:''}
   function renderProductionSelectedDesigns(){
     const host=qs('#productionSelectedDesigns');if(!host)return;
@@ -4433,7 +4533,7 @@
     if(material.costManual&&material.average_cost_cents!=null)return {cents:Math.max(0,Number(material.average_cost_cents)||0),source:null,manual:true};
     const type=material.material_type,fit=productionCostFit(material.fit),capacity=Number(material.capacity_ml)||0,features=itemFeatures(material).map(productionDesignSearchText),color=photoColor(material.color);
     const candidates=state.materials.filter(row=>row.material_type===type&&Number(row.average_cost_cents)>0&&(!materialIsGarment(type)||productionCostFit(row.fit)===fit)&&(!capacity||!Number(row.capacity_ml)||Number(row.capacity_ml)===capacity));
-    const score=row=>(Number(row.id)===Number(material.sourceMaterialId||material.id)?100:0)+(photoColor(row.color)===color?8:0)+itemFeatures(row).filter(value=>features.includes(productionDesignSearchText(value))).length*12+(Number(row.capacity_ml)===capacity?4:0);
+    const score=row=>(garmentFamilyFields(row)?.line===garmentFamilyFields(material)?.line?16:0)+(photoColor(row.color)===color?8:0)+itemFeatures(row).filter(value=>features.includes(productionDesignSearchText(value))).length*12+(Number(row.capacity_ml)===capacity?4:0);
     candidates.sort((a,b)=>score(b)-score(a)||String(b.updated_at||'').localeCompare(String(a.updated_at||''))||Number(b.id)-Number(a.id));
     if(candidates.length)return {cents:Number(candidates[0].average_cost_cents),source:candidates[0]};
     return {cents:null,source:null};
@@ -4665,7 +4765,7 @@
     const stockModeChange=holdStock?undefined:productionStockModeChange();
     const variantUpdates=holdStock||pendingStart?undefined:productionVariantUpdates();
     const cat=await ensureProductionCategory(type,status);if(!cat?.id)throw new Error('No pude determinar la categoría del producto.');
-    const capMaterialId=!bookMode&&!qs('#productionCapPriceBox')?.classList.contains('hidden')?Number(qs('#mockupCapMaterialSelect')?.value)||0:0,categoryId=Number(cat.id),recipe={baseMaterialType:state.productionMaterialsSelected.length||state.productionVirtualMaterial?'':state.productionEditingProduct?.recipe?.base_material_type||'',baseMaterialName:state.productionMaterialsSelected.length||state.productionVirtualMaterial?'':state.productionEditingProduct?.recipe?.base_material_name||'',wastePercent:Math.max(0,Number(qs('#productionWaste')?.value)||0),extraCostCents:bookMode?window.SalmosBook.plan().inkCents:Number(state.productionEditingProduct?.recipe?.extra_cost_cents)||0,designs:(bookMode?[]:productionPhysicalDesigns()).map(x=>({designAssetId:Number(x.designAssetId),quantity:Number(x.quantity)||1,widthCm:Number(x.widthCm)||0,heightCm:Number(x.heightCm)||0,measureOptionId:x.measureOptionId||'',measureLabel:x.measureLabel||'',printSide:x.printSide||'front',printMaterialType:x.printMaterialType||undefined,unitPrintCostCents:productionDesignUnitCost(x,state.designAssets.find(d=>Number(d.id)===Number(x.designAssetId)))})),materials:[...state.productionMaterialsSelected.map(x=>({materialId:Number(x.materialId),quantity:Number(x.quantity)||1})),...(capMaterialId?[{materialId:capMaterialId,quantity:1}]:[])]};
+    const capMaterialId=!bookMode&&!qs('#productionCapPriceBox')?.classList.contains('hidden')?Number(qs('#mockupCapMaterialSelect')?.value)||0:0,categoryId=Number(cat.id),recipe={baseMaterialType:state.productionMaterialsSelected.length||state.productionVirtualMaterial?'':state.productionEditingProduct?.recipe?.base_material_type||'',baseMaterialName:state.productionMaterialsSelected.length||state.productionVirtualMaterial?'':state.productionEditingProduct?.recipe?.base_material_name||'',wastePercent:Math.max(0,Number(qs('#productionWaste')?.value)||0),extraCostCents:bookMode?window.SalmosBook.plan().inkCents:Number(state.productionEditingProduct?.recipe?.extra_cost_cents)||0,designs:(bookMode?[]:productionPhysicalDesigns()).map(x=>({designAssetId:Number(x.designAssetId),quantity:Number(x.quantity)||1,widthCm:Number(x.widthCm)||0,heightCm:Number(x.heightCm)||0,measureOptionId:x.measureOptionId||'',measureLabel:x.measureLabel||'',printSide:x.printSide||'front',printMaterialType:x.printMaterialType||undefined,unitPrintCostCents:productionDesignUnitCost(x,state.designAssets.find(d=>Number(d.id)===Number(x.designAssetId)))})),materials:[...state.productionMaterialsSelected.filter(x=>!productionVirtualStock()||state.materials.find(m=>Number(m.id)===Number(x.materialId))?.material_type!==type).map(x=>({materialId:Number(x.materialId),quantity:Number(x.quantity)||1})),...(capMaterialId?[{materialId:capMaterialId,quantity:1}]:[])]};
     const variant={color:primary?.color||'',size:materialIsGarment(type)?(primary?.size||''):'',stock:0,stockKind,sku:''};
     const catalog=productionCatalogData(),variants=productionVirtualStock()?(catalog.colors.length?catalog.colors:['']).flatMap(color=>catalog.sizes.map(size=>({color,size,stock:0,stockKind:'to_stock',virtualStock:100,sku:''}))):[variant];if(!productionVirtualStock()&&materialIsGarment(type))variants.push(...catalog.sizes.filter(size=>size!==variant.size).map(size=>({color:variant.color,size,stock:0,stockKind:'untracked',virtualStock:100,sku:''})));
     const payload={name,production_catalog:catalog,show_all_sizes:1,publication_variant:qs('#productionPublicationVariant')?.value.trim()||'',category_id:categoryId,status,price_cents:cost.sale,compare_at_cents:0,cost_cents:cost.unitCost,recipe,short_description:qs('#productionDescription')?.value||'',meaning_text:qs('#productionMeaning')?.value||'',verse_text:qs('#productionVerse')?.value||'',verse_reference:qs('#productionVerseReference')?.value||'',fit:primary?.fit||'',audience:window.SalmosAudience.serialize(state.productionAudiences||[]),sale_mode:'stock',inventory_stage:'to_print',garment_ready:1,print_ready:bookMode||state.productionDesignsSelected.length?1:0,capacity_ml:Number(qs('#productionCapacity')?.value)||Number(primary?.capacity_ml)||0,is_new:qs('#productionIsNew')?.checked?1:0,is_featured:qs('#productionFeatured')?.checked?1:0,is_bestseller:qs('#productionBestseller')?.checked?1:0,weight_grams:Number(qs('#productionWeight')?.value)||0,height_cm:Number(qs('#productionHeight')?.value)||0,width_cm:Number(qs('#productionWidth')?.value)||0,depth_cm:Number(qs('#productionDepth')?.value)||0,variants};
@@ -4744,9 +4844,9 @@
   async function rememberFinanceReason(value){value=normalizeOption(value);if(!value||FINANCE_BASIC_REASONS.includes(value))return;addPurchaseOption('financeReasons',value);try{await persistAdminOptionSettings()}catch{}}
 
   function financePaymentDetail(m){
-    const method=m.payment_method||'',label={cash:'Efectivo',transfer:'Transferencia',mixed:'Efectivo + transferencia'}[method]||'Sin especificar';
+    const method=m.payment_method||'',label=paymentLabels[method]||'Sin especificar';
     let payments=m.payments||[];if(!payments.length){try{payments=JSON.parse(m.payment_json||'[]')}catch{}}
-    const details=payments.map(p=>[p.method==='transfer'?'Transferencia':'Efectivo',money(p.amountCents??p.amount_cents),p.origin,p.destination,p.reference,p.details].filter(Boolean).map(escapeHtml).join(' · ')).join('<br>');
+    const details=payments.filter(p=>!specialPayment(p.method)).map(p=>[paymentLabels[p.method],money(p.amountCents??p.amount_cents),p.origin,p.destination,p.reference,p.details].filter(Boolean).map(escapeHtml).join(' · ')).join('<br>');
     return `<strong>${label}</strong>${Number(m.surcharge_cents)>0?`<small class="table-sub">Base ${money(m.base_cents)} + recargo ${m.surcharge_type==='percent'?`${Number(m.surcharge_value)}% · `:''}${money(m.surcharge_cents)}</small>`:''}${details?`<details class="finance-row-detail"><summary>Ver pago</summary><div>${details}</div></details>`:''}`;
   }
 
@@ -4763,7 +4863,9 @@
     const response=await api(`/api/admin/purchases/${Number(id)}`,{cache:'no-store'});if(!response.item)throw new Error('Compra no encontrada.');await openPurchaseDialog(response.item);
   }
   async function openMovementDialog(id,readOnly=false){
-    const m=(state.financeMovements||[]).find(x=>Number(x.id)===id);if(!m)return;if(!readOnly&&m.source_kind==='purchase'){await openSourcePurchase(m.source_id);return;}
+    const m=(state.financeMovements||[]).find(x=>Number(x.id)===id);if(!m)return;
+    if(!readOnly&&m.source_kind==='sheet_waste'){await ensureCostingData();openDesignPreview(Number(m.source_id));return;}
+    if(!readOnly&&m.source_kind==='purchase'){await openSourcePurchase(m.source_id);return;}
     await ensureAdminOptionSettings();const form=qs('#movementForm');setMovementReadOnly(false);form.reset();state.viewingMovementId=id;state.movementOriginalOccurredAt=m.occurred_at||null;
     form.elements.type.value=m.type==='income'?'income':'expense';renderFinanceReasonSelector(m.category||'');form.elements.description.value=m.description||'';
     form.elements.origin.value=m.origin||'';form.elements.destination.value=m.destination||'';loadMovementPayment(m);await loadMovementSale(m);form.elements.date.value=today(parseAdminDate(m.occurred_at)||new Date());form.elements.time.value=adminTimeFormatter.format(parseAdminDate(m.occurred_at)||new Date()).slice(0,5);form.elements.notes.value=m.notes||'';
@@ -4774,14 +4876,16 @@
   function openMovementReview(id){
     const m=(state.financeMovements||[]).find(x=>Number(x.id)===Number(id));if(!m)return;
     const dialog=ensureAdminDialog('movementReviewDialog','Detalle del movimiento');
-    qs('.dialog-body',dialog).innerHTML=`<div class="movement-review-card"><header><span class="status ${m.type==='income'?'success':'warning'}">${m.type==='income'?'Ingreso':m.type==='investment'?'Inversión':'Egreso'}</span><strong>${money(m.amount_cents)}</strong></header><div>${adminDateTimeHtml(m.occurred_at)}</div><h3>${escapeHtml(m.category||'Movimiento')}</h3>${m.description?`<p>${escapeHtml(m.description)}</p>`:''}${m.client_name?`<p><strong>Cliente:</strong> ${escapeHtml(m.client_name)}${m.client_phone?' · '+escapeHtml(m.client_phone):''}</p>`:''}<dl><dt>Origen</dt><dd>${escapeHtml(m.origin||'—')}</dd><dt>Destino</dt><dd>${escapeHtml(m.destination||'—')}</dd></dl>${financePaymentDetail(m)}${creditReviewHtml(m.credit)}${m.notes?`<p>${escapeHtml(m.notes)}</p>`:''}${[...m.saleItems||[],...m.materialSales||[]].length?`<section><h4>Artículos vendidos</h4>${[...m.saleItems||[],...m.materialSales||[]].map(x=>`<div>${escapeHtml([x.product_name||x.name,x.variant_label||x.label].filter(Boolean).join(' · '))} × ${Number(x.quantity)} · ${money(x.unit_price_cents??x.unitPriceCents)}</div>`).join('')}</section>`:''}<div class="movement-review-attachments">${(m.attachments||[]).map(a=>`<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt="Comprobante"></a>`).join('')}</div><footer><button type="button" class="btn btn-ghost" data-edit-reviewed-movement="${m.id}"><i class="fa-solid fa-pen" aria-hidden="true"></i> Editar</button></footer></div>`;dialog.showModal();
+    qs('.dialog-body',dialog).innerHTML=`<div class="movement-review-card"><header><span class="status ${m.type==='income'?'success':'warning'}">${specialPayment(m.payment_method)?paymentLabels[m.payment_method]:m.type==='income'?'Ingreso':m.type==='investment'?'Inversión':'Egreso'}</span><strong>${money(m.nominal_cents??m.amount_cents)}</strong></header><div>${adminDateTimeHtml(m.occurred_at)}</div><h3>${escapeHtml(m.category||'Movimiento')}</h3>${m.description?`<p>${escapeHtml(m.description)}</p>`:''}${m.client_name?`<p><strong>Cliente:</strong> ${escapeHtml(m.client_name)}${m.client_phone?' · '+escapeHtml(m.client_phone):''}</p>`:''}<dl><dt>Origen</dt><dd>${escapeHtml(m.origin||'—')}</dd><dt>Destino</dt><dd>${escapeHtml(m.destination||'—')}</dd></dl>${financePaymentDetail(m)}${creditReviewHtml(m.credit)}${m.notes?`<p>${escapeHtml(m.notes)}</p>`:''}${[...m.saleItems||[],...m.materialSales||[]].length?`<section><h4>Artículos vendidos</h4>${[...m.saleItems||[],...m.materialSales||[]].map(x=>`<div>${escapeHtml([x.product_name||x.name,x.variant_label||x.label].filter(Boolean).join(' · '))} × ${Number(x.quantity)} · ${money(x.unit_price_cents??x.unitPriceCents)}</div>`).join('')}</section>`:''}<div class="movement-review-attachments">${(m.attachments||[]).map(a=>`<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt="Comprobante"></a>`).join('')}</div><footer><button type="button" class="btn btn-ghost" data-edit-reviewed-movement="${m.id}"><i class="fa-solid fa-pen" aria-hidden="true"></i> ${m.source_kind==='sheet_waste'?'Abrir plancha':'Editar'}</button></footer></div>`;dialog.showModal();
   }
   function financeMovementPayments(movement){
     let payments=[];try{payments=JSON.parse(movement.payment_json||'[]');}catch{}
+    if(specialPayment(movement.payment_method))return [];
     return Array.isArray(payments)&&payments.length?payments:[{method:movement.payment_method||'cash',amountCents:movement.amount_cents}];
   }
   function financeMovementMatches(movement,kind){
     if(kind==='sales')return movement.type==='income'&&Boolean(movement.saleItems?.length||movement.materialSales?.length);
+    if(movement.payment_method==='gift')return !kind||kind==='expense'||kind==='expense_other';
     if(kind==='income')return movement.type==='income'&&!movement.saleItems?.length&&!movement.materialSales?.length;
     if(kind==='expense_other')return movement.type!=='income'&&!movement.is_purchase&&movement.source_kind!=='purchase';
     if(kind==='expense')return movement.type!=='income';
@@ -4794,8 +4898,8 @@
   }
   function financeMovementIcon(movement){const kind=movement.type==='shipping'?'shipping':movement.type==='investment'?'investment':movement.is_purchase||movement.source_kind==='purchase'?'purchase':movement.isSale?'sale':movement.type==='income'?'income':'expense',labels={shipping:'Envío',investment:'Inversión',purchase:'Compra',sale:'Venta',income:'Ingreso',expense:'Egreso'},icons={shipping:'fa-truck',investment:'fa-hand-point-left',purchase:'fa-hand-point-left',sale:'fa-hand-point-right',income:'fa-hand-point-right',expense:'fa-hand-point-left'};return `<span class="finance-kind-icon finance-kind-${kind}" role="img" title="${labels[kind]}" aria-label="${labels[kind]}"><i class="fa-solid ${icons[kind]}" aria-hidden="true"></i></span>`;}
   function financeMovementRow(movement,kind){
-    const amount=kind==='cash'||kind==='virtual'?financeMovementPayments(movement).filter(payment=>(payment.method==='transfer'?'virtual':'cash')===kind).reduce((sum,payment)=>sum+Number(payment.amountCents??payment.amount_cents??0),0):Number(movement.amount_cents),income=movement.type==='income';
-    return `<article class="finance-compact-row" data-finance-movement="${movement.id}"><button type="button" class="finance-row-open" data-open-movement="${movement.id}">${financeMovementIcon(movement)}<span>${adminDateTimeHtml(movement.occurred_at)}<small>${income?'Ingreso':movement.type==='investment'?'Inversión':'Egreso'}</small></span><span><strong>${escapeHtml(movement.category||'Movimiento')}</strong><small>${escapeHtml([movement.client_name,movement.description].filter(Boolean).join(' · '))}</small></span><span><small>${escapeHtml([movement.origin,movement.destination].filter(Boolean).join(' → '))}</small><strong class="${income?'':'money-negative'}">${income?'':'− '}${money(amount)}</strong></span></button><button type="button" class="icon-btn" data-edit-movement="${movement.id}" aria-label="Editar movimiento"><i class="fa-solid fa-pen" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-delete-movement="${movement.id}" aria-label="Eliminar movimiento"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></article>`;
+    const amount=kind==='cash'||kind==='virtual'?financeMovementPayments(movement).filter(payment=>(payment.method==='transfer'?'virtual':'cash')===kind).reduce((sum,payment)=>sum+Number(payment.amountCents??payment.amount_cents??0),0):Number(movement.nominal_cents??movement.amount_cents),income=movement.type==='income'&&movement.payment_method!=='gift';
+    return `<article class="finance-compact-row" data-finance-movement="${movement.id}"><button type="button" class="finance-row-open" data-open-movement="${movement.id}">${financeMovementIcon(movement)}<span>${adminDateTimeHtml(movement.occurred_at)}<small>${specialPayment(movement.payment_method)?paymentLabels[movement.payment_method]:income?'Ingreso':movement.type==='investment'?'Inversión':'Egreso'}</small></span><span><strong>${escapeHtml(movement.category||'Movimiento')}</strong><small>${escapeHtml([movement.client_name,movement.description].filter(Boolean).join(' · '))}</small></span><span><small>${escapeHtml([movement.origin,movement.destination].filter(Boolean).join(' → '))}</small><strong class="${income?'':'money-negative'}">${income?'':'− '}${money(amount)}</strong></span></button><button type="button" class="icon-btn" data-edit-movement="${movement.id}" aria-label="${movement.source_kind==='sheet_waste'?'Abrir plancha':'Editar movimiento'}"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>${movement.source_kind==='sheet_waste'?'':`<button type="button" class="icon-btn" data-delete-movement="${movement.id}" aria-label="Eliminar movimiento"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>`}</article>`;
   }
   async function renderExpenses(){
     const range=reportRangeDates(),data=await api(`/api/admin/finance?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`),kind=state.view==='sales'?'sales':state.financeListFilter||'';
@@ -4832,6 +4936,36 @@
         <div class="admin-actions">${(o.files||[]).map(f=>`<a class="btn btn-ghost" href="${apiUrl(`/api/admin/custom-orders/${o.id}/files/${f.id}`)}" target="_blank" rel="noopener">Descargar ${escapeHtml(f.file_name)}</a>`).join('')||'<span class="muted">Sin archivos</span>'}</div>
         <div class="form-grid" style="margin-top:12px"><div class="field"><label>Total acordado ($)</label><input class="input" data-custom-total type="number" min="0" value="${Math.round((Number(o.quoted_total_cents)||0)/100)}"></div><div class="field"><label>Estado</label><select class="select" data-custom-status>${Object.entries(statusLabel).map(([v,l])=>`<option value="${v}" ${o.status===v?'selected':''}>${l}</option>`).join('')}</select></div><div class="field" style="align-self:end"><button class="btn btn-primary" data-save-custom="${o.id}">Guardar</button></div></div>
       </article>`).join(''):'<div class="empty-state"><strong>Todavía no hay pedidos.</strong></div>'}</div>`;
+  }
+  async function flyerUploadFiles(files,button){
+    const output=[];
+    for(const file of files){
+      if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){output.push(file);continue;}
+      const root=new URL('vendor/pdfjs/',document.baseURI);
+      const pdf=await import(new URL('pdf.min.mjs',root));
+      pdf.GlobalWorkerOptions.workerSrc=new URL('pdf.worker.min.mjs',root).href;
+      const task=pdf.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,
+        cMapUrl:new URL('cmaps/',root).href,cMapPacked:true,
+        standardFontDataUrl:new URL('standard_fonts/',root).href,wasmUrl:new URL('wasm/',root).href});
+      try{
+        const documentPdf=await task.promise;
+        for(let number=1;number<=documentPdf.numPages;number++){
+          button.textContent=`Convirtiendo página ${number} de ${documentPdf.numPages}…`;
+          const page=await documentPdf.getPage(number),original=page.getViewport({scale:1});
+          const viewport=page.getViewport({scale:Math.min(2.22,3000/Math.max(original.width,original.height))});
+          const canvas=document.createElement('canvas');
+          try{
+            canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+            await page.render({canvas,viewport}).promise;
+            const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            if(!png||png.size>15*1024*1024)throw new Error(`No se pudo preparar la página ${number} como PNG.`);
+            const suffix=documentPdf.numPages>1?`-pagina-${number}`:'';
+            output.push(new File([png],file.name.replace(/\.pdf$/i,'')+suffix+'.png',{type:'image/png'}));
+          }finally{canvas.width=canvas.height=0;page.cleanup();}
+        }
+      }finally{await task.destroy();}
+    }
+    return output;
   }
   function flyerGalleryCard(f){
     const mime=String(f.mime_type||''),name=f.title||f.file_name||'Flyer';
@@ -4934,15 +5068,57 @@
       if(name)item.name=name.value;if(scope)item.scope=scope.value;
     }
   }
+  function sheetArtworkScopeHtml(scope,attribute){
+    return `<label class="field">Sección<select class="select" ${attribute}><option value="salmos">SALMOS</option>
+      <option value="clients" ${scope==='clients'?'selected':''}>Clientes</option></select></label>`;
+  }
+  function openSheetArtworkFields(key,record,mark=true){
+    if(!record)return;
+    const dialog=ensureAdminDialog('sheetNewArtworkDialog',mark?'Agregar diseño individual':'Editar nombre y etiquetas'),body=qs('.dialog-body',dialog);
+    body.innerHTML=`<form class="sheet-new-artwork-form"><div class="sheet-new-artwork-top">
+      <figure><img class="checkerboard" data-sheet-new-preview src="${escapeHtml(record.previewUrl)}" alt="">
+        <button type="button" class="icon-btn" data-sheet-zoom-artwork="${record.temporaryId}" data-sheet-key="${key}" title="Ampliar diseño" aria-label="Ampliar diseño">${sheetZoomIcon()}</button>
+        <button type="button" class="icon-btn" data-edit-missing-artwork="${record.id}" data-sheet-key="${key}" title="Editar imagen" aria-label="Editar imagen"><i class="fa-solid fa-pen"></i></button>
+      </figure>
+      <label class="field">Nombre <input class="input" name="name" required maxlength="160" value="${escapeHtml(record.name)}"></label>
+      ${sheetArtworkScopeHtml(record.scope,'name="scope"')}
+    </div>
+    ${designTagPickerHtml('sheet-new-artwork',record.tags||[])}
+    <div class="admin-actions"><button type="button" class="btn btn-ghost" data-close-sheet-fields>Volver</button>
+      <button type="submit" class="btn btn-primary">${mark?'Marcar en la plancha':'Guardar cambios'}</button></div>
+    <p class="sheet-upload-error" data-new-sheet-error role="status"></p></form>`;
+    const form=qs('form',body),submit=qs('[type="submit"]',body);
+    qs('[data-close-sheet-fields]',body).onclick=()=>dialog.close();
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      if(!form.reportValidity()||!form.elements.name.value.trim())return;
+      submit.disabled=true;
+      try{
+        if(mark){
+          const format=await checkUploadSheetFormat(record.originalArtworkFile||record.file);
+          if(format)throw new Error('Ese archivo corresponde a una plancha completa. Elegilo como archivo de la plancha.');
+          if(!dialog.open||!sheetRoot(key).closest('dialog').open||sheetKind(key)!=='sheet')return;
+          ensureSheetReviewsComplete(key);
+        }
+        record.name=form.elements.name.value.trim();record.scope=form.elements.scope.value;
+        record.tags=designPickerSelections(form);
+        dialog.close();
+        if(mark)chooseSheetArtwork(key,record.temporaryId);
+        else{syncSheetScope(key);renderSheetSelected(key);}
+        renderMissingSheetQueue(key);
+      }catch(error){qs('[data-new-sheet-error]',body).textContent=error.message;}
+      finally{submit.disabled=false;}
+    };
+    qs('[data-design-tag-picker] details',body).open=Boolean(record.tags?.length);
+    dialog.showModal();form.elements.name.focus();form.elements.name.select();
+  }
   function renderMissingSheetQueue(key){
-    const root=sheetRoot(key);if(!root)return;const queue=sheetMissingQueue(key),host=qs('[data-missing-sheet-queue]',root);if(!host)return;
-    host.innerHTML=queue.map(item=>{
-      item.id??=crypto.randomUUID();if(!item.previewUrl&&String(item.file.type).startsWith('image/'))item.previewUrl=URL.createObjectURL(item.file);
-      return `<article class="sheet-missing-file" data-missing-sheet-id="${item.id}"><div class="sheet-missing-thumb" data-edit-missing-artwork="${item.id}" data-sheet-key="${key}">${item.previewUrl?`<img src="${item.previewUrl}" alt="${escapeHtml(item.name||item.file.name)}">`:'Archivo'}</div><div class="sheet-missing-fields"><small class="sheet-missing-filename" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</small><label class="field"><span>Nombre del diseño</span><input class="input" maxlength="160" data-missing-sheet-name value="${escapeHtml(item.name||'')}" placeholder="Nombre para la biblioteca"></label><label class="field"><span>Sección</span><select class="select" data-missing-sheet-scope><option value="salmos" ${item.scope==='salmos'?'selected':''}>SALMOS</option><option value="clients" ${item.scope==='clients'?'selected':''}>Clientes</option></select></label>${item.error?`<small class="sheet-upload-error" role="alert">${escapeHtml(item.error)}</small>`:''}</div><div class="sheet-missing-file-actions"><button type="button" class="btn btn-ghost" data-edit-missing-artwork="${item.id}" data-sheet-key="${key}">Ampliar / recortar y editar</button><button type="button" class="btn btn-ghost" data-remove-missing-sheet-file="${item.id}">Quitar</button><button type="button" class="btn btn-primary" data-upload-missing-sheet-design="${item.id}">Marcar en la plancha</button></div></article>`;
-    }).join('');
-    const status=qs('[data-missing-upload-status]',root);
-    if(status)status.textContent=queue.length?'Los archivos se guardan en la biblioteca al guardar la plancha.':'';
-    const all=qs('[data-upload-all-missing-sheet-designs]',root);if(all){all.classList.toggle('hidden',!queue.length);all.disabled=Boolean(state.designUploadBusy);}
+    const host=qs('[data-missing-sheet-queue]',sheetRoot(key));
+    if(!host)return;
+    host.innerHTML=sheetMissingQueue(key).map(item=>`<div class="sheet-missing-entry">
+      <button class="btn btn-ghost" type="button" data-configure-sheet-design="${item.id}" data-sheet-key="${key}">${escapeHtml(item.name)}</button>
+      <button class="icon-btn" type="button" data-remove-missing-sheet-file="${item.id}" data-sheet-key="${key}" aria-label="Quitar archivo">×</button>
+    </div>`).join('');
   }
   function removeMissingSheetFile(key,id){
     rememberMissingSheetFields(key);const queue=sheetMissingQueue(key),index=queue.findIndex(item=>item.id===id);if(index<0)return;
@@ -5088,6 +5264,7 @@
     const box={...item.box,rotation:assetId===item.designId?item.suggestedRotation||0:0};
     stageSheetMark(key,null,box,{assetId,scanId:item.id,sourceMethod:'alpha-detected'});
     showSheetPreview(key);
+    confirmSheetMark(key,item);
   }
   function renderSheetDetections(key){
     const root=sheetRoot(key),host=qs('[data-sheet-detections]',root);
@@ -5303,14 +5480,14 @@
       if(!design)return;
       const id=Number(design.dataset.sheetPickerDesign);
       try{
-        if(item)reviewDetectedSheetMark(key,item,id);
-        else chooseSheetArtwork(key,id);
+        if(!item)chooseSheetArtwork(key,id);
         (state.sheetGalleryScope??={})[key]=scope;
         const option=qs(`[data-sheet-gallery-scope][value="${scope}"]`,root);
         if(option)option.checked=true;
         filterSheetGallery(key);
         dialog.close();
-        if(!item)showSheetPreview(key);
+        if(item)reviewDetectedSheetMark(key,item,id);
+        else showSheetPreview(key);
       }catch(error){toast(error.message,'error');}
     };
     dialog.showModal();render();input.focus({preventScroll:true});
@@ -5380,7 +5557,6 @@
             <div class="sheet-missing-upload">
               <div class="sheet-missing-queue" data-missing-sheet-queue aria-label="Diseños pendientes de subir"></div>
               <div class="sheet-missing-batch-actions">
-                <button type="button" class="btn btn-primary hidden" data-upload-all-missing-sheet-designs>Marcar todos los archivos</button>
                 <button type="button" class="btn btn-ghost hidden" data-cancel-missing-sheet-design>Descartar archivos pendientes</button>
               </div>
               <small class="sheet-missing-status" data-missing-upload-status role="status" aria-live="polite"></small>
@@ -5433,21 +5609,84 @@
     const file=state.sheetUploadPreview?.file;if(!file)return;
     try{const key=sheetDraftKey(file);localStorage.removeItem(key);const latest=JSON.parse(localStorage.getItem('salmos_sheet_draft_latest')||'null');if(latest?.key===key)localStorage.removeItem('salmos_sheet_draft_latest');}catch{}
   }
+  function sheetCostCents(key){
+    const input=qs(key==='upload'?'#designUploadCost':'[data-design-cost]',sheetRoot(key));
+    if(input?.value.trim())return pesosToCents(input.value);
+    const sheet=key==='detail'&&state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId));
+    return Number(sheet?.cost_cents??1000000);
+  }
+  function proportionalPrintCost(width,height,sheetWidth,sheetHeight,sheetCost){
+    return sheetWidth>0&&sheetHeight>0?Math.round(width*height/(sheetWidth*sheetHeight)*sheetCost):null;
+  }
+  function sheetOccurrenceHtml(key,mark,selected,price){
+    const {rowIndex,boxIndex,number,measure,box}=mark;
+    const active=selected?.key===key&&selected.rowIndex===rowIndex&&selected.boxIndex===boxIndex;
+    return `<li class="sheet-size-line ${active?'active':''}">
+      <button type="button" class="sheet-size-target" data-sheet-pin="${rowIndex}" data-pin-index="${boxIndex}" data-sheet-key="${key}" aria-pressed="${active}">
+        <span class="sheet-mark-number">${number}</span><span>${detectedSizeLabel(measure)}<strong>${printMoney(price(measure))}</strong></span>
+      </button>
+      <label class="sheet-waste-choice"><input type="checkbox" data-sheet-waste="${rowIndex}" data-box-index="${boxIndex}" data-sheet-key="${key}" ${box.waste?'checked':''}> Desperdicio</label>
+    </li>`;
+  }
   function renderSheetSelected(key){
-    const root=sheetRoot(key),host=qs('[data-sheet-selected]',root);if(!host)return;const components=sheetComponents(key),count=qs('[data-sheet-list-count]',root);if(count)count.textContent=String(components.length);if(key==='upload'){const confirmation=qs('#designSheetCompositionComplete',root);if(confirmation?.checked&&state.sheetCompositionConfirmation!==sheetCompositionFingerprint()){confirmation.checked=false;state.sheetCompositionConfirmation=null;}}
-    const size=sheetSize(key),costCents=Number(key==='upload'?qs('#designUploadCost')?.value*100:state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId))?.cost_cents)||1000000;
-    const metrics=sheetMetrics(size.width,size.height,components,costCents),markNumbers=sheetMarkNumbers(components),scroll=host.scrollTop;
-    host.innerHTML=components.map((c,i)=>({c,i})).sort((a,b)=>Number(!!a.c.previewBoxes?.length)-Number(!!b.c.previewBoxes?.length)||(a.c.previewBoxes?.length&&b.c.previewBoxes?.length?Number(a.c.previewBoxes[0].order)-Number(b.c.previewBoxes[0].order):a.i-b.i)).map(({c,i})=>{const asset=sheetIndividualAsset(key,c.designAssetId),options=asset?parseDesignMeasureOptions(asset):[];if(c.pendingMeasureOption&&!options.some(o=>o.id===c.pendingMeasureOption.id))options.push(c.pendingMeasureOption);const chosen=options.find(o=>o.id===c.measureOptionId)||c.pendingMeasureOption,cost=asset&&chosen?designPrintCostCents(asset,chosen.widthCm,chosen.heightCm):null;
-      const measure=chosen?`<small class="sheet-readonly-measure">${detectedSizeLabel(chosen)}</small>
-        <div class="sheet-exact-measure"><label class="field">Ancho exacto (cm)<input class="input" type="number" min=".01" step=".01" data-sheet-exact="width" value="${Number(chosen.widthCm)}"></label><label class="field">Alto exacto (cm)<input class="input" type="number" min=".01" step=".01" data-sheet-exact="height" value="${Number(chosen.heightCm)}"></label></div>`:'<small class="field-help">Tocá la estampa en la plancha o dibujá su contorno.</small>';
-      const repeating=state.sheetRepeatTarget?.key===key&&state.sheetRepeatTarget?.index===i;
-      const marking=state.sheetBoxTarget?.key===key&&state.sheetBoxTarget?.index===i;
-      const actions=c.previewBoxes?.length?`<button type="button" class="btn btn-ghost" data-sheet-repeat="${i}" data-sheet-key="${key}">${repeating?'Terminar':'Hay más'}</button>
-        <button type="button" class="btn btn-ghost" data-sheet-undo="${i}" data-sheet-key="${key}">Anular última marca</button>`:
-        `<button type="button" class="btn btn-ghost" data-sheet-box="${i}" data-sheet-key="${key}">${marking?'✓ Marcando':'Marcar este diseño'}</button>`;
-      return `<div class="sheet-component-row ${state.sheetBoxTarget?.key===key&&state.sheetBoxTarget?.index===i?'sheet-component-active':''}" data-sheet-component="${i}" data-sheet-key="${key}"><div class="sheet-component-identity">${asset?`<span class="sheet-artwork-tile sheet-added-artwork">${designSmallImage(asset)}${sheetArtworkZoomHtml(asset,key)}</span>`:''}<strong>${escapeHtml(c.name||asset?.name||'Diseño')}</strong></div>${measure}<div class="sheet-marked-count">${(c.previewBoxes||[]).length} marca${(c.previewBoxes||[]).length===1?'':'s'}<span class="sheet-mark-numbers">${(c.previewBoxes||[]).map((b,j)=>`<button type="button" class="sheet-mark-number" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" aria-label="Ajustar marca ${markNumbers.get(Number(b.order))}">${markNumbers.get(Number(b.order))}</button>`).join('')}</span></div><div class="admin-actions">${actions}<button type="button" class="icon-btn" data-remove-sheet-component="${i}" data-sheet-key="${key}" aria-label="Quitar diseño">×</button></div><small class="sheet-component-cost">Costo en esta plancha: ${money(metrics.componentCosts[i]||0)}</small></div>`}).join('')||'<p class="muted">Todavía no elegiste diseños.</p>';
+    const root=sheetRoot(key),host=qs('[data-sheet-selected]',root);
+    if(!host)return;
+    const components=sheetComponents(key),size=sheetSize(key),cost=sheetCostCents(key);
+    const count=qs('[data-sheet-list-count]',root),numbers=sheetMarkNumbers(components),scroll=host.scrollTop;
+    const price=option=>proportionalPrintCost(option.widthCm,option.heightCm,size.width,size.height,cost)??0;
+    const groups=new Map();
+    components.forEach((component,index)=>{
+      const id=Number(component.designAssetId);
+      if(!groups.has(id))groups.set(id,[]);
+      groups.get(id).push({component,index});
+    });
+    if(count)count.textContent=String(groups.size);
+    if(key==='upload'){
+      const confirmation=qs('#designSheetCompositionComplete',root);
+      if(confirmation?.checked&&state.sheetCompositionConfirmation!==sheetCompositionFingerprint()){confirmation.checked=false;state.sheetCompositionConfirmation=null;}
+    }
+    const open=state.sheetOpenSizes??=new Set(),selected=state.sheetActiveBox;
+    host.innerHTML=[...groups].map(([id,rows])=>{
+      const asset=sheetIndividualAsset(key,id),name=asset?.name||rows[0].component.name||'Diseño';
+      const marks=rows.flatMap(({component,index})=>(component.previewBoxes||[]).map((box,boxIndex)=>({
+        rowIndex:index,boxIndex,box,number:numbers.get(Number(box.order)),measure:sheetBoxMeasures(box,size)
+      }))).sort((a,b)=>a.number-b.number);
+      const estimates=rows.filter(({component})=>!component.previewBoxes?.length&&component.widthCm>0&&component.heightCm>0);
+      const options=!marks.length&&!estimates.length&&asset?parseDesignMeasureOptions(asset):[];
+      const target=state.sheetRepeatTarget?.key===key&&rows.some(row=>row.index===state.sheetRepeatTarget.index)?state.sheetRepeatTarget:null;
+      const marking=state.sheetBoxTarget?.key===key&&rows.some(row=>row.index===state.sheetBoxTarget.index);
+      const highlighted=state.sheetHighlightedDesign?.key===key&&state.sheetHighlightedDesign.id===id;
+      const index=target?.index??marks[0]?.rowIndex??rows[0].index;
+      const actions=marks.length?`<button type="button" class="btn btn-ghost" data-sheet-repeat="${index}" data-sheet-key="${key}">${target?'Terminar':'Hay más'}</button>
+        <button type="button" class="btn btn-ghost" data-sheet-undo="${marks.at(-1).rowIndex}" data-sheet-key="${key}">Anular última marca</button>
+        <button type="button" class="btn btn-ghost" data-sheet-waste-group="${id}" data-sheet-key="${key}">${marks.every(mark=>mark.box.waste)?'Quitar desperdicio':'Marcar desperdicio'}</button>`:
+        `<button type="button" class="btn btn-ghost" data-sheet-box="${index}" data-sheet-key="${key}">${marking?'✓ Marcando':'Marcar este diseño'}</button>`;
+      const openKey=key+':'+id,expanded=open.has(openKey),total=marks.reduce((sum,mark)=>sum+price(mark.measure),0)+estimates.reduce((sum,{component})=>sum+price(component)*Number(component.quantity),0);
+      return `<div class="sheet-component-row ${marking||highlighted?'sheet-component-active':''}">
+        <div class="sheet-component-identity">
+          ${asset?`<span class="sheet-artwork-tile sheet-added-artwork">${designSmallImage(asset)}${sheetArtworkZoomHtml(asset,key)}</span>`:''}
+          <button type="button" class="sheet-design-name" data-focus-sheet-design="${id}" data-sheet-key="${key}" aria-pressed="${highlighted}">${escapeHtml(name)}</button>
+          ${asset?`<button type="button" class="icon-btn" data-rename-sheet-design="${id}" data-sheet-key="${key}" aria-label="Editar nombre" title="Editar nombre"><i class="fa-solid fa-pen"></i></button>`:''}
+        </div>
+        ${marks.length||estimates.length?`<button type="button" class="sheet-marked-count sheet-count-toggle" data-toggle-sheet-sizes="${id}" data-sheet-key="${key}" aria-expanded="${expanded}">
+          <span class="sheet-mark-number">${marks.length}</span><span>${marks.length===1?'Marca':'Marcas'}</span><span aria-hidden="true">${expanded?'⌃':'⌄'}</span>
+        </button>
+        ${expanded?`<ol class="sheet-size-list">
+          ${marks.map(mark=>sheetOccurrenceHtml(key,mark,selected,price)).join('')}
+          ${estimates.map(({component})=>`<li class="sheet-size-estimate"><span>${detectedSizeLabel(component)}</span><strong>${printMoney(price(component))} / estampa</strong></li>`).join('')}
+        </ol>`:''}
+        <small class="sheet-component-cost">Costo en esta plancha · ${printMoney(total)}</small>`:''}
+        ${options.length?`<ul class="sheet-size-list" aria-label="Costos por medida guardada">
+          ${options.map(measure=>`<li class="sheet-size-estimate"><span>${detectedSizeLabel(measure)}</span><strong>${printMoney(price(measure))} / estampa</strong></li>`).join('')}
+        </ul>`:''}
+        <div class="admin-actions">${actions}<button type="button" class="icon-btn" data-remove-sheet-design="${id}" data-sheet-key="${key}" aria-label="Quitar diseño de la plancha" title="Quitar de la plancha"><i class="fa-solid fa-trash-can"></i></button></div>
+      </div>`;
+    }).join('')||'<p class="muted">Todavía no elegiste diseños.</p>';
     host.scrollTop=scroll;
-    qsa('[data-add-sheet-design]',root).forEach(b=>b.classList.toggle('selected',components.some(c=>Number(c.designAssetId)===Number(b.dataset.addSheetDesign))));updateSheetMetrics(key);renderSheetPreview(key);filterSheetGallery(key);if(!state.designUploadBusy)syncSheetUploadGate(key);if(key==='upload')scheduleSheetDraftSave();
+    qsa('[data-add-sheet-design]',root).forEach(button=>button.classList.toggle('selected',groups.has(Number(button.dataset.addSheetDesign))));
+    updateSheetMetrics(key);renderSheetPreview(key);filterSheetGallery(key);
+    if(!state.designUploadBusy)syncSheetUploadGate(key);
+    if(key==='upload')scheduleSheetDraftSave();
   }
   function toggleSheetSelectedList(key){
     const list=qs('[data-sheet-selected-list]',sheetRoot(key));if(!list)return;
@@ -5467,7 +5706,8 @@
       if(pending?.replaced===b)return '';
       const markNumber=markNumbers.get(Number(b.order));
       const active=state.sheetActiveBox?.key===key&&state.sheetActiveBox.rowIndex===i&&state.sheetActiveBox.boxIndex===j;
-      const pin=`<button type="button" class="sheet-preview-pin" style="left:${(Number(b.x)+Number(b.width)/2)*100}%;top:${(Number(b.y)+Number(b.height)/2)*100}%" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" title="Ajustar recuadro de ${escapeHtml(c.name||'diseño')}">${markNumber}</button>`;
+      const highlighted=state.sheetHighlightedDesign?.key===key&&state.sheetHighlightedDesign.id===Number(c.designAssetId);
+      const pin=`<button type="button" class="sheet-preview-pin ${active||highlighted?'is-highlighted':''} ${b.waste?'is-waste':''}" style="left:${(Number(b.x)+Number(b.width)/2)*100}%;top:${(Number(b.y)+Number(b.height)/2)*100}%" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" title="Ajustar recuadro de ${escapeHtml(c.name||'diseño')}">${markNumber}</button>`;
       if(!active)return pin;
       return sheetEditableBox(b,`data-sheet-row="${i}" data-sheet-index="${j}" data-sheet-key="${key}"`)+pin;
     })).join('');
@@ -5560,21 +5800,31 @@
     const dialog=ensureAdminDialog('sheetCropReviewDialog','Revisar recorte individual');
     dialog.classList.add('artwork-editor-dialog');
     const body=qs('.dialog-body',dialog);
-    body.innerHTML=`<label class="field">Nombre del diseño <input class="input" type="text" maxlength="160" data-sheet-crop-name value="${escapeHtml(crop.name)}"></label>
+    const defaultScope=sheetScope(key)?.value==='clients'||sheetScope(key)?.value==='mixed'&&state.sheetGalleryScope?.[key]==='clients'?'clients':'salmos';
+    body.innerHTML=`<div class="sheet-crop-fields"><label class="field">Nombre del diseño <input class="input" type="text" maxlength="160" data-sheet-crop-name value="${escapeHtml(crop.name)}"></label>
+      ${sheetArtworkScopeHtml(crop.scope||defaultScope,'data-sheet-crop-scope')}
+      <label class="sheet-waste-choice"><input type="checkbox" data-sheet-crop-waste ${crop.waste?'checked':''}> Desperdicio</label></div>
       <div class="sheet-crop-stage checkerboard"></div>
       <div class="sheet-crop-review-tools">
         <label>Goma <input type="range" min="5" max="90" step="1" value="20" data-crop-eraser aria-label="Tamaño de la goma"></label>
         <button type="button" class="btn btn-ghost" data-crop-rotate="-90">Girar a la izquierda</button>
         <button type="button" class="btn btn-ghost" data-crop-rotate="90">Girar a la derecha</button>
         <button type="button" class="btn btn-ghost" data-crop-reset>Restablecer recorte</button>
+        <button type="button" class="icon-btn" data-crop-larger title="Ampliar recorte" aria-label="Ampliar recorte" aria-pressed="false">${sheetZoomIcon()}</button>
       </div>
+      ${designTagPickerHtml('sheet-crop',crop.tags||[])}
       <p data-crop-measure role="status"></p>
       <div class="admin-actions">
         <button type="button" class="btn btn-ghost" data-close-crop-review>Volver a la plancha</button>
         <button type="button" class="btn btn-primary" data-save-crop-review>Guardar individual</button>
       </div>
       <p class="sheet-upload-error" data-crop-warning role="status"></p>`;
+    qs('[data-design-tag-picker] details',body).open=Boolean(crop.tags?.length);
     const stage=qs('.sheet-crop-stage',body),cursor=document.createElement('span');
+    qs('[data-crop-larger]',body).onclick=event=>{
+      const active=stage.classList.toggle('crop-larger');
+      event.currentTarget.setAttribute('aria-pressed',String(active));
+    };
     cursor.className='sheet-crop-cursor';cursor.hidden=true;stage.append(canvas,cursor);
     canvas.setAttribute('aria-label','Estampa recortada. Arrastrá para borrar.');
     const range=qs('[data-crop-eraser]',body);
@@ -5629,12 +5879,15 @@
     dialog.onclose=()=>{canvas.width=0;};
     qs('[data-save-crop-review]',body).onclick=async event=>{
       if(crop.saving)return;
-      const button=event.currentTarget,controls=qsa('button,input',dialog);
+      const button=event.currentTarget,controls=qsa('button,input,select',dialog);
       controls.forEach(control=>control.disabled=true);
       button.textContent='Guardando…';
       qs('[data-crop-warning]',body).textContent='';
       try{
         crop.name=qs('[data-sheet-crop-name]',body).value.trim();
+        crop.scope=qs('[data-sheet-crop-scope]',body).value;
+        crop.tags=designPickerSelections(body);
+        crop.waste=qs('[data-sheet-crop-waste]',body).checked;
         await saveSheetCrop(crop,{...original.box,rotation},canvas);
         dialog.close();
       }catch(error){qs('[data-crop-warning]',body).textContent=error.message;}
@@ -5659,7 +5912,7 @@
         const output=await window.SalmosSheetDetection.cropArtwork(image,box,size,canvas);
         const fileName=name.replace(/[\\/:*?"<>|\x00-\x1f]/g,'-').slice(0,150);
         crop.record={file:new File([output.blob],fileName+'.png',{type:'image/png'}),name,
-          scope:sheetScope(key)?.value==='clients'||sheetScope(key)?.value==='mixed'&&state.sheetGalleryScope?.[key]==='clients'?'clients':'salmos',box:output.box};
+          scope:crop.scope,tags:crop.tags,box:output.box};
       }
       crop.record.name=name;
       const measured=sheetBoxMeasures(crop.record.box,size);
@@ -5668,9 +5921,9 @@
       if(!state.designAssets.some(item=>Number(item.id)===id))state.designAssets.unshift(asset);
       const library=qs('.sheet-design-library',sheetRoot(key));
       if(library)library.innerHTML=sheetDesignLibraryHtml(key);
-      writeSheetMark({key,assetId:id,box:crop.record.box,scanId:crop.scanId,sourceMethod:'box-selected'},
+      writeSheetMark({key,assetId:id,box:{...crop.record.box,waste:Boolean(crop.waste)},scanId:crop.scanId,sourceMethod:'box-selected'},
         detectedMeasureOption(asset,crop.record.file.name,measured));
-      crop.box=null;crop.name='';crop.record=null;crop.scanId=null;state.sheetActiveBox=null;
+      crop.box=null;crop.name='';crop.record=null;crop.scanId=null;crop.waste=false;crop.tags=[];state.sheetActiveBox=null;
       renderSheetSelected(key);
       if(key==='upload')persistSheetDraft();
       toast('Estampa guardada como diseño individual','success');
@@ -5823,7 +6076,7 @@
   function resizeSheetBox(key,rowIndex,boxIndex,box){
     const replaced=state.designSheetDrafts[key]?.[rowIndex]?.previewBoxes?.[boxIndex];
     if(!replaced)return;
-    stageSheetMark(key,rowIndex,box,{replaced});
+    stageSheetMark(key,rowIndex,{...box,waste:Boolean(replaced.waste)},{replaced});
   }
   function writeSheetMark(mark,option){
     const {key,row,box,replaced}=mark,rows=state.designSheetDrafts[key];
@@ -5857,6 +6110,7 @@
     state.sheetPendingMark=null;
     if(repeat)repeat.index=rows.includes(repeatRow)?rows.indexOf(repeatRow):rows.indexOf(target);
     state.sheetBoxTarget=repeat;
+    state.sheetHighlightedDesign=null;
     state.sheetActiveBox={key,rowIndex:rows.indexOf(target),boxIndex:target.previewBoxes.length-1};
     state.sheetCompositionConfirmation=null;
     removeSheetDetection(key,mark.scanId);
@@ -5866,40 +6120,52 @@
   function applySheetBox(index,box,key='upload'){
     stageSheetMark(key,index,box);
   }
-  function openSheetMeasureChoice(mark,option,options){
-    const dialog=ensureAdminDialog('sheetMeasureChoiceDialog','Elegir medida del diseño'),body=qs('.dialog-body',dialog);
-    const asset=sheetIndividualAsset(mark.key,mark.assetId);
-    const error=item=>Math.hypot((item.widthCm-option.widthCm)/option.widthCm,(item.heightCm-option.heightCm)/option.heightCm);
-    const ordered=[...options].sort((a,b)=>error(a)-error(b));
-    body.innerHTML=`<p><strong>${escapeHtml(asset.name||asset.file_name)}</strong></p>
-      <p>El recuadro mide <b>${detectedSizeLabel(option)}</b>.</p>
-      <label class="field">Medidas guardadas
-        <select class="select" data-sheet-saved-measure>${ordered.map(item=>`<option value="${escapeHtml(item.id)}">${detectedSizeLabel(item)}${item.size?' · '+escapeHtml(item.size):''}</option>`).join('')}</select>
-      </label>
-      <div class="admin-actions">
-        <button type="button" class="btn btn-ghost" data-sheet-use-existing>Usar medida guardada</button>
-        <button type="button" class="btn btn-primary" data-sheet-new-size>Guardar medida nueva</button>
-      </div>`;
+  function openSheetMeasureChoice(mark,option,options,detection=null){
+    const asset=sheetIndividualAsset(mark.key,mark.assetId),name=asset.name||asset.file_name||'Diseño';
+    const dialog=ensureAdminDialog('sheetMeasureChoiceDialog',name),body=qs('.dialog-body',dialog);
+    const distance=item=>Math.hypot((item.widthCm-option.widthCm)/option.widthCm,(item.heightCm-option.heightCm)/option.heightCm);
+    const ordered=[...options].sort((a,b)=>distance(a)-distance(b));
+    const size=sheetSize(mark.key),price=item=>printMoney(proportionalPrintCost(item.widthCm,item.heightCm,size.width,size.height,sheetCostCents(mark.key))??0);
+    body.innerHTML=`<div class="sheet-measure-match">
+      ${detection?`<figure><img class="checkerboard" alt="Recorte de la plancha" src="${escapeHtml(detection.thumb)}"><figcaption>En la plancha · ${detectedSizeLabel(option)} · ${price(option)}</figcaption></figure>`:''}
+      <figure><span class="sheet-artwork-tile">${designSmallImage(asset)}${sheetArtworkZoomHtml(asset,mark.key)}</span>
+        <figcaption>${detection?'Diseño de la biblioteca':'Recuadro · '+detectedSizeLabel(option)}</figcaption></figure>
+    </div>
+    ${ordered.length?`<fieldset class="sheet-saved-measures"><legend>Medidas del diseño</legend>
+      ${ordered.map((item,index)=>`<label><input type="radio" name="sheet-match-measure" value="${escapeHtml(item.id)}" ${index===0?'checked':''}>
+        <span>${escapeHtml(designMeasureLabel(item))}</span><strong>${price(item)}</strong></label>`).join('')}
+    </fieldset>`:''}
+    <div class="admin-actions sheet-measure-actions">
+      ${detection?'<button type="button" class="btn btn-ghost" data-sheet-other-artwork>Elegir otro diseño</button>':''}
+      <button type="button" class="btn btn-ghost" data-sheet-adjust-on-plancha>Ajustar recuadro</button>
+      ${ordered.length?'<button type="button" class="btn btn-primary" data-sheet-use-existing>Vincular medida elegida</button>':''}
+      ${ordered.some(item=>item.id===option.id)?'':'<button type="button" class="btn btn-primary" data-sheet-new-size>Agregar medida de la plancha</button>'}
+    </div>`;
     const choose=value=>{
       if(state.sheetPendingMark!==mark)return;
       try{writeSheetMark(mark,value);dialog.close();}
       catch(error){toast(error.message,'error');}
     };
-    qs('[data-sheet-use-existing]',body).onclick=()=>choose(ordered.find(item=>item.id===qs('[data-sheet-saved-measure]',body).value));
-    qs('[data-sheet-new-size]',body).onclick=()=>choose(option);
+    const existing=qs('[data-sheet-use-existing]',body),add=qs('[data-sheet-new-size]',body),other=qs('[data-sheet-other-artwork]',body);
+    if(existing)existing.onclick=()=>choose(ordered.find(item=>item.id===qs('[name="sheet-match-measure"]:checked',body)?.value));
+    if(add)add.onclick=()=>choose(option);
+    if(other)other.onclick=()=>{dialog.close();discardSheetMark(mark.key);openSheetDesignGallery(mark.key,detection);};
+    qs('[data-sheet-adjust-on-plancha]',body).onclick=()=>dialog.close();
     dialog.showModal();
+    bindDesignVisuals(body);
   }
-  function confirmSheetMark(key){
+  function confirmSheetMark(key,detection=null){
     const mark=state.sheetPendingMark;
     if(!mark||mark.key!==key)return;
     validateSheetMark(key,mark.box,mark.replaced);
     const asset=sheetIndividualAsset(key,mark.assetId),fileName=key==='upload'?state.sheetUploadPreview?.file?.name:
       state.designAssets.find(item=>Number(item.id)===Number(state.activeDesignId))?.file_name;
     const measured=sheetBoxMeasures(mark.box,sheetSize(key)),option=detectedMeasureOption(asset,fileName,measured);
+    detection??=sheetDetectionState(key)?.items.find(item=>item.id===mark.scanId);
     const options=sheetMarkOptions(key,asset);
     const exact=options.find(item=>Math.abs(item.widthCm-option.widthCm)<.005&&Math.abs(item.heightCm-option.heightCm)<.005);
-    if(exact||!options.length)writeSheetMark(mark,exact||option);
-    else openSheetMeasureChoice(mark,option,options);
+    if(detection||options.length&&!exact)openSheetMeasureChoice(mark,option,options,detection);
+    else writeSheetMark(mark,exact||option);
   }
   function discardSheetMark(key){
     const mark=state.sheetPendingMark;
@@ -6005,31 +6271,11 @@
     const dialog=qs('#sheetMeasureDialog'),options=readDesignMeasureOptions(dialog);if(!options.length)throw new Error('Ingresá las medidas.');button.disabled=true;
     try{const {key,id}=state.sheetMeasureTarget,data=await api(`/api/admin/design-assets/${id}/measures`,{method:'POST',body:JSON.stringify({measureOptions:options})});state.designAssets=state.designAssets.map(a=>Number(a.id)===id?data.item:a);for(const option of options)state.designSheetDrafts[key].push({designAssetId:id,measureOptionId:option.id,quantity:1});dialog.close();syncSheetScope(key);renderSheetSelected(key);toast('Medidas guardadas en el diseño','success')}finally{button.disabled=false}
   }
-  function updateSheetMetrics(key){const el=qs('[data-sheet-metrics]',sheetRoot(key)),size=sheetSize(key),sheet=state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId)),cost=key==='upload'?pesosToCents(qs('#designUploadCost')?.value||10000):pesosToCents(qs('[data-design-cost]',sheetRoot(key))?.value||0)||Number(sheet?.cost_cents)||1000000;if(el)el.innerHTML=sheetMetricsHtml(size.width,size.height,sheetComponents(key),cost);}
-  function syncSheetScope(key){const select=sheetScope(key),scopes=new Set(sheetComponents(key).map(c=>c.scope));if(select&&select.value!=='mixed'&&scopes.size)select.value=scopes.size>1?'mixed':[...scopes][0];if(select?.value==='mixed'){const kind=qs(key==='upload'?'#designUploadKind':'[data-design-kind]',sheetRoot(key));kind.value='sheet';kind.disabled=true;}}
-  async function stageMissingSheetDesigns(button,all=false){
-    if(state.designUploadBusy)return;
-    const key=button.closest('[data-sheet-editor]').dataset.sheetEditor;
-    const root=sheetRoot(key),queue=sheetMissingQueue(key);
-    rememberMissingSheetFields(key);
-    const records=all?[...queue]:queue.filter(item=>item.id===button.dataset.uploadMissingSheetDesign);
-    if(!records.length)throw new Error('Elegí el archivo de un diseño individual.');
-    for(const record of records){
-      const format=await checkUploadSheetFormat(record.originalArtworkFile||record.file);
-      if(format)throw new Error(`${record.file.name} es una plancha. Elegila como archivo de la plancha.`);
-    }
-    if(!root.closest('dialog').open||sheetKind(key)!=='sheet'||records.some(record=>!queue.includes(record)))return;
-    for(const record of records){
-      state.nextSheetTemporaryId??=0;
-      if(!record.temporaryId)record.temporaryId=--state.nextSheetTemporaryId;
-      if(!(state.designSheetDrafts[key]||[]).some(draft=>draft.designAssetId===record.temporaryId)){
-        addSheetDesign(key,record.temporaryId,false);
-      }
-    }
-    renderMissingSheetQueue(key);
-    renderSheetSelected(key);
-    showSheetPreview(key);
+  function updateSheetMetrics(key){
+    const el=qs('[data-sheet-metrics]',sheetRoot(key)),size=sheetSize(key);
+    if(el)el.innerHTML=sheetMetricsHtml(size.width,size.height,sheetComponents(key),sheetCostCents(key));
   }
+  function syncSheetScope(key){const select=sheetScope(key),scopes=new Set(sheetComponents(key).map(c=>c.scope));if(select&&select.value!=='mixed'&&scopes.size)select.value=scopes.size>1?'mixed':[...scopes][0];if(select?.value==='mixed'){const kind=qs(key==='upload'?'#designUploadKind':'[data-design-kind]',sheetRoot(key));kind.value='sheet';kind.disabled=true;}}
   async function uploadIndividualSheetDesign(key,record,measurement){
     if(record.savedItem)return record.savedItem;
     const file=record.file,form=new FormData();
@@ -6037,7 +6283,7 @@
     const printType=qs(key==='upload'?'#designUploadPrintType':'[data-design-print-type]',sheetRoot(key))?.value||'dtf_textile';
     for(const [field,value] of Object.entries({
       kind:'individual',scope:record.scope,name:record.name.trim()||file.name.replace(/\.[^.]+$/,''),
-      printMaterialType:printType,measureOptions:'[]',components:'[]',
+      printMaterialType:printType,measureOptions:'[]',components:'[]',tags:JSON.stringify(record.tags||[]),
       widthCm:measurement?.widthCm?.toFixed(2)||0,heightCm:measurement?.heightCm?.toFixed(2)||0
     }))form.append(field,String(value));
     record.forceResumable=true;
@@ -6181,7 +6427,7 @@
   function sheetIsPrinted(key){return Boolean(qs(key==='upload'?'#designUploadPrinted':'[data-design-printed]',sheetRoot(key))?.checked);}
   function sheetPurchasePanelHtml(key){
     const p=sheetPurchasePrefix(key);
-    return `<details class="sheet-purchase-panel" id="${key==='upload'?'designSheetPurchase':key==='link'?'linkedDesignSheetPurchase':'detailDesignSheetPurchase'}" open><summary>Compra de la plancha impresa · obligatoria</summary><p class="field-help">Al guardar se registra la compra, el ingreso de DTF y el pago en Caja. Para cargarla sin compra, desmarcá “Impreso”.</p><div class="form-grid"><label class="field">Monto de compra ($)<input class="input" id="${p}Amount" type="number" min="0.01" step=".01" data-sheet-purchase-amount></label><label class="field">Proveedor<select class="select" id="${p}Supplier" data-supplier-select>${supplierOptions('Adrian')}</select></label><label class="field">Forma de pago<select class="select" id="${p}Method"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Efectivo y transferencia</option></select></label><label class="field">Recargo<select class="select" id="${p}SurchargeType"><option value="fixed">Pesos</option><option value="percent">Porcentaje</option></select></label><label class="field">Importe del recargo<input class="input" id="${p}Surcharge" type="number" min="0" step=".01" value="0"></label><label class="field" data-sheet-mixed>Efectivo ($)<input class="input" id="${p}Cash" type="number" min="0" step=".01"></label><label class="field" data-sheet-mixed>Transferencia ($)<input class="input" id="${p}Transfer" type="number" min="0" step=".01"></label><label class="field" data-sheet-transfer>Origen / alias<input class="input" id="${p}Origin" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Destino / alias<input class="input" id="${p}Destination" placeholder="Opcional"></label><label class="field" data-sheet-transfer>N.º de operación<input class="input" id="${p}Reference" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Detalle de la transferencia<input class="input" id="${p}Details" placeholder="Opcional"></label></div><p id="${p}Total" class="field-help"></p></details>`;
+    return `<details class="sheet-purchase-panel" id="${key==='upload'?'designSheetPurchase':key==='link'?'linkedDesignSheetPurchase':'detailDesignSheetPurchase'}" open><summary>Compra de la plancha impresa · obligatoria</summary><p class="field-help">Al guardar se registra la compra y el movimiento en Caja. Para cargarla sin compra, desmarcá “Impreso”.</p><div class="form-grid"><label class="field">Monto de compra ($)<input class="input" id="${p}Amount" type="number" min="0.01" step=".01" data-sheet-purchase-amount></label><label class="field">Proveedor<select class="select" id="${p}Supplier" data-supplier-select>${supplierOptions('Adrian')}</select></label><label class="field">Forma de pago<select class="select" id="${p}Method"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Efectivo y transferencia</option><option value="pending">Pago pendiente</option><option value="gift">Regalo · Inversión / aporte</option></select></label><label class="field">Recargo<select class="select" id="${p}SurchargeType"><option value="fixed">Pesos</option><option value="percent">Porcentaje</option></select></label><label class="field">Importe del recargo<input class="input" id="${p}Surcharge" type="number" min="0" step=".01" value="0"></label><label class="field" data-sheet-mixed>Efectivo ($)<input class="input" id="${p}Cash" type="number" min="0" step=".01"></label><label class="field" data-sheet-mixed>Transferencia ($)<input class="input" id="${p}Transfer" type="number" min="0" step=".01"></label><label class="field" data-sheet-transfer>Origen / alias<input class="input" id="${p}Origin" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Destino / alias<input class="input" id="${p}Destination" placeholder="Opcional"></label><label class="field" data-sheet-transfer>N.º de operación<input class="input" id="${p}Reference" placeholder="Opcional"></label><label class="field" data-sheet-transfer>Detalle de la transferencia<input class="input" id="${p}Details" placeholder="Opcional"></label></div><p id="${p}Total" class="field-help"></p></details>`;
   }
   function syncSheetPurchaseAmount(key,source=null){
     const cost=qs(key==='upload'?'#designUploadCost':'[data-design-cost]',sheetRoot(key)),amount=qs('#'+sheetPurchasePrefix(key)+'Amount');
@@ -6196,13 +6442,13 @@
     panel.classList.toggle('hidden',!enabled&&!record?.purchase_id);if(enabled||record?.purchase_id)panel.open=true;if(record?.purchase_id){let summary=qs('[data-registered-purchase]',panel);if(!summary){summary=document.createElement('div');summary.dataset.registeredPurchase='';panel.append(summary);}qsa('.form-grid,.field-help',panel).forEach(el=>el.classList.add('hidden'));const heading=qs('summary',panel);if(heading)heading.textContent='Compra registrada';if(key!=='detail'||summary.dataset.purchaseId!==String(record.purchase_id))summary.textContent=`Compra #${record.purchase_id} · ${money(record.cost_cents||0)}`;if(key==='detail')loadSheetPurchaseSummary(record,summary);else summary.textContent+=[qs('#'+p+'Supplier')?.value,qs('#'+p+'Method')?.selectedOptions?.[0]?.textContent].filter(Boolean).map(v=>' · '+v).join('');}
     const method=qs('#'+p+'Method')?.value||'cash';
     qsa('[data-sheet-mixed]',panel).forEach(el=>el.classList.toggle('hidden',method!=='mixed'));
-    qsa('[data-sheet-transfer]',panel).forEach(el=>el.classList.toggle('hidden',method==='cash'));
+    qsa('[data-sheet-transfer]',panel).forEach(el=>el.classList.toggle('hidden',method==='cash'||specialPayment(method)));
     const base=pesosToCents(qs(key==='upload'?'#designUploadCost':'[data-design-cost]',sheetRoot(key))?.value);
     const surcharge=Number(qs('#'+p+'Surcharge')?.value)||0,type=qs('#'+p+'SurchargeType')?.value;
     const total=base+Math.round(type==='percent'?base*surcharge/100:surcharge*100),host=qs('#'+p+'Total');
     if(host)host.textContent=`Total de la compra: ${money(total)}`;
   }
-  async function loadSheetPurchaseSummary(record,host){if(host.dataset.purchaseId===String(record.purchase_id))return;host.dataset.purchaseId=String(record.purchase_id);try{state.sheetPurchaseRecords??=api('/api/admin/purchases').then(d=>d.items||[]).catch(err=>{state.sheetPurchaseRecords=null;throw err;});const rows=await state.sheetPurchaseRecords,purchase=rows.find(p=>Number(p.id)===Number(record.purchase_id));if(purchase&&host.isConnected)host.textContent=[`Compra #${purchase.id}`,purchase.supplier,money(purchase.total_cents||record.cost_cents),(purchase.payments||[]).map(p=>`${p.method==='cash'?'Efectivo':'Transferencia'}: ${money(p.amount_cents)}`).join(' · ')].filter(Boolean).join(' · ');}catch{delete host.dataset.purchaseId;host.textContent+= ' · No se pudo cargar el detalle. Volvé a abrir la plancha para reintentar.';}}
+  async function loadSheetPurchaseSummary(record,host){if(host.dataset.purchaseId===String(record.purchase_id))return;host.dataset.purchaseId=String(record.purchase_id);try{state.sheetPurchaseRecords??=api('/api/admin/purchases').then(d=>d.items||[]).catch(err=>{state.sheetPurchaseRecords=null;throw err;});const rows=await state.sheetPurchaseRecords,purchase=rows.find(p=>Number(p.id)===Number(record.purchase_id));if(purchase&&host.isConnected)host.textContent=[`Compra #${purchase.id}`,purchase.supplier,money(purchase.total_cents||record.cost_cents),(purchase.payments||[]).map(p=>`${paymentLabels[p.method]||'Pago'} · ${money(p.amount_cents??p.amountCents)}`).join(' · ')].filter(Boolean).join(' · ');}catch{delete host.dataset.purchaseId;host.textContent+= ' · No se pudo cargar el detalle. Volvé a abrir la plancha para reintentar.';}}
   function sheetPurchasePayload(sheet,key='upload'){
     const p=sheetPurchasePrefix(key),read=name=>String(qs('#'+p+name)?.value||'').trim();
     const amount=qs('#'+p+'Amount'),base=amount?pesosToCents(amount.value):Number(sheet.cost_cents),quantity=(Number(sheet.print_length_cm)||Number(sheet.height_cm))/100;
@@ -6211,25 +6457,27 @@
     if(!['dtf_textile','dtf_uv'].includes(sheet.print_material_type))throw new Error('Elegí DTF textil o DTF UV para la compra de la plancha impresa.');
     const type=read('SurchargeType'),value=Number(read('Surcharge')),charge=Math.round(type==='percent'?base*value/100:value*100),total=base+charge,method=read('Method');
     if(!['fixed','percent'].includes(type)||!Number.isFinite(value)||value<0||!Number.isSafeInteger(total))throw new Error('Ingresá un recargo válido, mayor o igual a cero.');
-    if(!['cash','transfer','mixed'].includes(method))throw new Error('Elegí la forma de pago de la plancha.');
+    if(!['cash','transfer','mixed','pending','gift'].includes(method))throw new Error('Elegí la forma de pago de la plancha.');
     const supplier=read('Supplier'),transfer={method:'transfer',origin:read('Origin'),destination:read('Destination'),reference:read('Reference'),details:read('Details')};
     let payments;
-    if(method==='mixed'){
+    if(specialPayment(method))payments=[];
+    else if(method==='mixed'){
       const cash=pesosToCents(read('Cash')),transferred=pesosToCents(read('Transfer'));
       if(cash<=0||transferred<=0||cash+transferred!==total)throw new Error(`Efectivo + transferencia debe sumar ${money(total)}.`);
       payments=[{method:'cash',amountCents:cash,destination:supplier},{...transfer,amountCents:transferred}];
     }else payments=[method==='cash'?{method:'cash',amountCents:total,destination:supplier}:{...transfer,amountCents:total}];
-    return {sourceSheetAssetId:Number(sheet.id),supplier,reference:`Plancha #${sheet.id} · ${sheet.name||sheet.file_name||''}`,notes:'DTF registrado desde Diseños',surchargeType:type,surchargeValue:value,payments,occurredAt:new Date().toISOString(),items:[{materialType:sheet.print_material_type,name:sheet.print_material_type==='dtf_uv'?'DTF UV':'DTF textil',features:[sheet.print_material_type==='dtf_uv'?'DTF UV':'DTF textil'],quantity,unit:'meter',widthCm:Number(sheet.width_cm),unitPriceCents:Math.round(base/quantity),lineTotalCents:base,sheetAssetId:Number(sheet.id)}]};
+    return {sourceSheetAssetId:Number(sheet.id),supplier,reference:`Plancha #${sheet.id} · ${sheet.name||sheet.file_name||''}`,notes:'DTF registrado desde Diseños',surchargeType:type,surchargeValue:value,payment_method:method,payments,occurredAt:new Date().toISOString(),items:[{materialType:sheet.print_material_type,name:sheet.print_material_type==='dtf_uv'?'DTF UV':'DTF textil',features:[sheet.print_material_type==='dtf_uv'?'DTF UV':'DTF textil'],quantity,unit:'meter',widthCm:Number(sheet.width_cm),unitPriceCents:Math.round(base/quantity),lineTotalCents:base,sheetAssetId:Number(sheet.id)}]};
   }
   async function prepareSheetPurchaseFunding(sheet,key){
     const payload=sheetPurchasePayload(sheet,key);
+    if(specialPayment(payload.payment_method))return undefined;
     const total=payload.payments.reduce((sum,item)=>sum+Number(item.amountCents??item.amount_cents??0),0);
     return await askSheetPurchaseFunding(sheet,total);
   }
   async function registerSheetPurchase(sheet,key='upload',funding){
     if(sheet.purchase_id)return;
     const payload=sheetPurchasePayload(sheet,key);
-    payload.funding=funding??await prepareSheetPurchaseFunding(sheet,key);
+    if(!specialPayment(payload.payment_method))payload.funding=funding??await prepareSheetPurchaseFunding(sheet,key);
     const result=await api('/api/admin/purchases',{method:'POST',body:JSON.stringify(payload)});
     if(!result.item?.id)throw new Error('No pude confirmar la compra de la plancha. Reintentá el guardado.');
     sheet.purchase_id=Number(result.item.id);sheet.printed=1;
@@ -6747,11 +6995,6 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const row=e.target.closest('[data-purchase-row]');
       if(row){
         const i=Number(row.dataset.purchaseRow),x=state.purchaseItems[i];syncPurchaseRowFromDom(row);
-        if(e.target.matches('[data-purchase-choice="fit"],[data-purchase-choice="gender"]')&&
-          !x.sourceItemId&&femaleGarmentFit(x.fit)&&!purchaseItemAudiences(x).includes('Kids')){
-          const gender=qs('[data-purchase-choice="gender"]',row);
-          if(gender){gender.value='Mujer';x.gender='Mujer';}
-        }
         if(e.target.matches('[data-purchase-feature]')){x.features=qsa('[data-purchase-feature]:checked',row).map(el=>el.value);x.name=x.features.join(' · ');updatePurchaseFeatureSummary(row,x.features);return;}
         if(e.target.matches('[data-purchase-type-select]')){
           const type=e.target.value;
@@ -6846,13 +7089,22 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         if(state.designUploadBusy)return;
         const editor=e.target.closest('[data-sheet-editor]'),key=editor.dataset.sheetEditor;
         rememberMissingSheetFields(key);const queue=sheetMissingQueue(key),scope=sheetScope(key)?.value==='clients'?'clients':'salmos';
-        for(const file of e.target.files||[])if(!queue.some(item=>item.file.name===file.name&&item.file.size===file.size&&item.file.lastModified===file.lastModified))queue.push({id:crypto.randomUUID(),file,name:file.name.replace(/\.[^.]+$/,''),scope});
+        const added=[];
+        for(const file of e.target.files||[])if(!queue.some(item=>item.file.name===file.name&&item.file.size===file.size&&item.file.lastModified===file.lastModified)){
+          state.nextSheetTemporaryId??=0;
+          const record={id:crypto.randomUUID(),file,name:file.name.replace(/\.[^.]+$/,''),scope,temporaryId:--state.nextSheetTemporaryId,previewUrl:URL.createObjectURL(file),tags:[]};
+          queue.push(record);added.push(record);
+        }
         e.target.value='';renderMissingSheetQueue(key);syncSheetUploadGate(key);
+        if(added.length)openSheetArtworkFields(key,added[0]);
       }
       if(e.target.id==='designUploadKind'){setUploadKind(e.target.value);}if(e.target.id==='designSheetCompositionComplete')state.sheetCompositionConfirmation=e.target.checked?sheetCompositionFingerprint():null;
       if(e.target.matches('[data-design-kind]'))refreshDesignKind('detail');
-      if(e.target.matches('[data-sheet-measure],[data-sheet-quantity]')){const row=e.target.closest('[data-sheet-component]'),key=row.dataset.sheetKey,c=state.designSheetDrafts[key][Number(row.dataset.sheetComponent)];if(e.target.matches('[data-sheet-measure]')){c.measureOptionId=e.target.value;if(c.pendingMeasureOption?.id!==c.measureOptionId)c.pendingMeasureOption=null;}else c.quantity=Number(e.target.value);renderSheetSelected(key);}
-      if(e.target.matches('[data-sheet-exact]')){const row=e.target.closest('[data-sheet-component]'),key=row.dataset.sheetKey,c=state.designSheetDrafts[key]?.[Number(row.dataset.sheetComponent)],asset=sheetIndividualAsset(key,c?.designAssetId),size=sheetSize(key),old=c?.pendingMeasureOption||parseDesignMeasureOptions(asset||{}).find(o=>o.id===c?.measureOptionId);if(!c?.previewBoxes?.length||!old)return;const problem=sheetMeasurementProblem(key);if(problem){toast(problem,'error');return;}const w=Number(qs('[data-sheet-exact="width"]',row)?.value),h=Number(qs('[data-sheet-exact="height"]',row)?.value);if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0||w>size.width||h>size.height){toast('Ingresá ancho y alto que entren en la plancha.','error');return;}const resized=c.previewBoxes.map(box=>{const rotated=Number(box.rotation)%180;return {...box,width:(rotated?h:w)/size.width,height:(rotated?w:h)/size.height}});if(resized.some(box=>box.x+box.width>1.001||box.y+box.height>1.001)){toast('La medida exacta se sale de la plancha: corregí el recuadro.','error');return;}c.previewBoxes=resized;const sheet=state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId));c.pendingMeasureOption=detectedMeasureOption(asset,key==='upload'?state.sheetUploadPreview?.file?.name:sheet?.file_name,{widthCm:w,heightCm:h});c.measureOptionId=c.pendingMeasureOption.id;renderSheetSelected(key);return;}
+      if(e.target.matches('[data-sheet-waste]')){
+        const {sheetKey:key,sheetWaste:row,boxIndex}=e.target.dataset;
+        const box=state.designSheetDrafts[key]?.[Number(row)]?.previewBoxes?.[Number(boxIndex)];
+        if(box){box.waste=e.target.checked;renderSheetSelected(key);}
+      }
       if(e.target.matches('[data-band-mode]'))syncMotoBandRow(e.target.closest('[data-moto-band]'));
       if(e.target.matches('[data-production-design-side]')){const item=state.productionDesignsSelected[Number(e.target.dataset.index)];if(item){item.printSide=e.target.value;renderProductionSelectedDesigns();}}
 
@@ -6927,7 +7179,12 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const resetSheetZoom=e.target.closest('[data-reset-sheet-zoom]');if(resetSheetZoom){state.sheetZoom=1;renderSheetPreview(resetSheetZoom.closest('[data-sheet-editor]')?.dataset.sheetEditor||'upload');return;}
       if(e.target.closest('[data-cancel-missing-sheet-design]')){if(state.designUploadBusy)return;clearMissingSheetQueue(e.target.closest('[data-sheet-editor]').dataset.sheetEditor);return;}
       const removePending=e.target.closest('[data-remove-missing-sheet-file]');if(removePending){if(state.designUploadBusy)return;removeMissingSheetFile(removePending.closest('[data-sheet-editor]').dataset.sheetEditor,removePending.dataset.removeMissingSheetFile);return;}
-      const uploadMissing=e.target.closest('[data-upload-missing-sheet-design],[data-upload-all-missing-sheet-designs]');if(uploadMissing){try{await stageMissingSheetDesigns(uploadMissing,uploadMissing.hasAttribute('data-upload-all-missing-sheet-designs'))}catch(err){toast(err.message,'error')}return;}
+      const configureSheet=e.target.closest('[data-configure-sheet-design]');
+      if(configureSheet){
+        const key=configureSheet.dataset.sheetKey;
+        openSheetArtworkFields(key,sheetMissingQueue(key).find(record=>record.id===configureSheet.dataset.configureSheetDesign));
+        return;
+      }
       if(e.target.id==='addPromotionBtn'){qs('#promotionsEditor').insertAdjacentHTML('beforeend',promotionEditorRow());syncPromotionFields(qsa('[data-promotion-row]').at(-1));return;}
       if(e.target.closest('[data-promo-confirm]')){try{await saveSettings()}catch(err){toast(err.message,'error')}return;}
       if(e.target.closest('[data-add-promo-requirement]')){const row=e.target.closest('[data-promotion-row]'),used=qsa('[data-promo-requirement-type]',row).map(x=>x.value),type=[...qs('[data-promo-field="triggerType"]',row).options].map(x=>x.value).find(x=>x&&!used.includes(x));if(!type){toast('Ya agregaste todos los tipos.');return;}qs('[data-promo-requirements]',row).insertAdjacentHTML('beforeend',promotionRequirementRow({type}));syncPromotionFields(row);return;}
@@ -6967,7 +7224,6 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(sheetArtworkZoom){openSheetArtworkZoom(sheetArtworkZoom.dataset.sheetKey,Number(sheetArtworkZoom.dataset.sheetZoomArtwork));return;}
       const addSheet=e.target.closest('[data-add-sheet-design]');
       if(addSheet){chooseSheetArtwork(addSheet.dataset.sheetKey,Number(addSheet.dataset.addSheetDesign));return;}
-      const removeSheet=e.target.closest('[data-remove-sheet-component]');if(removeSheet){state.sheetRepeatTarget=null;const key=removeSheet.dataset.sheetKey,index=Number(removeSheet.dataset.removeSheetComponent);state.designSheetDrafts[key].splice(index,1);state.sheetActiveBox=null;if(state.sheetBoxTarget?.key===key){const active=state.sheetBoxTarget.index;if(active===index){state.sheetBoxTarget=null;state.sheetRepeatTarget=null;}else if(active>index)state.sheetBoxTarget.index--;}renderSheetSelected(key);return;}
 
       const groupHead=e.target.closest('.inventory-group-head');if(groupHead){const g=groupHead.closest('.inventory-group');if(g){g.classList.toggle('list-collapsed');return;}}
       const newMeasure=e.target.closest('[data-sheet-new-measure]');if(newMeasure){openSheetMeasure(newMeasure.dataset.sheetKey,Number(newMeasure.dataset.sheetNewMeasure));return;}
@@ -6989,7 +7245,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         const key=useScan.dataset.sheetKey,id=Number(useScan.dataset.pickSheetScan||useScan.dataset.createSheetScan||useScan.dataset.zoomSheetScan);
         const item=sheetDetectionState(key)?.items.find(item=>item.id===id);
         try{
-          if(item&&useScan.hasAttribute('data-pick-sheet-scan'))openSheetDesignGallery(key,item);
+          if(item&&useScan.hasAttribute('data-pick-sheet-scan')){
+            const asset=sheetIndividualAsset(key,item.designId);
+            if(asset?.kind==='individual')reviewDetectedSheetMark(key,item,Number(asset.id));
+            else openSheetDesignGallery(key,item);
+          }
           if(item&&useScan.hasAttribute('data-create-sheet-scan'))beginSheetCrop(key,item);
           if(item&&useScan.hasAttribute('data-zoom-sheet-scan'))openDetectedSheetZoom(key,item);
         }catch(error){toast(error.message,'error');}
@@ -7033,7 +7293,42 @@ function calculatePromotions(rules,items,shippingCostCents=0){
           state.sheetRepeatTarget=null;state.sheetBoxTarget={key,index};
         }
       }state.sheetActiveBox=null;renderSheetSelected(key);return;}
-      const pin=e.target.closest('[data-sheet-pin]');if(pin){if(state.sheetCrop?.key===pin.dataset.sheetKey)return;const selected={key:pin.dataset.sheetKey,rowIndex:Number(pin.dataset.sheetPin),boxIndex:Number(pin.dataset.pinIndex)};state.sheetActiveBox=selected;state.sheetBoxTarget=state.sheetRepeatTarget?.key===selected.key?state.sheetRepeatTarget:{key:selected.key,index:selected.rowIndex};renderSheetSelected(selected.key);return;}
+      const sheetGroupAction=e.target.closest('[data-toggle-sheet-sizes],[data-focus-sheet-design],[data-rename-sheet-design],[data-remove-sheet-design],[data-sheet-waste-group]');
+      if(sheetGroupAction){
+        const {sheetKey:key,toggleSheetSizes,focusSheetDesign,renameSheetDesign,removeSheetDesign,sheetWasteGroup}=sheetGroupAction.dataset;
+        const id=Number(toggleSheetSizes??focusSheetDesign??renameSheetDesign??removeSheetDesign??sheetWasteGroup);
+        const rows=state.designSheetDrafts[key];
+        if(!rows)return;
+        try{
+          if(renameSheetDesign){
+            if(id>0)await renameProductionDesign(id,()=>renderSheetSelected(key));
+            else openSheetArtworkFields(key,sheetMissingQueue(key).find(item=>item.temporaryId===id),false);
+            return;
+          }
+          if(toggleSheetSizes){
+            const open=state.sheetOpenSizes??=new Set(),active=key+':'+id;
+            if(open.has(active))open.delete(active);else open.add(active);
+          }
+          if(focusSheetDesign||toggleSheetSizes){
+            state.sheetActiveBox=null;
+            state.sheetHighlightedDesign={key,id};
+          }
+          if(removeSheetDesign){
+            ensureSheetReviewsComplete(key);
+            state.designSheetDrafts[key]=rows.filter(row=>Number(row.designAssetId)!==id);
+            state.sheetActiveBox=state.sheetHighlightedDesign=state.sheetBoxTarget=state.sheetRepeatTarget=state.sheetMarkTarget=null;
+            syncSheetScope(key);
+          }
+          if(sheetWasteGroup){
+            const boxes=rows.filter(row=>Number(row.designAssetId)===id).flatMap(row=>row.previewBoxes||[]);
+            const waste=boxes.some(box=>!box.waste);
+            for(const box of boxes)box.waste=waste;
+          }
+          renderSheetSelected(key);
+        }catch(error){toast(error.message,'error');}
+        return;
+      }
+      const pin=e.target.closest('[data-sheet-pin]');if(pin){state.sheetHighlightedDesign=null;if(state.sheetCrop?.key===pin.dataset.sheetKey)return;const selected={key:pin.dataset.sheetKey,rowIndex:Number(pin.dataset.sheetPin),boxIndex:Number(pin.dataset.pinIndex)};state.sheetActiveBox=selected;state.sheetBoxTarget=state.sheetRepeatTarget?.key===selected.key?state.sheetRepeatTarget:{key:selected.key,index:selected.rowIndex};renderSheetSelected(selected.key);return;}
       const canvas=e.target.closest('[data-sheet-canvas]');if(canvas){const target=state.sheetMarkTarget,key=canvas.dataset.sheetCanvas;if(target?.key===key){const c=state.designSheetDrafts[key][target.index];if(c){c.previewMarks??=[];if(c.previewMarks.length>=Number(c.quantity)){toast('Ya marcaste todas las unidades de esta fila.','error');return;}c.previewMarks.push(sheetBoxCoordinate(canvas,e));renderSheetSelected(key)}}return;}
       const addMeasure=e.target.closest('[data-add-measure-option]');if(addMeasure){qs('[data-measure-rows]',addMeasure.closest('[data-measure-editor]')).insertAdjacentHTML('beforeend',designMeasureRow());return;}
       const removeMeasure=e.target.closest('[data-remove-measure-option]');if(removeMeasure){removeMeasure.closest('[data-measure-option]').remove();return;}
@@ -7154,6 +7449,12 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         catch(error){toast(error.message,'error');}
         return;
       }
+      const addModelForPhoto=e.target.closest('[data-add-model-for-photo]');
+      if(addModelForPhoto){
+        const photo=state.mockupAssets.find(asset=>Number(asset.id)===Number(addModelForPhoto.dataset.addModelForPhoto));
+        if(photo)addModelToMontageProduct(photo);
+        return;
+      }
       const editPhoto=e.target.closest('[data-edit-mockup-asset]');if(editPhoto){try{await openMockupAssetDialog(null,Number(editPhoto.dataset.editMockupAsset),{production:Boolean(qs('#productionDialog')?.open),editingAsset:true})}catch(err){toast(err.message,'error')}return;}
       const photoPreview=e.target.closest('[data-open-mockup-queue]');if(photoPreview){openMockupPhotoPreview(Number(photoPreview.dataset.openMockupQueue));return;}
       const photoZoom=e.target.closest('[data-photo-zoom]');if(photoZoom){setMockupPhotoZoom(photoZoom.dataset.photoZoom==='fit'?1:(state.mockupPhotoZoom||1)*Number(photoZoom.dataset.photoZoom));return;}
@@ -7262,13 +7563,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const sizeFilter=e.target.closest('[data-product-size-filter]');
       if(sizeFilter){
         const purchased=Boolean(qs('#purchasedMaterialsGrid')),value=sizeFilter.dataset.productSizeFilter;
-        if(!value){
-          if(purchased)clearPurchasedInventoryFilters();
-          else{resetProductFilters();await renderProducts();}
-          return;
-        }
         const filters=purchased?purchasedFilters():state.stockFilters;
-        filters.size=filters.size===value?'':value;
+        if(!value){
+          filters.physicalOnly=!filters.physicalOnly||Boolean(filters.size);
+          filters.size='';
+        }else filters.size=filters.size===value?'':value;
         const select=qs(purchased?'[data-purchased-filter="size"]':'#stockFilterSize');
         if(select)select.value=filters.size;
         renderInventoryCards();
@@ -7296,7 +7595,25 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const ct=e.target.closest('[data-correo-track]');if(ct){try{ct.disabled=true;const d=await api(`/api/admin/orders/${ct.dataset.correoTrack}/correo/tracking`);toast(d.status?`Correo: ${d.status}`:'Seguimiento actualizado','success');await renderOrders()}catch(err){toast(err.message,'error');ct.disabled=false}return}
       const cx=e.target.closest('[data-correo-cancel]');if(cx){if(!confirm('¿Cancelar esta preimposición en Correo Argentino?'))return;try{cx.disabled=true;await api(`/api/admin/orders/${cx.dataset.correoCancel}/correo/cancel`,{method:'PATCH'});toast('Preimposición cancelada en Correo Argentino','success');await renderOrders()}catch(err){toast(err.message,'error');cx.disabled=false}return}
       if(e.target.id==='testCorreoBtn'){try{e.target.disabled=true;e.target.textContent='Probando...';const d=await api('/api/admin/correo/status');toast(d.authOk?'Credenciales de Correo válidas':d.message,d.authOk?'success':'error');await renderSettings()}catch(err){toast(err.message,'error');e.target.disabled=false;e.target.textContent='Probar credenciales ahora'}return}
-      if(e.target.id==='uploadFlyersBtn'){const form=qs('#flyerUploadForm');const fd=new FormData(form);const files=[...(form.elements.files?.files||[])];if(!files.length){toast('Elegí al menos un archivo.','error');return}const up=new FormData();up.append('title',fd.get('title')||'');up.append('public',fd.get('public')?'1':'0');files.forEach(file=>up.append('files',file));try{e.target.disabled=true;await api('/api/admin/flyers',{method:'POST',body:up});toast('Flyer/s subido/s','success');qs('#flyerUploadDialog')?.close();await renderFlyers()}catch(err){toast(err.message,'error')}finally{e.target.disabled=false}return}
+      if(e.target.id==='uploadFlyersBtn'){
+        const button=e.target,form=qs('#flyerUploadForm'),fields=new FormData(form),files=[...(form.elements.files?.files||[])];
+        if(!files.length){toast('Elegí al menos un archivo.','error');return;}
+        const label=button.textContent;
+        button.disabled=true;
+        try{
+          const upload=new FormData();
+          upload.append('title',fields.get('title')||'');
+          upload.append('public',fields.get('public')?'1':'0');
+          for(const file of await flyerUploadFiles(files,button))upload.append('files',file);
+          button.textContent='Subiendo…';
+          await api('/api/admin/flyers',{method:'POST',body:upload});
+          qs('#flyerUploadDialog')?.close();
+          toast('Flyers guardados','success');
+          await renderFlyers();
+        }catch(error){toast(error.message,'error');}
+        finally{button.disabled=false;button.textContent=label;}
+        return;
+      }
       if(e.target.closest('[data-new-coupon38]')){renderCouponEditor();return;}if(e.target.closest('[data-batch-coupon38]')){openCouponBatch38();return;}
       const ec=e.target.closest('[data-edit-coupon]');if(ec){state.editingCouponId=Number(ec.dataset.editCoupon);const c=state.coupons.find(x=>Number(x.id)===state.editingCouponId);renderCouponEditor(c||null);qs('#couponForm')?.scrollIntoView({behavior:'smooth',block:'start'});return}
       const dc=e.target.closest('[data-delete-coupon]');if(dc){if(confirm('¿Eliminar este cupón?')){await api(`/api/admin/coupons/${dc.dataset.deleteCoupon}`,{method:'DELETE'});if(Number(state.editingCouponId)===Number(dc.dataset.deleteCoupon))state.editingCouponId=null;toast('Cupón eliminado','success');await renderCoupons()}return}
@@ -7374,7 +7691,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         let x=old.x,y=old.y,right=old.x+old.width,bottom=old.y+old.height;
         if(edge==='move'){x=Math.max(0,Math.min(1-old.width,x+dx));y=Math.max(0,Math.min(1-old.height,y+dy));right=x+old.width;bottom=y+old.height}
         else{if(edge.includes('w'))x=Math.max(0,Math.min(right-.005,x+dx));if(edge.includes('e'))right=Math.min(1,Math.max(x+.005,right+dx));if(edge.includes('n'))y=Math.max(0,Math.min(bottom-.005,y+dy));if(edge.includes('s'))bottom=Math.min(1,Math.max(y+.005,bottom+dy))}
-        const box={x,y,width:right-x,height:bottom-y,rotation:old.rotation||0};resize.box=box;resize.moved=true;
+        const box={...old,x,y,width:right-x,height:bottom-y,rotation:old.rotation||0};resize.box=box;resize.moved=true;
         Object.assign(resize.element.style,{left:x*100+'%',top:y*100+'%',width:box.width*100+'%',height:box.height*100+'%'});
         if(resize.pin)Object.assign(resize.pin.style,{left:(x+box.width/2)*100+'%',top:(y+box.height/2)*100+'%'});
         return;
@@ -7451,7 +7768,56 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     document.addEventListener('dragend',e=>{e.target.closest?.('[data-media-key]')?.classList.remove('dragging');state.mediaDragKey=null});
     document.addEventListener('dragover',e=>{if(e.target.closest?.('[data-media-key]'))e.preventDefault()});
     document.addEventListener('drop',e=>{const target=e.target.closest?.('[data-media-key]');if(!target||!state.mediaDragKey)return;e.preventDefault();const from=state.mediaItems.findIndex(x=>x.key===state.mediaDragKey),to=state.mediaItems.findIndex(x=>x.key===target.dataset.mediaKey);if(from<0||to<0||from===to)return;const [item]=state.mediaItems.splice(from,1);state.mediaItems.splice(to,0,item);renderMediaManager()});
-    qs('#adminContent').addEventListener('input',e=>{
+    const inventoryHost=qs('#adminContent');
+    inventoryHost.addEventListener('toggle',event=>{
+      if(event.target.matches?.('.inventory-search')&&event.target.open)qs('#adminProductSearch',event.target)?.focus();
+    },true);
+    let inventorySource=null,inventoryPointer=null;
+    inventoryHost.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&event.target.id==='adminProductSearch'){
+        const search=event.target.closest('details');
+        search.open=false;
+        qs('summary',search)?.focus();
+      }
+      const head=event.target.closest('[data-inventory-header]');
+      if(!head||!event.altKey||!['ArrowUp','ArrowDown'].includes(event.key))return;
+      const after=event.key==='ArrowDown',sibling=head.parentElement[after?'nextElementSibling':'previousElementSibling'];
+      if(sibling){event.preventDefault();moveInventoryHeader(head,qs('.product-category-head',sibling),after);}
+    });
+    inventoryHost.addEventListener('dragstart',event=>{
+      inventorySource=event.target.closest('[data-inventory-header]');
+      if(inventorySource&&event.dataTransfer){event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',inventorySource.parentElement.dataset.productCategory);}
+    });
+    inventoryHost.addEventListener('dragend',()=>{inventorySource=null;});
+    inventoryHost.addEventListener('dragover',event=>{
+      if(inventorySource&&event.target.closest('.product-category-head'))event.preventDefault();
+    });
+    function dropInventoryHeader(source,target,y){
+      if(!source||!target)return;
+      const rect=target.getBoundingClientRect();
+      moveInventoryHeader(source,target,y>rect.top+rect.height/2);
+    }
+    inventoryHost.addEventListener('drop',event=>{
+      if(!inventorySource)return;
+      event.preventDefault();
+      dropInventoryHeader(inventorySource,event.target.closest('.product-category-head'),event.clientY);
+      inventorySource=null;
+    });
+    inventoryHost.addEventListener('pointerdown',event=>{
+      const title=event.target.closest('[data-inventory-header] h2');
+      if(event.pointerType==='mouse'||!title)return;
+      inventoryPointer={id:event.pointerId,head:title.closest('[data-inventory-header]'),y:event.clientY};
+      title.setPointerCapture(event.pointerId);
+    });
+    inventoryHost.addEventListener('pointercancel',()=>{inventoryPointer=null;});
+    inventoryHost.addEventListener('pointerup',event=>{
+      if(inventoryPointer?.id!==event.pointerId)return;
+      const {head,y}=inventoryPointer;
+      inventoryPointer=null;
+      if(Math.abs(event.clientY-y)<10)return;
+      dropInventoryHeader(head,document.elementFromPoint(event.clientX,event.clientY)?.closest('.product-category-head'),event.clientY);
+    });
+    inventoryHost.addEventListener('input',e=>{
       if(e.target.id!=='adminProductSearch')return;
       if(qs('#purchasedMaterialsGrid'))state.purchasedMaterialSearch=e.target.value;
       else state.productSearch=e.target.value;
@@ -7481,6 +7847,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     const key=e.target.closest('#designUploadDialog')?'upload':'detail';
     if(e.target.matches('[data-sheet-purchase-amount]')){syncSheetPurchaseAmount(key,e.target);updateSheetMetrics(key);}
     if(e.target.closest('.sheet-purchase-panel')||e.target.matches('#designUploadCost,[data-design-cost]'))syncSheetPurchasePanel(key);
+    if(e.target.matches('#designUploadCost,[data-design-cost],[data-sheet-purchase-amount]')&&sheetKind(key)==='sheet')renderSheetSelected(key);
     if(e.target.closest('#designUploadDialog'))scheduleSheetDraftSave();
   }
   window.addEventListener('beforeunload',persistSheetDraft);
@@ -7510,7 +7877,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     return [...groups.values()].map(g=>{const count=g.quantity.toLocaleString('es-AR',{maximumFractionDigits:3});if(materialIsDtf(g.type))return `${count} m de ${materialTypeLabel(g.type)}`;const [one,many]=labels[g.type]||[materialTypeLabel(g.type).toLowerCase(),materialTypeLabel(g.type).toLowerCase()];const cut=g.fit?photoFit(g.fit):'';const suffix=cut==='oversize'?'over':cut==='clasico'?(g.quantity===1?'clásica':'clásicas'):g.fit;return `${count} ${g.quantity===1?one:many}${suffix?' '+suffix:''}`;}).join(' · ');
   }
   function updatePurchaseQuantitySummary(){const card=qs('.purchase-payment-card',qs('#purchaseForm'));if(!card)return;let host=qs('#purchaseQuantitySummary');if(!host){host=document.createElement('section');host.id='purchaseQuantitySummary';host.className='purchase-quantity-summary';card.before(host);}host.textContent=purchaseQuantitySummary(state.purchaseItems);}
-  function purchaseListRow(p,group='all'){const visible=(p.items||[]).filter(item=>group==='all'||purchaseItemGroup(item)===group),total=group==='all'?p.total_cents:purchaseGroupTotals(p)[group];return `<article class="purchase-compact-row" data-view-purchase="${p.id}" tabindex="0" role="button" aria-label="Ver compra ${p.id}"><header class="purchase-row-header"><div class="purchase-row-heading"><strong>Compra #${p.id}</strong><small>${adminDateTimeHtml(p.occurred_at)}</small></div><span class="purchase-row-supplier">${escapeHtml(p.supplier||'Sin proveedor')}</span><span class="purchase-row-payment">${(p.payments||[]).map(x=>`${x.method==='transfer'?'Transferencia':'Efectivo'} ${group==='all'?purchaseWholeMoney(x.amount_cents):''}`).join('<br>')}</span><strong class="purchase-row-total">${purchaseWholeMoney(total)}</strong><button type="button" class="icon-btn" data-edit-purchase="${p.id}" aria-label="Editar compra"><i class="fa-solid fa-pen" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-delete-purchase="${p.id}" aria-label="Eliminar compra"><i class="fa-solid fa-trash-can"></i></button><small class="purchase-row-summary">${escapeHtml(purchaseQuantitySummary(visible))}</small></header><div class="purchase-row-items">${(p.items||[]).map((item,index)=>{if(group!=='all'&&purchaseItemGroup(item)!==group)return '';const photos=purchaseListPhotos(item);return `<div class="purchase-panel-item"><div class="purchase-panel-preview">${photos.length?`<img src="${escapeHtml(photos[0].url)}" alt="${escapeHtml(item.material_name)}" loading="lazy" data-purchase-list-image="${p.id}:${index}">${photos.length>1?`<button type="button" class="icon-btn" data-purchase-list-photo="${p.id}:${index}" data-dir="-1" aria-label="Foto anterior">‹</button><button type="button" class="icon-btn" data-purchase-list-photo="${p.id}:${index}" data-dir="1" aria-label="Foto siguiente">›</button>`:''}`:'<i class="fa-regular fa-image"></i>'}</div><div class="purchase-panel-item-detail">${colorDetail(item.color)}<span>${escapeHtml([item.size,item.fit,item.material_name,item.material_class].filter(Boolean).filter((x,i,list)=>list.indexOf(x)===i).join(' · '))}</span></div><b>${Number(item.quantity).toLocaleString('es-AR')}${item.unit==='meter'?' m':''}</b><strong>${purchaseWholeMoney(item.line_total_cents)}</strong></div>`;}).join('')}</div></article>`;}
+  function purchaseListRow(p,group='all'){const visible=(p.items||[]).filter(item=>group==='all'||purchaseItemGroup(item)===group),total=group==='all'?p.total_cents:purchaseGroupTotals(p)[group];return `<article class="purchase-compact-row" data-view-purchase="${p.id}" tabindex="0" role="button" aria-label="Ver compra ${p.id}"><header class="purchase-row-header"><div class="purchase-row-heading"><strong>Compra #${p.id}</strong><small>${adminDateTimeHtml(p.occurred_at)}</small></div><span class="purchase-row-supplier">${escapeHtml(p.supplier||'Sin proveedor')}${specialPayment(p.payments?.[0]?.method)?' · '+paymentLabels[p.payments[0].method]:''}</span><span class="purchase-row-payment">${(p.payments||[]).map(x=>`${x.method==='transfer'?'Transferencia':'Efectivo'} ${group==='all'?purchaseWholeMoney(x.amount_cents):''}`).join('<br>')}</span><strong class="purchase-row-total">${purchaseWholeMoney(total)}</strong><button type="button" class="icon-btn" data-edit-purchase="${p.id}" aria-label="Editar compra"><i class="fa-solid fa-pen" aria-hidden="true"></i></button><button type="button" class="icon-btn" data-delete-purchase="${p.id}" aria-label="Eliminar compra"><i class="fa-solid fa-trash-can"></i></button><small class="purchase-row-summary">${escapeHtml(purchaseQuantitySummary(visible))}</small></header><div class="purchase-row-items">${(p.items||[]).map((item,index)=>{if(group!=='all'&&purchaseItemGroup(item)!==group)return '';const photos=purchaseListPhotos(item);return `<div class="purchase-panel-item"><div class="purchase-panel-preview">${photos.length?`<img src="${escapeHtml(photos[0].url)}" alt="${escapeHtml(item.material_name)}" loading="lazy" data-purchase-list-image="${p.id}:${index}">${photos.length>1?`<button type="button" class="icon-btn" data-purchase-list-photo="${p.id}:${index}" data-dir="-1" aria-label="Foto anterior">‹</button><button type="button" class="icon-btn" data-purchase-list-photo="${p.id}:${index}" data-dir="1" aria-label="Foto siguiente">›</button>`:''}`:'<i class="fa-regular fa-image"></i>'}</div><div class="purchase-panel-item-detail">${colorDetail(item.color)}<span>${escapeHtml([item.size,item.fit,item.material_name,item.material_class].filter(Boolean).filter((x,i,list)=>list.indexOf(x)===i).join(' · '))}</span></div><b>${Number(item.quantity).toLocaleString('es-AR')}${item.unit==='meter'?' m':''}</b><strong>${purchaseWholeMoney(item.line_total_cents)}</strong></div>`;}).join('')}</div></article>`;}
   async function deletePurchaseFromUI(id){if(!confirm('¿Eliminar esta compra y sus egresos de Caja? Se descontará la cantidad recibida del stock.'))return;await api(`/api/admin/purchases/${Number(id)}`,{method:'DELETE'});qs('#purchaseReviewDialog')?.close();state.costingLoaded=false;state.mockupAssetsLoaded=false;toast('Compra eliminada','success');await renderPurchases();}
   async function deleteSelectedProducts(){const ids=[...(state.selectedProductIds||[])];if(!ids.length)return;if(!confirm(`¿Eliminar ${ids.length} producto${ids.length===1?'':'s'} marcado${ids.length===1?'':'s'}?`))return;const button=qs('#deleteSelectedProductsBtn');if(button)button.disabled=true;const failures=[];for(const id of ids){try{await api(`/api/admin/products/${id}`,{method:'DELETE'});state.selectedProductIds.delete(id);}catch(error){failures.push(`#${id}: ${error.message}`);}}await renderProducts();toast(failures.length?failures.join('\n'):'Productos eliminados',failures.length?'error':'success');}
   function triggerPhotoDownload(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
@@ -7661,7 +8028,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   function syncPurchaseFunding(){const keep=qs('#purchaseFundingKeep')?.checked,mode=qs('#purchaseFundingMode')?.value;qs('#purchaseFundingMode').disabled=Boolean(keep);qs('#purchaseFundingMode').required=!keep;qs('[data-funding-existing]')?.classList.toggle('hidden',keep||mode!=='existing');qsa('[data-funding-new]').forEach(x=>x.classList.toggle('hidden',keep||!['new','income'].includes(mode)));qs('[data-funding-credit]')?.classList.toggle('hidden',keep||mode!=='credit');}
   function collectPurchaseFunding(){if(qs('#purchaseFundingKeep')?.checked)return undefined;const mode=qs('#purchaseFundingMode')?.value;if(mode==='existing'){const movementId=Number(qs('#purchaseFundingMovement').value);if(!movementId)throw new Error('Elegí el ingreso que financia la compra.');return {mode,movementId};}if(mode==='credit'){if(!state.purchaseCreditDraft)throw new Error('Completá el crédito.');return {mode:'new',kind:'credit',...state.purchaseCreditDraft};}if(['new','income'].includes(mode)){const amountCents=pesosToCents(qs('#purchaseFundingAmount').value);if(amountCents<=0)throw new Error('Ingresá el monto del aporte.');return {mode:'new',kind:mode==='income'?'income':'aporte',amountCents,paymentMethod:qs('#purchaseFundingAccount').value,description:qs('#purchaseFundingDescription').value.trim()};}throw new Error('Elegí el tipo de aporte.');}
   function setupMovementCredit(m={}){const form=qs('#movementForm');let host=qs('#movementCredit');if(!host){host=document.createElement('section');host.id='movementCredit';host.className='movement-credit';qs('.dialog-body',form).append(host);}const c=m.credit;host.innerHTML=`<label class="credit-toggle"><input type="checkbox" id="movementCreditEnabled" ${c?'checked':''}> Este ingreso es un crédito</label><div id="movementCreditFields" class="form-grid"><label class="field">Entidad / prestamista<input class="input" id="creditLender" value="${escapeHtml(c?.lender||'')}"></label><label class="field">Intereses totales (%)<input class="input" type="number" min="0" step="any" id="creditInterest" readonly value="${Number(c?.interestPercent)||0}"></label><label class="field">Total a pagar ($)<input class="input" type="number" min=".01" step="any" id="creditTotal" readonly value="${c?c.totalCents/100:''}"></label><label class="field">Cuotas<input class="input" type="number" min="1" max="360" step="1" id="creditCount" value="${c?.installments?.length||1}"></label><label class="field">Importe de cada cuota ($)<input class="input" type="number" min=".01" step=".01" id="creditQuotaAmount" value="${c?.installments?.[0]?.amountCents/100||''}"></label><label class="field">Primer vencimiento<input class="input" type="date" id="creditFirstDue" value="${c?.installments?.[0]?.dueDate||today()}"></label><button type="button" class="btn btn-ghost" id="generateCreditInstallments">Distribuir cuotas</button><div class="credit-installments full" id="creditInstallments"></div></div>`;state.creditInstallments=structuredClone(c?.installments||[]);renderCreditInstallments();syncMovementCredit();}
-  function syncMovementCredit(){const income=qs('#movementType')?.value==='income',enabled=qs('#movementCreditEnabled')?.checked;qs('#movementCredit')?.classList.toggle('hidden',!income);qs('#movementCreditFields')?.classList.toggle('hidden',!enabled);}
+  function syncMovementCredit(){const income=qs('#movementType')?.value==='income',enabled=qs('#movementCreditEnabled')?.checked;qs('#movementCredit')?.classList.toggle('hidden',!income||specialPayment(qs('#movementPaymentMethod')?.value));qs('#movementCreditFields')?.classList.toggle('hidden',!enabled);}
   function renderCreditInstallments(){const host=qs('#creditInstallments');if(!host)return;host.innerHTML=(state.creditInstallments||[]).map((x,index)=>`<div class="credit-installment"><strong>${index+1}</strong><input class="input" type="date" data-credit-due="${index}" value="${x.dueDate}" aria-label="Vencimiento cuota ${index+1}"><input class="input" type="number" min=".01" step="any" data-credit-amount="${index}" value="${x.amountCents/100}" aria-label="Importe cuota ${index+1}"><label><input type="checkbox" data-credit-paid="${index}" ${x.paid?'checked':''}> Pagada</label></div>`).join('');}
   function generateCreditInstallments(){const quota=pesosToCents(qs('#creditQuotaAmount')?.value);if(quota>0){const total=quota*Number(qs('#creditCount').value),principal=pesosToCents(qs('#movementAmount').value);qs('#creditTotal').value=total/100;qs('#creditInterest').value=principal>0?(total/principal-1)*100:0;}const principal=pesosToCents(qs('#movementAmount').value),interest=Number(qs('#creditInterest').value)||0,total=pesosToCents(qs('#creditTotal').value||principal*(1+interest/100)/100),count=Number(qs('#creditCount').value),first=qs('#creditFirstDue').value;if(!(Number.isInteger(count)&&count>=1&&count<=360)||!/^\d{4}-\d{2}-\d{2}$/.test(first)||total<=0)throw new Error('Revisá cuotas, importe y primer vencimiento.');qs('#creditTotal').value=total/100;const [year,month,day]=first.split('-').map(Number);state.creditInstallments=Array.from({length:count},(_,index)=>{const date=new Date(Date.UTC(year,month-1+index,1)),last=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).getUTCDate();date.setUTCDate(Math.min(day,last));return {dueDate:date.toISOString().slice(0,10),amountCents:Math.floor(total/count)+(index<total%count?1:0),paid:false};});renderCreditInstallments();}
   function collectMovementCredit(){if(qs('#movementType')?.value!=='income'||!qs('#movementCreditEnabled')?.checked)return null;const installments=(state.creditInstallments||[]).map((x,index)=>({dueDate:qs(`[data-credit-due="${index}"]`).value,amountCents:pesosToCents(qs(`[data-credit-amount="${index}"]`).value),paid:qs(`[data-credit-paid="${index}"]`).checked})),totalCents=pesosToCents(qs('#creditTotal').value),principal=pesosToCents(qs('#movementAmount').value);if(!installments.length||installments.some(x=>!x.dueDate||x.amountCents<=0)||installments.reduce((sum,x)=>sum+x.amountCents,0)!==totalCents||totalCents<principal)throw new Error('Distribuí las cuotas y verificá que sumen el total a pagar.');return {lender:qs('#creditLender').value.trim(),interestPercent:Number(qs('#creditInterest').value),totalCents,installments};}
@@ -7720,7 +8087,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     });
     document.addEventListener('click',event=>{const button=event.target.closest('[data-copy-production-design],[data-copy-all-production-designs]');if(!button)return;event.preventDefault();event.stopImmediatePropagation();copyMockupLayers('clean',button.dataset.copyProductionDesign||null,button.hasAttribute('data-copy-all-production-designs'));},true);
   }
-  async function renameProductionDesign(id){const asset=state.designAssets.find(x=>Number(x.id)===id);if(!asset)return;const dialog=ensureAdminDialog('productionDesignNameDialog','Nombre de la estampa');qs('.dialog-body',dialog).innerHTML=`<form id="productionDesignNameForm"><label class="field">Nombre<input class="input" name="name" maxlength="160" required value="${escapeHtml(asset.name||'')}"></label><p role="status"></p><button type="submit" class="icon-btn" aria-label="Guardar nombre"><i class="fa-solid fa-circle-check"></i></button></form>`;const form=qs('form',dialog);form.onsubmit=async e=>{e.preventDefault();const name=form.elements.name.value.trim();if(!name)return;const button=qs('button',form);button.disabled=true;try{const saved=await api(`/api/admin/design-assets/${id}/name`,{method:'PATCH',body:JSON.stringify({name})});Object.assign(asset,saved.item);dialog.close();renderProductionSelectedDesigns();renderProductionDesignGallery();}catch(error){qs('[role=status]',form).textContent=error.message;}finally{button.disabled=false;}};dialog.showModal();form.elements.name.focus();form.elements.name.select();}
+  async function renameProductionDesign(id,onSaved){const asset=state.designAssets.find(x=>Number(x.id)===id);if(!asset)return;const dialog=ensureAdminDialog('productionDesignNameDialog','Nombre de la estampa');qs('.dialog-body',dialog).innerHTML=`<form id="productionDesignNameForm"><label class="field">Nombre<input class="input" name="name" maxlength="160" required value="${escapeHtml(asset.name||'')}"></label><p role="status"></p><button type="submit" class="icon-btn" aria-label="Guardar nombre"><i class="fa-solid fa-circle-check"></i></button></form>`;const form=qs('form',dialog);form.onsubmit=async e=>{e.preventDefault();const name=form.elements.name.value.trim();if(!name)return;const button=qs('button',form);button.disabled=true;try{const saved=await api(`/api/admin/design-assets/${id}/name`,{method:'PATCH',body:JSON.stringify({name})});Object.assign(asset,saved.item);dialog.close();if(onSaved)onSaved();else{renderProductionSelectedDesigns();renderProductionDesignGallery();}}catch(error){qs('[role=status]',form).textContent=error.message;}finally{button.disabled=false;}};dialog.showModal();form.elements.name.focus();form.elements.name.select();}
   function updateResizeReadout(layer,canvas){
     let readout=qs('#mockupResizeReadout');if(!layer){readout?.remove();return;}
     const column=qs('.production-mockup-preview-column'),toolbar=qs('#productionTextTools .production-text-toolbar');if(!column||!toolbar)return;
@@ -7795,7 +8162,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   const productionMutationSelector='[data-edit-production-artwork],[data-mockup-calibrate],[data-mockup-turn],[data-mockup-undo],[data-mockup-undo-all],[data-add-production-text],[data-font-id],[data-text-case],[data-text-bold],[data-text-color],[data-surface-field],[data-mockup-reference-width],[data-fullscreen-reference-width],[data-mockup-rotation],[data-select-mockup-background],[data-remove-production-design],[data-remove-production-text],[data-change-production-measure],[data-add-production-design],[data-select-production-design],#productionTextInput,#applyProductionMeasureBtn,#mockupBackgroundSelect';
   for(const eventName of ['click','input','change','pointerdown'])document.addEventListener(eventName,e=>{if(!qs('#productionDialog')?.open||!activeProductionViewLocked())return;if((e.target.id==='productionMockupCanvas'&&eventName==='pointerdown'&&state.mockupZoom<=1)||e.target.closest(productionMutationSelector)){e.preventDefault();e.stopImmediatePropagation();toast('Vista bloqueada. Abrí el candado para editarla.');}},true);
   document.addEventListener('change',e=>{const target=e.target;if(target.matches('[data-view-ok],[data-current-view-ok]')){e.stopImmediatePropagation();const key=target.dataset.viewOk||mockupViewKey();setProductionViewOK(key,target.checked).catch(error=>{target.checked=!target.checked;toast(error.message,'error');});return;}if(target.matches('[data-keep-design-only]')){e.stopImmediatePropagation();updateCarrySelection('keepDesign',target.checked,target.dataset.keepDesignOnly);}if(target.matches('[data-keep-production-design]')){e.stopImmediatePropagation();updateCarrySelection('keepPlacement',target.checked,target.dataset.keepProductionDesign);}},true);
-  document.addEventListener('click',async e=>{try{const bulk=e.target.closest('[data-carry-all]');if(bulk){e.stopImmediatePropagation();updateCarrySelection(bulk.dataset.carryAll,bulk.dataset.value==='1');return;}const batch=e.target.closest('[data-edit-upload-artwork]');if(batch){e.stopImmediatePropagation();const record=state.designUploadFiles.find(x=>String(x.id)===batch.dataset.editUploadArtwork);await openUploadArtworkEditor(record,()=>{const row=qs(`[data-design-batch-row="${record.id}"]`);const img=qs('.design-upload-file-preview img',row);if(img)img.src=record.previewUrl;const visual=qs('[data-design-visual]',row);if(visual){visual.dataset.designInk='';visual.dataset.designBrightness='100';visual.dataset.designSaturation='100';paintDesignVisual(visual);}qsa('[data-design-tone]',row).forEach(input=>{input.value=100;if(input.nextElementSibling)input.nextElementSibling.textContent='100%';});});return;}const missing=e.target.closest('[data-edit-missing-artwork]');if(missing){e.stopImmediatePropagation();const key=missing.dataset.sheetKey;rememberMissingSheetFields(key);const record=sheetMissingQueue(key).find(x=>x.id===missing.dataset.editMissingArtwork);await openUploadArtworkEditor(record,()=>renderMissingSheetQueue(key));}}catch(error){toast(error.message,'error');}},true);
+  document.addEventListener('click',async e=>{try{const bulk=e.target.closest('[data-carry-all]');if(bulk){e.stopImmediatePropagation();updateCarrySelection(bulk.dataset.carryAll,bulk.dataset.value==='1');return;}const batch=e.target.closest('[data-edit-upload-artwork]');if(batch){e.stopImmediatePropagation();const record=state.designUploadFiles.find(x=>String(x.id)===batch.dataset.editUploadArtwork);await openUploadArtworkEditor(record,()=>{const row=qs(`[data-design-batch-row="${record.id}"]`);const img=qs('.design-upload-file-preview img',row);if(img)img.src=record.previewUrl;const visual=qs('[data-design-visual]',row);if(visual){visual.dataset.designInk='';visual.dataset.designBrightness='100';visual.dataset.designSaturation='100';paintDesignVisual(visual);}qsa('[data-design-tone]',row).forEach(input=>{input.value=100;if(input.nextElementSibling)input.nextElementSibling.textContent='100%';});});return;}const missing=e.target.closest('[data-edit-missing-artwork]');if(missing){e.stopImmediatePropagation();const key=missing.dataset.sheetKey;rememberMissingSheetFields(key);const record=sheetMissingQueue(key).find(x=>x.id===missing.dataset.editMissingArtwork);await openUploadArtworkEditor(record,()=>{const preview=qs('#sheetNewArtworkDialog[open] [data-sheet-new-preview]');if(preview)preview.src=record.previewUrl;renderMissingSheetQueue(key);});}}catch(error){toast(error.message,'error');}},true);
 
 
   document.addEventListener('click',event=>{const button=event.target.closest('[data-toggle-view-lock]');if(!button)return;event.stopImmediatePropagation();const key=button.dataset.toggleViewLock==='current'?mockupViewKey():button.dataset.toggleViewLock;setProductionViewOK(key,!state.productionMountViews?.[key]?.locked).catch(error=>toast(error.message,'error'));},true);
@@ -7868,7 +8235,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const scale=Math.min(Math.max(1,stage.clientWidth-16)/width,Math.max(1,stage.clientHeight-16)/height)*zoom;
       frame.style.width=Math.max(1,width*scale)+'px';frame.style.height=Math.max(1,height*scale)+'px';canvas.dataset.rotation=rotated?'90':'0';draft.zoom=zoom;qs('[data-link-sheet-zoom-label]',dialog).textContent=Math.round(zoom*100)+'%';draw();
     }
-    const showPurchase=()=>{const needed=Boolean(image&&!draft.sheet?.purchase_id);qs('[data-link-sheet-purchase]',dialog).classList.toggle('hidden',!needed);qs('#linkedSheetPurchaseAmount').value=String((Number(draft.sheet?.cost_cents)||cost)/100);qs('#linkedSheetPurchaseMethod').value='cash';qs('#linkedSheetPurchaseSurchargeType').value='fixed';qs('#linkedSheetPurchaseSurcharge').value='0';for(const [id,value] of Object.entries(draft.purchaseFields||{})){const input=qs('#'+id,dialog);if(input)input.value=value;}const method=qs('#linkedSheetPurchaseMethod').value;qsa('[data-sheet-mixed]',dialog).forEach(el=>el.classList.toggle('hidden',method!=='mixed'));qsa('[data-sheet-transfer]',dialog).forEach(el=>el.classList.toggle('hidden',method==='cash'));};
+    const showPurchase=()=>{const needed=Boolean(image&&!draft.sheet?.purchase_id);qs('[data-link-sheet-purchase]',dialog).classList.toggle('hidden',!needed);qs('#linkedSheetPurchaseAmount').value=String((Number(draft.sheet?.cost_cents)||cost)/100);qs('#linkedSheetPurchaseMethod').value='cash';qs('#linkedSheetPurchaseSurchargeType').value='fixed';qs('#linkedSheetPurchaseSurcharge').value='0';for(const [id,value] of Object.entries(draft.purchaseFields||{})){const input=qs('#'+id,dialog);if(input)input.value=value;}const method=qs('#linkedSheetPurchaseMethod').value;qsa('[data-sheet-mixed]',dialog).forEach(el=>el.classList.toggle('hidden',method!=='mixed'));qsa('[data-sheet-transfer]',dialog).forEach(el=>el.classList.toggle('hidden',method==='cash'||specialPayment(method)));};
     async function load(url,autoSize=false){
       const seq=++loadSeq;loadingImage=true;image=null;drag=null;canvas.hidden=true;loading.hidden=false;qs('span',loading).textContent='Cargando plancha…';qs('[data-link-sheet-retry]',dialog).hidden=true;stage.setAttribute('aria-busy','true');status.textContent='';controls();
       try{const next=new Image();next.crossOrigin='use-credentials';next.src=url;await next.decode();if(closed||seq!==loadSeq)return;
@@ -7904,7 +8271,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
     qsa('[data-link-sheet-zoom]',dialog).forEach(button=>button.onclick=()=>{const action=button.dataset.linkSheetZoom;setZoom(action==='fit'?1:zoom*(action==='in'?1.25:1/1.25));});
     qs('[data-link-sheet-undo]',dialog).onclick=()=>{draft.boxes.pop();active=draft.boxes.length-1;invalidate();draw();};
     qsa('[data-link-sheet-width],[data-link-sheet-height]',dialog).forEach(input=>input.oninput=()=>{invalidate();draw();});
-    qs('#linkedSheetPurchaseMethod').onchange=event=>{const method=event.target.value;qsa('[data-sheet-mixed]',dialog).forEach(el=>el.classList.toggle('hidden',method!=='mixed'));qsa('[data-sheet-transfer]',dialog).forEach(el=>el.classList.toggle('hidden',method==='cash'));};
+    qs('#linkedSheetPurchaseMethod').onchange=event=>{const method=event.target.value;qsa('[data-sheet-mixed]',dialog).forEach(el=>el.classList.toggle('hidden',method!=='mixed'));qsa('[data-sheet-transfer]',dialog).forEach(el=>el.classList.toggle('hidden',method==='cash'||specialPayment(method)));};
     save.onclick=async()=>{
       if(busy||loadingImage)return;busy=true;controls();status.textContent='Guardando relación…';
       try{
@@ -7968,10 +8335,6 @@ function calculatePromotions(rules,items,shippingCostCents=0){
   }
   function renderProductionAudiences(){
     const host=qs('#productionAudienceField');if(!host)return;
-    if(!state.productionAudienceDirty){
-      const primary=productionPrimaryMaterial();
-      state.productionAudiences=primary?purchaseItemAudiences(primary):[];
-    }
     const value=window.SalmosAudience.serialize(state.productionAudiences);
     if(host.dataset.value!==value){host.innerHTML=window.SalmosAudience.html(value,'production');host.dataset.value=value;}
   }
