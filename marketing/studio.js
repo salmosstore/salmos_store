@@ -11,7 +11,19 @@
   function current(){return project.scenes[active];}
   function checkpoint(snapshot=project){const copy=structuredClone(snapshot);if(musicTrial)Object.assign(copy.audio,musicTrial);history.push(copy);if(history.length>12)history.shift();future.length=0;syncUndo();}
   function syncUndo(){$('#undo').disabled=!history.length||exporting;$('#redo').disabled=!future.length||exporting;}
-  function changed(reload=false){renderUsedItems();project.updatedAt=Date.now();if(reload)prepareMedia().then(()=>draw()).catch(e=>notify(e.message,'error'));else draw();syncTimeline();clearTimeout(autosaveTimer);autosaveTimer=setTimeout(()=>saveRecord().catch(()=>notify('No se pudo guardar el borrador. Revisá el espacio disponible en este navegador.','error')),900);}
+  function flushReelAutosave(){
+    if(!autosaveTimer)return;
+    clearTimeout(autosaveTimer);autosaveTimer=null;
+    saveRecord().catch(()=>notify('No se pudo guardar el borrador. Revisá el espacio disponible en este navegador.','error'));
+  }
+  function changed(reload=false){
+    project.updatedAt=Date.now();
+    clearTimeout(autosaveTimer);
+    autosaveTimer=setTimeout(flushReelAutosave,900);
+    renderUsedItems();
+    if(reload)prepareMedia().then(()=>draw()).catch(error=>notify(error.message,'error'));else draw();
+    syncTimeline();
+  }
   function checkedValue(input){return input.type==='checkbox'?input.checked:['number','range'].includes(input.type)?Number(input.value):input.value;}
   function valueTo(input,value){if(input.type==='checkbox')input.checked=!!value;else input.value=value??'';}
   function syncForm(){const s=current();for(const el of $$('[data-scene]'))if(el.id!=='duration')valueTo(el,s[el.dataset.scene]);syncSceneDuration();for(const el of $$('[data-project]'))valueTo(el,project[el.dataset.project]);for(const el of $$('[data-placement]')){valueTo(el,s.placement?.[el.dataset.placement]);el.disabled=!!s.final;}for(const el of $$('[data-audio]'))valueTo(el,project.audio[el.dataset.audio]);$('#baseName').textContent=s.baseName||(s.base?'Imagen cargada':'Subir imagen');$('#stampName').textContent=s.stampName||(s.stamp?'Estampa cargada':'Subir PNG o WebP');$('#projectName').textContent=project.title;$('#sourceBadge').textContent=s.components?.some(l=>l.production)?'Capas de Producción':s.demo?'Demostración':s.final?'Composición terminada':s.video?'Clip de video':'Tus imágenes';$('#placementHelp').textContent=s.final?'Se conserva la posición de la composición terminada. Para cambiarla, ajustala en Producción o cargá la estampa por separado.':'Podés arrastrar la estampa en la vista previa. Pausá el video y elegí un momento del final.';$('#previewHint').textContent=s.demo?'Ejemplo ilustrado. Cargá tu producto o usá «Crear reel» desde Producción.':s.final&&!s.base?'Producto terminado. Para dibujar la estampa, agregá también su base lisa con el mismo encuadre.':'La vista previa usa tus archivos. Revisá encuadre, texto y estampa antes de exportar.';for(const b of $$('[data-template]'))b.classList.toggle('active',b.dataset.template===s.template);$('#musicName').textContent=project.audio.musicName||'Sin música.';$('#voiceName').textContent=project.audio.voiceName||'Sin narración.';for(const [kind,id] of [['music','musicListen'],['voice','voiceListen']]){const audio=$('#'+id),src=project.audio[kind];audio.hidden=!src;if(src&&audio.getAttribute('src')!==src)audio.src=src;if(!src)audio.removeAttribute('src');}syncTimeline();syncUndo();syncExtraForm();}
@@ -51,19 +63,34 @@
   const filename=()=>String(project.title||'SALMOS-reel').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]+/gi,'-').slice(0,70);
   async function poster(final=false){if(final)return productFrame();pause();await prepareMedia();const previous=time,oldEdit=editingStamp;editingStamp=false;if(final){const at=C.sceneAt(project.scenes,time);time=at.start+at.scene.duration*.95;}draw();await new Promise(resolve=>canvas.toBlob(blob=>{if(blob)download(blob,filename()+(final?'-para-IA':'-imagen')+'.png');resolve();},'image/png'));time=previous;editingStamp=oldEdit;draw();}
   const REEL_DATABASE='salmos-reels-v1';
+  const REEL_STORES=['projects','posts','exports','assets'];
+  let checkedBrowserDrafts=false;
   function openReelDatabase(version){return new Promise((resolve,reject)=>{
     const request=version?indexedDB.open(REEL_DATABASE,version):indexedDB.open(REEL_DATABASE);
+    let blocked=false;
     request.onupgradeneeded=()=>{
-      for(const name of ['projects','posts','exports','assets']){
+      for(const name of REEL_STORES){
         if(!request.result.objectStoreNames.contains(name))request.result.createObjectStore(name,{keyPath:'id'});
       }
     };
-    request.onsuccess=()=>resolve(request.result);
+    request.onblocked=()=>{
+      blocked=true;
+      reject(new Error('Cerrá otras pestañas de Marketing y reels y volvé a buscar los borradores.'));
+    };
+    request.onsuccess=()=>{
+      const database=request.result;
+      if(blocked){database.close();return;}
+      database.onversionchange=()=>database.close();
+      resolve(database);
+    };
     request.onerror=()=>reject(request.error);
   });}
   async function db(){
-    try{return await openReelDatabase(3);}
-    catch(error){if(error.name!=='VersionError')throw error;return openReelDatabase();}
+    const database=await openReelDatabase();
+    if(REEL_STORES.every(name=>database.objectStoreNames.contains(name)))return database;
+    const next=Math.max(3,database.version+1);
+    database.close();
+    return openReelDatabase(next);
   }
   async function dbAction(store,mode,action){
     const database=await db();
@@ -75,15 +102,22 @@
       }catch(error){database.close();reject(error);}
     });
   }
-  async function saveRecord(id=project.id){const copy=structuredClone(project);restoreEffectFields(copy);try{copy.cover=projectCover(copy);}catch{}if(musicTrial)Object.assign(copy.audio,musicTrial);await dbAction('projects','readwrite',store=>store.put({...copy,id,originalId:project.id,savedAt:Date.now()}));}
-  function reelRecord(raw){
-    const data=raw?.project||raw;
+  async function saveRecord(id=project.id){
+    const copy=structuredClone(project),savedAt=Date.now();
+    restoreEffectFields(copy);
+    try{copy.cover=projectCover(copy);}catch{}
+    if(musicTrial)Object.assign(copy.audio,musicTrial);
+    await dbAction('projects','readwrite',store=>store.put({...copy,id,originalId:copy.id,savedAt}));
+  }
+  function reelRecord(raw,fallbackId){
+    const data=raw?.project||raw?.draft||raw;
     if(!Array.isArray(data?.scenes))return null;
     const scenes=data.scenes.filter(scene=>scene&&typeof scene==='object'&&!Array.isArray(scene));
     if(!scenes.length)return null;
-    return {...data,scenes,id:raw.id??data.id,
-      originalId:data.originalId??raw.originalId??data.id??raw.id,
-      savedAt:Number(raw.savedAt||data.savedAt||data.updatedAt)||0,
+    const updated=raw.savedAt||data.savedAt||data.updatedAt||raw.updatedAt;
+    return {...data,scenes,id:raw.id??data.id??fallbackId,
+      originalId:data.originalId??raw.originalId??data.id??raw.id??fallbackId,
+      savedAt:Number(updated)||Date.parse(updated)||0,
       title:data.title||raw.title||'Reel sin título',cover:data.cover||raw.cover,
       status:data.status||raw.status};
   }
@@ -106,7 +140,15 @@
       if(!host.querySelector('.saved-card'))host.textContent='No se pudieron leer los proyectos de este navegador. Usá Buscar borradores o Abrir respaldo.';
       throw error;
     }
-    const entries=latestReelRecords(all),cards=document.createDocumentFragment();
+    let entries=latestReelRecords(all);
+    if(!entries.length&&!checkedBrowserDrafts){
+      checkedBrowserDrafts=true;
+      try{
+        const count=await restoreMissingReels(await readBrowserReelDrafts());
+        if(count)entries=latestReelRecords(await dbAction('projects','readonly',store=>store.getAll()));
+      }catch(error){setReelRecoveryStatus(error.message);}
+    }
+    const cards=document.createDocumentFragment();
     for(const p of entries){
       const row=document.createElement('article');row.className='saved-card';
       const cover=new Image();cover.className='project-cover';cover.alt=p.title;
@@ -121,6 +163,11 @@
       open.onclick=()=>openSavedProject(p).catch(error=>notify(error.message,'error'));cover.onclick=open.onclick;
       const down=document.createElement('button');down.textContent='↓ Video';down.title='Descargar video';down.onclick=()=>projectVideoAction(p,false);
       const share=document.createElement('button');share.textContent='Compartir';share.onclick=()=>projectVideoAction(p,true);
+      const backup=document.createElement('button');backup.textContent='Respaldo';
+      backup.onclick=()=>{
+        const name=String(p.title).replace(/[^\p{L}\p{N}_-]+/gu,'-').slice(0,75)||'SALMOS-reel';
+        download(new Blob([JSON.stringify(p)],{type:'application/json'}),name+'.json');
+      };
       const copy=document.createElement('button');copy.textContent='Duplicar';copy.onclick=()=>duplicateProject13(p);
       const del=document.createElement('button');del.textContent='×';del.title='Eliminar proyecto';
       del.onclick=async()=>{
@@ -132,10 +179,11 @@
         await dbAction('exports','readwrite',store=>store.delete(p.originalId));
         await loadSaved();
       };
-      actions.append(open,down,share,copy,del);row.append(cover,title,small,actions);cards.append(row);
+      actions.append(open,down,share,backup,copy,del);row.append(cover,title,small,actions);cards.append(row);
     }
     host.replaceChildren(cards);
-    if(!entries.length)host.textContent='En este navegador todavía no hay proyectos visibles. Podés buscar borradores o abrir un respaldo.';
+    if(!entries.length)host.textContent='En este perfil de Chrome no aparecen proyectos guardados de SALMOS. Podés buscar borradores o abrir un respaldo.';
+    return entries.length;
   }
 
   function csvCell(x){let v=String(x??'');if(/^[=+@-]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"';}
@@ -393,7 +441,7 @@
   async function homeView(){
     cancelEffectTrial();closeWanPreview();pause();
     if(editorActive13){
-      editorActive13=false;clearTimeout(autosaveTimer);
+      editorActive13=false;clearTimeout(autosaveTimer);autosaveTimer=null;
       try{await cancelMusicTrial();await saveRecord();}catch(error){notify(error.message,'error');}
     }
     $('#studioHome').hidden=false;$('.workspace').hidden=true;document.body.classList.add('reel-home');
@@ -443,7 +491,7 @@
   async function openSavedProject(record){
     const saved=reelRecord(record);
     if(!saved)throw new Error('Este proyecto no tiene escenas para abrir.');
-    pause();clearTimeout(autosaveTimer);
+    pause();flushReelAutosave();
     selectedMusic10=null;auditionTrack=null;musicTrial=null;selectCurrentSceneScope();selectedSceneIds.clear();
     selectedComponent=null;editingStamp=false;blankPreview=false;history.length=0;future.length=0;
     const defaults=newProject();
@@ -824,7 +872,7 @@
     if(fresh){
       if(editorActive13&&previous.scenes.some(scene=>!scene.demo))await saveRecord(previous.id);
       if(project!==previous)return;
-      clearTimeout(autosaveTimer);
+      clearTimeout(autosaveTimer);autosaveTimer=null;
       await cancelMusicTrial();
       project=newProject();
       project.title=scenes[0].shotTitle||'Nuevo reel';
@@ -1146,25 +1194,71 @@
   renderAiTracks19=function(){const host=$('#aiMusicTracks19');if(!host)return;const oldScroll=host.scrollLeft,tracks=orderedAiTracks20(),first=tracks[0]?.id,previous=host.dataset.first20;host.replaceChildren();host.dataset.first20=first||'';for(const t of tracks){const card=document.createElement('article');card.className='ai-song-card20';const listen=document.createElement('button');listen.className='ai-song-play20';listen.dataset.aiTrack19=t.id;listen.textContent=auditionTrack==='ai-'+t.id&&playing?'Ⅱ':'▶';listen.title='Escuchar o pausar';listen.setAttribute('aria-label','Escuchar '+t.name);listen.onclick=async()=>{listen.disabled=true;try{await playAi20(t);}catch(e){notify(e.message,'error');}finally{listen.disabled=false;}};const meta=document.createElement('small');meta.textContent=(musicGenres20[t.request?.style]?.[0]||'Música')+' · '+t.duration+' s';const name=document.createElement('input');name.value=aiNameDrafts20.get(t.id)??t.name;name.maxLength=100;name.oninput=()=>aiNameDrafts20.set(t.id,name.value);name.dataset.trackName20=t.id;name.setAttribute('aria-label','Nombre de la canción');name.onchange=()=>renameAi20(t,name.value).catch(e=>notify(e.message,'error'));const actions=document.createElement('div'),save=document.createElement('button'),edit=document.createElement('button'),del=document.createElement('button');actions.className='song-actions20';save.textContent=t.saved20?'✓ Guardada':'Guardar';save.classList.toggle('active',!!t.saved20);save.onclick=()=>saveAi20(t).catch(e=>notify(e.message,'error'));edit.textContent='✎';edit.title='Editar propuesta y generar otra';edit.setAttribute('aria-label',edit.title);edit.onclick=()=>{project.audio.aiMusic19={...aiDefault19,...t.request};restoreAi19();changed();$('#aiMusicLyrics19').focus();};del.innerHTML=icon10('eraser');del.title='Descartar canción';del.setAttribute('aria-label',del.title);del.onclick=()=>discardAi20(t).catch(e=>notify(e.message,'error'));actions.append(save,edit,del);card.append(listen,meta,name,actions);host.append(card);}if(!tracks.length)host.textContent='Tus canciones aparecerán acá.';host.scrollLeft=first!==previous?0:oldScroll;};
   function installMusic20(){const panel=$('#aiMusic19'),oldName=$('#aiMusicName19');oldName.closest('label').hidden=true;const genres=$('#aiStyleChoices19');genres.replaceChildren();const group=(host,data,attribute,multi=false)=>{for(const[id,[title]]of Object.entries(data)){const b=document.createElement('button');b.dataset[attribute]=id;b.textContent=title;b.onclick=()=>{if(multi)b.classList.toggle('active');else for(const x of host.children)x.classList.toggle('active',x===b);persistAi19();};host.append(b);}};group(genres,musicGenres20,'aiStyle19');const heading=document.createElement('strong');heading.className='inline-section-title20';heading.textContent='Género';genres.before(heading);let after=genres;for(const[data,label,attr,multi]of[[musicMoods20,'Carácter','aiMood20',false],[musicRhythms20,'Ritmo','aiRhythm20',false],[musicInstruments20,'Instrumentos','aiInstrument20',true]]){const block=document.createElement('div'),h=document.createElement('strong'),row=document.createElement('div');block.className='music-options20';h.textContent=label;row.className='choice-buttons';row.setAttribute('aria-label',label);group(row,data,attr,multi);block.append(h,row);after.after(block);after=block;}restoreAi19();$('#aiMusicTracks19').classList.add('song-gallery20');$('#aiMusicGenerate19').addEventListener('click',()=>{project.audio.aiMusic19=aiSettings19();});}
 
-  async function saveDraft20(){pause();clearTimeout(autosaveTimer);cancelEffectTrial();await cancelMusicTrial();project.status='draft';await saveRecord();const snapshot=structuredClone(project);snapshot.savedAt=Date.now();notify('Borrador guardado.');try{await helperFetch('/api/projects/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snapshot)});notify('Borrador guardado con copia en tu disco.');}catch{}return snapshot;}
+  let reelDiskConnected=false;
+  async function saveDraft20(){
+    pause();clearTimeout(autosaveTimer);autosaveTimer=null;
+    cancelEffectTrial();await cancelMusicTrial();project.status='draft';
+    await saveRecord();
+    notify('Borrador guardado en Chrome.');
+    if(reelDiskConnected||localReady){
+      const snapshot={...structuredClone(project),savedAt:Date.now()};
+      try{
+        await helperFetch('/api/projects/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snapshot)});
+        notify('Borrador guardado con copia en tu disco.');
+      }catch{reelDiskConnected=false;}
+    }
+  }
+  function addStoredReels(rows,value,key){
+    const collection=Array.isArray(value)?value:[value?.projects,value?.reels,value?.drafts].find(Array.isArray);
+    const records=collection||[value];
+    records.forEach((raw,index)=>{
+      const row=reelRecord(raw,collection?key+'-'+index:key);
+      if(row)rows.push(row);
+    });
+  }
   function readReelDraftStores(name){return new Promise((resolve,reject)=>{
     const request=indexedDB.open(name);
     request.onupgradeneeded=()=>request.transaction.abort();
     request.onerror=()=>reject(request.error);
     request.onsuccess=()=>{
       const database=request.result,rows=[];
-      const stores=[...database.objectStoreNames].filter(store=>
-        /projects|drafts|reels/i.test(store)&&(name!==REEL_DATABASE||store!=='projects'));
+      const stores=[...database.objectStoreNames].filter(store=>/project|draft|reel|autosave/i.test(store));
       if(!stores.length){database.close();resolve(rows);return;}
       const tx=database.transaction(stores,'readonly');
       for(const store of stores){
-        const read=tx.objectStore(store).getAll();
-        read.onsuccess=()=>{for(const row of read.result)rows.push(row);};
+        const read=tx.objectStore(store).openCursor();
+        read.onsuccess=()=>{
+          const cursor=read.result;
+          if(!cursor)return;
+          addStoredReels(rows,cursor.value,String(cursor.primaryKey));
+          cursor.continue();
+        };
       }
       tx.oncomplete=()=>{database.close();resolve(rows);};
       tx.onabort=()=>{database.close();reject(tx.error);};
     };
   });}
+  async function readBrowserReelDrafts(){
+    const rows=[];
+    for(const name of ['localStorage','sessionStorage']){
+      try{
+        const storage=window[name];
+        for(const key of Object.keys(storage)){
+          if(!/^salmos[-_].*(reel|marketing|project|draft|borrador)/i.test(key))continue;
+          try{addStoredReels(rows,JSON.parse(storage.getItem(key)),key);}
+          catch{}
+        }
+      }catch{}
+    }
+    const databases=await indexedDB.databases?.().catch(()=>[])||[];
+    const names=new Set([REEL_DATABASE,...databases.map(info=>info.name)
+      .filter(name=>/^salmos[-_].*(reel|marketing|project|draft)/i.test(name))]);
+    for(const name of names){
+      const saved=await readReelDraftStores(name).catch(()=>[]);
+      rows.push(...saved);
+    }
+    return rows;
+  }
   async function readReelDraftsOnDisk(){
     const list=await(await helperFetch('/api/projects')).json(),rows=[];
     for(const entry of list.projects||[]){
@@ -1194,29 +1288,37 @@
     });
     return added;
   }
+  function setReelRecoveryStatus(text){
+    const status=$('#reelRecoveryStatus');
+    if(status){status.textContent=text;status.hidden=!text;}
+  }
   async function recoverDrafts20(){
     const button=$('#recoverDrafts20');button.disabled=true;
+    checkedBrowserDrafts=true;
+    setReelRecoveryStatus('Buscando borradores en este perfil de Chrome…');
     try{
-      const disk=readReelDraftsOnDisk().catch(()=>null);
-      await loadSaved();
-      const databases=await indexedDB.databases?.().catch(()=>[])||[];
-      const names=new Set([REEL_DATABASE,...databases.map(info=>info.name).filter(name=>/^salmos[-_](reels|marketing)/i.test(name))]);
-      let count=0;
-      for(const name of names){
-        const rows=await readReelDraftStores(name).catch(()=>[]);
-        count+=await restoreMissingReels(rows);
-      }
-      if(count)await loadSaved();
-      const backups=await disk;
-      if(backups?.length){
-        count+=await restoreMissingReels(backups);
-        await loadSaved();
-      }
-      notify(count?`${count} ${count===1?'borrador recuperado':'borradores recuperados'}.`:
-        backups===null?'No encontré más borradores en este navegador. Podés abrir un respaldo guardado en tu PC.':
-          'No encontré más borradores en este navegador ni en el iniciador.');
-    }catch(error){notify(error.message,'error');}
+      const count=await restoreMissingReels(await readBrowserReelDrafts());
+      const total=await loadSaved();
+      setReelRecoveryStatus(count?`${count} ${count===1?'borrador recuperado':'borradores recuperados'}.`:
+        total?'Estos son los proyectos guardados en este perfil.':'No encontré borradores en este perfil de Chrome.');
+    }catch(error){setReelRecoveryStatus(error.message);}
     finally{button.disabled=false;}
+  }
+  async function recoverDiskReels(){
+    const button=$('#recoverReelDisk');button.disabled=true;
+    setReelRecoveryStatus('Buscando copias en el iniciador…');
+    try{
+      const rows=await readReelDraftsOnDisk();reelDiskConnected=true;
+      const count=await restoreMissingReels(rows);
+      const total=await loadSaved();
+      setReelRecoveryStatus(count?`${count} ${count===1?'copia recuperada':'copias recuperadas'} del iniciador.`:
+        rows.length&&total?'Las copias del iniciador ya figuran en Proyectos.':'El iniciador no encontró copias en el disco.');
+    }catch(error){
+      if(error instanceof TypeError||error.name==='AbortError'){
+        reelDiskConnected=false;
+        setReelRecoveryStatus('Abrí INICIAR_SALMOS.bat en tu PC y volvé a tocar Copias del iniciador.');
+      }else setReelRecoveryStatus(error.message);
+    }finally{button.disabled=false;}
   }
 
   loadWanClips=async function(){try{const data=await(await helperFetch('/api/wan/clips')).json(),host=$('#wanClips');openDock('wan');host.replaceChildren();if(!data.clips.length){host.textContent='Todavía no hay videos disponibles.';return;}for(const clip of data.clips){const card=document.createElement('article'),name=document.createElement('input'),view=document.createElement('button'),use=document.createElement('button'),del=document.createElement('button');card.className='wan-card20';name.value=clip.name;name.maxLength=100;name.setAttribute('aria-label','Nombre del video');name.onchange=async()=>{try{await helperFetch('/api/wan/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:clip.id,name:name.value})});clip.name=name.value;}catch(e){notify(e.message,'error');name.value=clip.name;}};view.textContent='▶ Ver';view.onclick=()=>showWanPreview(clip).catch(e=>notify(e.message,'error'));use.textContent='Usar';use.onclick=()=>useWanClip(clip).catch(e=>notify(e.message,'error'));del.innerHTML=icon10('eraser');del.title='Eliminar resultado';del.setAttribute('aria-label',del.title);del.onclick=async()=>{if(!confirm('¿Eliminar este resultado de WanGP del disco?'))return;try{closeWanPreview();await helperFetch('/api/wan/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:clip.id})});wanClipBlobs.delete(clip.id);await loadWanClips();}catch(e){notify(e.message,'error');}};const cut=document.createElement('button');cut.textContent='✂';cut.title='Recortar video';cut.setAttribute('aria-label',cut.title);cut.onclick=()=>trimClip24(clip).catch(e=>notify(e.message,'error'));card.append(name,view,use,cut,del);host.append(card);}}catch(e){$('#wanState').textContent=e.message;}};
@@ -1231,9 +1333,15 @@
     arrangePanels20();installImageShelf20();installMusic20();installMotion20();
     const recover=document.createElement('button');recover.id='recoverDrafts20';
     recover.textContent='Buscar borradores';recover.onclick=recoverDrafts20;
+    const disk=document.createElement('button');disk.id='recoverReelDisk';
+    disk.textContent='Copias del iniciador';disk.onclick=recoverDiskReels;
     const open=document.createElement('button');open.textContent='Abrir respaldo';
     open.onclick=()=>$('#projectFile').click();
-    $('#createReel').before(recover,open);
+    const status=document.createElement('p');status.id='reelRecoveryStatus';
+    status.className='reel-recovery-status';status.hidden=true;status.setAttribute('role','status');
+    $('#homeProjects').before(status);
+    const create=$('#createReel'),actions=document.createElement('div');actions.className='home-project-actions';
+    create.before(actions);actions.append(recover,disk,open,create);
     $('#saveDraft14').onclick=async()=>{
       const button=$('#saveDraft14');button.disabled=true;
       try{await saveDraft20();}catch(error){notify(error.message,'error');}
@@ -1301,6 +1409,8 @@
     document.documentElement.dataset.studioReady='true';$('#studioBoot15')?.remove();
     if(parent!==window)parent.postMessage({type:'salmos-marketing-ready'},location.origin);
   }
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)flushReelAutosave();});
+  window.addEventListener('pagehide',flushReelAutosave);
   window.addEventListener('unhandledrejection',e=>{notify(e.reason?.message||'No se pudo completar esa operación.','error');});
   init().catch(e=>{console.error(e.stack);const b=$('#studioBoot15');if(b){b.querySelector('p').textContent='No se pudo abrir el editor. Tocá Reintentar.';b.querySelector('button').hidden=false;}notify(e.message,'error');});
 })();
