@@ -125,6 +125,24 @@
       ${fields}
     </div>`;
   }
+  function purchasedBookMaterials(types,{hidden=new Set(),selected=0}={}){
+    const candidates=context.state.materials.filter(material=>
+      types.includes(material.material_type)&&Number(material.has_purchase)===1&&!hidden.has(Number(material.id)));
+    const distinct=new Map();
+    for(const material of candidates){
+      const meta=materialInfo(material),format=(window.SalmosCatalog?.formats(FORMATS)||FORMATS)[meta.format]||[];
+      const key=[PAPER,COVER].includes(material.material_type)?
+        JSON.stringify([norm(meta.kind).trim(),meta.gsm,norm(meta.format),norm(meta.finish).trim(),meta.faces,meta.widthMm||format[0],meta.heightMm||format[1]]):
+        material.material_type===SPIRAL?`spiral:${meta.capacity}`:material.material_type;
+      const current=distinct.get(key);
+      if(!current||Number(material.id)===Number(selected)||(Number(current.id)!==Number(selected)&&
+        ((Number(material.stock_qty)>0&&!(Number(current.stock_qty)>0))||
+          ((Number(material.stock_qty)>0)===(Number(current.stock_qty)>0)&&Number(material.id)>Number(current.id))))){
+        distinct.set(key,material);
+      }
+    }
+    return [...distinct.values()];
+  }
   function render(){
     if(!context)return;
     const enabled=isBookType($('#productionMaterialType')?.value),dialog=$('#productionDialog');if(dialog)dialog.dataset.book=String(enabled);
@@ -134,7 +152,13 @@
     const kind=current().kind,variantMarkup=document.createElement('template');variantMarkup.innerHTML=select('Variante','kind',kind,BOOK_VARIANTS.map(value=>[value,value]));variant.replaceChildren(...variantMarkup.content.firstElementChild.childNodes);
 
     const b=current(),materials=context.state.materials,hidden=hiddenMaterialIds();
-    const options=(types,selected)=>[['','Elegir…'],...materials.filter(m=>(types.includes(m.material_type)&&!hidden.has(Number(m.id)))||Number(m.id)===Number(selected)).map(m=>[m.id,`${materialLabel(m)} · ${context.money(m.average_cost_cents)} / u${hidden.has(Number(m.id))?' · oculto':''}`])];
+    const options=(types,selected)=>{
+      const usable=purchasedBookMaterials(types,{hidden,selected});
+      const choices=usable.map(m=>[m.id,`${materialLabel(m)} · ${context.money(m.average_cost_cents)} / u`]);
+      const previous=selected&&materials.find(m=>Number(m.id)===Number(selected));
+      if(previous&&!usable.some(m=>Number(m.id)===Number(selected)))choices.push([selected,`${materialLabel(previous)} · selección anterior`]);
+      return [['','Elegir…'],...choices];
+    };
     const inkOpen=host.querySelector('.book-ink-panel')?.open??true;
     const rowField=(group,index,key,label,value,attrs='')=>`<label class="field">${label}<input class="input" type="number" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="${key}" value="${escape(value)}" aria-label="${escape(label)}" ${attrs}></label>`;
     const rowSelect=(group,index,key,label,value,choices)=>`<label class="field">${label}<select class="select" data-book-row-group="${group}" data-book-row-index="${index}" data-book-row-field="${key}">${choices.map(([id,name])=>`<option value="${escape(id)}" ${String(id)===String(value)?'selected':''}>${escape(name)}</option>`).join('')}</select></label>`;
@@ -193,15 +217,16 @@
   }
   function manageMaterials(){
     const dialog=context.dialog('bookMaterialsDialog','Administrar materiales de libros');
-    const hidden=hiddenMaterialIds(),materials=context.state.materials.filter(m=>isMaterial(m.material_type));
+    const hidden=hiddenMaterialIds(),materials=context.state.materials.filter(m=>isMaterial(m.material_type)&&Number(m.has_purchase)===1);
     const body=dialog.querySelector('.dialog-body');
-    body.innerHTML=`<form class="book-material-manager"><p class="muted">Elegí qué insumos aparecen al armar libros. Las recetas guardadas conservan sus materiales.</p><fieldset><legend>Mostrar al armar libros</legend>${materials.map(m=>`<label class="book-check"><input type="checkbox" value="${Number(m.id)}" ${hidden.has(Number(m.id))?'':'checked'}><span>${escape(materialLabel(m))} · ${escape(context.money(m.average_cost_cents))} / u</span></label>`).join('')||'<p>Todavía no hay materiales de libros en Compras.</p>'}</fieldset><button type="submit" class="btn btn-primary">Guardar lista</button></form>`;
+    body.innerHTML=`<form class="book-material-manager"><p class="muted">Elegí qué insumos de Compras aparecen al armar libros.</p><fieldset><legend>Mostrar al armar libros</legend>${materials.map(m=>`<label class="book-check"><input type="checkbox" value="${Number(m.id)}" ${hidden.has(Number(m.id))?'':'checked'}><span>${escape(materialLabel(m))} · ${escape(context.money(m.average_cost_cents))} / u</span></label>`).join('')||'<p>Todavía no hay materiales de libros en Compras.</p>'}</fieldset><button type="submit" class="btn btn-primary">Guardar lista</button></form>`;
     const form=body.querySelector('form'),save=form.querySelector('button');
     form.addEventListener('submit',async event=>{
       event.preventDefault();
       if(save.disabled)return;
       save.disabled=true;
-      const ids=Array.from(form.querySelectorAll('input')).filter(input=>!input.checked).map(input=>Number(input.value));
+      const inputs=Array.from(form.querySelectorAll('input')),manageable=new Set(inputs.map(input=>Number(input.value)));
+      const ids=[...[...hidden].filter(id=>!manageable.has(id)),...inputs.filter(input=>!input.checked).map(input=>Number(input.value))];
       const previous=context.state.purchaseOptions.bookHiddenMaterialIds;
       context.state.purchaseOptions.bookHiddenMaterialIds=ids;
       try{await context.saveOptions();render();dialog.close();context.toast('Lista de materiales guardada.','success');}
