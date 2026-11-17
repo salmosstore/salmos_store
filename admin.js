@@ -490,7 +490,8 @@
     const options=(choices,current)=>choices.map(([value,label])=>
       `<option value="${escapeHtml(value)}" ${current===value?'selected':''}>${escapeHtml(label)}</option>`).join('');
     return `<div class="unified-product-toolbar">
-      ${search}<div id="productStockSummary" class="product-stock-summary"></div>
+      ${search}
+      <div class="inventory-toolbar-controls">
       <details class="product-filter-menu"><summary class="btn btn-ghost">Filtrar</summary>
         <div class="product-filter-fields">${fields.map(([attribute,key,label,choices])=>
           `<label>${label}<select class="select" ${attribute}>${options([['','Todos'],...choices],f[key])}</select></label>`).join('')}
@@ -505,6 +506,8 @@
         <label>Ordenar<select class="select" id="stockSort">${options(sorts,f.sort)}</select></label>
         <label>Agrupar<select class="select" id="productGroupBy">${options(groups,groupBy)}</select></label>
       </div>${actions}
+      </div>
+      <div id="productStockSummary" class="product-stock-summary"></div>
     </div>`;
   }
   function purchasedFilters(){
@@ -657,12 +660,13 @@
     const available=(state.purchasedMaterials||[]).filter(row=>{
       if((f.category&&row.material_type!==f.category)||(f.fit&&row.fit!==f.fit)||(f.audience&&row.material_class!==f.audience))return false;
       const refs=row.purchase_refs||[];
+      if(row.material_type==='dtf_textile')return purchasedSheetRefs(row,f,query).length>0;
       if(f.supplier&&!refs.some(ref=>ref.supplier===f.supplier))return false;
       if(!query.length)return true;
       const search=productionDesignSearchText([row.name,productionMaterialLabel(row),...refs.flatMap(ref=>[ref.supplier,ref.sheetName])].join(' '));
       return query.every(term=>search.includes(term));
     });
-    return {available,visible:available.filter(row=>(!f.color||photoColor(row.color)===photoColor(f.color))&&(!f.size||normalizeCatalogSize(row.size)===f.size))};
+    return {available,visible:available.filter(row=>(!f.color||photoColor(row.color)===photoColor(f.color))&&(!f.size||normalizeCatalogSize(row.size)===f.size)),query};
   }
   function purchasedQuantity(rows){
     let units=0,meters=0,hasUnits=false,hasMeters=false;
@@ -680,13 +684,109 @@
     if(groupBy==='color')return material.color||'Sin color';
     return 'Materia prima';
   }
+  function purchasedSheetRefs(material,filter,terms){
+    return (material.purchase_refs||[]).filter(ref=>{
+      if(filter.supplier&&ref.supplier!==filter.supplier)return false;
+      if(!terms.length)return true;
+      const text=productionDesignSearchText([material.name,productionMaterialLabel(material),ref.supplier,ref.sheetName,'#'+ref.id].join(' '));
+      return terms.every(term=>text.includes(term));
+    });
+  }
+  function groupedPurchasedSheets(materials,filter,terms){
+    const plans=new Map();
+    for(const material of materials){
+      if(material.material_type!=='dtf_textile')continue;
+      for(const ref of purchasedSheetRefs(material,filter,terms)){
+        const key=`${ref.id}-${ref.sheetAssetId?'plancha-'+ref.sheetAssetId:'renglon-'+ref.itemId}`;
+        let plan=plans.get(key);
+        if(!plan){
+          plan={...material,key,purchase:ref,variants:[material],quantity:0,lineTotal:0};
+          plans.set(key,plan);
+        }
+        plan.quantity+=Number(ref.quantity)||0;
+        plan.lineTotal+=Number(ref.lineTotal??Math.round(Number(ref.quantity)*Number(ref.unitPrice)))||0;
+      }
+    }
+    return [...plans.values()];
+  }
+  function purchasedSheetName(ref){
+    return ref.sheetName||(ref.sheetAssetId?`Plancha #${ref.sheetAssetId}`:'DTF textil');
+  }
+  function purchasedSheetPhoto(ref,display=true){
+    if(!ref.sheetAssetId)return null;
+    const original=apiUrl(`/api/admin/design-assets/${Number(ref.sheetAssetId)}/file`);
+    return {url:display?original+'?display=1':original,original,name:purchasedSheetName(ref),mime:ref.sheetMimeType||'image/png'};
+  }
+  function purchasedSheetCard(plan){
+    const ref=plan.purchase,name=purchasedSheetName(ref),photo=purchasedSheetPhoto(ref);
+    const date=parseAdminDate(ref.date)?.toLocaleDateString('es-AR')||'';
+    return `<article class="unified-product-card purchased-sheet-card">
+      <header><h3>${escapeHtml(name)}</h3></header>
+      <div class="unified-product-main">
+        <div class="unified-product-image-row">
+          <div class="stock-group-image has-product-price purchased-material-photo checkerboard${photo?'':' no-photo'}">
+            <button type="button" class="unified-product-preview" data-open-purchased-sheet="${escapeHtml(plan.key)}" aria-label="Abrir ficha de ${escapeHtml(name)}">
+              ${photo?purchasedMaterialPhotoHtml(photo):'<span class="muted">Sin plancha vinculada</span>'}
+            </button>
+          </div>
+        </div>
+        <div class="unified-product-side purchased-material-info">
+          <small>Compra #${Number(ref.id)}${date?' · '+escapeHtml(date):''}</small>
+          ${ref.supplier?`<small>${escapeHtml(ref.supplier)}</small>`:''}
+          ${Number(ref.sheetWidth)>0&&Number(ref.sheetHeight)>0?`<small>${detectedSizeLabel({widthCm:ref.sheetWidth,heightCm:ref.sheetHeight})}</small>`:''}
+          <small>Comprado · <b>${materialStockLabel({...plan,stock_qty:plan.quantity})}</b></small>
+          <small>Costo · <b>${money(plan.lineTotal)}</b></small>
+          <button class="btn btn-ghost" type="button" data-open-purchased-sheet="${escapeHtml(plan.key)}">Editar</button>
+        </div>
+      </div>
+    </article>`;
+  }
+  async function openPurchasedSheet(key){
+    const plan=state.purchasedSheetCards?.get(key);
+    if(!plan)return;
+    const ref=plan.purchase,photo=purchasedSheetPhoto(ref,false);
+    const dialog=ensureAdminDialog('purchasedSheetDialog',purchasedSheetName(ref)),body=qs('.dialog-body',dialog);
+    dialog.classList.remove('compact-admin-dialog');
+    body.innerHTML=`<div class="purchased-sheet-detail">
+      <div class="checkerboard purchased-sheet-detail-image">${photo?photo.mime.startsWith('image/')?
+        purchasedMaterialPhotoHtml(photo):`<a class="btn btn-ghost" href="${escapeHtml(photo.original)}" target="_blank" rel="noopener">Abrir plancha</a>`:
+        '<p class="muted">Esta compra figura sin una plancha vinculada.</p>'}</div>
+      <section>
+        <p>Compra #${Number(ref.id)} · ${escapeHtml(ref.supplier||'Compra')} · <strong>${money(plan.lineTotal)}</strong></p>
+        <h3>Diseños de la plancha</h3>
+        <div data-purchased-sheet-designs role="status">${ref.sheetAssetId?'Cargando diseños…':'Vinculá la plancha desde la compra para ver su composición.'}</div>
+        <div class="admin-actions">
+          <button type="button" class="btn btn-ghost" data-edit-purchased-material="${Number(ref.id)}" data-purchased-source-item="${Number(ref.itemId)}">Editar compra</button>
+          ${ref.sheetAssetId?`<button type="button" class="btn btn-primary" data-edit-purchased-sheet="${Number(ref.sheetAssetId)}" disabled>Editar diseños</button>`:''}
+        </div>
+      </section>
+    </div>`;
+    dialog.showModal();
+    if(!ref.sheetAssetId)return;
+    const host=qs('[data-purchased-sheet-designs]',body),edit=qs('[data-edit-purchased-sheet]',body);
+    try{
+      await ensureCostingData();
+      if(!host.isConnected||!dialog.open)return;
+      const sheet=state.designAssets.find(asset=>Number(asset.id)===Number(ref.sheetAssetId)&&asset.kind==='sheet');
+      if(!sheet){host.textContent='La plancha vinculada no está disponible en Diseños.';return;}
+      host.innerHTML=sheet.components?.length?`<ul class="purchased-sheet-components">${sheet.components.map(component=>{
+        const asset=state.designAssets.find(item=>Number(item.id)===Number(component.designAssetId));
+        const name=asset?.name||component.name||'Diseño';
+        return `<li>${asset?designSmallImage(asset):''}<span><strong>${escapeHtml(name)}</strong> <small>× ${Number(component.quantity)||1} · ${escapeHtml(designMeasureLabel(component))}</small></span></li>`;
+      }).join('')}</ul>`:'<p class="muted">Todavía no se cargaron diseños para esta plancha.</p>';
+      edit.disabled=false;
+    }catch(error){if(host.isConnected)host.textContent='No se pudo cargar la composición. '+error.message;}
+  }
   function renderPurchasedMaterialCards(){
     const host=qs('#purchasedMaterialsGrid');
     if(!host)return;
-    const f=purchasedFilters(),{available,visible}=filteredPurchasedMaterials(),groups=groupedMaterialVariants(visible);
-    const stock=group=>group.stock_qty,cost=group=>Number(group.average_cost_cents)||0;
-    const title=group=>[materialTypeLabel(group.material_type),group.fit,group.color,group.name].filter(Boolean).join(' · ');
-    const date=group=>Math.max(...group.variants.map(row=>productEditedTime(row)));
+    const f=purchasedFilters(),{available,visible,query}=filteredPurchasedMaterials();
+    const plans=groupedPurchasedSheets(visible,f,query);
+    const materials=groupedMaterialVariants(visible.filter(row=>row.material_type!=='dtf_textile'));
+    const groups=[...materials,...plans];
+    const stock=group=>group.purchase?group.quantity:group.stock_qty,cost=group=>group.purchase?group.lineTotal:Number(group.average_cost_cents)||0;
+    const title=group=>group.purchase?purchasedSheetName(group.purchase):[materialTypeLabel(group.material_type),group.fit,group.color,group.name].filter(Boolean).join(' · ');
+    const date=group=>group.purchase?(parseAdminDate(group.purchase.date)?.getTime()||0):Math.max(...group.variants.map(row=>productEditedTime(row)));
     const order={stock_desc:(a,b)=>stock(b)-stock(a),stock_asc:(a,b)=>stock(a)-stock(b),
       price_asc:(a,b)=>cost(a)-cost(b),price_desc:(a,b)=>cost(b)-cost(a),updated:(a,b)=>date(b)-date(a)};
     groups.sort((a,b)=>(order[f.sort]?.(a,b)||0)||title(a).localeCompare(title(b),'es',{numeric:true}));
@@ -697,9 +797,10 @@
       sections.get(label).push(group);
     }
     host.innerHTML=[...sections].sort(([a],[b])=>a.localeCompare(b,'es',{numeric:true})).map(([name,items])=>
-      inventoryGroupSection(name,`purchased:${f.group}:${name}`,items,rows=>rows.map(purchasedMaterialCard).join(''))).join('')||
+      inventoryGroupSection(name,`purchased:${f.group}:${name}`,items,rows=>rows.map(row=>row.purchase?purchasedSheetCard(row):purchasedMaterialCard(row)).join(''))).join('')||
       '<div class="notice">No hay materia prima comprada para este filtro.</div>';
-    state.purchasedMaterialGroups=new Map(groups.map(group=>[Number(group.id),group]));
+    state.purchasedMaterialGroups=new Map(materials.map(group=>[Number(group.id),group]));
+    state.purchasedSheetCards=new Map(plans.map(plan=>[plan.key,plan]));
     renderInventoryStockSummary(available,visible,f,purchasedQuantity);
   }
   function openPurchasedMaterialGallery(id){
@@ -732,6 +833,7 @@
     if(!item)throw new Error('Compra no encontrada.');
     await openPurchaseDialog(item,'purchased-products');
     qs('#purchasedMaterialDialog')?.close();
+    qs('#purchasedSheetDialog')?.close();
     const index=state.purchaseItems.findIndex(row=>Number(row.sourceItemId)===Number(button.dataset.purchasedSourceItem));
     requestAnimationFrame(()=>{
       const row=qs(`#purchaseDialog[open] [data-purchase-row="${index}"]`);
@@ -4877,12 +4979,14 @@
     return new Map(orders.map((order,i)=>[order,i+1]));
   }
   function sheetMarkNumber(rows,rowIndex,boxIndex){return sheetMarkNumbers(rows).get(Number(rows[rowIndex]?.previewBoxes?.[boxIndex]?.order))||0;}
+  function sheetZoomIcon(){
+    return '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5M10 7v6m-3-3h6"/></svg>';
+  }
   function sheetArtworkZoomHtml(asset,key){
     if(!String(asset.mime_type||'').startsWith('image/'))return '';
     return `<button type="button" class="icon-btn sheet-artwork-zoom" data-sheet-zoom-artwork="${asset.id}" data-sheet-key="${key}"
       aria-label="Ampliar ${escapeHtml(asset.name||asset.file_name||'diseño')}" title="Ampliar diseño">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-        <circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5M10 7v6m-3-3h6"/></svg>
+      ${sheetZoomIcon()}
     </button>`;
   }
   function sheetArtworkTile(asset,key,expanded=false){
@@ -4945,51 +5049,39 @@
     const format=value=>Number(value).toLocaleString('es-AR',{maximumFractionDigits:2});
     return `${format(widthCm)} × ${format(heightCm)} cm`;
   }
-  function addDetectedSheetMarks(key,entries,fileName){
-    const rows=state.designSheetDrafts[key],size=sheetSize(key);
-    ensureSheetMarkOrder(rows);
-    let order=Math.max(0,...rows.flatMap(row=>(row.previewBoxes||[]).map(box=>Number(box.order)||0)));
-    for(const {asset,box,confidence} of entries){
-      if(rows.some(row=>(row.previewBoxes||[]).some(mark=>sheetBoxesDuplicate(mark,box))))continue;
-      const measure=detectedMeasureOption(asset,fileName,sheetBoxMeasures(box,size));
-      const saved=parseDesignMeasureOptions(asset).find(option=>option.id===measure.id);
-      const row=rows.find(item=>Number(item.designAssetId)===Number(asset.id)&&item.measureOptionId===measure.id)||
-        rows.find(item=>Number(item.designAssetId)===Number(asset.id)&&!item.previewBoxes?.length)||{
-          designAssetId:Number(asset.id),previewBoxes:[],previewMarks:[]
-        };
-      if(!rows.includes(row))rows.push(row);
-      row.measureOptionId=measure.id;
-      row.pendingMeasureOption=saved?null:{...measure,detail:`Detectada en ${fileName}`};
-      row.previewBoxes??=[];
-      row.previewMarks??=[];
-      row.previewBoxes.push({...box,order:++order});
-      row.previewMarks.push({x:box.x+box.width/2,y:box.y+box.height/2});
-      row.quantity=row.previewBoxes.length;
-      row.sourceMethod='alpha-detected';
-      row.confidence=confidence;
-    }
-    syncSheetScope(key);
-    state.sheetCompositionConfirmation=null;
-    state.sheetBoxTarget=null;state.sheetRepeatTarget=null;
-    renderSheetSelected(key);
-    if(key==='upload')persistSheetDraft();
-  }
-  function applyDetectedSheetMarks(key,items,assetId){
+  function removeSheetDetection(key,id){
     const scan=sheetDetectionState(key);
-    if(!scan||!items.length||state.designUploadBusy)return;
-    const entries=items.map(item=>({
-      asset:state.designAssets.find(design=>Number(design.id)===Number(assetId||item.designId)),
-      box:assetId&&assetId!==item.designId?{...item.box,rotation:0}:item.box,
-      confidence:item.confidence||0
-    })).filter(item=>item.asset?.kind==='individual');
-    if(!entries.length)return;
-    if(entries.length+(state.designSheetDrafts[key]||[]).length>300)throw new Error('La plancha admite hasta 300 medidas de diseño.');
-    const ids=new Set(items.map(item=>item.id));
-    scan.items=scan.items.filter(item=>!ids.has(item.id));
+    if(!scan||!id||!scan.items.some(item=>item.id===id))return;
+    scan.items=scan.items.filter(item=>item.id!==id);
     scan.active=scan.items[0]?.id;
-    scan.status=scan.items.length?'Revisá las marcas restantes.':'Marcas agregadas.';
-    addDetectedSheetMarks(key,entries,scan.fileName);
+    scan.status=scan.items.length?'Revisá los recortes restantes.':'Recortes revisados.';
     renderSheetDetections(key);
+  }
+  function openDetectedSheetZoom(key,item){
+    const image=qs('[data-sheet-canvas] img',sheetRoot(key));
+    if(!image?.naturalWidth)throw new Error('Esperá a que se cargue la plancha.');
+    const dialog=ensureAdminDialog('sheetArtworkZoomDialog','Recorte detectado '+item.label);
+    const host=qs('.dialog-body',dialog),canvas=document.createElement('canvas'),box=item.box;
+    const {naturalWidth:width,naturalHeight:height}=image;
+    const rect={left:Math.floor(box.x*width),top:Math.floor(box.y*height),
+      right:Math.min(width,Math.ceil((box.x+box.width)*width)),bottom:Math.min(height,Math.ceil((box.y+box.height)*height))};
+    window.SalmosSheetDetection.drawRegion(canvas,image,rect,0,2048);
+    canvas.setAttribute('aria-label','Recorte en la plancha');
+    host.innerHTML='<div class="sheet-artwork-viewer checkerboard"></div>';
+    host.firstElementChild.append(canvas);
+    dialog.showModal();
+  }
+  function reviewDetectedSheetMark(key,item,assetId){
+    if(state.designUploadBusy)return;
+    const asset=sheetIndividualAsset(key,assetId);
+    if(!asset||asset.kind!=='individual')return;
+    cancelSheetProposal(key);
+    if(state.sheetPendingMark?.key===key)discardSheetMark(key);
+    discardUnmarkedSheetArtwork(key);
+    state.sheetCrop=null;state.sheetBoxTarget=null;state.sheetRepeatTarget=null;state.sheetActiveBox=null;
+    const box={...item.box,rotation:assetId===item.designId?item.suggestedRotation||0:0};
+    stageSheetMark(key,null,box,{assetId,scanId:item.id,sourceMethod:'alpha-detected'});
+    showSheetPreview(key);
   }
   function renderSheetDetections(key){
     const root=sheetRoot(key),host=qs('[data-sheet-detections]',root);
@@ -4998,26 +5090,27 @@
     if(status)status.textContent=scan?.status||'';
     if(detect)detect.disabled=Boolean(scan?.working);
     if(!scan?.items?.length){host.innerHTML='';return;}
-    const matched=scan.items.filter(item=>item.designId).length;
     host.innerHTML=`<section class="sheet-scan-results" aria-label="Estampas encontradas">
-      <div class="sheet-scan-heading"><strong>${scan.items.length} marcas</strong>
-        ${matched?`<button class="btn btn-primary" type="button" data-accept-sheet-matches="${key}">Agregar ${matched} ${matched===1?'coincidencia':'coincidencias'}</button>`:''}
+      <div class="sheet-scan-heading"><strong>${scan.items.length} recortes para revisar</strong>
         <button type="button" class="icon-btn" data-clear-sheet-scan="${key}" aria-label="Quitar las marcas detectadas" title="Quitar marcas detectadas">×</button>
       </div>
       <div class="sheet-scan-list">${scan.items.map(item=>{
         const asset=state.designAssets.find(design=>Number(design.id)===Number(item.designId));
-        const saved=asset?uniqOptions(parseDesignMeasureOptions(asset).map(detectedSizeLabel)).join(' · '):'';
         return `<article class="sheet-scan-row ${scan.active===item.id?'active':''}" data-scan-row="${item.id}">
-          <button class="sheet-scan-identity" type="button" data-sheet-scan-select="${item.id}" data-sheet-key="${key}" aria-pressed="${scan.active===item.id}">
-            <span class="sheet-scan-thumb checkerboard"><img alt="" src="${escapeHtml(item.thumb)}"></span>
-            <span><strong>${item.label}. ${escapeHtml(asset?.name||asset?.file_name||'Sin coincidencia')}</strong>
+          <div class="sheet-scan-image sheet-artwork-tile">
+            <button class="sheet-scan-thumb checkerboard" type="button" data-sheet-scan-select="${item.id}" data-sheet-key="${key}" aria-label="Ubicar recorte ${item.label} en la plancha" aria-pressed="${scan.active===item.id}">
+              <img alt="" src="${escapeHtml(item.thumb)}">
+            </button>
+            <button class="icon-btn sheet-artwork-zoom" type="button" data-zoom-sheet-scan="${item.id}" data-sheet-key="${key}"
+              aria-label="Ampliar recorte ${item.label}" title="Ampliar recorte">${sheetZoomIcon()}</button>
+          </div>
+          <div class="sheet-scan-description"><strong>Recorte ${item.label}</strong>
               <small>En la plancha · ${detectedSizeLabel(sheetBoxMeasures(item.box,sheetSize(key)))}</small>
-              ${saved?`<small>Guardada · ${escapeHtml(saved)}</small>`:''}
-            </span>
-          </button>
+              ${asset?`<small class="sheet-scan-suggestion">${designSmallImage(asset)}<span>Posible coincidencia · ${escapeHtml(asset.name||asset.file_name)}</span></small>`:''}
+          </div>
           <div class="sheet-scan-actions">
-            ${asset?`<button type="button" class="btn btn-ghost" data-accept-sheet-scan="${item.id}" data-sheet-key="${key}">Agregar</button>`:''}
-            <button type="button" class="btn btn-ghost" data-pick-sheet-scan="${item.id}" data-sheet-key="${key}">${asset?'Cambiar':'Elegir diseño'}</button>
+            <button type="button" class="btn btn-ghost" data-pick-sheet-scan="${item.id}" data-sheet-key="${key}">Vincular diseño existente</button>
+            <button type="button" class="btn btn-ghost" data-create-sheet-scan="${item.id}" data-sheet-key="${key}">Crear individual</button>
           </div>
         </article>`;
       }).join('')}</div>
@@ -5110,7 +5203,7 @@
         signal.throwIfAborted();
         const rect=found.candidates[index];
         if(!already(rect)){
-          const match=detector.match(detector.fingerprints(bitmap,rect),signatures);
+          const match=detector.match(detector.fingerprints(bitmap,rect),signatures,{strict:true});
           if(match)matches.push({...match,rect});
         }
         if(index%24===0)await new Promise(resolve=>requestAnimationFrame(resolve));
@@ -5119,14 +5212,14 @@
       const unmatched=found.boxes.filter(rect=>!already(rect)&&!chosen.some(item=>detector.overlapArea(item.rect,rect)>0));
       const ordered=[...chosen,...unmatched.map(rect=>({rect}))].sort((a,b)=>a.rect.top-b.rect.top||a.rect.left-b.rect.left);
       const canvas=document.createElement('canvas');
-      scan.items=ordered.slice(0,160).map(({rect,id,rotation,score},index)=>{
-        detector.drawRegion(canvas,bitmap,rect,rotation||0,85);
-        return {id:index+1,label:index+1,box:detectedSheetBox(rect,bitmap,rotation),thumb:canvas.toDataURL(),designId:id,confidence:id?1-score:0};
+      scan.items=ordered.slice(0,160).map(({rect,id,rotation},index)=>{
+        detector.drawRegion(canvas,bitmap,rect,0,112);
+        return {id:index+1,label:index+1,box:detectedSheetBox(rect,bitmap),thumb:canvas.toDataURL(),designId:id,suggestedRotation:rotation};
       });
       canvas.width=0;
       scan.active=scan.items[0]?.id;
       const matchCount=chosen.length;
-      report(matchCount?`${matchCount} ${matchCount===1?'coincidencia para revisar':'coincidencias para revisar'}.`:
+      report(matchCount?`${matchCount} ${matchCount===1?'posible coincidencia para revisar':'posibles coincidencias para revisar'}.`:
         scan.items.length?'Elegí un diseño para las marcas que quieras añadir.': 'No se encontraron estampas separadas. Elegí un diseño y marcá su contorno sobre la plancha.');
     }catch(error){
       if(!signal.aborted)report(error.message);
@@ -5142,16 +5235,20 @@
     dialog.classList.remove('compact-admin-dialog');
     dialog.classList.add('production-design-gallery-dialog');
     const search=qs('[data-sheet-search]',root)?.value||'';
-    let scope=state.sheetGalleryScope?.[key]||'salmos';
+    const suggestion=item&&sheetIndividualAsset(key,item.designId);
+    let scope=suggestion?.scope||state.sheetGalleryScope?.[key]||'salmos';
     qs('.dialog-body',dialog).innerHTML=`<div class="production-expanded-toolbar">
       <button type="button" class="btn btn-ghost" data-sheet-picker-scope="salmos">SALMOS</button>
       <button type="button" class="btn btn-ghost" data-sheet-picker-scope="clients">Clientes</button>
       <input class="input" type="search" data-sheet-picker-search placeholder="Buscar diseño" aria-label="Buscar diseño" value="${escapeHtml(item?'':search)}" autocomplete="off">
       <small data-sheet-picker-count role="status"></small>
-    </div><div class="production-expanded-grid" data-sheet-picker-grid></div>`;
+    </div>${item?`<div class="sheet-picker-reference"><img class="checkerboard" src="${escapeHtml(item.thumb)}" alt="Recorte en la plancha">
+      <span>Elegí el diseño que corresponde a este recorte.</span></div>`:''}
+    <div class="production-expanded-grid" data-sheet-picker-grid></div>`;
     const grid=qs('[data-sheet-picker-grid]',dialog),input=qs('[data-sheet-picker-search]',dialog);
     const render=()=>{
       const assets=state.designAssets.filter(asset=>asset.kind==='individual'&&asset.scope===scope&&!Number(asset.hidden)&&productionDesignMatchesSearch(asset,input.value));
+      if(suggestion)assets.sort((a,b)=>Number(b.id===suggestion.id)-Number(a.id===suggestion.id));
       qs('[data-sheet-picker-count]',dialog).textContent=assets.length+' diseños';
       for(const button of qsa('[data-sheet-picker-scope]',dialog)){
         const active=button.dataset.sheetPickerScope===scope;
@@ -5168,8 +5265,8 @@
       if(!design)return;
       const id=Number(design.dataset.sheetPickerDesign);
       try{
-        if(item)applyDetectedSheetMarks(key,[item],id);
-        else void chooseSheetArtwork(key,id);
+        if(item)reviewDetectedSheetMark(key,item,id);
+        else chooseSheetArtwork(key,id);
         (state.sheetGalleryScope??={})[key]=scope;
         const option=qs(`[data-sheet-gallery-scope][value="${scope}"]`,root);
         if(option)option.checked=true;
@@ -5210,7 +5307,10 @@
 
   function sheetCompositionEditor(key){
     return `<section class="sheet-composition" data-sheet-editor="${key}">
-      <h3 class="sheet-composition-heading">Diseños que componen la plancha</h3>
+      <header class="sheet-composition-heading">
+        <h3>Diseños que componen la plancha</h3>
+        <button type="button" class="icon-btn" data-expand-sheet="${key}" aria-label="Expandir plancha" title="Expandir plancha" aria-pressed="false"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
+      </header>
       <div class="sheet-composition-layout">
         <aside class="sheet-added-column">
           <details class="sheet-selected-list" data-sheet-selected-list="${key}" ${state.sheetListsCollapsed?.[key]?'':'open'}>
@@ -5227,7 +5327,6 @@
         <aside class="sheet-library-column" aria-label="Diseños guardados">
           <div class="sheet-library-heading">
             <strong>Diseños guardados</strong>
-            <button type="button" class="icon-btn" data-expand-sheet-library="${key}" aria-label="Expandir galería de diseños" title="Expandir galería de diseños"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
           </div>
           <div class="sheet-library-actions">
             <input class="input" type="search" data-sheet-search value="${escapeHtml(state.sheetSearch?.[key]||'')}" placeholder="Buscar diseños" aria-label="Buscar diseños">
@@ -5249,6 +5348,9 @@
               <small class="sheet-missing-status" data-missing-upload-status role="status" aria-live="polite"></small>
             </div>
             <div class="sheet-design-library">${sheetDesignLibraryHtml(key)}</div>
+          </div>
+          <div class="sheet-library-footer">
+            <button type="button" class="icon-btn" data-expand-sheet-library="${key}" aria-label="Expandir galería de diseños" title="Expandir galería de diseños"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
           </div>
         </aside>
       </div>
@@ -5296,15 +5398,17 @@
   function renderSheetSelected(key){
     const root=sheetRoot(key),host=qs('[data-sheet-selected]',root);if(!host)return;const components=sheetComponents(key),count=qs('[data-sheet-list-count]',root);if(count)count.textContent=String(components.length);if(key==='upload'){const confirmation=qs('#designSheetCompositionComplete',root);if(confirmation?.checked&&state.sheetCompositionConfirmation!==sheetCompositionFingerprint()){confirmation.checked=false;state.sheetCompositionConfirmation=null;}}
     const size=sheetSize(key),costCents=Number(key==='upload'?qs('#designUploadCost')?.value*100:state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId))?.cost_cents)||1000000;
-    const metrics=sheetMetrics(size.width,size.height,components,costCents),markNumbers=sheetMarkNumbers(components);
+    const metrics=sheetMetrics(size.width,size.height,components,costCents),markNumbers=sheetMarkNumbers(components),scroll=host.scrollTop;
     host.innerHTML=components.map((c,i)=>({c,i})).sort((a,b)=>Number(!!a.c.previewBoxes?.length)-Number(!!b.c.previewBoxes?.length)||(a.c.previewBoxes?.length&&b.c.previewBoxes?.length?Number(a.c.previewBoxes[0].order)-Number(b.c.previewBoxes[0].order):a.i-b.i)).map(({c,i})=>{const asset=sheetIndividualAsset(key,c.designAssetId),options=asset?parseDesignMeasureOptions(asset):[];if(c.pendingMeasureOption&&!options.some(o=>o.id===c.pendingMeasureOption.id))options.push(c.pendingMeasureOption);const chosen=options.find(o=>o.id===c.measureOptionId)||c.pendingMeasureOption,cost=asset&&chosen?designPrintCostCents(asset,chosen.widthCm,chosen.heightCm):null;
-      const measure=chosen?`<div class="sheet-exact-measure"><label class="field">Ancho exacto (cm)<input class="input" type="number" min=".01" step=".01" data-sheet-exact="width" value="${Number(chosen.widthCm)}"></label><label class="field">Alto exacto (cm)<input class="input" type="number" min=".01" step=".01" data-sheet-exact="height" value="${Number(chosen.heightCm)}"></label></div>`:'<small class="field-help">Arrastrá un recuadro para medir la primera aparición.</small>';
+      const measure=chosen?`<small class="sheet-readonly-measure">${detectedSizeLabel(chosen)}</small>
+        <div class="sheet-exact-measure"><label class="field">Ancho exacto (cm)<input class="input" type="number" min=".01" step=".01" data-sheet-exact="width" value="${Number(chosen.widthCm)}"></label><label class="field">Alto exacto (cm)<input class="input" type="number" min=".01" step=".01" data-sheet-exact="height" value="${Number(chosen.heightCm)}"></label></div>`:'<small class="field-help">Tocá la estampa en la plancha o dibujá su contorno.</small>';
       const repeating=state.sheetRepeatTarget?.key===key&&state.sheetRepeatTarget?.index===i;
       const marking=state.sheetBoxTarget?.key===key&&state.sheetBoxTarget?.index===i;
       const actions=c.previewBoxes?.length?`<button type="button" class="btn btn-ghost" data-sheet-repeat="${i}" data-sheet-key="${key}">${repeating?'Terminar':'Hay más'}</button>
         <button type="button" class="btn btn-ghost" data-sheet-undo="${i}" data-sheet-key="${key}">Anular última marca</button>`:
         `<button type="button" class="btn btn-ghost" data-sheet-box="${i}" data-sheet-key="${key}">${marking?'✓ Marcando':'Marcar este diseño'}</button>`;
       return `<div class="sheet-component-row ${state.sheetBoxTarget?.key===key&&state.sheetBoxTarget?.index===i?'sheet-component-active':''}" data-sheet-component="${i}" data-sheet-key="${key}"><div class="sheet-component-identity">${asset?`<span class="sheet-artwork-tile sheet-added-artwork">${designSmallImage(asset)}${sheetArtworkZoomHtml(asset,key)}</span>`:''}<strong>${escapeHtml(c.name||asset?.name||'Diseño')}</strong></div>${measure}<div class="sheet-marked-count">${(c.previewBoxes||[]).length} marca${(c.previewBoxes||[]).length===1?'':'s'}<span class="sheet-mark-numbers">${(c.previewBoxes||[]).map((b,j)=>`<button type="button" class="sheet-mark-number" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" aria-label="Ajustar marca ${markNumbers.get(Number(b.order))}">${markNumbers.get(Number(b.order))}</button>`).join('')}</span></div><div class="admin-actions">${actions}<button type="button" class="icon-btn" data-remove-sheet-component="${i}" data-sheet-key="${key}" aria-label="Quitar diseño">×</button></div><small class="sheet-component-cost">Costo en esta plancha: ${money(metrics.componentCosts[i]||0)}</small></div>`}).join('')||'<p class="muted">Todavía no elegiste diseños.</p>';
+    host.scrollTop=scroll;
     qsa('[data-add-sheet-design]',root).forEach(b=>b.classList.toggle('selected',components.some(c=>Number(c.designAssetId)===Number(b.dataset.addSheetDesign))));updateSheetMetrics(key);renderSheetPreview(key);filterSheetGallery(key);if(!state.designUploadBusy)syncSheetUploadGate(key);if(key==='upload')scheduleSheetDraftSave();
   }
   function toggleSheetSelectedList(key){
@@ -5320,7 +5424,9 @@
   }
   function sheetPreviewMarks(rows,key){
     const markNumbers=sheetMarkNumbers(rows);
+    const pending=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
     const saved=rows.flatMap((c,i)=>(c.previewBoxes||[]).map((b,j)=>{
+      if(pending?.replaced===b)return '';
       const markNumber=markNumbers.get(Number(b.order));
       const active=state.sheetActiveBox?.key===key&&state.sheetActiveBox.rowIndex===i&&state.sheetActiveBox.boxIndex===j;
       const pin=`<button type="button" class="sheet-preview-pin" style="left:${(Number(b.x)+Number(b.width)/2)*100}%;top:${(Number(b.y)+Number(b.height)/2)*100}%" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" title="Ajustar recuadro de ${escapeHtml(c.name||'diseño')}">${markNumber}</button>`;
@@ -5328,48 +5434,41 @@
       return sheetEditableBox(b,`data-sheet-row="${i}" data-sheet-index="${j}" data-sheet-key="${key}"`)+pin;
     })).join('');
     const crop=state.sheetCrop;
-    return saved+(crop?.key===key&&crop.box?sheetEditableBox(crop.box,`data-sheet-crop-outline data-sheet-key="${key}"`):'');
+    return saved+(crop?.key===key&&crop.box?sheetEditableBox(crop.box,`data-sheet-crop-outline data-sheet-key="${key}"`):'')+
+      (pending?sheetEditableBox(pending.box,`data-sheet-proposal-outline data-sheet-key="${key}"`):'');
+  }
+  function renderSheetMarkControls(key){
+    const root=sheetRoot(key),host=qs('[data-sheet-mark-controls]',root),mark=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
+    if(!host)return;
+    host.hidden=!mark;
+    if(!mark){host.replaceChildren();return;}
+    const asset=sheetIndividualAsset(key,mark.assetId);
+    host.innerHTML=`<span><b>${escapeHtml(asset?.name||asset?.file_name||'Diseño')}</b> · ${detectedSizeLabel(sheetBoxMeasures(mark.box,sheetSize(key)))}</span>
+      <button type="button" class="btn btn-ghost" data-rotate-sheet-mark="${key}">Girar 90°</button>
+      <button type="button" class="btn btn-primary" data-confirm-sheet-mark="${key}">Confirmar recuadro</button>
+      <button type="button" class="btn btn-ghost" data-discard-sheet-mark="${key}">Descartar recuadro</button>`;
   }
   function cancelSheetProposal(key){
     const pending=state.sheetProposal?.[key];
     if(pending){pending.abort();delete state.sheetProposal[key];}
   }
-  async function chooseSheetArtwork(key,id){
+  function discardUnmarkedSheetArtwork(key,nextAssetId){
+    const target=state.sheetBoxTarget,rows=state.designSheetDrafts[key];
+    const row=target?.key===key?rows?.[target.index]:null;
+    if(row&&!row.quantity&&Number(row.designAssetId)>0&&Number(row.designAssetId)!==nextAssetId){
+      rows.splice(target.index,1);
+      state.sheetBoxTarget=null;state.sheetActiveBox=null;
+    }
+  }
+  function chooseSheetArtwork(key,id){
     const asset=sheetIndividualAsset(key,id);
     if(!asset||state.designUploadBusy)return;
     cancelSheetProposal(key);
+    if(state.sheetPendingMark?.key===key)discardSheetMark(key);
+    discardUnmarkedSheetArtwork(key,id);
     if(state.sheetCrop?.key===key)state.sheetCrop=null;
     addSheetDesign(key,id);
     showSheetPreview(key);
-    const root=sheetRoot(key),image=qs('[data-sheet-canvas] img',root),target=state.sheetBoxTarget;
-    const findDesign=window.SalmosSheetDetection?.findDesignOnSheet;
-    if(!image||!findDesign||!String(asset.mime_type).startsWith('image/'))return;
-    const pending=new AbortController(),{signal}=pending;
-    (state.sheetProposal??={})[key]=pending;
-    const source=image.src;
-    const status=message=>{const hint=qs('.sheet-mark-status',root);if(hint)hint.textContent=message;};
-    const isCurrent=()=>!signal.aborted&&root.closest('dialog').open&&state.sheetBoxTarget===target&&
-      image===qs('[data-sheet-canvas] img',root)&&source===image.src;
-    status('Buscando esta estampa en la plancha…');
-    try{
-      if(!image.naturalWidth)await image.decode();
-      if(!isCurrent()||sheetMeasurementProblem(key))return;
-      const size=sheetSize(key);
-      const [template]=await sheetDesignSignatures([asset],signal,()=>{});
-      if(!isCurrent())return;
-      const used=(state.designSheetDrafts[key]||[]).flatMap(row=>row.previewBoxes||[]);
-      const box=template&&await findDesign(image,size,template.signature,used,signal);
-      if(!isCurrent())return;
-      const currentSize=sheetSize(key);
-      if(size.width!==currentSize.width||size.height!==currentSize.height){status('Dibujá un recuadro alrededor de esta estampa.');return;}
-      if(!box){status('Dibujá un recuadro alrededor de esta estampa.');return;}
-      applySheetBox(target.index,box,key);
-      status('Recuadro propuesto. Podés moverlo o arrastrar sus bordes.');
-    }catch{
-      if(isCurrent())status('Dibujá un recuadro alrededor de esta estampa.');
-    }finally{
-      if(state.sheetProposal?.[key]===pending)delete state.sheetProposal[key];
-    }
   }
   function sheetCropName(key){
     const root=sheetRoot(key),name=qs(key==='upload'?'#designUploadName':'[data-design-name]',root)?.value.trim();
@@ -5378,66 +5477,162 @@
   }
   function renderSheetCropControls(key){
     const root=sheetRoot(key),host=qs('[data-sheet-crop-controls]',root),crop=state.sheetCrop?.key===key?state.sheetCrop:null;
-    const start=qs('[data-start-sheet-crop]',root);
-    start?.setAttribute('aria-pressed',String(Boolean(crop)));
+    qs('[data-start-sheet-crop]',root)?.setAttribute('aria-pressed',String(Boolean(crop)));
     if(!host)return;
     host.hidden=!crop;
     if(!crop){host.replaceChildren();return;}
-    host.innerHTML=crop.box?`<input class="input" type="text" maxlength="160" aria-label="Nombre de la estampa" placeholder="Nombre de la estampa"
-      data-sheet-crop-name value="${escapeHtml(crop.name)}" ${crop.saving?'disabled':''}>
-      <button type="button" class="btn btn-primary" data-save-sheet-crop="${key}" ${crop.saving?'disabled':''}>${crop.saving?'Subiendo…':'Guardar individual'}</button>
+    host.innerHTML=crop.box?`<button type="button" class="btn btn-primary" data-review-sheet-crop="${key}" ${crop.saving?'disabled':''}>Revisar recorte</button>
       <button type="button" class="btn btn-ghost" data-cancel-sheet-crop="${key}" ${crop.saving?'disabled':''}>Cancelar recorte</button>`:
       `<button type="button" class="btn btn-ghost" data-cancel-sheet-crop="${key}">Terminar</button>`;
   }
-  function toggleSheetCrop(key){
+  function beginSheetCrop(key,item=null){
     if(state.designUploadBusy)return;
-    if(state.sheetCrop?.key===key){state.sheetCrop=null;renderSheetSelected(key);return;}
     const problem=sheetMeasurementProblem(key);
     if(problem)throw new Error(problem);
     const image=qs('[data-sheet-canvas] img',sheetRoot(key));
     if(!image?.naturalWidth)throw new Error('Abrí la imagen de la plancha para recortar.');
+    if(item)validateSheetMark(key,item.box);
     cancelSheetProposal(key);
+    if(state.sheetPendingMark?.key===key)discardSheetMark(key);
+    discardUnmarkedSheetArtwork(key);
     state.sheetBoxTarget=null;state.sheetRepeatTarget=null;state.sheetActiveBox=null;
-    state.sheetCrop={key,image,source:image.currentSrc||image.src,box:null,name:''};
+    state.sheetCrop={key,image,source:image.currentSrc||image.src,box:item?{...item.box}:null,scanId:item?.id,name:item?sheetCropName(key):''};
     renderSheetSelected(key);
     showSheetPreview(key);
   }
+  function toggleSheetCrop(key){
+    if(state.designUploadBusy)return;
+    if(state.sheetCrop?.key===key){state.sheetCrop=null;renderSheetSelected(key);return;}
+    beginSheetCrop(key);
+  }
   function setSheetCropBox(crop,box){
     if(crop!==state.sheetCrop)return;
+    validateSheetMark(crop.key,box);
     crop.box=box;
     crop.record=null;
     if(!crop.name)crop.name=sheetCropName(crop.key);
     renderSheetPreview(crop.key);
   }
-  async function saveSheetCrop(key){
-    const crop=state.sheetCrop;
+  function reviewSheetCrop(key){
+    const crop=state.sheetCrop,detector=window.SalmosSheetDetection;
     if(!crop?.box||crop.key!==key||state.designUploadBusy)return;
-    const {box,image}=crop,rows=state.designSheetDrafts[key]??=[];
-    const problem=sheetMeasurementProblem(key);
-    if(problem)throw new Error(problem);
-    if(crop.source!==(image.currentSrc||image.src)||image!==qs('[data-sheet-canvas] img',sheetRoot(key)))return;
-    if(box.width>=.91&&box.height>=.91)throw new Error('Marcá solo una estampa para guardar como individual.');
+    validateSheetMark(key,crop.box);
+    const original=detector.cropArtworkCanvas(crop.image,crop.box),canvas=original.canvas;
+    let rotation=Number(original.box.rotation)||0,stroke=null;
+    const dialog=ensureAdminDialog('sheetCropReviewDialog','Revisar recorte individual');
+    dialog.classList.add('artwork-editor-dialog');
+    const body=qs('.dialog-body',dialog);
+    body.innerHTML=`<label class="field">Nombre del diseño <input class="input" type="text" maxlength="160" data-sheet-crop-name value="${escapeHtml(crop.name)}"></label>
+      <div class="sheet-crop-stage checkerboard"></div>
+      <div class="sheet-crop-review-tools">
+        <label>Goma <input type="range" min="5" max="90" step="1" value="20" data-crop-eraser aria-label="Tamaño de la goma"></label>
+        <button type="button" class="btn btn-ghost" data-crop-rotate="-90">Girar a la izquierda</button>
+        <button type="button" class="btn btn-ghost" data-crop-rotate="90">Girar a la derecha</button>
+        <button type="button" class="btn btn-ghost" data-crop-reset>Restablecer recorte</button>
+      </div>
+      <p data-crop-measure role="status"></p>
+      <div class="admin-actions">
+        <button type="button" class="btn btn-ghost" data-close-crop-review>Volver a la plancha</button>
+        <button type="button" class="btn btn-primary" data-save-crop-review>Guardar individual</button>
+      </div>
+      <p class="sheet-upload-error" data-crop-warning role="status"></p>`;
+    const stage=qs('.sheet-crop-stage',body),cursor=document.createElement('span');
+    cursor.className='sheet-crop-cursor';cursor.hidden=true;stage.append(canvas,cursor);
+    canvas.setAttribute('aria-label','Estampa recortada. Arrastrá para borrar.');
+    const range=qs('[data-crop-eraser]',body);
+    const tellSize=()=>{qs('[data-crop-measure]',body).textContent=detectedSizeLabel(sheetBoxMeasures({...original.box,rotation},sheetSize(key)));};
+    const point=event=>{
+      const rect=canvas.getBoundingClientRect(),scale=canvas.width/rect.width;
+      const dx=event.clientX-rect.left,dy=event.clientY-rect.top,diameter=Number(range.value);
+      const parent=stage.getBoundingClientRect();
+      Object.assign(cursor.style,{left:`${event.clientX-parent.left}px`,top:`${event.clientY-parent.top}px`,width:diameter+'px',height:diameter+'px'});
+      cursor.hidden=dx<0||dx>rect.width||dy<0||dy>rect.height;
+      return {x:dx*scale,y:dy*canvas.height/rect.height,radius:diameter*scale/2};
+    };
+    const erase=(p,from=p)=>{
+      const ctx=canvas.getContext('2d');
+      ctx.save();ctx.globalCompositeOperation='destination-out';ctx.lineCap='round';ctx.lineWidth=p.radius*2;
+      ctx.beginPath();ctx.moveTo(from.x,from.y);ctx.lineTo(p.x,p.y);ctx.stroke();
+      ctx.beginPath();ctx.arc(p.x,p.y,p.radius,0,2*Math.PI);ctx.fill();ctx.restore();
+      if(!crop.record?.savedItem)crop.record=null;
+    };
+    canvas.onpointerdown=event=>{
+      if(event.button>0||crop.saving||crop.record?.savedItem)return;
+      event.preventDefault();
+      const position=point(event);erase(position);
+      stroke={id:event.pointerId,position};canvas.setPointerCapture?.(event.pointerId);
+    };
+    canvas.onpointermove=event=>{
+      const position=point(event);
+      if(stroke?.id===event.pointerId&&!crop.saving){erase(position,stroke.position);stroke.position=position;}
+    };
+    canvas.onpointerleave=()=>{cursor.hidden=true;};
+    canvas.onpointerup=canvas.onpointercancel=()=>{stroke=null;cursor.hidden=true;};
+    const replacePixels=(next,angle)=>{
+      canvas.width=next.width;canvas.height=next.height;
+      canvas.getContext('2d').drawImage(next,0,0);
+      next.width=0;
+      rotation=angle;
+      if(!crop.record?.savedItem)crop.record=null;
+      tellSize();
+    };
+    for(const control of qsa('[data-crop-rotate]',body)){
+      control.onclick=()=>{
+        if(crop.saving||crop.record?.savedItem)return;
+        const angle=Number(control.dataset.cropRotate);
+        replacePixels(detector.rotateArtworkCanvas(canvas,angle),(rotation+angle+360)%360);
+      };
+    }
+    qs('[data-crop-reset]',body).onclick=()=>{
+      if(!crop.saving&&!crop.record?.savedItem)replacePixels(detector.cropArtworkCanvas(crop.image,crop.box).canvas,Number(original.box.rotation)||0);
+    };
+    qs('[data-close-crop-review]',body).onclick=()=>{if(!crop.saving)dialog.close();};
+    dialog.oncancel=event=>{if(crop.saving)event.preventDefault();};
+    dialog.onclose=()=>{canvas.width=0;};
+    qs('[data-save-crop-review]',body).onclick=async event=>{
+      if(crop.saving)return;
+      const button=event.currentTarget,controls=qsa('button,input',dialog);
+      controls.forEach(control=>control.disabled=true);
+      button.textContent='Guardando…';
+      qs('[data-crop-warning]',body).textContent='';
+      try{
+        crop.name=qs('[data-sheet-crop-name]',body).value.trim();
+        await saveSheetCrop(crop,{...original.box,rotation},canvas);
+        dialog.close();
+      }catch(error){qs('[data-crop-warning]',body).textContent=error.message;}
+      finally{
+        button.textContent='Guardar individual';controls.forEach(control=>control.disabled=false);
+      }
+    };
+    dialog.showModal();tellSize();
+  }
+  async function saveSheetCrop(crop,box,canvas){
+    if(crop!==state.sheetCrop||state.designUploadBusy)return;
+    const {key,image}=crop,rows=state.designSheetDrafts[key];
+    validateSheetMark(key,box);
+    if(crop.source!==(image.currentSrc||image.src)||image!==qs('[data-sheet-canvas] img',sheetRoot(key))){
+      throw new Error('La imagen cambió. Volvé a marcar el recorte.');
+    }
     if(rows.length>=300)throw new Error('La plancha admite hasta 300 medidas de diseño.');
-    if(rows.some(row=>(row.previewBoxes||[]).some(mark=>sheetBoxesDuplicate(mark,box))))throw new Error('Esta zona ya tiene una marca. Marcá otra estampa.');
     crop.saving=true;state.designUploadBusy=true;renderSheetCropControls(key);
     try{
       const size=sheetSize(key),name=crop.name.trim()||sheetCropName(key);
       if(!crop.record){
-        const output=await window.SalmosSheetDetection.cropArtwork(image,box,size);
-        crop.box=output.box;
+        const output=await window.SalmosSheetDetection.cropArtwork(image,box,size,canvas);
         const fileName=name.replace(/[\\/:*?"<>|\x00-\x1f]/g,'-').slice(0,150);
         crop.record={file:new File([output.blob],fileName+'.png',{type:'image/png'}),name,
-          scope:sheetScope(key)?.value==='clients'||sheetScope(key)?.value==='mixed'&&state.sheetGalleryScope?.[key]==='clients'?'clients':'salmos'};
+          scope:sheetScope(key)?.value==='clients'||sheetScope(key)?.value==='mixed'&&state.sheetGalleryScope?.[key]==='clients'?'clients':'salmos',box:output.box};
       }
       crop.record.name=name;
-      const asset=await uploadIndividualSheetDesign(key,crop.record,sheetBoxMeasures(crop.box,size));
+      const measured=sheetBoxMeasures(crop.record.box,size);
+      const asset=await uploadIndividualSheetDesign(key,crop.record,measured);
       const id=Number(asset.id);
       if(!state.designAssets.some(item=>Number(item.id)===id))state.designAssets.unshift(asset);
-      addSheetDesign(key,id,false);
       const library=qs('.sheet-design-library',sheetRoot(key));
       if(library)library.innerHTML=sheetDesignLibraryHtml(key);
-      applySheetBox(state.sheetBoxTarget.index,crop.box,key);
-      crop.box=null;crop.name='';crop.record=null;state.sheetActiveBox=null;
+      writeSheetMark({key,assetId:id,box:crop.record.box,scanId:crop.scanId,sourceMethod:'box-selected'},
+        detectedMeasureOption(asset,crop.record.file.name,measured));
+      crop.box=null;crop.name='';crop.record=null;crop.scanId=null;state.sheetActiveBox=null;
       renderSheetSelected(key);
       if(key==='upload')persistSheetDraft();
       toast('Estampa guardada como diseño individual','success');
@@ -5476,10 +5671,12 @@
   }
   function renderSheetPreview(key){
     const root=sheetRoot(key),host=qs('[data-sheet-preview]',root);if(!host)return;host.dataset.designPreviewBackground=designViewerBackground('sheet-'+key);
-    const crop=state.sheetCrop?.key===key?state.sheetCrop:null,drawing=Boolean(crop||state.sheetBoxTarget?.key===key);
-    const markHint=crop?(crop.box?'Ajustá los bordes y guardá la estampa.':'Dibujá el contorno de la próxima estampa.'):
+    const crop=state.sheetCrop?.key===key?state.sheetCrop:null,mark=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
+    const drawing=Boolean(crop||mark||state.sheetBoxTarget?.key===key);
+    const markHint=crop?(crop.box?'Ajustá el recuadro y revisá el recorte antes de guardarlo.':'Tocá una estampa o dibujá su contorno.'):
+      mark?'Mové el recuadro o ajustá sus bordes antes de confirmarlo.':
       state.sheetRepeatTarget?.key===key?'Hacé clic en la estampa o dibujá su contorno. Elegí Terminar al finalizar.':
-      state.sheetBoxTarget?.key===key?'Dibujá un recuadro alrededor de la estampa.':'';
+      state.sheetBoxTarget?.key===key?'Tocá la estampa en la plancha o dibujá su contorno.':'';
     const status=qs('.sheet-mark-status',host);if(status)status.textContent=markHint;
     const asset=key==='upload'?state.sheetUploadPreview:state.designAssets.find(x=>Number(x.id)===state.activeDesignId),url=key==='upload'?asset?.url:asset?apiUrl(`/api/admin/design-assets/${asset.id}/file`):'',mime=asset?.mime_type||asset?.file?.type||'',rows=state.designSheetDrafts?.[key]||[];
     if(!url){host._sheetResizeObserver?.disconnect();delete host.dataset.sheetSource;host.innerHTML='<p class="muted">Elegí el archivo de la plancha para verla acá.</p>';return;}
@@ -5487,16 +5684,17 @@
     if(image&&host.dataset.sheetSource===url&&existing){
       qs('.sheet-preview-marks',existing).innerHTML=sheetPreviewMarks(rows,key)+sheetDetectionOutline(key);existing.classList.toggle('drawing',drawing);
       renderSheetCropControls(key);
+      renderSheetMarkControls(key);
       const range=qs('[data-sheet-zoom]',host);if(range)range.value=String(state.sheetZoom||1);
       const label=qs('[data-sheet-zoom-label]',host);if(label)label.textContent=`Zoom ${Math.round((state.sheetZoom||1)*100)}%`;
       const img=qs('img',existing);if(img.naturalWidth&&!syncSheetImageSize(key,img))fitSheetPreview(existing);return;
     }
     const stageImage=key==='detail'&&asset?.kind==='sheet'?qs('#designPreviewStage img'):null,reusedImage=stageImage&&(stageImage.getAttribute('src')===url||stageImage.getAttribute('src')?.startsWith(url+'?'))?stageImage:null;
     host._sheetResizeObserver?.disconnect();host.dataset.sheetSource=url;
-    host.innerHTML=`<div data-sheet-size-notice></div>${image?`<div class="sheet-preview-tools"><button type="button" class="icon-btn" data-expand-sheet="${key}" aria-label="Expandir plancha" title="Expandir plancha" aria-pressed="${root.closest('dialog').classList.contains('sheet-fullscreen')}"><i class="fa-solid ${root.closest('dialog').classList.contains('sheet-fullscreen')?'fa-compress':'fa-expand'}" aria-hidden="true"></i></button>${designBackgroundControlHtml('sheet-'+key)}<span data-sheet-zoom-label>Zoom ${Math.round((state.sheetZoom||1)*100)}%</span><input type="range" min="1" max="5" step=".25" value="${state.sheetZoom||1}" data-sheet-zoom aria-label="Zoom de la plancha"><button type="button" class="btn btn-ghost" data-reset-sheet-zoom>Restablecer</button></div><div class="sheet-crop-tools" data-sheet-crop-controls hidden></div><p class="sheet-mark-status" role="status">${escapeHtml(markHint)}</p><div data-image-status role="status">Cargando plancha…</div><div class="sheet-preview-viewport"><div class="sheet-preview-frame"><div class="sheet-preview-canvas checkerboard ${drawing?'drawing':''}" data-sheet-canvas="${key}"  ${sheetBackgroundAttrs(key)}><img crossorigin="use-credentials" ${reusedImage?'':`src="${escapeHtml(url)}"`} alt="Plancha a cargar"><div class="sheet-preview-marks">${sheetPreviewMarks(rows,key)+sheetDetectionOutline(key)}</div></div></div></div>`:mime==='application/pdf'?`<iframe src="${escapeHtml(url)}" title="Plancha"></iframe><small>Usá la lista con miniaturas para revisar los diseños.</small>`:`<a class="btn btn-ghost" href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir archivo original</a><small>Este formato no tiene vista previa en el navegador.</small>`}`;
+    host.innerHTML=`<div data-sheet-size-notice></div>${image?`<div class="sheet-preview-tools">${designBackgroundControlHtml('sheet-'+key)}<span data-sheet-zoom-label>Zoom ${Math.round((state.sheetZoom||1)*100)}%</span><input type="range" min="1" max="5" step=".25" value="${state.sheetZoom||1}" data-sheet-zoom aria-label="Zoom de la plancha"><button type="button" class="btn btn-ghost" data-reset-sheet-zoom>Restablecer</button></div><div class="sheet-crop-tools" data-sheet-crop-controls hidden></div><div class="sheet-mark-controls" data-sheet-mark-controls hidden></div><p class="sheet-mark-status" role="status">${escapeHtml(markHint)}</p><div data-image-status role="status">Cargando plancha…</div><div class="sheet-preview-viewport"><div class="sheet-preview-frame"><div class="sheet-preview-canvas checkerboard ${drawing?'drawing':''}" data-sheet-canvas="${key}"  ${sheetBackgroundAttrs(key)}><img crossorigin="use-credentials" ${reusedImage?'':`src="${escapeHtml(url)}"`} alt="Plancha a cargar"><div class="sheet-preview-marks">${sheetPreviewMarks(rows,key)+sheetDetectionOutline(key)}</div></div></div></div>`:mime==='application/pdf'?`<iframe src="${escapeHtml(url)}" title="Plancha"></iframe><small>Usá la lista con miniaturas para revisar los diseños.</small>`:`<a class="btn btn-ghost" href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir archivo original</a><small>Este formato no tiene vista previa en el navegador.</small>`}`;
     const viewport=qs('.sheet-preview-viewport',host),canvas=qs('[data-sheet-canvas]',host);if(reusedImage&&canvas){const placeholder=qs('img',canvas);placeholder.before(reusedImage);placeholder.remove();}
     const img=canvas&&qs('img',canvas);
-    renderSheetCropControls(key);
+    renderSheetCropControls(key);renderSheetMarkControls(key);
     if(viewport&&img){
       watchDesignPreview(img,host,()=>{if(host.dataset.sheetSource!==url||qs('[data-sheet-canvas]',host)!==canvas)return;if(!syncSheetImageSize(key,img))fitSheetPreview(canvas);});
       if(window.ResizeObserver){host._sheetResizeObserver=new ResizeObserver(()=>{if(qs('[data-sheet-canvas]',host)===canvas)fitSheetPreview(canvas)});host._sheetResizeObserver.observe(viewport);}
@@ -5549,101 +5747,175 @@
     const overlap=Math.max(0,Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x))*Math.max(0,Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y));
     const union=a.width*a.height+b.width*b.height-overlap;return union>0&&overlap/union>.9;
   }
-  async function addRepeatedSheetBox(key,index,point){
-    const rows=state.designSheetDrafts?.[key]||[],row=rows[index],seed=row?.previewBoxes?.[0];
-    const root=sheetRoot(key),image=qs('[data-sheet-canvas] img',root),repeat=state.sheetRepeatTarget;
-    if(!seed||!image?.naturalWidth||!repeat)return;
-    const status=qs('.sheet-mark-status',root);
-    const used=rows.flatMap(component=>component.previewBoxes||[]);
-    if(used.some(box=>point.x>=box.x&&point.x<=box.x+box.width&&point.y>=box.y&&point.y<=box.y+box.height)){
-      if(status)status.textContent='Esa aparición ya tiene una marca. Elegí otra estampa.';
-      return;
-    }
-    const source=image.currentSrc||image.src,size=sheetSize(key);
-    state.sheetMeasureBusy=true;
-    if(status)status.textContent='Midiendo esta aparición…';
-    try{
-      const box=await window.SalmosSheetDetection?.findOccurrence(image,size,seed,point,used);
-      const currentSize=sheetSize(key);
-      if(repeat!==state.sheetRepeatTarget||rows!==state.designSheetDrafts[key]||
-        currentSize.width!==size.width||currentSize.height!==size.height||
-        !root.closest('dialog').open||source!==(image.currentSrc||image.src)||
-        qs('[data-sheet-canvas] img',root)!==image||row.previewBoxes[0]!==seed)return;
-      if(!box){
-        if(status)status.textContent='Dibujá un recuadro alrededor de esta estampa para medirla.';
-        return;
+  function sheetMarkOptions(key,asset){
+    const options=parseDesignMeasureOptions(asset);
+    const known=new Set(options.map(option=>option.id));
+    for(const row of state.designSheetDrafts[key]||[]){
+      const pending=row.pendingMeasureOption;
+      if(Number(row.designAssetId)===Number(asset.id)&&pending&&!known.has(pending.id)){
+        known.add(pending.id);options.push(pending);
       }
-      applySheetBox(repeat.index,box,key);
-    }catch{
-      if(repeat===state.sheetRepeatTarget&&status)status.textContent='Dibujá un recuadro alrededor de esta estampa para medirla.';
-    }finally{state.sheetMeasureBusy=false;}
+    }
+    return options;
   }
-  function applySheetBox(index,box,key='upload'){
-    const draft=state.designSheetDrafts[key]?.[index],asset=sheetIndividualAsset(key,draft?.designAssetId),size=sheetSize(key);
-    if(!draft||!asset||!size.width||!size.height||box.width<.005||box.height<.005)throw new Error('Marcá el contorno completo del diseño sobre la imagen.');
-    if(draft.previewBoxes?.length&&!(state.sheetRepeatTarget?.key===key&&state.sheetRepeatTarget.index===index))throw new Error('Usá Hay más para marcar otra aparición.');
+  function ensureSheetReviewsComplete(key){
+    if(state.sheetPendingMark?.key===key)throw new Error('Confirmá o descartá el recuadro pendiente.');
+    if(state.sheetCrop?.key===key&&state.sheetCrop.box)throw new Error('Revisá o cancelá el recorte individual pendiente.');
+  }
+  function validateSheetMark(key,box,replaced=null){
     const problem=sheetMeasurementProblem(key);if(problem)throw new Error(problem);
-    const sheetAsset=state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId)),option=detectedMeasureOption(asset,key==='upload'?state.sheetUploadPreview?.file?.name:sheetAsset?.file_name,sheetBoxMeasures(box,size));
-    const rows=state.designSheetDrafts[key];
-    if(rows.some(c=>Number(c.designAssetId)===Number(asset.id)&&(c.previewBoxes||[]).some(b=>sheetBoxesDuplicate(b,box))))throw new Error('Esa aparición ya está marcada. Quitá su marca si querés corregirla.');
-    let target=draft;
-    if(draft.previewBoxes?.length){
-      target=rows.find(item=>Number(item.designAssetId)===Number(asset.id)&&item.measureOptionId===option.id);
-      if(!target){
-        if(rows.length>=300)throw new Error('La plancha admite hasta 300 medidas de diseño.');
-        target={designAssetId:Number(asset.id),quantity:0,previewBoxes:[],previewMarks:[]};
-        rows.push(target);
-      }
+    if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.x<0||box.y<0||
+      box.x+box.width>1.001||box.y+box.height>1.001)throw new Error('El recuadro debe quedar dentro de la plancha.');
+    if(box.width<.005||box.height<.005)throw new Error('Marcá el contorno completo de la estampa.');
+    if(box.width>=.91&&box.height>=.91)throw new Error('Marcá una estampa por recuadro.');
+    const rows=state.designSheetDrafts[key]||[];
+    if(rows.some(row=>(row.previewBoxes||[]).some(mark=>mark!==replaced&&sheetBoxesDuplicate(mark,box)))){
+      throw new Error('Ese lugar ya tiene una marca. Elegí esa marca para corregirla.');
     }
-    target.measureOptionId=option.id;target.pendingMeasureOption=option;target.previewBoxes??=[];target.previewMarks??=[];
-    ensureSheetMarkOrder(rows);const nextOrder=Math.max(0,...rows.flatMap(c=>(c.previewBoxes||[]).map(b=>Number(b.order)||0)))+1;
-    target.previewBoxes.push({...box,rotation:box.rotation||0,order:nextOrder});target.previewMarks.push({x:box.x+box.width/2,y:box.y+box.height/2});
-    target.quantity=target.previewBoxes.length;target.sourceMethod='box-selected';
-    const repeat=state.sheetRepeatTarget?.key===key?state.sheetRepeatTarget:null;
-    const rowIndex=rows.indexOf(target),boxIndex=target.previewBoxes.length-1;
-    state.sheetBoxTarget=repeat;
-    state.sheetActiveBox={key,rowIndex,boxIndex};
+  }
+  function stageSheetMark(key,index,box,details={}){
+    const row=state.designSheetDrafts[key]?.[index],assetId=details.assetId??row?.designAssetId;
+    if(!sheetIndividualAsset(key,assetId))throw new Error('Elegí el diseño que querés marcar.');
+    validateSheetMark(key,box,details.replaced);
+    state.sheetPendingMark={key,row,assetId,box:{...box},sourceMethod:'box-selected',...details};
+    state.sheetActiveBox=null;
+    state.sheetCompositionConfirmation=null;
     renderSheetSelected(key);
-    const status=qs('.sheet-mark-status',sheetRoot(key));
-    if(status)status.textContent=`Marca ${sheetMarkNumber(rows,rowIndex,boxIndex)} · ${detectedSizeLabel(option)}. ${repeat?'Marcá otra aparición o tocá Terminar.':'Usá Hay más para marcar otra aparición.'}`;
   }
   function resizeSheetBox(key,rowIndex,boxIndex,box){
-    const rows=state.designSheetDrafts[key],row=rows?.[rowIndex],previous=row?.previewBoxes?.[boxIndex],asset=sheetIndividualAsset(key,row?.designAssetId);
-    if(!previous||!asset||box.width<.005||box.height<.005)throw new Error('El recuadro debe cubrir toda la estampa.');
-    ensureSheetMarkOrder(rows);box={...box,order:previous.order};
-    const problem=sheetMeasurementProblem(key);if(problem)throw new Error(problem);
-    const collision=rows.some((c,i)=>Number(c.designAssetId)===Number(asset.id)&&(c.previewBoxes||[]).some((b,j)=>{
-      if(i===rowIndex&&j===boxIndex)return false;
-      return sheetBoxesDuplicate(b,box);
-    }));
-    if(collision)throw new Error('Ese diseño ya tiene una marca en ese lugar.');
-    const sheet=state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId)),option=detectedMeasureOption(asset,key==='upload'?state.sheetUploadPreview?.file?.name:sheet?.file_name,sheetBoxMeasures(box,sheetSize(key)));
-    const oldOption=row.pendingMeasureOption||parseDesignMeasureOptions(asset).find(o=>o.id===row.measureOptionId);
-    const different=oldOption&&oldOption.id!==option.id;
-    const repeat=state.sheetRepeatTarget?.key===key?state.sheetRepeatTarget:null;
-    let repeatRow=repeat?rows[repeat.index]:null;
-    if(different&&row.previewBoxes.length>1){
-      row.previewBoxes.splice(boxIndex,1);row.previewMarks?.splice(boxIndex,1);row.quantity=row.previewBoxes.length;
-      rows.push({designAssetId:Number(asset.id),measureOptionId:option.id,pendingMeasureOption:option,quantity:1,previewBoxes:[box],previewMarks:[{x:box.x+box.width/2,y:box.y+box.height/2}],sourceMethod:'box-selected'});
-      state.sheetActiveBox={key,rowIndex:rows.length-1,boxIndex:0};
-    }else{
-      row.previewBoxes[boxIndex]=box;row.previewMarks??=[];row.previewMarks[boxIndex]={x:box.x+box.width/2,y:box.y+box.height/2};row.measureOptionId=option.id;row.pendingMeasureOption=option;row.sourceMethod='box-selected';
-      state.sheetActiveBox={key,rowIndex,boxIndex};
+    const replaced=state.designSheetDrafts[key]?.[rowIndex]?.previewBoxes?.[boxIndex];
+    if(!replaced)return;
+    stageSheetMark(key,rowIndex,box,{replaced});
+  }
+  function writeSheetMark(mark,option){
+    const {key,row,box,replaced}=mark,rows=state.designSheetDrafts[key];
+    const asset=sheetIndividualAsset(key,mark.assetId);
+    if(!option||!asset||row&&!rows.includes(row)||replaced&&!row?.previewBoxes?.includes(replaced))throw new Error('Volvé a elegir el recuadro en la plancha.');
+    validateSheetMark(key,box,replaced);
+    const repeat=state.sheetRepeatTarget?.key===key?state.sheetRepeatTarget:null,repeatRow=repeat?rows[repeat.index]:null;
+    const reuse=rows.find(item=>Number(item.designAssetId)===Number(asset.id)&&item.measureOptionId===option.id);
+    const canReuseRow=row&&(!row.quantity||replaced&&row.previewBoxes.length===1);
+    let target=reuse||(canReuseRow?row:null);
+    if(!target){
+      if(rows.length>=300)throw new Error('La plancha admite hasta 300 medidas de diseño.');
+      target={designAssetId:Number(asset.id),previewBoxes:[],previewMarks:[]};
+      rows.push(target);
     }
-    const edited=rows[state.sheetActiveBox.rowIndex],editedBox=edited.previewBoxes[state.sheetActiveBox.boxIndex];
-    const matching=rows.find(c=>c!==edited&&Number(c.designAssetId)===Number(edited.designAssetId)&&c.measureOptionId===edited.measureOptionId);
-    if(matching){
-      const offset=matching.previewBoxes?.length||0;matching.previewBoxes=[...(matching.previewBoxes||[]),...edited.previewBoxes];matching.previewMarks=[...(matching.previewMarks||[]),...(edited.previewMarks||[])];matching.quantity=matching.previewBoxes.length;
-      matching.pendingMeasureOption=edited.pendingMeasureOption;matching.sourceMethod='box-selected';rows.splice(rows.indexOf(edited),1);
-      if(repeatRow===edited)repeatRow=matching;
-      state.sheetActiveBox={key,rowIndex:rows.indexOf(matching),boxIndex:offset+edited.previewBoxes.indexOf(editedBox)};
-    }
-    const activeRow=rows[state.sheetActiveBox.rowIndex];
-    const firstOrder=c=>Math.min(...(c.previewBoxes?.length?c.previewBoxes.map(b=>Number(b.order)):[Infinity]));
-    rows.sort((a,b)=>firstOrder(a)-firstOrder(b));state.sheetActiveBox.rowIndex=rows.indexOf(activeRow);
-    if(repeatRow)repeat.index=rows.indexOf(repeatRow);
-    state.sheetBoxTarget=repeat||{key,index:state.sheetActiveBox.rowIndex};
+    ensureSheetMarkOrder(rows);
+    const order=replaced?.order||Math.max(0,...rows.flatMap(item=>(item.previewBoxes||[]).map(b=>Number(b.order)||0)))+1;
+    if(replaced){
+      const offset=row.previewBoxes.indexOf(replaced);
+      row.previewBoxes.splice(offset,1);row.previewMarks?.splice(offset,1);
+      row.quantity=row.previewBoxes.length;
+      if(!row.quantity&&row!==target)rows.splice(rows.indexOf(row),1);
+    }else if(row&&row!==target&&!row.quantity)rows.splice(rows.indexOf(row),1);
+    target.measureOptionId=option.id;
+    target.pendingMeasureOption=parseDesignMeasureOptions(asset).some(saved=>saved.id===option.id)?null:option;
+    target.previewBoxes??=[];target.previewMarks??=[];
+    target.previewBoxes.push({...box,rotation:box.rotation||0,order});
+    target.previewMarks.push({x:box.x+box.width/2,y:box.y+box.height/2});
+    target.quantity=target.previewBoxes.length;
+    target.sourceMethod=mark.sourceMethod;
+    state.sheetPendingMark=null;
+    if(repeat)repeat.index=rows.includes(repeatRow)?rows.indexOf(repeatRow):rows.indexOf(target);
+    state.sheetBoxTarget=repeat;
+    state.sheetActiveBox={key,rowIndex:rows.indexOf(target),boxIndex:target.previewBoxes.length-1};
+    state.sheetCompositionConfirmation=null;
+    removeSheetDetection(key,mark.scanId);
+    syncSheetScope(key);
     renderSheetSelected(key);
+  }
+  function applySheetBox(index,box,key='upload'){
+    stageSheetMark(key,index,box);
+  }
+  function openSheetMeasureChoice(mark,option,options){
+    const dialog=ensureAdminDialog('sheetMeasureChoiceDialog','Elegir medida del diseño'),body=qs('.dialog-body',dialog);
+    const asset=sheetIndividualAsset(mark.key,mark.assetId);
+    const error=item=>Math.hypot((item.widthCm-option.widthCm)/option.widthCm,(item.heightCm-option.heightCm)/option.heightCm);
+    const ordered=[...options].sort((a,b)=>error(a)-error(b));
+    body.innerHTML=`<p><strong>${escapeHtml(asset.name||asset.file_name)}</strong></p>
+      <p>El recuadro mide <b>${detectedSizeLabel(option)}</b>.</p>
+      <label class="field">Medidas guardadas
+        <select class="select" data-sheet-saved-measure>${ordered.map(item=>`<option value="${escapeHtml(item.id)}">${detectedSizeLabel(item)}${item.size?' · '+escapeHtml(item.size):''}</option>`).join('')}</select>
+      </label>
+      <div class="admin-actions">
+        <button type="button" class="btn btn-ghost" data-sheet-use-existing>Usar medida guardada</button>
+        <button type="button" class="btn btn-primary" data-sheet-new-size>Guardar medida nueva</button>
+      </div>`;
+    const choose=value=>{
+      if(state.sheetPendingMark!==mark)return;
+      try{writeSheetMark(mark,value);dialog.close();}
+      catch(error){toast(error.message,'error');}
+    };
+    qs('[data-sheet-use-existing]',body).onclick=()=>choose(ordered.find(item=>item.id===qs('[data-sheet-saved-measure]',body).value));
+    qs('[data-sheet-new-size]',body).onclick=()=>choose(option);
+    dialog.showModal();
+  }
+  function confirmSheetMark(key){
+    const mark=state.sheetPendingMark;
+    if(!mark||mark.key!==key)return;
+    validateSheetMark(key,mark.box,mark.replaced);
+    const asset=sheetIndividualAsset(key,mark.assetId),fileName=key==='upload'?state.sheetUploadPreview?.file?.name:
+      state.designAssets.find(item=>Number(item.id)===Number(state.activeDesignId))?.file_name;
+    const measured=sheetBoxMeasures(mark.box,sheetSize(key)),option=detectedMeasureOption(asset,fileName,measured);
+    const options=sheetMarkOptions(key,asset);
+    const exact=options.find(item=>Math.abs(item.widthCm-option.widthCm)<.005&&Math.abs(item.heightCm-option.heightCm)<.005);
+    if(exact||!options.length)writeSheetMark(mark,exact||option);
+    else openSheetMeasureChoice(mark,option,options);
+  }
+  function discardSheetMark(key){
+    const mark=state.sheetPendingMark;
+    if(mark?.key!==key)return;
+    const rows=state.designSheetDrafts[key],target=state.sheetRepeatTarget;
+    if(mark.row&&!mark.row.quantity&&rows.includes(mark.row)){
+      const index=rows.indexOf(mark.row);
+      rows.splice(index,1);
+      if(state.sheetBoxTarget?.key===key&&state.sheetBoxTarget.index===index)state.sheetBoxTarget=null;
+    }
+    state.sheetPendingMark=null;
+    if(target?.key===key)state.sheetBoxTarget=target;
+    syncSheetScope(key);
+    renderSheetSelected(key);
+  }
+  async function proposeSheetBoxAtPoint(drag,point){
+    const {key,index,crop,repeat}=drag,root=sheetRoot(key),image=qs('[data-sheet-canvas] img',root);
+    const detector=window.SalmosSheetDetection,rows=state.designSheetDrafts[key],row=rows[index];
+    if(!image?.naturalWidth||!detector)return;
+    const task=new AbortController(),{signal}=task;
+    const target=state.sheetBoxTarget,source=image.currentSrc||image.src,size=sheetSize(key);
+    const current=()=>!signal.aborted&&root.closest('dialog').open&&rows===state.designSheetDrafts[key]&&
+      (image.currentSrc||image.src)===source&&(!crop||state.sheetCrop===crop)&&
+      state.sheetRepeatTarget=== (repeat||null)&&state.sheetBoxTarget===target&&
+      size.width===sheetSize(key).width&&size.height===sheetSize(key).height;
+    const status=message=>{const node=qs('.sheet-mark-status',root);if(node)node.textContent=message;};
+    const used=rows.flatMap(item=>item.previewBoxes||[]);
+    if(used.some(box=>point.x>=box.x&&point.x<=box.x+box.width&&point.y>=box.y&&point.y<=box.y+box.height)){
+      status('Ese lugar ya tiene una marca. Elegí otra aparición.');return;
+    }
+    (state.sheetProposal??={})[key]=task;
+    state.sheetMeasureBusy=true;
+    status('Midiendo la estampa…');
+    try{
+      const seed=repeat&&row?.previewBoxes?.[0];
+      const asset=row&&sheetIndividualAsset(key,row.designAssetId);
+      const cached=asset&&state.sheetSignatures?.get([asset.id,asset.preview_version,asset.file_name,asset.size_bytes].join(':'));
+      const option=asset&&sheetMarkOptions(key,asset)[0];
+      const aspect=seed?seed.width*size.width/(seed.height*size.height):option?option.widthCm/option.heightCm:0;
+      let box=seed&&await detector.findOccurrence(image,size,seed,point,used);
+      if(!box&&cached)box=await detector.findDesignOnSheet(image,size,cached,used,signal,point);
+      if(!box){
+        box=await detector.proposeRegionAtPoint(image,size,point,used,aspect);
+        if(box&&seed)box.rotation=detector.occurrenceRotation(image,seed,box);
+      }
+      if(!current())return;
+      if(!box){status('Arrastrá desde una esquina hasta la opuesta para marcar la estampa.');return;}
+      if(crop)setSheetCropBox(crop,box);
+      else applySheetBox(index,box,key);
+    }catch(error){if(current())status(error.message||'Dibujá el recuadro sobre la estampa.');}
+    finally{
+      if(state.sheetProposal?.[key]===task)delete state.sheetProposal[key];
+      state.sheetMeasureBusy=false;
+    }
   }
   function sheetSizeInputs(key){const root=sheetRoot(key);return {width:qs(key==='upload'?'#designUploadWidth':'[data-design-width]',root),height:qs(key==='upload'?'#designUploadHeight':'[data-design-height]',root)};}
   function sheetAspectMatches(size,image){return size.width>0&&size.height>0&&image?.width>0&&image?.height>0&&Math.abs((size.width/size.height)/(image.width/image.height)-1)<=.01;}
@@ -5674,7 +5946,7 @@
     renderSheetSizeNotice(key);if(sheetMeasurementProblem(key))return;
     const size=sheetSize(key),sheet=state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId));
     for(const draft of state.designSheetDrafts?.[key]||[]){
-      if(!draft.previewBoxes?.[0])continue;
+      if(!draft.previewBoxes?.[0]||!draft.pendingMeasureOption)continue;
       const asset=sheetIndividualAsset(key,draft.designAssetId);if(!asset)continue;
       draft.pendingMeasureOption=detectedMeasureOption(asset,key==='upload'?state.sheetUploadPreview?.file?.name:sheet?.file_name,sheetBoxMeasures(draft.previewBoxes[0],size));
       draft.measureOptionId=draft.pendingMeasureOption.id;draft.sourceMethod='box-selected';
@@ -5774,6 +6046,7 @@
       const record=(state.designUploadFiles||[])[0],file=record?.originalArtworkFile||record?.file;
       if(file&&state.sheetUploadPreview?.file!==file){
         clearSheetDetection('upload');cancelSheetProposal('upload');
+        if(state.sheetPendingMark?.key==='upload')state.sheetPendingMark=null;
         if(state.sheetCrop?.key==='upload')state.sheetCrop=null;
         clearTimeout(state.sheetDraftTimer);
         if(state.sheetUploadPreview?.url)URL.revokeObjectURL(state.sheetUploadPreview.url);
@@ -5824,6 +6097,7 @@
   function sheetPayload(key){const kind=sheetKind(key),size=sheetSize(key),confirmed=key==='upload'?Boolean(qs('#designSheetCompositionComplete',sheetRoot(key))?.checked):Boolean(qs('[data-sheet-complete]',sheetRoot(key))?.checked);return {widthCm:kind==='sheet'?size.width:0,heightCm:kind==='sheet'?size.height:0,measureOptions:kind==='sheet'||key==='upload'?[]:parseDesignMeasureOptions(state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId))||{}),compositionComplete:kind==='sheet'&&confirmed,components:kind==='sheet'?(state.designSheetDrafts?.[key]||[]).map(c=>({designAssetId:Number(c.designAssetId),measureOptionId:c.measureOptionId,quantity:Number(c.quantity),previewMarks:c.previewMarks||[],previewBoxes:c.previewBoxes||[],sourceMethod:c.sourceMethod})):[],complete:confirmed};}
   function openDesignUpload(context='designs'){
     clearTimeout(state.sheetDraftTimer);clearSheetDetection('upload');
+    state.sheetPendingMark=null;state.sheetCrop=null;
     state.sheetDraftCompleted=false;clearMissingSheetQueue('upload');
     syncSheetUploadGate('upload');state.sheetSizeManual={...state.sheetSizeManual,upload:false};state.sheetImageSizes={...state.sheetImageSizes,upload:null};state.sheetSearch={...state.sheetSearch,upload:''};state.designUploadClientId=null;state.designUploadContext=context;state.designSheetDrafts??={};state.designSheetDrafts.upload=[];state.sheetCompositionConfirmation=null;state.designUploadFiles=[];state.designUploadNextId=0;state.designUploadRenderedIds=new Set();state.sheetUploadRecent=[];for(const url of state.designUploadPreviewUrls||[])URL.revokeObjectURL(url);state.designUploadPreviewUrls=[];if(state.sheetUploadPreview?.url)URL.revokeObjectURL(state.sheetUploadPreview.url);state.sheetUploadPreview=null;state.sheetUploadAppearance={};state.sheetBoxTarget=null;state.sheetRepeatTarget=null;state.sheetActiveBox=null;state.sheetDesignPixels=new Map();state.sheetMeasureBusy=false;
     for(const id of ['designUploadName','designUploadWidth','designUploadHeight','designUploadFiles'])qs('#'+id).value='';qs('#designUploadCost').value='10000';qs('#designUploadMetaSummary').textContent='';qs('#designUploadBatchMeta').innerHTML='';qs('#designUploadBatchMeta').classList.add('hidden');qs('#designUploadTagPicker').innerHTML=designTagPickerHtml('sheet-upload',[]);state.sheetZoom=1;
@@ -6041,6 +6315,7 @@
     if(kind==='sheet'&&records.length>1)throw new Error('Tenés varios archivos cargados. Quitá los demás o elegí Individual; los archivos se conservan al cambiar de tipo.');
     if(kind==='sheet'&&files.length!==1)throw new Error('Cargá una plancha por vez para indicar su composición.');
     if(kind==='sheet'){
+      ensureSheetReviewsComplete('upload');
       const problem=sheetMeasurementProblem('upload');if(problem)throw new Error(problem);
       if(!/^image\/(png|jpeg|webp)$/.test(files[0].type))throw new Error('Para marcar los diseños, subí la plancha en PNG, JPG o WEBP.');
       const drafts=state.designSheetDrafts.upload||[];
@@ -6139,6 +6414,7 @@
   function openDesignPreview(id){
     const a=state.designAssets.find(x=>Number(x.id)===Number(id));if(!a)return;
     clearSheetDetection('detail');
+    state.sheetPendingMark=null;state.sheetCrop=null;
     state.sheetSizeManual={...state.sheetSizeManual,detail:false};
     state.sheetDetailBackground=previewColor(a.preview_background);
     qs('#designPreviewDialog')?.classList.remove('sheet-editor-open','sheet-fullscreen');state.activeDesignId=Number(a.id);state.designSheetDrafts??={};state.designSheetDrafts.detail=structuredClone(a.components||[]);state.sheetImageSizes={...state.sheetImageSizes,detail:null};state.sheetBoxTarget=null;state.sheetRepeatTarget=null;state.sheetActiveBox=null;state.sheetZoom=1;
@@ -6652,7 +6928,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const sheetArtworkZoom=e.target.closest('[data-sheet-zoom-artwork]');
       if(sheetArtworkZoom){openSheetArtworkZoom(sheetArtworkZoom.dataset.sheetKey,Number(sheetArtworkZoom.dataset.sheetZoomArtwork));return;}
       const addSheet=e.target.closest('[data-add-sheet-design]');
-      if(addSheet){void chooseSheetArtwork(addSheet.dataset.sheetKey,Number(addSheet.dataset.addSheetDesign));return;}
+      if(addSheet){chooseSheetArtwork(addSheet.dataset.sheetKey,Number(addSheet.dataset.addSheetDesign));return;}
       const removeSheet=e.target.closest('[data-remove-sheet-component]');if(removeSheet){state.sheetRepeatTarget=null;const key=removeSheet.dataset.sheetKey,index=Number(removeSheet.dataset.removeSheetComponent);state.designSheetDrafts[key].splice(index,1);state.sheetActiveBox=null;if(state.sheetBoxTarget?.key===key){const active=state.sheetBoxTarget.index;if(active===index){state.sheetBoxTarget=null;state.sheetRepeatTarget=null;}else if(active>index)state.sheetBoxTarget.index--;}renderSheetSelected(key);return;}
 
       const groupHead=e.target.closest('.inventory-group-head');if(groupHead){const g=groupHead.closest('.inventory-group');if(g){g.classList.toggle('list-collapsed');return;}}
@@ -6670,28 +6946,49 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(expandSheet){toggleSheetFullscreen(expandSheet.dataset.expandSheet);return;}
       const scanSelect=e.target.closest('[data-sheet-scan-select]');
       if(scanSelect){selectSheetDetection(scanSelect.dataset.sheetKey,Number(scanSelect.dataset.sheetScanSelect));return;}
-      const useMatches=e.target.closest('[data-accept-sheet-matches]');
-      if(useMatches){
-        const key=useMatches.dataset.acceptSheetMatches;
-        applyDetectedSheetMarks(key,sheetDetectionState(key)?.items.filter(item=>item.designId)||[]);
-        return;
-      }
-      const useScan=e.target.closest('[data-accept-sheet-scan],[data-pick-sheet-scan]');
+      const useScan=e.target.closest('[data-pick-sheet-scan],[data-create-sheet-scan],[data-zoom-sheet-scan]');
       if(useScan){
-        const key=useScan.dataset.sheetKey,item=sheetDetectionState(key)?.items.find(item=>item.id===Number(useScan.dataset.acceptSheetScan||useScan.dataset.pickSheetScan));
-        if(item){
-          if(useScan.hasAttribute('data-pick-sheet-scan'))openSheetDesignGallery(key,item);
-          else applyDetectedSheetMarks(key,[item]);
-        }
+        const key=useScan.dataset.sheetKey,id=Number(useScan.dataset.pickSheetScan||useScan.dataset.createSheetScan||useScan.dataset.zoomSheetScan);
+        const item=sheetDetectionState(key)?.items.find(item=>item.id===id);
+        try{
+          if(item&&useScan.hasAttribute('data-pick-sheet-scan'))openSheetDesignGallery(key,item);
+          if(item&&useScan.hasAttribute('data-create-sheet-scan'))beginSheetCrop(key,item);
+          if(item&&useScan.hasAttribute('data-zoom-sheet-scan'))openDetectedSheetZoom(key,item);
+        }catch(error){toast(error.message,'error');}
         return;
       }
       const discardScan=e.target.closest('[data-clear-sheet-scan]');
       if(discardScan){clearSheetDetection(discardScan.dataset.clearSheetScan,true);return;}
       const cropToggle=e.target.closest('[data-start-sheet-crop],[data-cancel-sheet-crop]');
       if(cropToggle){try{toggleSheetCrop(cropToggle.dataset.startSheetCrop||cropToggle.dataset.cancelSheetCrop);}catch(error){toast(error.message,'error');}return;}
-      const cropSave=e.target.closest('[data-save-sheet-crop]');
-      if(cropSave){try{await saveSheetCrop(cropSave.dataset.saveSheetCrop);}catch(error){toast(error.message,'error');}return;}
-      const chooseSheetFiles=e.target.closest('[data-sheet-upload-files]');if(chooseSheetFiles){qs('[data-missing-sheet-file]',chooseSheetFiles.closest('[data-sheet-editor]'))?.click();return;}const repeat=e.target.closest('[data-sheet-repeat]');if(repeat){const key=repeat.dataset.sheetKey,index=Number(repeat.dataset.sheetRepeat);state.sheetRepeatTarget=state.sheetRepeatTarget?.key===key&&state.sheetRepeatTarget.index===index?null:{key,index};state.sheetBoxTarget=state.sheetRepeatTarget;state.sheetActiveBox=null;renderSheetSelected(key);if(state.sheetRepeatTarget)showSheetPreview(key);return;}const box=e.target.closest('[data-sheet-box]');if(box){state.sheetRepeatTarget=null;const key=box.dataset.sheetKey||'upload';if(state.designSheetDrafts[key]?.[Number(box.dataset.sheetBox)]?.previewBoxes?.length){toast('Usá Hay más para otra aparición.','error');return;}state.sheetBoxTarget={key,index:Number(box.dataset.sheetBox)};state.sheetActiveBox=null;state.sheetMarkTarget=null;renderSheetSelected(key);return;}
+      const cropReview=e.target.closest('[data-review-sheet-crop]');
+      if(cropReview){try{reviewSheetCrop(cropReview.dataset.reviewSheetCrop);}catch(error){toast(error.message,'error');}return;}
+      const confirmMark=e.target.closest('[data-confirm-sheet-mark]');
+      if(confirmMark){try{confirmSheetMark(confirmMark.dataset.confirmSheetMark);}catch(error){toast(error.message,'error');}return;}
+      const discardMark=e.target.closest('[data-discard-sheet-mark]');
+      if(discardMark){discardSheetMark(discardMark.dataset.discardSheetMark);return;}
+      const rotateMark=e.target.closest('[data-rotate-sheet-mark]');
+      if(rotateMark&&state.sheetPendingMark?.key===rotateMark.dataset.rotateSheetMark){
+        const mark=state.sheetPendingMark;
+        mark.box.rotation=((Number(mark.box.rotation)||0)+90)%360;
+        renderSheetPreview(mark.key);return;
+      }
+      const chooseSheetFiles=e.target.closest('[data-sheet-upload-files]');
+      if(chooseSheetFiles){qs('[data-missing-sheet-file]',chooseSheetFiles.closest('[data-sheet-editor]'))?.click();return;}
+      const marking=e.target.closest('[data-sheet-repeat],[data-sheet-box]');
+      if(marking){
+        const key=marking.dataset.sheetKey,isRepeat=marking.hasAttribute('data-sheet-repeat');
+        const index=Number(isRepeat?marking.dataset.sheetRepeat:marking.dataset.sheetBox);
+        try{ensureSheetReviewsComplete(key);}catch(error){toast(error.message,'error');return;}
+        if(state.sheetCrop?.key===key)state.sheetCrop=null;
+        const stop=isRepeat&&state.sheetRepeatTarget?.key===key&&state.sheetRepeatTarget.index===index;
+        state.sheetRepeatTarget=isRepeat&&!stop?{key,index}:null;
+        state.sheetBoxTarget=stop?null:{key,index};
+        state.sheetActiveBox=null;state.sheetMarkTarget=null;
+        renderSheetSelected(key);
+        if(!stop)showSheetPreview(key);
+        return;
+      }
       const mark=e.target.closest('[data-sheet-mark]');if(mark){state.sheetMarkTarget={key:mark.dataset.sheetKey,index:Number(mark.dataset.sheetMark)};state.sheetBoxTarget=null;state.sheetRepeatTarget=null;renderSheetPreview(mark.dataset.sheetKey);return;}
       const undoMark=e.target.closest('[data-sheet-undo]');if(undoMark){const key=undoMark.dataset.sheetKey,index=Number(undoMark.dataset.sheetUndo),c=state.designSheetDrafts[key]?.[index];if(!c?.previewBoxes?.length)return;c.previewBoxes.pop();c.previewMarks?.pop();c.quantity=c.previewBoxes.length;if(!c.quantity){c.measureOptionId='';delete c.pendingMeasureOption;
         if(state.sheetRepeatTarget?.key===key&&state.sheetRepeatTarget.index===index){
@@ -6736,6 +7033,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       let funding;
       if(purchaseWanted)payload.printed=false;
       if(payload.kind==='sheet'){
+        ensureSheetReviewsComplete('detail');
         const problem=sheetMeasurementProblem('detail');if(problem)throw new Error(problem);
         const drafts=state.designSheetDrafts.detail||[];
         if(drafts.some(c=>!c.previewBoxes?.length||c.previewBoxes.length!==c.quantity))throw new Error('Marcá cada aparición de la plancha antes de guardar.');
@@ -6744,7 +7042,11 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         await saveStagedSheetDesigns('detail');
         for(const c of drafts){if(c.pendingMeasureOption){const saved=await api(`/api/admin/design-assets/${c.designAssetId}/measures`,{method:'POST',body:JSON.stringify({measureOptions:[c.pendingMeasureOption]})});state.designAssets=state.designAssets.map(a=>Number(a.id)===Number(c.designAssetId)?saved.item:a);c.measureOptionId=c.pendingMeasureOption.id;delete c.pendingMeasureOption;}}
         payload.components=sheetPayload('detail').components;
-      }const updated=await api(`/api/admin/design-assets/${state.activeDesignId}`,{method:'PATCH',body:JSON.stringify(payload)});if(purchaseWanted)await registerSheetPurchase(updated.item,'detail',funding);toast('Diseño actualizado','success');if(qs('#productionDialog')?.open){state.designAssets=state.designAssets.map(asset=>Number(asset.id)===Number(updated.item.id)?updated.item:asset);renderProductionDesignGallery();renderProductionSelectedDesigns();await refreshMockupPreview();}else await renderDesigns();qs('#designPreviewDialog')?.close();openDesignPreview(state.activeDesignId)}catch(err){toast(err.message,'error')}finally{state.designUploadBusy=false;e.target.disabled=false}return}
+      }const updated=await api(`/api/admin/design-assets/${state.activeDesignId}`,{method:'PATCH',body:JSON.stringify(payload)});if(purchaseWanted)await registerSheetPurchase(updated.item,'detail',funding);toast('Diseño actualizado','success');if(qs('#productionDialog')?.open){state.designAssets=state.designAssets.map(asset=>Number(asset.id)===Number(updated.item.id)?updated.item:asset);renderProductionDesignGallery();renderProductionSelectedDesigns();await refreshMockupPreview();}else if(state.view==='products'&&state.productInventoryView==='purchased'){
+        state.costingLoaded=false;
+        state.designAssets=state.designAssets.map(asset=>Number(asset.id)===Number(updated.item.id)?updated.item:asset);
+        await renderProducts();
+      }else await renderDesigns();qs('#designPreviewDialog')?.close();openDesignPreview(state.activeDesignId)}catch(err){toast(err.message,'error')}finally{state.designUploadBusy=false;e.target.disabled=false}return}
       if(e.target.id==='deleteDesignDetailBtn'){if(!state.activeDesignId)return;try{await refreshDesignAssetsForDelete();const block=designDeleteBlockReason(state.activeDesignId);if(block){toast(block,'error');return}if(!confirm('¿Eliminar este diseño de la biblioteca?'))return;await api(`/api/admin/design-assets/${state.activeDesignId}`,{method:'DELETE'});qs('#designPreviewDialog')?.close();state.activeDesignId=null;toast('Diseño eliminado','success');await renderDesigns()}catch(err){toast(err.message,'error')}return;}
       if(e.target.id==='shareFlyerDetailBtn'){const flyer=state.flyers.find(f=>Number(f.id)===Number(state.activeFlyerId));if(flyer)window.SalmosShare.open({flyer});return;}
       if(e.target.id==='saveFlyerDetailBtn'){if(!state.activeFlyerId)return;try{e.target.disabled=true;await api(`/api/admin/flyers/${state.activeFlyerId}`,{method:'PUT',body:JSON.stringify({title:qs('#flyerDetailTitle')?.value||'',public:Boolean(qs('#flyerDetailPublic')?.checked),sort_order:Number(qs('#flyerDetailSort')?.value)||0})});qs('#flyerDetailDialog')?.close();toast('Flyer actualizado','success');await renderFlyers()}catch(err){toast(err.message,'error')}finally{e.target.disabled=false}return}
@@ -6761,6 +7063,15 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         if(inventoryTab.getAttribute('aria-pressed')==='true'&&qs('#adminProductsTable,#purchasedMaterialsGrid'))return;
         state.productInventoryView=inventoryTab.dataset.productInventory;
         try{await renderProducts();}catch(error){toast(error.message,'error');}
+        return;
+      }
+      const purchasedSheet=e.target.closest('[data-open-purchased-sheet]');
+      if(purchasedSheet){await openPurchasedSheet(purchasedSheet.dataset.openPurchasedSheet);return;}
+      const editPurchasedSheet=e.target.closest('[data-edit-purchased-sheet]');
+      if(editPurchasedSheet){
+        const id=Number(editPurchasedSheet.dataset.editPurchasedSheet);
+        qs('#purchasedSheetDialog')?.close();
+        openDesignPreview(id);openDesignEdit();
         return;
       }
       const materialGallery=e.target.closest('[data-purchased-material-gallery]');
@@ -6983,6 +7294,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const canvas=e.target.closest?.('[data-sheet-canvas]');
       const key=canvas?.dataset.sheetCanvas,repeat=state.sheetRepeatTarget?.key===key?state.sheetRepeatTarget:null;
       const crop=state.sheetCrop?.key===key?state.sheetCrop:null;
+      const mark=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
       const target=repeat||(state.sheetBoxTarget?.key===key?state.sheetBoxTarget:null);
       if(viewport&&(e.button===1||e.button===0&&(e.shiftKey||(!target&&!crop&&!e.target.closest('button,[data-sheet-move]'))))){
         e.preventDefault();
@@ -6993,15 +7305,16 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       }
       if(!canvas||state.sheetMeasureBusy||state.designUploadBusy||e.button!==0)return;
       const problem=sheetMeasurementProblem(key);if(problem){toast(problem,'error');return;}
-      if(e.target.closest('[data-sheet-pin]')||e.target.closest('[data-sheet-scan-select]')&&!repeat&&!crop)return;
+      if(e.target.closest('[data-sheet-pin]')||e.target.closest('[data-sheet-scan-select]')&&!target&&!crop&&!mark)return;
       cancelSheetProposal(key);
       const active=e.target.closest('[data-sheet-move]'),edge=e.target.closest('[data-sheet-resize]');
       if(active){
         const rowIndex=Number(active.dataset.sheetRow),boxIndex=Number(active.dataset.sheetIndex),key=active.dataset.sheetKey;
         const cropOutline=active.hasAttribute('data-sheet-crop-outline')?crop:null;
-        const box=cropOutline?.box||state.designSheetDrafts[key]?.[rowIndex]?.previewBoxes?.[boxIndex];if(!box)return;
+        const proposal=active.hasAttribute('data-sheet-proposal-outline')?mark:null;
+        const box=cropOutline?.box||proposal?.box||state.designSheetDrafts[key]?.[rowIndex]?.previewBoxes?.[boxIndex];if(!box)return;
         e.preventDefault();e.stopPropagation();state.sheetResizeDrag={canvas,pointerId:e.pointerId,element:active,crop:cropOutline,
-          pin:cropOutline?null:canvas.querySelector(`[data-sheet-pin="${rowIndex}"][data-pin-index="${boxIndex}"]`),
+          proposal,pin:cropOutline||proposal?null:canvas.querySelector(`[data-sheet-pin="${rowIndex}"][data-pin-index="${boxIndex}"]`),
           key,rowIndex,boxIndex,start:sheetBoxCoordinate(canvas,e),original:{...box},box:{...box},edge:edge?.dataset.sheetResize||'move'};
         canvas.setPointerCapture?.(e.pointerId);return;
       }
@@ -7023,7 +7336,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         let x=old.x,y=old.y,right=old.x+old.width,bottom=old.y+old.height;
         if(edge==='move'){x=Math.max(0,Math.min(1-old.width,x+dx));y=Math.max(0,Math.min(1-old.height,y+dy));right=x+old.width;bottom=y+old.height}
         else{if(edge.includes('w'))x=Math.max(0,Math.min(right-.005,x+dx));if(edge.includes('e'))right=Math.min(1,Math.max(x+.005,right+dx));if(edge.includes('n'))y=Math.max(0,Math.min(bottom-.005,y+dy));if(edge.includes('s'))bottom=Math.min(1,Math.max(y+.005,bottom+dy))}
-        const box={x,y,width:right-x,height:bottom-y,rotation:old.rotation||0};resize.box=box;
+        const box={x,y,width:right-x,height:bottom-y,rotation:old.rotation||0};resize.box=box;resize.moved=true;
         Object.assign(resize.element.style,{left:x*100+'%',top:y*100+'%',width:box.width*100+'%',height:box.height*100+'%'});
         if(resize.pin)Object.assign(resize.pin.style,{left:(x+box.width/2)*100+'%',top:(y+box.height/2)*100+'%'});
         return;
@@ -7037,8 +7350,14 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const resize=state.sheetResizeDrag;
       if(resize?.pointerId===e.pointerId){
         state.sheetResizeDrag=null;
+        if(!resize.moved)return;
         try{
           if(resize.crop)setSheetCropBox(resize.crop,resize.box);
+          else if(resize.proposal){
+            if(state.sheetPendingMark!==resize.proposal)return;
+            validateSheetMark(resize.key,resize.box,resize.proposal.replaced);
+            resize.proposal.box=resize.box;renderSheetPreview(resize.key);
+          }
           else resizeSheetBox(resize.key,resize.rowIndex,resize.boxIndex,resize.box);
         }catch(error){renderSheetPreview(resize.key);toast(error.message,'error');}
         return;
@@ -7047,13 +7366,13 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       state.sheetDrawStart=null;drag.overlay.remove();
       const point=sheetBoxCoordinate(drag.canvas,e);
       if(drag.repeat&&drag.repeat!==state.sheetRepeatTarget)return;
-      if(drag.repeat&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<4){
-        addRepeatedSheetBox(drag.key,drag.index,point);
+      if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<4){
+        void proposeSheetBoxAtPoint(drag,point);
         return;
       }
       const box={x:Math.min(drag.point.x,point.x),y:Math.min(drag.point.y,point.y),width:Math.abs(drag.point.x-point.x),height:Math.abs(drag.point.y-point.y)};
       if(box.width<.005||box.height<.005){toast('Arrastrá desde una esquina hasta la opuesta para medir el diseño.','error');return;}
-      if(drag.crop){setSheetCropBox(drag.crop,box);return;}
+      if(drag.crop){try{setSheetCropBox(drag.crop,box);}catch(error){toast(error.message,'error');}return;}
       const seed=drag.repeat&&state.designSheetDrafts[drag.key]?.[drag.index]?.previewBoxes?.[0];
       const image=seed&&qs('img',drag.canvas);
       if(seed){

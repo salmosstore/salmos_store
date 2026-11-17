@@ -368,10 +368,12 @@
     target.width = swapped ? height : width;
     target.height = swapped ? width : height;
     const context = target.getContext('2d');
+    context.save();
     context.imageSmoothingQuality='high';
     context.translate(target.width/2,target.height/2);
     context.rotate(rotation*Math.PI/180);
     context.drawImage(image,rect.left,rect.top,sourceWidth,sourceHeight,-width/2,-height/2,width,height);
+    context.restore();
   }
 
   function signature(image, rect, rotation = 0) {
@@ -478,22 +480,36 @@
     }
     return difference/(ink||1)+aspectError*.35;
   }
-  function match(signatures, candidates) {
+  function comparablePrint(reference,template){
+    let shared=0,union=0,colorError=0;
+    for(let i=0;i<reference.data.length;i+=4){
+      const a=reference.data[i+3],b=template.data[i+3],weight=Math.min(a,b);
+      shared+=weight;union+=Math.max(a,b);
+      if(weight<22)continue;
+      for(let channel=0;channel<3;channel++){
+        colorError+=weight*Math.abs(reference.data[i+channel]/a-template.data[i+channel]/b);
+      }
+    }
+    return union>0&&shared/union>=.83&&colorError/(3*(shared||1))<=.16;
+  }
+  function match(signatures, candidates, {strict=false}={}) {
     const scores=[];
     for (const candidate of candidates) {
       let score=Infinity,rotation=0;
       for (let i=0;i<signatures.length;i++) {
         const reference=signatures[i],template=candidate.signature;
-        const original=signatureDistance(reference,template);
+        const compare=design=>strict&&!comparablePrint(reference,design)?Infinity:signatureDistance(reference,design);
+        const original=compare(template);
         const distance=template.alternate?
-          Math.min(original<.035?original:Infinity,signatureDistance(reference,template.alternate)+.012):original;
+          Math.min(original<.035?original:Infinity,compare(template.alternate)+.012):original;
         if (distance<score) {score=distance;rotation=i*90;}
       }
       if (Number.isFinite(score)) scores.push({id:candidate.id,score,rotation});
     }
     scores.sort((a,b)=>a.score-b.score);
     const best=scores[0];
-    return best&&best.score<.19&&(!scores[1]||scores[1].score-best.score>.025)?best:null;
+    const limit=strict ? .115 : .19,margin=strict ? .04 : .025;
+    return best&&best.score<limit&&(!scores[1]||scores[1].score-best.score>margin)?best:null;
   }
 
   const occurrenceSamples=new WeakMap();
@@ -523,7 +539,7 @@
     const work=canvas(Math.round(width*scale),Math.round(height*scale));
     work.getContext('2d').drawImage(image,0,0,work.width,work.height);
     const result=detect(work,size).then(found=>({
-      work,candidates:found.candidates,templatesBySeed:new WeakMap(),fingerprintsByRect:new WeakMap()
+      work,boxes:found.boxes,candidates:found.candidates,templatesBySeed:new WeakMap(),fingerprintsByRect:new WeakMap()
     }));
     occurrenceSamples.set(image,{key,result});
     try{return await result;}
@@ -578,7 +594,7 @@
       overlapArea(row.rect,best.rect)<.7*Math.max(boxArea(row.rect),boxArea(best.rect))))return null;
     return {...normalizedBox(best.rect,width,height),rotation:((Number(seed.rotation)||0)+best.rotation)%360};
   }
-  async function findDesignOnSheet(image,size,template,used,signal){
+  async function findDesignOnSheet(image,size,template,used,signal,point=null){
     const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
     if(!width||!height||!template)return null;
     const sample=await occurrenceSample(image,size),{work,candidates}=sample;
@@ -587,6 +603,7 @@
     for(let i=0;i<candidates.length;i++){
       if(i%30===0){signal?.throwIfAborted();await nextFrame();}
       const rect=candidates[i],aspect=rectWidth(rect)/rectHeight(rect);
+      if(point&&!regionContains(rect,point.x*work.width,point.y*work.height,2))continue;
       if(rectWidth(rect)/work.width<.005||rectHeight(rect)/work.height<.005||!freeOccurrence(occupied,rect))continue;
       const agrees=value=>Math.min(Math.abs(Math.log(value/aspect)),Math.abs(Math.log(value*aspect)))<=.21;
       if(!agrees(template.aspect)&&!(template.alternate&&agrees(template.alternate.aspect)))continue;
@@ -596,6 +613,32 @@
     signal?.throwIfAborted();
     const [best]=confirmOccurrences(image,work,hits,templates,occupied,6);
     return best&&best.score<.185?{...normalizedBox(best.rect,width,height),rotation:best.rotation}:null;
+  }
+  function regionContains(rect,x,y,padding=0){
+    return x>=rect.left-padding&&x<=rect.right+padding&&y>=rect.top-padding&&y<=rect.bottom+padding;
+  }
+  async function proposeRegionAtPoint(image,size,point,used,aspect=0){
+    const {work,boxes,candidates}=await occurrenceSample(image,size);
+    const x=point.x*work.width,y=point.y*work.height;
+    const occupied=used.map(box=>normalizedRect(box,work.width,work.height));
+    if(occupied.some(rect=>regionContains(rect,x,y)))return null;
+    const valid=rect=>regionContains(rect,x,y,3)&&freeOccurrence(occupied,rect)&&
+      rectWidth(rect)/work.width>=.005&&rectHeight(rect)/work.height>=.005;
+    const fitting=[...boxes,...candidates].filter(valid);
+    if(!fitting.length)return null;
+    const leaf=boxes.find(valid),leafSet=new Set(boxes);
+    const rank=rect=>{
+      const ratio=rectWidth(rect)/rectHeight(rect),area=boxArea(rect);
+      const error=aspect>0?Math.min(Math.abs(Math.log(ratio/aspect)),Math.abs(Math.log(ratio*aspect))):0;
+      const growsPastLeaf=leaf&&area>boxArea(leaf)*2.6?0.55:0;
+      const distance=Math.hypot((x-(rect.left+rect.right)/2)/rectWidth(rect),(y-(rect.top+rect.bottom)/2)/rectHeight(rect));
+      return error+distance*.24+growsPastLeaf+(leafSet.has(rect)?0:.12);
+    };
+    const rect=fitting.sort((a,b)=>rank(a)-rank(b))[0];
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    const raw=normalizedBox(rect,work.width,work.height);
+    const tight=inkBounds(image,normalizedRect(raw,width,height));
+    return tight?{...normalizedBox(tight,width,height),rotation:0}:null;
   }
   function pngDensityChunk(x,y){
     const chunk=new Uint8Array(21),view=new DataView(chunk.buffer);
@@ -623,23 +666,42 @@
     }
     return new Blob([blob.slice(0,33),density,blob.slice(33)],{type:'image/png'});
   }
-  async function cropArtwork(image,box,size){
+  function cropArtworkCanvas(image,box){
     const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
-    if(!width||!height||!(size.width>0&&size.height>0))throw new Error('Elegí una plancha con medidas válidas.');
+    if(!width||!height)throw new Error('Abrí la imagen de la plancha para recortar.');
     const rect=normalizedRect(box,width,height),w=rectWidth(rect),h=rectHeight(rect);
     if(w<1||h<1)throw new Error('Marcá el contorno completo de la estampa.');
-    const work=canvas(w,h),context=work.getContext('2d');
+    const work=canvas(w,h),rotation=Number(box.rotation)||0;
+    drawRegion(work,image,rect,rotation);
+    return {canvas:work,box:{...normalizedBox(rect,width,height),rotation}};
+  }
+  function rotateArtworkCanvas(work,angle){
+    const rotated=canvas(work.height,work.width),context=rotated.getContext('2d');
+    context.save();
     context.imageSmoothingEnabled=false;
+    context.translate(angle>0?rotated.width:0,angle>0?0:rotated.height);
+    context.rotate(angle*Math.PI/180);
+    context.drawImage(work,0,0);
+    context.restore();
+    return rotated;
+  }
+  async function cropArtwork(image,box,size,edited=null){
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    if(!(size.width>0&&size.height>0))throw new Error('Elegí una plancha con medidas válidas.');
+    const crop=edited?{canvas:edited,box}:cropArtworkCanvas(image,box);
+    const work=crop.canvas;
     try{
-      context.drawImage(image,rect.left,rect.top,w,h,0,0,w,h);
       const png=await new Promise((resolve,reject)=>work.toBlob(blob=>
         blob?resolve(blob):reject(new Error('No se pudo preparar el PNG de la estampa.')),'image/png'));
+      const x=Math.round(width/size.width*100),y=Math.round(height/size.height*100);
+      const swap=(Number(crop.box.rotation)||0)%180!==0;
       return {
-        blob:await applyPngDensity(png,Math.round(width/size.width*100),Math.round(height/size.height*100)),
-        box:normalizedBox(rect,width,height)
+        blob:await applyPngDensity(png,swap?y:x,swap?x:y),
+        box:crop.box
       };
-    }finally{work.width=0;}
+    }finally{if(!edited)work.width=0;}
   }
 
-  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,assetSignature,match,selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,cropArtwork};
+  window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,assetSignature,match,
+    selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,proposeRegionAtPoint,cropArtworkCanvas,rotateArtworkCanvas,cropArtwork};
 })();
