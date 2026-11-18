@@ -548,7 +548,10 @@
     return inventoryStockToolbar(`<input class="input" id="adminProductSearch" type="search" aria-label="Buscar materia prima"
       placeholder="Buscar materia prima…" value="${escapeHtml(state.purchasedMaterialSearch||'')}">`,
     f,fields,colors,sorts,f.group,groups,'',
-    '<div class="unified-product-actions"><button type="button" class="icon-btn" id="newPurchaseBtn" title="Nueva compra" aria-label="Nueva compra"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i></button></div>');
+    `<div class="unified-product-actions">
+      ${loaded?`<button type="button" class="icon-btn" data-review-material-stock aria-label="Revisar stock de materia prima" title="Revisar stock de materia prima"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></button>`:''}
+      <button type="button" class="icon-btn" id="newPurchaseBtn" title="Nueva compra" aria-label="Nueva compra"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i></button>
+    </div>`);
   }
   async function renderPurchasedProducts(sequence){
     const host=qs('#adminContent');
@@ -574,6 +577,26 @@
   function materialStockLabel(material){
     const stock=(Number(material.stock_qty)||0).toLocaleString('es-AR',{maximumFractionDigits:3});
     return stock+' '+(material.unit==='meter'?'m':'u');
+  }
+  function materialStockFacts(materials){
+    if(!materials.length||materials.some(material=>!material.stock_summary))return null;
+    const sums={purchased:0,reserved:0,produced:0,cash:0,review:false};
+    for(const material of materials){
+      for(const key of ['purchased','reserved','produced','cash'])sums[key]+=Number(material.stock_summary[key])||0;
+      sums.review||=Boolean(material.stock_summary.review);
+    }
+    return sums;
+  }
+  function materialStockFactsHtml(material,summary){
+    if(!summary)return '';
+    const quantity=value=>materialStockLabel({...material,stock_qty:value});
+    const facts=[
+      `Compras ${quantity(summary.purchased)}`,
+      summary.reserved>0?`Reservado ${quantity(summary.reserved)}`:'',
+      summary.produced>0?`Usado en Producción ${quantity(summary.produced)}`:'',
+      summary.cash>0?`Salidas por Caja ${quantity(summary.cash)}`:''
+    ].filter(Boolean);
+    return `<small class="material-stock-facts">${facts.join(' · ')}</small>`;
   }
   function materialCardPhotos(material){
     if(materialIsGarment(material.material_type)){
@@ -621,9 +644,10 @@
       const size=normalizeCatalogSize(variant.size)||'Único';
       stockBySize.set(size,(stockBySize.get(size)||0)+(Number(variant.stock_qty)||0));
     }
-    const quantities=sized?`<table class="purchased-stock-table"><thead><tr><th scope="col">Talle</th><th scope="col">Físico</th></tr></thead>
+    const facts=materialStockFacts(group.variants);
+    const quantities=sized?`<table class="purchased-stock-table"><thead><tr><th scope="col">Talle</th><th scope="col">Disponible</th></tr></thead>
       <tbody>${[...stockBySize].map(([size,quantity])=>`<tr><th scope="row">${escapeHtml(size)}</th><td>${materialStockLabel({...group,stock_qty:quantity})}</td></tr>`).join('')}</tbody></table>`:
-      `<small>Stock físico · <b>${materialStockLabel(group)}</b></small>`;
+      `<small>Stock disponible · <b>${materialStockLabel(group)}</b></small>`;
     return `<article class="unified-product-card" data-stock-group="${key}">
       <header><h3 title="${escapeHtml(title)}">${escapeHtml(title)}</h3></header>
       <div class="unified-product-main">
@@ -638,9 +662,11 @@
           <div class="material-feature-chips">${materialFeatureChips(itemFeatures(group))}</div>
           ${details?`<small>${escapeHtml(details)}</small>`:''}
           ${quantities}
+          ${materialStockFactsHtml(group,facts)}
+          ${facts?.review?`<button type="button" class="material-stock-review-link" data-open-material-purchases="${group.id}">Revisar diferencia</button>`:''}
           <aside class="unified-product-card-actions">
             ${photo?`<button type="button" class="icon-btn" data-purchased-material-gallery="${group.id}" aria-label="Ver galería completa" title="Ver galería completa"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>`:''}
-            <button type="button" class="icon-btn" data-open-material-purchases="${group.id}" aria-label="Ver compras y editar" title="Ver compras y editar"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+            <button type="button" class="icon-btn" data-open-material-purchases="${group.id}" aria-label="Ver compras y movimientos" title="Ver compras y movimientos"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
           </aside>
           <small>Costo promedio · <b>${cost} / ${group.unit==='meter'?'m':'u'}</b></small>
         </div>
@@ -820,18 +846,69 @@
         `<img class="checkerboard" src="${escapeHtml(photo.original||photo.url)}" alt="${escapeHtml(photo.name)}">`).join('')}</div>`;
     dialog.showModal();
   }
-  function openPurchasedMaterialSources(id){
-    const group=state.purchasedMaterialGroups?.get(id);
-    if(!group)return;
-    const dialog=ensureAdminDialog('purchasedMaterialDialog',productionMaterialLabel(group));
-    qs('.dialog-body',dialog).innerHTML=group.variants.map(material=>`<section class="material-purchase-variant">
-      <div><strong>${escapeHtml(material.size||material.name||materialTypeLabel(material.material_type))}</strong><small>Stock ${materialStockLabel(material)} · Costo promedio ${money(material.average_cost_cents)} / ${material.unit==='meter'?'m':'u'}</small></div>
-      ${(material.purchase_refs||[]).map(ref=>`<div class="material-purchase-ref"><div><strong>${escapeHtml(ref.supplier||'Compra')} · #${Number(ref.id)}</strong>
-        <small>${escapeHtml(String(ref.date||'').slice(0,10).split('-').reverse().join('/'))} · ${materialStockLabel({...material,stock_qty:ref.quantity})} · ${money(ref.unitPrice)} / ${material.unit==='meter'?'m':'u'}</small></div>
-        <button class="btn btn-ghost" type="button" data-edit-purchased-material="${Number(ref.id)}" data-purchased-source-item="${Number(ref.itemId)}">Editar en Compras</button>
-      </div>`).join('')}
-    </section>`).join('');
+  function openPurchasedStockReview(){
+    const rows=state.purchasedMaterials||[];
+    const review=rows.filter(material=>material.stock_summary?.review);
+    const exhausted=rows.filter(material=>Number(material.stock_qty)<=0&&!material.stock_summary?.review);
+    const dialog=ensureAdminDialog('purchasedMaterialStockDialog','Stock de materia prima');
+    const section=(title,materials,empty)=>`<section class="material-stock-review-group"><h3>${title}</h3>${materials.length?
+      materials.map(material=>`<button type="button" class="material-stock-review-row" data-review-material-variant="${Number(material.id)}">
+        <span><strong>${escapeHtml(productionMaterialLabel(material))}</strong>${materialStockFactsHtml(material,material.stock_summary)}</span>
+        <strong>${materialStockLabel(material)}</strong><i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+      </button>`).join(''):`<p class="muted">${empty}</p>`}</section>`;
+    qs('.dialog-body',dialog).innerHTML=section('Saldos para revisar',review,'Los saldos coinciden con los movimientos registrados.')+
+      section('Sin stock disponible',exhausted,'Todas las materias primas restantes tienen stock disponible.');
     dialog.showModal();
+  }
+  function materialStockMovementsHtml(material,movements){
+    const entries=movements.filter(movement=>Number(movement.material_id)===Number(material.id));
+    const labels={reserved:'Reservado para Producción',produced:'Usado en Producción',
+      gift:'Regalo',sale:'Venta de materia prima',sale_input:'Insumo usado en una venta'};
+    if(!entries.length)return '<small class="muted">Sin salidas registradas para este artículo.</small>';
+    return `<div class="material-stock-movements">
+      <h4>Salidas registradas</h4>
+      ${entries.map(entry=>`<div class="material-stock-movement"><div>
+        <strong>${escapeHtml(entry.description||entry.code||'Movimiento #'+entry.id)}</strong>
+        <small>${labels[entry.kind]||'Salida'}${entry.color||entry.size?' · '+escapeHtml([entry.color,entry.size].filter(Boolean).join(' · ')):''}
+        ${entry.occurred_at?' · '+adminDateTimeHtml(entry.occurred_at):''}</small>
+      </div><b>− ${materialStockLabel({...material,stock_qty:entry.quantity})}</b></div>`).join('')}
+      ${Number(entries[0].total)>entries.length?`<small class="muted">Últimas ${entries.length} de ${Number(entries[0].total)} salidas.</small>`:''}
+    </div>`;
+  }
+  async function openPurchasedMaterialSources(id,single=false){
+    const group=single?null:state.purchasedMaterialGroups?.get(id);
+    const material=group||state.purchasedMaterials?.find(row=>Number(row.id)===id);
+    if(!material)return;
+    const variants=group?.variants||[material],dialog=ensureAdminDialog('purchasedMaterialDialog',productionMaterialLabel(material));
+    const body=qs('.dialog-body',dialog);
+    body.innerHTML=variants.map(variant=>{
+      const facts=variant.stock_summary;
+      const difference=facts?.review?(Math.abs(Number(facts.recorded)-Number(variant.stock_qty))>=0.0005?
+        `Los movimientos registrados dan ${materialStockLabel({...variant,stock_qty:facts.recorded})}. Revisá la diferencia con el saldo actual.`:
+        'El saldo de esta materia prima está por debajo de cero.'):'';
+      return `<section class="material-purchase-variant">
+        <div><strong>${escapeHtml(variant.size||variant.name||materialTypeLabel(variant.material_type))}</strong>
+        <small>Disponible ${materialStockLabel(variant)} · Costo promedio ${money(variant.average_cost_cents)} / ${variant.unit==='meter'?'m':'u'}</small></div>
+        ${materialStockFactsHtml(variant,facts)}
+        ${difference?`<p class="material-stock-difference">${difference}</p>`:''}
+        ${(variant.purchase_refs||[]).map(ref=>`<div class="material-purchase-ref"><div><strong>${escapeHtml(ref.supplier||'Compra')} · #${Number(ref.id)}</strong>
+          <small>${escapeHtml(String(ref.date||'').slice(0,10).split('-').reverse().join('/'))} · + ${materialStockLabel({...variant,stock_qty:ref.quantity})} · ${money(ref.unitPrice)} / ${variant.unit==='meter'?'m':'u'}</small></div>
+          <button class="btn btn-ghost" type="button" data-edit-purchased-material="${Number(ref.id)}" data-purchased-source-item="${Number(ref.itemId)}">Editar en Compras</button>
+        </div>`).join('')}
+        <div data-material-stock-movements="${Number(variant.id)}" class="material-stock-activity" role="status">Cargando salidas…</div>
+      </section>`;
+    }).join('');
+    const hosts=qsa('[data-material-stock-movements]',body);
+    dialog.showModal();
+    try{
+      const ids=variants.map(variant=>Number(variant.id));
+      const chunks=Array.from({length:Math.ceil(ids.length/100)},(_,i)=>ids.slice(i*100,i*100+100));
+      const batches=await Promise.all(chunks.map(list=>api(`/api/admin/materials/stock-movements?ids=${list.join(',')}`,{cache:'no-store'})));
+      const movements=batches.flatMap(batch=>batch.items||[]);
+      for(const [index,host] of hosts.entries())if(host.isConnected)host.innerHTML=materialStockMovementsHtml(variants[index],movements);
+    }catch(error){
+      for(const host of hosts)if(host.isConnected)host.textContent='No se pudieron consultar las salidas. '+error.message;
+    }
   }
   async function editPurchasedMaterial(button){
     const id=Number(button.dataset.editPurchasedMaterial);
@@ -839,6 +916,7 @@
     if(!item)throw new Error('Compra no encontrada.');
     await openPurchaseDialog(item,'purchased-products');
     qs('#purchasedMaterialDialog')?.close();
+    qs('#purchasedMaterialStockDialog')?.close();
     qs('#purchasedSheetDialog')?.close();
     const index=state.purchaseItems.findIndex(row=>Number(row.sourceItemId)===Number(button.dataset.purchasedSourceItem));
     requestAnimationFrame(()=>{
@@ -2233,7 +2311,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   function productionCatalogData(){
     if(window.SalmosBook.isBookType(qs('#productionMaterialType')?.value))return {version:1,materialType:window.SalmosBook.BOOK,materialClass:'',fit:'',colors:[],sizes:[''],book:structuredClone(window.SalmosBook.current())};
     const primary=productionPrimaryMaterial(),type=qs('#productionMaterialType')?.value||'shirt',colors=uniqOptions([primary?.color,...Object.entries(state.productionMountViews||{}).filter(([key,view])=>mockupViewHasOutput(view,key)).map(([,view])=>mockupBaseAsset(view.baseId)).filter(asset=>asset&&productionPhotoMatchesMaterial(asset,primary)).map(asset=>garmentPhotoMembership(asset).find(row=>row.key===garmentFamilyFields(primary||{})?.key)?.color||asset.color)].filter(Boolean)),klass=(productionVirtualStock()?state.productionAudiences?.length===1&&state.productionAudiences[0]==='Kids'?'NIÑOS':primary?.material_class&&!kidClass25(primary.material_class)?primary.material_class:'ADULTOS':primary?.material_class)||'ADULTOS',sizes=materialIsGarment(type)?uniqOptions(purchaseSizeOptions({materialClass:klass})):[''];
-    return {version:1,materialType:type,materialClass:klass,fit:primary?.fit||state.productionEditingProduct?.fit||'',colors,sizes:sizes.length?sizes:['S','M','L','XL','XXL']};
+    return {version:1,materialType:type,materialClass:klass,fit:primary?.fit||state.productionEditingProduct?.fit||state.productionEditingProduct?.mount?.project?.catalog?.fit||'',colors,sizes:sizes.length?sizes:['S','M','L','XL','XXL']};
   }
 
   function productionCategoryGuess(type){const names={shirt:['remera','remeras'],chomba:['chomba','chombas'],hoodie:['buzo','buzos'],cap:['gorra','gorras'],mug:['taza','tazas'],glass:['vaso','vasos'],thermos:['termo','termos'],tumbler:['vaso','vasos','termo','termos'],bag:['bolso','bolsos']};const words=names[type]||[];return state.categories.find(c=>words.some(w=>String(c.name||'').toLowerCase().includes(w)))||null;}
@@ -4915,7 +4993,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     const capMaterialId=!bookMode&&!qs('#productionCapPriceBox')?.classList.contains('hidden')?Number(qs('#mockupCapMaterialSelect')?.value)||0:0,categoryId=Number(cat.id),recipe={baseMaterialType:state.productionMaterialsSelected.length||state.productionVirtualMaterial?'':state.productionEditingProduct?.recipe?.base_material_type||'',baseMaterialName:state.productionMaterialsSelected.length||state.productionVirtualMaterial?'':state.productionEditingProduct?.recipe?.base_material_name||'',wastePercent:Math.max(0,Number(qs('#productionWaste')?.value)||0),extraCostCents:bookMode?window.SalmosBook.plan().inkCents:Number(state.productionEditingProduct?.recipe?.extra_cost_cents)||0,designs:(bookMode?[]:productionPhysicalDesigns()).map(x=>({designAssetId:Number(x.designAssetId),quantity:Number(x.quantity)||1,widthCm:Number(x.widthCm)||0,heightCm:Number(x.heightCm)||0,measureOptionId:x.measureOptionId||'',measureLabel:x.measureLabel||'',printSide:x.printSide||'front',printMaterialType:x.printMaterialType||undefined,unitPrintCostCents:productionDesignUnitCost(x,state.designAssets.find(d=>Number(d.id)===Number(x.designAssetId)))})),materials:[...state.productionMaterialsSelected.filter(x=>!productionVirtualStock()||state.materials.find(m=>Number(m.id)===Number(x.materialId))?.material_type!==type).map(x=>({materialId:Number(x.materialId),quantity:Number(x.quantity)||1})),...(capMaterialId?[{materialId:capMaterialId,quantity:1}]:[])]};
     const variant={color:primary?.color||'',size:materialIsGarment(type)?(primary?.size||''):'',stock:0,stockKind,sku:''};
     const catalog=productionCatalogData(),variants=productionVirtualStock()?(catalog.colors.length?catalog.colors:['']).flatMap(color=>catalog.sizes.map(size=>({color,size,stock:0,stockKind:'to_stock',virtualStock:100,sku:''}))):[variant];if(!productionVirtualStock()&&materialIsGarment(type))variants.push(...catalog.sizes.filter(size=>size!==variant.size).map(size=>({color:variant.color,size,stock:0,stockKind:'untracked',virtualStock:100,sku:''})));
-    const payload={name,production_catalog:catalog,show_all_sizes:1,publication_variant:qs('#productionPublicationVariant')?.value.trim()||'',category_id:categoryId,status,price_cents:cost.sale,compare_at_cents:0,cost_cents:cost.unitCost,recipe,short_description:qs('#productionDescription')?.value||'',meaning_text:qs('#productionMeaning')?.value||'',verse_text:qs('#productionVerse')?.value||'',verse_reference:qs('#productionVerseReference')?.value||'',fit:primary?.fit||'',audience:window.SalmosAudience.serialize(state.productionAudiences||[]),sale_mode:'stock',inventory_stage:'to_print',garment_ready:1,print_ready:bookMode||state.productionDesignsSelected.length?1:0,capacity_ml:Number(qs('#productionCapacity')?.value)||Number(primary?.capacity_ml)||0,is_new:qs('#productionIsNew')?.checked?1:0,is_featured:qs('#productionFeatured')?.checked?1:0,is_bestseller:qs('#productionBestseller')?.checked?1:0,weight_grams:Number(qs('#productionWeight')?.value)||0,height_cm:Number(qs('#productionHeight')?.value)||0,width_cm:Number(qs('#productionWidth')?.value)||0,depth_cm:Number(qs('#productionDepth')?.value)||0,variants};
+    const payload={name,production_catalog:catalog,show_all_sizes:1,publication_variant:qs('#productionPublicationVariant')?.value.trim()||'',category_id:categoryId,status,price_cents:cost.sale,compare_at_cents:0,cost_cents:cost.unitCost,recipe,short_description:qs('#productionDescription')?.value||'',meaning_text:qs('#productionMeaning')?.value||'',verse_text:qs('#productionVerse')?.value||'',verse_reference:qs('#productionVerseReference')?.value||'',fit:catalog.fit,audience:window.SalmosAudience.serialize(state.productionAudiences||[]),sale_mode:'stock',inventory_stage:'to_print',garment_ready:1,print_ready:bookMode||state.productionDesignsSelected.length?1:0,capacity_ml:Number(qs('#productionCapacity')?.value)||Number(primary?.capacity_ml)||0,is_new:qs('#productionIsNew')?.checked?1:0,is_featured:qs('#productionFeatured')?.checked?1:0,is_bestseller:qs('#productionBestseller')?.checked?1:0,weight_grams:Number(qs('#productionWeight')?.value)||0,height_cm:Number(qs('#productionHeight')?.value)||0,width_cm:Number(qs('#productionWidth')?.value)||0,depth_cm:Number(qs('#productionDepth')?.value)||0,variants};
     await ensureProductionPreviewMedia();
     let productId=Number(editing?.id||state.productionCreatedProductId)||0;
     if(!productId){
@@ -6322,9 +6400,14 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     const ordered=[...options].sort((a,b)=>distance(a)-distance(b));
     const size=sheetSize(mark.key),price=item=>printMoney(proportionalPrintCost(item.widthCm,item.heightCm,size.width,size.height,sheetCostCents(mark.key))??0);
     body.innerHTML=`<div class="sheet-measure-match">
-      ${detection?`<figure><img class="checkerboard" alt="Recorte de la plancha" src="${escapeHtml(detection.thumb)}"><figcaption>En la plancha · ${detectedSizeLabel(option)} · ${price(option)}</figcaption></figure>`:''}
-      <figure><span class="sheet-artwork-tile">${designSmallImage(asset)}${sheetArtworkZoomHtml(asset,mark.key)}</span>
-        <figcaption>${detection?'Diseño de la biblioteca':'Recuadro · '+detectedSizeLabel(option)}</figcaption></figure>
+      ${detection?`<figure><div class="sheet-match-preview checkerboard"><img alt="Recorte de la plancha" src="${escapeHtml(detection.thumb)}"></div>
+        <figcaption>En la plancha · ${detectedSizeLabel(option)} · ${price(option)}</figcaption></figure>`:''}
+      <figure><div class="sheet-match-preview sheet-artwork-tile checkerboard" ${designVisualAttrs(asset)}>
+          ${String(asset.mime_type||'').startsWith('image/')?
+            `<img crossorigin="use-credentials" src="${escapeHtml(asset.localPreview||apiUrl('/api/admin/design-assets/'+Number(asset.id)+'/file?display=1'))}" alt="${escapeHtml(name)}" decoding="async">`:
+            '<span>Archivo</span>'}
+          ${sheetArtworkZoomHtml(asset,mark.key)}
+        </div><figcaption>Diseño de la biblioteca${detection?'':' · Recuadro '+detectedSizeLabel(option)}</figcaption></figure>
     </div>
     ${ordered.length?`<fieldset class="sheet-saved-measures"><legend>Medidas del diseño</legend>
       ${ordered.map((item,index)=>`<label><input type="radio" name="sheet-match-measure" value="${escapeHtml(item.id)}" ${index===0?'checked':''}>
@@ -7605,8 +7688,13 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       }
       const materialGallery=e.target.closest('[data-purchased-material-gallery]');
       if(materialGallery){openPurchasedMaterialGallery(Number(materialGallery.dataset.purchasedMaterialGallery));return;}
-      const purchases=e.target.closest('[data-open-material-purchases]');
-      if(purchases){openPurchasedMaterialSources(Number(purchases.dataset.openMaterialPurchases));return;}
+      if(e.target.closest('[data-review-material-stock]')){openPurchasedStockReview();return;}
+      const purchases=e.target.closest('[data-open-material-purchases],[data-review-material-variant]');
+      if(purchases){
+        const {openMaterialPurchases,reviewMaterialVariant}=purchases.dataset;
+        await openPurchasedMaterialSources(Number(openMaterialPurchases??reviewMaterialVariant),reviewMaterialVariant!==undefined);
+        return;
+      }
       const editPurchased=e.target.closest('[data-edit-purchased-material]');
       if(editPurchased){
         editPurchased.disabled=true;

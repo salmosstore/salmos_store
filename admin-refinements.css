@@ -971,11 +971,29 @@ body #adminContent .unified-product-toolbar > .product-stock-summary {
 body .sheet-preview-pin:not(.is-highlighted):not(.is-waste) { background: #69517d; border-color: #dec6ef; }
 body .sheet-preview-pin.is-highlighted { background: #ffc869; color: #2b1525; border-color: #fff7cf; }
 body .sheet-preview-pin.is-waste:not(.is-highlighted) { background: #952446; border-color: #ffd4de; }
-.sheet-measure-match, .sheet-new-artwork-top, .sheet-crop-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.sheet-new-artwork-top, .sheet-crop-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .sheet-measure-match figure, .sheet-new-artwork-top figure { margin: 0; position: relative; display: grid; gap: 5px; }
-.sheet-measure-match figure { flex: 1 1 130px; }
+#sheetMeasureChoiceDialog { width: min(1320px, calc(100vw - 24px)) !important; }
+.sheet-measure-match { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
+.sheet-measure-match figure { min-width: 0; align-content: start; }
 .sheet-measure-match figcaption { font-size: .82rem; }
-.sheet-measure-match img, .sheet-measure-match .design-small-image { width: 100%; height: clamp(96px, 21vh, 200px); object-fit: contain; }
+.sheet-match-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: clamp(160px, 42dvh, 440px);
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.sheet-match-preview > img { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+.sheet-match-preview .sheet-artwork-zoom { opacity: 1; }
+@media (max-width: 560px) {
+  .sheet-measure-match { gap: 6px; }
+  .sheet-match-preview { height: clamp(112px, 30dvh, 260px); padding: 4px; }
+}
 .sheet-saved-measures { display: grid; gap: 5px; margin: 9px 0; padding: 7px; border: 1px solid var(--line); border-radius: 8px; }
 .sheet-saved-measures label { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 6px; align-items: center; cursor: pointer; }
 .sheet-measure-actions { flex-wrap: wrap; padding: 8px 0 0; }
@@ -1019,3 +1037,43 @@ body #productStockDialog .unified-product-card > header { display: flex !importa
 .movement-review-line small { display: block; color: var(--muted); }
 .movement-review-image { display: inline-flex; flex: 0 0 auto; }
 .movement-review-card .movement-review-image img { width: 72px; height: 72px; border-radius: 6px; object-fit: contain; background: var(--surface-2); }
+
+.material-stock-facts { display: block; color: var(--muted); line-height: 1.35; }
+.material-stock-review-link {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--gold);
+  text-align: left;
+  font: inherit;
+  font-size: .8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.material-stock-review-group + .material-stock-review-group { margin-top: 18px; }
+.material-stock-review-group h3 { margin: 0 0 8px; }
+.material-stock-review-row, .material-stock-movement {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.material-stock-review-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+.material-stock-review-row:hover { border-color: var(--gold); }
+.material-stock-movements { display: grid; gap: 5px; }
+.material-stock-movements h4 { margin: 0 0 2px; }
+.material-stock-movement small { color: var(--muted); }
+.material-stock-difference { margin: 0; color: var(--gold); }
