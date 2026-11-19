@@ -782,6 +782,20 @@
     if(mask)applyArtworkShape(work,box.shape);
     return {canvas:work,box:{...box,...normalizedBox(rect,width,height),rotation}};
   }
+  function artworkCropBox(box,selection,rotation=0){
+    const x=selection.x,y=selection.y,w=selection.width,h=selection.height,angle=((rotation%360)+360)%360;
+    const local=angle===90?{x:y,y:1-x-w,width:h,height:w}:angle===180?{x:1-x-w,y:1-y-h,width:w,height:h}:angle===270?{x:1-y-h,y:x,width:h,height:w}:{x,y,width:w,height:h};
+    return {...box,x:box.x+local.x*box.width,y:box.y+local.y*box.height,width:local.width*box.width,height:local.height*box.height,rotation:angle};
+  }
+  function recropArtworkCanvas(work,selection,shape='rectangle'){
+    let left=Math.max(0,Math.floor(selection.x*work.width)),top=Math.max(0,Math.floor(selection.y*work.height));
+    let width=Math.min(work.width-left,Math.max(1,Math.round(selection.width*work.width))),height=Math.min(work.height-top,Math.max(1,Math.round(selection.height*work.height)));
+    if(shape==='circle'){const side=Math.min(width,height);left+=Math.floor((width-side)/2);top+=Math.floor((height-side)/2);width=height=side;}
+    const output=canvas(width,height),context=output.getContext('2d');context.imageSmoothingEnabled=false;
+    context.drawImage(work,left,top,width,height,0,0,width,height);applyArtworkShape(output,shape);
+    return {canvas:output,selection:{x:left/work.width,y:top/work.height,width:width/work.width,height:height/work.height}};
+  }
+
   function rotateArtworkCanvas(work,angle){
     const rotated=canvas(work.height,work.width),context=rotated.getContext('2d');
     context.save();
@@ -811,5 +825,5 @@
   }
 
   window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,imageSignature,assetSignature,match,
-    selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,proposeRegionAtPoint,cropArtworkCanvas,rotateArtworkCanvas,cropArtwork,applyArtworkShape};
+    selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,proposeRegionAtPoint,cropArtworkCanvas,rotateArtworkCanvas,cropArtwork,applyArtworkShape,artworkCropBox,recropArtworkCanvas};
 })();
