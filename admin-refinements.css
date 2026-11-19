@@ -1077,3 +1077,33 @@ body #productStockDialog .unified-product-card > header { display: flex !importa
 .material-stock-movements h4 { margin: 0 0 2px; }
 .material-stock-movement small { color: var(--muted); }
 .material-stock-difference { margin: 0; color: var(--gold); }
+
+body .stock-count-chip[aria-pressed="true"],
+body .stock-count-chip.active {
+  background: var(--pink, #eaa0bf) !important;
+  border-color: var(--pink, #eaa0bf) !important;
+  color: #391728 !important;
+  box-shadow: inset 0 0 0 1px #f9d0e2;
+}
+body .stock-count-chip:hover { border-color: var(--pink, #eaa0bf); }
+body .stock-count-chip[aria-pressed="true"] :is(span,strong) { color: inherit !important; }
+body .sheet-size-line { grid-template-columns: minmax(0,1fr) 28px auto 24px; gap: 5px; }
+.sheet-size-line .sheet-edit-mark { width: 26px; min-width: 26px; min-height: 26px; height: 26px; padding: 3px; }
+.sheet-shape-field { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
+.sheet-shape-field .select { width: auto; min-width: 125px; padding: 6px 28px 6px 8px; }
+.sheet-preview-box-active[data-outline-shape="circle"],
+.sheet-preview-box-active[data-outline-shape="ellipse"] { border-radius: 50%; }
+.sheet-preview-box-active[data-outline-shape="rounded"] { border-radius: 16%; }
+.sheet-crop-stage canvas[data-crop-shape="circle"],
+.sheet-crop-stage canvas[data-crop-shape="ellipse"] { clip-path: ellipse(50% 50% at 50% 50%); }
+.sheet-crop-stage canvas[data-crop-shape="rounded"] { clip-path: inset(0 round 16%); }
+#sheetMarkReviewDialog { width: min(1300px, calc(100vw - 24px)) !important; }
+.sheet-mark-review-tools { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.sheet-mark-review-stage { display: flex; justify-content: center; align-items: center; min-height: 200px; height: 65dvh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
+.sheet-mark-review-stage canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sheet-delete-mark-list { display: grid; gap: 6px; margin: 12px 0; }
+.sheet-delete-mark-list label { display: flex; align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+.sheet-delete-all { display: flex; align-items: center; gap: 8px; }
+.design-tag-picker-row[draggable="true"] { cursor: grab; }
+.design-tag-picker-row.dragging { opacity: .5; outline: 1px solid var(--pink); }
+.sheet-mark-review-stage canvas { width: 100%; height: 100%; }

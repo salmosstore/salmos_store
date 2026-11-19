@@ -583,6 +583,84 @@
     }
     return confirmed.sort((a,b)=>a.score-b.score);
   }
+  function sampledColor(frame,x,y){
+    const px=Math.max(0,Math.min(frame.width-1,x)),py=Math.max(0,Math.min(frame.height-1,y));
+    const left=Math.floor(px),top=Math.floor(py),right=Math.min(frame.width-1,left+1),bottom=Math.min(frame.height-1,top+1);
+    const dx=px-left,dy=py-top,out=[0,0,0,0];
+    for(const [xx,yy,weight] of [[left,top,(1-dx)*(1-dy)],[right,top,dx*(1-dy)],[left,bottom,(1-dx)*dy],[right,bottom,dx*dy]]){
+      const index=(yy*frame.width+xx)*4,alpha=frame.data[index+3]/255;
+      out[3]+=alpha*weight;
+      for(let channel=0;channel<3;channel++)out[channel]+=frame.data[index+channel]/255*alpha*weight;
+    }
+    return out;
+  }
+  async function findSeedOccurrence(image,sample,seed,point,occupied){
+    const {work}=sample;
+    const frame=sample.rgba??=work.getContext('2d',{willReadFrequently:true}).getImageData(0,0,work.width,work.height);
+    const seedRect=inkBounds(work,normalizedRect(seed,work.width,work.height));
+    if(!seedRect)return null;
+    const seedWidth=rectWidth(seedRect),seedHeight=rectHeight(seedRect),grid=14,template=[];
+    for(let y=0;y<grid;y++)for(let x=0;x<grid;x++){
+      const u=(x+.5)/grid-.5,v=(y+.5)/grid-.5;
+      template.push({u,v,color:sampledColor(frame,(seedRect.left+seedRect.right)/2+u*seedWidth,(seedRect.top+seedRect.bottom)/2+v*seedHeight)});
+    }
+    const ink=template.reduce((sum,pixel)=>sum+pixel.color[3],0);
+    if(ink<8)return null;
+    const px=point.x*work.width,py=point.y*work.height;
+    const evaluate=proposal=>{
+      const {x,y,width,height,quarter}=proposal;
+      const rect={left:x-width/2,top:y-height/2,right:x+width/2,bottom:y+height/2};
+      if(rect.left<0||rect.top<0||rect.right>work.width||rect.bottom>work.height||
+        !regionContains(rect,px,py)||!freeOccurrence(occupied,rect))return null;
+      let difference=0;
+      for(const pixel of template){
+        let u=pixel.u,v=pixel.v;
+        if(quarter===1)[u,v]=[-v,u];
+        if(quarter===2){u=-u;v=-v;}
+        if(quarter===3)[u,v]=[v,-u];
+        const target=sampledColor(frame,x+u*width,y+v*height),reference=pixel.color;
+        difference+=Math.abs(target[3]-reference[3])*.75;
+        for(let channel=0;channel<3;channel++)difference+=Math.abs(target[channel]-reference[channel])/12;
+        if(difference>ink*.32)return null;
+      }
+      return {...proposal,rect,score:difference/ink};
+    };
+    const hits=[],scales=[1,.9,1.1,.8,1.25,.67,1.5,.5,2,.4,2.5,.33,3,.25,4];
+    for(const scale of scales){
+      for(let quarter=0;quarter<4;quarter++){
+        const width=(quarter%2?seedHeight:seedWidth)*scale,height=(quarter%2?seedWidth:seedHeight)*scale;
+        if(width<5||height<5||width>work.width||height>work.height)continue;
+        for(const dx of [-.4,-.25,-.1,0,.1,.25,.4])for(const dy of [-.4,-.25,-.1,0,.1,.25,.4]){
+          const hit=evaluate({x:px+dx*width,y:py+dy*height,width,height,quarter});
+          if(hit)hits.push(hit);
+        }
+      }
+      await nextFrame();
+    }
+    hits.sort((a,b)=>a.score-b.score);
+    let refined=hits.slice(0,8);
+    for(const step of [.06,.025,.01]){
+      const next=[];
+      for(const candidate of refined){
+        let best=candidate;
+        for(const dx of [-step,0,step])for(const dy of [-step,0,step])for(const ds of [-step,0,step]){
+          const hit=evaluate({...candidate,x:candidate.x+dx*candidate.width,y:candidate.y+dy*candidate.height,
+            width:candidate.width*(1+ds),height:candidate.height*(1+ds)});
+          if(hit&&hit.score<best.score)best=hit;
+        }
+        next.push(best);
+      }
+      refined=next.sort((a,b)=>a.score-b.score);
+    }
+    const best=refined[0];
+    if(!best||best.score>.155)return null;
+    const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+    const estimate=normalizedBox(best.rect,work.width,work.height);
+    const bounds=inkBounds(image,normalizedRect(estimate,width,height));
+    if(!bounds)return null;
+    const box=normalizedBox(bounds,width,height);
+    return {...box,rotation:((Number(seed.rotation)||0)+360-best.quarter*90)%360,...(seed.shape?{shape:seed.shape}:{})};
+  }
   async function findOccurrence(image,size,seed,point,used){
     const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
     if(!width||!height)return null;
@@ -596,6 +674,8 @@
     const px=point.x*work.width,py=point.y*work.height;
     const occupied=used.map(box=>normalizedRect(box,work.width,work.height));
     if(occupied.some(rect=>px>=rect.left&&px<=rect.right&&py>=rect.top&&py<=rect.bottom))return null;
+    const seeded=await findSeedOccurrence(image,sample,seed,point,occupied);
+    if(seeded)return seeded;
     const hits=[];
     for(const rect of candidates){
       if(px<rect.left||px>rect.right||py<rect.top||py>rect.bottom||!freeOccurrence(occupied,rect))continue;
@@ -680,14 +760,27 @@
     }
     return new Blob([blob.slice(0,33),density,blob.slice(33)],{type:'image/png'});
   }
-  function cropArtworkCanvas(image,box){
+  function artworkShapePath(context,width,height,shape){
+    context.beginPath();
+    if(shape==='circle'||shape==='ellipse')context.ellipse(width/2,height/2,width/2,height/2,0,0,Math.PI*2);
+    else if(shape==='rounded')context.roundRect(0,0,width,height,Math.min(width,height)*.16);
+    else context.rect(0,0,width,height);
+  }
+  function applyArtworkShape(work,shape){
+    if(!shape||shape==='rectangle')return;
+    const context=work.getContext('2d');
+    context.save();context.globalCompositeOperation='destination-in';
+    artworkShapePath(context,work.width,work.height,shape);context.fill();context.restore();
+  }
+  function cropArtworkCanvas(image,box,mask=true){
     const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
     if(!width||!height)throw new Error('Abrí la imagen de la plancha para recortar.');
     const rect=normalizedRect(box,width,height),w=rectWidth(rect),h=rectHeight(rect);
     if(w<1||h<1)throw new Error('Marcá el contorno completo de la estampa.');
     const work=canvas(w,h),rotation=Number(box.rotation)||0;
     drawRegion(work,image,rect,rotation);
-    return {canvas:work,box:{...normalizedBox(rect,width,height),rotation}};
+    if(mask)applyArtworkShape(work,box.shape);
+    return {canvas:work,box:{...box,...normalizedBox(rect,width,height),rotation}};
   }
   function rotateArtworkCanvas(work,angle){
     const rotated=canvas(work.height,work.width),context=rotated.getContext('2d');
@@ -702,8 +795,9 @@
   async function cropArtwork(image,box,size,edited=null){
     const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
     if(!(size.width>0&&size.height>0))throw new Error('Elegí una plancha con medidas válidas.');
-    const crop=edited?{canvas:edited,box}:cropArtworkCanvas(image,box);
+    const crop=edited?{canvas:canvas(edited.width,edited.height),box}:cropArtworkCanvas(image,box);
     const work=crop.canvas;
+    if(edited){work.getContext('2d').drawImage(edited,0,0);applyArtworkShape(work,box.shape);}
     try{
       const png=await new Promise((resolve,reject)=>work.toBlob(blob=>
         blob?resolve(blob):reject(new Error('No se pudo preparar el PNG de la estampa.')),'image/png'));
@@ -713,9 +807,9 @@
         blob:await applyPngDensity(png,swap?y:x,swap?x:y),
         box:crop.box
       };
-    }finally{if(!edited)work.width=0;}
+    }finally{work.width=0;}
   }
 
   window.SalmosSheetDetection={openPng,pngSheetFormat,formatForAspect,detect,drawRegion,signature,fingerprints,imageSignature,assetSignature,match,
-    selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,proposeRegionAtPoint,cropArtworkCanvas,rotateArtworkCanvas,cropArtwork};
+    selectMatches,overlapArea,findOccurrence,occurrenceRotation,findDesignOnSheet,proposeRegionAtPoint,cropArtworkCanvas,rotateArtworkCanvas,cropArtwork,applyArtworkShape};
 })();

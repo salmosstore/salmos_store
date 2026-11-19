@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
   <link rel="stylesheet" href="admin-books.css?v=46.7">
   <link rel="stylesheet" href="admin-management.css?v=38.0">
-  <link rel="stylesheet" href="admin-refinements.css?v=47.8">
+  <link rel="stylesheet" href="admin-refinements.css?v=48.0">
   <link rel="stylesheet" href="production-gallery.css?v=39.0">
   <link rel="stylesheet" href="storefront-refinements.css?v=46.4">
   <link rel="stylesheet" href="book-digital.css?v=28.0">
@@ -115,14 +115,14 @@
         <section class="production-tab-panel" data-production-panel="1">
           <div class="production-top-grid">
             <div class="field production-type-field"><label for="productionMaterialType">Tipo de producto</label><select class="select" id="productionMaterialType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="glass">Vaso</option><option value="thermos">Termo</option><option value="bag">Bolso</option><option value="custom_libro">Libro / cuaderno</option><option value="other">Sin clasificar</option></select></div>
-            <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock físico</option><option value="to_stock">Stock virtual</option></select></div>
+            <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock real</option><option value="to_stock">Stock virtual</option></select></div>
             <div class="field production-qty-field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
             
             <div class="field production-print-type-field"><label>DTF</label><select class="select" id="productionPrintType"><option value="dtf_textile">Textil</option><option value="dtf_uv">UV</option></select></div><div class="field production-print-rate-field"><label id="productionPrintRateLabel">Costo del metro ($)</label><input class="input" id="productionPrintRate" type="number" min="0" step="any" value="10000"></div>
             <div class="field production-waste-field"><label>Extra DTF por desperdicio (%)</label><input class="input" id="productionWaste" type="number" min="0" step=".01" value="10"></div>
           </div>
           <div class="field full" id="productionAudienceField"></div>
-          <div class="production-stock-note" id="productionStockNote">Stock físico descuenta la materia prima al iniciar producción. El stock virtual permite armar el producto aunque todavía no tengas la materia prima.</div>
+          <div class="production-stock-note" id="productionStockNote">Stock real descuenta la materia prima al iniciar producción. El stock virtual permite armar el producto aunque todavía no tengas la materia prima.</div>
           <div class="production-picker-section"><div class="production-picker-head"><div><h3 id="productionMaterialsTitle">Materia prima disponible</h3><p class="muted">Elegí exactamente lo que usaste. La galería se filtra por tipo.</p></div><button class="btn btn-ghost" type="button" id="productionAddMaterialFromEditorBtn">+ Agregar materia prima</button></div><div class="horizontal-gallery-shell"><button class="gallery-arrow gallery-arrow-left" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="-1">‹</button><div class="production-material-gallery" id="productionMaterialGallery"></div><button class="gallery-arrow gallery-arrow-right" type="button" data-scroll-target="productionMaterialGallery" data-scroll-dir="1">›</button></div></div>
           <div class="production-selected" id="productionSelectedMaterials"></div>
           <div class="production-sale-prices"><label class="field"><span id="productionSalePriceLabel">Precio de venta ($)</span><input class="input" id="productionSalePrice" type="number" min="0" step="1" placeholder="Sugerencia del último producto similar"></label><div id="productionCapPriceBox" class="hidden"><label class="field">Gorra agregada · materia prima<select class="select" id="mockupCapMaterialSelect"><option value="">Elegir gorra</option></select></label><label class="field">Precio de venta de la gorra ($)<input class="input" id="mockupCapSalePrice" type="number" min="0" step="1" placeholder="Último precio usado"></label></div></div><div class="production-cost-summary" id="productionBuilderCost"></div>
@@ -188,7 +188,7 @@
           <div class="field movement-kind-field"><label>Tipo</label><select class="select" name="type" id="movementType"><option value="expense">Egreso</option><option value="income">Ingreso</option></select></div>
           <div class="field movement-date-field"><label>Fecha</label><input class="input" name="date" type="date" required></div><div class="field movement-time-field"><label>Hora</label><input class="input" name="time" type="time" step="60"></div>
           <div class="field movement-reason-field"><label>Motivo / etiqueta</label><select class="select" id="movementCategorySelect"><option value="">Elegir motivo...</option></select><input class="input hidden movement-category-other" name="category" id="movementCategoryOther" placeholder="Escribí el nuevo motivo" required></div>
-          <section class="full movement-sale-section" id="movementSaleSection"><label class="toggle-label"><input type="checkbox" id="movementSaleEnabled"> Vincular productos vendidos a este ingreso</label><div id="movementSaleDetails" class="hidden"><div id="movementSaleRows"></div><button type="button" class="btn btn-ghost" id="addMovementSaleBtn">+ Agregar producto vendido</button><p class="field-help">Descuenta el stock físico. Si falta, queda pendiente de preparar. La publicación de la tienda se conserva.</p></div></section><div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
+          <section class="full movement-sale-section" id="movementSaleSection"><label class="toggle-label"><input type="checkbox" id="movementSaleEnabled"> Vincular productos vendidos a este ingreso</label><div id="movementSaleDetails" class="hidden"><div id="movementSaleRows"></div><button type="button" class="btn btn-ghost" id="addMovementSaleBtn">+ Agregar producto vendido</button><p class="field-help">Descuenta el stock real. Si falta, queda pendiente de preparar. La publicación de la tienda se conserva.</p></div></section><div class="field full" id="movementDescriptionField"><label>Detalle</label><input class="input" name="description" placeholder="Detalle del movimiento" required></div>
           <div class="field"><label for="movementPaymentMethod">Forma del ingreso / egreso</label><select class="select" name="payment_method" id="movementPaymentMethod"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="mixed">Parte efectivo + parte transferencia</option><option value="pending">Pago pendiente</option><option value="gift">Regalo · Inversión / aporte</option></select></div>
           <div class="field"><label for="movementAmount">Importe base ($)</label><input class="input" name="amount" id="movementAmount" type="number" min="0.01" step="0.01" required></div>
           <div class="field full"><label for="movementSurcharge">Recargo / comisión</label><div class="surcharge-controls"><select class="select" id="movementSurchargeType" name="surcharge_type" aria-label="Tipo de recargo"><option value="fixed">Pesos ($)</option><option value="percent">Porcentaje (%)</option></select><input class="input" id="movementSurcharge" name="surcharge" type="number" min="0" step="0.01" placeholder="0" aria-label="Valor del recargo"></div><small id="movementSurchargeHelp">Importe fijo en pesos.</small></div>
@@ -301,8 +301,8 @@
   <script src="admin-shipping-request.js?v=40.0" defer></script>
   <script src="web-projects-shared.js?v=46.0" defer></script>
   <script src="web-projects-admin.js?v=46.0" defer></script>
-  <script src="sheet-detection.js?v=47.5" defer></script>
-  <script src="admin.js?v=47.8&amp;mkt=26.6" defer></script>
+  <script src="sheet-detection.js?v=48.0" defer></script>
+  <script src="admin.js?v=48.0&amp;mkt=26.6" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=46.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
