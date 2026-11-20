@@ -167,7 +167,7 @@
     const owner=typeof assetOrOwner==='string'?designVisualOwner(assetOrOwner):'asset-'+assetOrOwner.id;
     const asset=typeof assetOrOwner==='string'?designAppearanceTarget(owner):assetOrOwner;
     const bg=previewColor(asset?.preview_background);
-    if(asset?.kind==='sheet')return bg?`style="--design-preview-bg:${bg};--design-preview-pattern:none"`:'';
+    if(asset?.kind==='sheet')return `data-sheet-appearance-id="${Number(asset.id)}"${bg?` style="--design-preview-bg:${bg};--design-preview-pattern:none"`:''}`;
     const color=previewColor(asset?.preview_color);
     return `data-design-brightness="${Number(asset?.preview_brightness??100)}" data-design-saturation="${Number(asset?.preview_saturation??100)}" data-design-visual="${escapeHtml(owner)}" data-design-color-opacity="${Number(asset?.preview_color_opacity??100)}" data-design-ink="${color}"${bg?` style="--design-preview-bg:${bg};--design-preview-pattern:none"`:''}`;
   }
@@ -658,7 +658,7 @@
     const photos=purchasedMaterialModels(group),groups=new Map();
     for(const photo of photos){const name=purchasedMaterialModelName(photo);if(!groups.has(name))groups.set(name,[]);groups.get(name).push(photo);}
     const dialog=ensureAdminDialog('materialModelsDialog','Modelos · '+[materialTypeLabel(group.material_type),group.fit,group.color].filter(Boolean).join(' · '));dialog.classList.add('material-creations-dialog');
-    qs('.dialog-body',dialog).innerHTML=`<p class="muted">${groups.size} modelo${groups.size===1?'':'s'} · ${photos.length} foto${photos.length===1?'':'s'}</p>${[...groups].map(([name,items])=>`<section class="material-model-group"><h3>${escapeHtml(name)}</h3><div class="material-model-photos">${items.map(photo=>`<figure><img class="checkerboard" src="${escapeHtml(mockupAssetUrl(photo))}" alt="${escapeHtml(name)} · ${photo.pose==='back'?'Espalda':'Frente'}" loading="lazy"><figcaption>${photo.pose==='back'?'Espalda':'Frente'}</figcaption></figure>`).join('')}</div></section>`).join('')}${photos.length?'':'<p class="muted">Este producto todavía no tiene modelos asociados.</p>'}`;
+    qs('.dialog-body',dialog).innerHTML=`<p class="muted">${groups.size} modelo${groups.size===1?'':'s'} · ${photos.length} foto${photos.length===1?'':'s'}</p><div class="material-model-grid">${[...groups].map(([name,items])=>`<section class="material-model-group"><h3>${escapeHtml(name)}</h3><div class="material-model-photos">${items.map(photo=>`<figure><img class="checkerboard" src="${escapeHtml(mockupAssetUrl(photo))}" alt="${escapeHtml(name)} · ${photo.pose==='back'?'Espalda':'Frente'}" loading="lazy"><figcaption>${photo.pose==='back'?'Espalda':'Frente'}</figcaption></figure>`).join('')}</div></section>`).join('')}</div>${photos.length?'':'<p class="muted">Este producto todavía no tiene modelos asociados.</p>'}`;
     dialog.showModal();
   }
   function purchasedMaterialCard(group){
@@ -678,7 +678,9 @@
       stockBySize.set(size,(stockBySize.get(size)||0)+(Number(variant.stock_qty)||0));
     }
     const facts=materialStockFacts(group.variants),creations=purchasedMaterialCreations(group),models=purchasedMaterialModels(group),modelCount=new Set(models.map(purchasedMaterialModelName)).size;
-    const quantities=`<section class="purchased-sizes" aria-label="Stock comprado por talle"><div class="purchased-sizes-heading">${sized?'Talles':'Stock comprado'}</div><div class="purchased-size-grid">${(sized?[...stockBySize]:[['Disponible',Number(group.stock_qty)||0]]).map(([size,quantity])=>`<div class="purchased-size-pill${quantity>0?'':' is-empty'}"><span>${escapeHtml(size)}</span><strong>${Number(quantity).toLocaleString('es-AR',{maximumFractionDigits:3})}</strong><small>${group.unit==='meter'?'m':'u'}</small></div>`).join('')}</div></section>`;
+    const quantities=sized?`<div class="purchased-stock-by-size"><table aria-label="Stock real por talle"><thead><tr><th scope="col">Talle</th><th scope="col">Stock real</th></tr></thead><tbody>
+      ${[...stockBySize].map(([size,quantity])=>`<tr><th scope="row">${escapeHtml(size)}</th><td><span class="purchased-stock-value">${materialStockLabel({...group,stock_qty:quantity})}</span></td></tr>`).join('')}
+      </tbody></table></div>`:`<div class="purchased-stock-total"><span>Stock real</span><strong class="purchased-stock-value">${materialStockLabel(group)}</strong></div>`;
     return `<article class="unified-product-card purchased-material-card" data-stock-group="${key}" data-material-card-creations="${group.id}" tabindex="0" aria-label="Ver creaciones de ${escapeHtml(title)} ${escapeHtml(group.color||'')}">
       <header><h3 title="${escapeHtml(title)}">${escapeHtml(title)}</h3></header>
       <div class="unified-product-main">
@@ -863,8 +865,8 @@
     host.innerHTML=inventoryOrderedGroups(sections,`purchased:${f.group}:`).map(([name,items])=>
       inventoryGroupSection(name,`purchased:${f.group}:${name}`,items,rows=>rows.map(row=>row.purchase?purchasedSheetCard(row):purchasedMaterialCard(row)).join(''))).join('')||
       '<div class="notice">No hay materia prima comprada para este filtro.</div>';
-    const sizeRows=Math.max(2,...materials.map(group=>Math.ceil(new Set(group.variants.map(row=>normalizeCatalogSize(row.size)).filter(Boolean)).size/3)));
-    host.style.setProperty('--purchased-card-height',(400+Math.max(0,sizeRows-2)*44)+'px');
+    const sizeRows=Math.max(0,...materials.map(group=>new Set(group.variants.map(row=>normalizeCatalogSize(row.size)||'Único')).size));
+    host.style.setProperty('--purchased-card-height',(400+Math.max(0,Math.min(6,sizeRows)-3)*26)+'px');
     state.purchasedMaterialGroups=new Map(materials.map(group=>[Number(group.id),group]));
     state.purchasedSheetCards=new Map(plans.map(plan=>[plan.key,plan]));
     renderInventoryStockSummary(available,visible,f,purchasedQuantity);
@@ -1282,7 +1284,16 @@
     await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{admin_purchase_options_v2:payload}})});
     state.settings.admin_purchase_options_v2=payload;
   }
-  async function ensureCostingData(force=false){if(state.costingLoaded&&!force&&Date.now()-(state.costingLoadedAt||0)<10000){await ensureAdminOptionSettings();return;}const [m,d]=await Promise.all([api('/api/admin/materials',force?{cache:'reload'}:{}),api('/api/admin/design-assets',force?{cache:'reload'}:{}),ensureAdminOptionSettings()]);state.materials=m.items||[];state.designAssets=d.items||[];state.costingLoaded=true;state.costingLoadedAt=Date.now();}
+  let sheetBackgroundRevision=0;
+  const sheetBackgroundWrites=new Map();
+  function setDesignAssetList(items,readRevision){
+    state.designAssets=items||[];
+    for(const asset of state.designAssets){
+      const saved=sheetBackgroundWrites.get(Number(asset.id));
+      if(saved&&saved.revision>readRevision)asset.preview_background=saved.color;
+    }
+  }
+  async function ensureCostingData(force=false){if(state.costingLoaded&&!force&&Date.now()-(state.costingLoadedAt||0)<10000){await ensureAdminOptionSettings();return;}const readRevision=sheetBackgroundRevision;const [m,d]=await Promise.all([api('/api/admin/materials',force?{cache:'reload'}:{}),api('/api/admin/design-assets',force?{cache:'reload'}:{}),ensureAdminOptionSettings()]);state.materials=m.items||[];setDesignAssetList(d.items,readRevision);state.costingLoaded=true;state.costingLoadedAt=Date.now();}
   function materialFamilies(){const seen=new Set(),out=[];for(const m of state.materials){if(!m.name||materialIsDtf(m.material_type))continue;const key=`${m.material_type}|||${m.name}`.toLowerCase();if(seen.has(key))continue;seen.add(key);out.push({type:m.material_type,name:m.name});}return out.sort((a,b)=>materialTypeLabel(a.type).localeCompare(materialTypeLabel(b.type),'es')||a.name.localeCompare(b.name,'es'));}
   function recipeFamilyValue(type='',name=''){return type&&name?`${type}|||${name}`:''}
   function productRecipeDesignRow(row={},i=0){const selected=Number(row.designAssetId??row.design_asset_id)||0,qty=Math.max(.01,Number(row.quantity)||1);const options=state.designAssets.filter(d=>d.kind==='individual').map(d=>`<option value="${d.id}" ${Number(d.id)===selected?'selected':''}>${escapeHtml(d.name||d.file_name)} · ${Number(d.width_cm)||'?'}×${Number(d.height_cm)||'?'} cm · ${d.print_material_type==='dtf_uv'?'DTF UV':d.print_material_type==='none'?'Sin DTF':'DTF textil'}</option>`).join('');return `<div class="recipe-design-row" data-recipe-design-row="${i}"><select class="select" data-recipe-design-id><option value="">Elegir diseño...</option>${options}</select><input class="input" data-recipe-design-qty type="number" min=".01" step="1" value="${qty}" title="Cantidad de estampas"><button type="button" class="icon-btn" data-remove-recipe-design="${i}" aria-label="Quitar">×</button>${row.measureLabel?`<small class="recipe-measure-note">${escapeHtml(row.measureLabel)}</small>`:''}</div>`;}
@@ -4057,7 +4068,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
       ['collection','Colección',hasBooks?collections.map(row=>[row.value,row.label]):[]],
       ['capStyle','Tipo de gorra',hasCaps?capStyles:[]],
       ['fit','Corte',montageOptions(identityRows,'fit')],
-      ['model','Modelo',montageOptions(identityRows,'model')],
+      ['model','Modelos',montageOptions(identityRows,'model')],
       ['color','Color',montageOptions(scoped,'color')]
     ];
     const controls={};
@@ -6243,17 +6254,23 @@ function nearestDesignMeasure(options,measurement){
       style="left:${box.x*100}%;top:${box.y*100}%;width:${box.width*100}%;height:${box.height*100}%"
       ${attributes}>${handles}</div>`;
   }
+  function sheetIsMarking(key){
+    return [state.sheetBoxTarget,state.sheetRepeatTarget,state.sheetMarkTarget,state.sheetPendingMark,state.sheetCrop].some(target=>target?.key===key);
+  }
   function sheetPreviewMarks(rows,key){
     if(state.sheetCountMode?.[key])return rows.flatMap(row=>(row.previewBoxes||[]).map(box=>
       `<div class="sheet-count-outline" style="left:${Number(box.x)*100}%;top:${Number(box.y)*100}%;width:${Number(box.width)*100}%;height:${Number(box.height)*100}%" aria-hidden="true"></div>`)).join('');
-    const markNumbers=sheetMarkNumbers(rows);
+    const markNumbers=sheetMarkNumbers(rows),marking=sheetIsMarking(key);
     const pending=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
     const saved=rows.flatMap((c,i)=>(c.previewBoxes||[]).map((b,j)=>{
       if(pending?.replaced===b)return '';
       const markNumber=markNumbers.get(Number(b.order));
       const active=state.sheetActiveBox?.key===key&&state.sheetActiveBox.rowIndex===i&&state.sheetActiveBox.boxIndex===j;
       const highlighted=state.sheetHighlightedDesign?.key===key&&state.sheetHighlightedDesign.id===Number(c.designAssetId);
-      const pin=`<button type="button" class="sheet-preview-pin ${active||highlighted?'is-highlighted':''} ${b.waste?'is-waste':''}" style="left:${(Number(b.x)+Number(b.width)/2)*100}%;top:${(Number(b.y)+Number(b.height)/2)*100}%" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" title="Mostrar marca ${markNumber} en la lista" aria-label="Mostrar marca ${markNumber} en la lista">${markNumber}</button>`;
+      const pinClass=`sheet-preview-pin ${active||highlighted?'is-highlighted':''} ${b.waste?'is-waste':''}`;
+      const position=`left:${(Number(b.x)+Number(b.width)/2)*100}%;top:${(Number(b.y)+Number(b.height)/2)*100}%`;
+      const pin=marking?`<span class="${pinClass} sheet-pin-passive" style="${position}" aria-hidden="true">${markNumber}</span>`:
+        `<button type="button" class="${pinClass}" style="${position}" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" title="Mostrar marca ${markNumber} en la lista" aria-label="Mostrar marca ${markNumber} en la lista">${markNumber}</button>`;
       if(!active)return pin;
       return `<div class="sheet-selection-outline" data-outline-shape="${b.shape||'rectangle'}" style="left:${b.x*100}%;top:${b.y*100}%;width:${b.width*100}%;height:${b.height*100}%" aria-hidden="true"></div>`+pin;
     })).join('');
@@ -6536,14 +6553,15 @@ function nearestDesignMeasure(options,measurement){
     const value=sheetPreviewBackground(key);
     return `data-sheet-background-preview="${key}"${value?` style="--design-preview-bg:${value};--design-preview-pattern:none"`:''}`;
   }
+  function paintSheetBackground(frame,value){
+    frame.style.setProperty('--design-preview-bg',value);
+    frame.style.setProperty('--design-preview-pattern',value?'none':'');
+  }
   function updateSheetBackground(key,color){
     const value=previewColor(color);
     if(key==='upload')(state.sheetUploadAppearance??={}).preview_background=value;
-    else state.sheetDetailBackground=value;
-    for(const frame of qsa(`[data-sheet-background-preview="${key}"]`)){
-      frame.style.setProperty('--design-preview-bg',value);
-      frame.style.setProperty('--design-preview-pattern',value?'none':'');
-    }
+    else {state.sheetDetailBackground=value;qs('#designPreviewDialog').dataset.designPreviewBackground=value||'default';}
+    for(const frame of qsa(`[data-sheet-background-preview="${key}"]`))paintSheetBackground(frame,value);
     for(const control of qsa(`[data-sheet-background="${key}"]`)){
       const parent=control.closest('.sheet-background-control'),reset=parent.nextElementSibling;
       if(reset?.matches('[data-clear-sheet-background]'))reset.remove();
@@ -6565,26 +6583,30 @@ function nearestDesignMeasure(options,measurement){
   async function saveSheetBackground(key,color){
     const value=previewColor(color);updateSheetBackground(key,value);
     if(key!=='detail'||!qs('#designDetailEditor')?.classList.contains('hidden'))return;
-    const id=Number(state.activeDesignId),asset=state.designAssets.find(item=>Number(item.id)===id);if(!asset)return;
+    const id=Number(state.activeDesignId);if(!id)return;
     const pending=state.sheetBackgroundPending??={};pending[id]=value;
     const remember=()=>{try{localStorage.setItem('salmos_sheet_background_pending',JSON.stringify(pending));}catch{}};
     remember();sheetBackgroundSaveStatus(id,'Guardando fondo…');
     const queues=state.sheetBackgroundSaveQueues??={},previous=queues[id]||Promise.resolve();
     const task=previous.catch(()=>{}).then(async()=>{
       const saved=await api(`/api/admin/design-assets/${id}/appearance`,{method:'PATCH',body:JSON.stringify({preview_background:value})});
-      asset.preview_background=previewColor(saved.item.preview_background);
-      if(pending[id]===value){delete pending[id];remember();sheetBackgroundSaveStatus(id,'Fondo guardado');}
+      if(Number(saved?.item?.id)!==id||!Object.hasOwn(saved.item,'preview_background')||previewColor(saved.item.preview_background)!==value)throw new Error('El servidor no confirmó el color de la plancha.');
+      const asset=state.designAssets.find(item=>Number(item.id)===id);
+      if(asset)asset.preview_background=value;
+      sheetBackgroundWrites.set(id,{revision:++sheetBackgroundRevision,color:value});
+      for(const frame of qsa(`[data-sheet-appearance-id="${id}"]`))paintSheetBackground(frame,value);
+      if(queues[id]===task){delete pending[id];remember();sheetBackgroundSaveStatus(id,'Fondo guardado');}
       return saved;
     });
     queues[id]=task;
     try{return await task;}
-    catch(error){if(pending[id]===value)sheetBackgroundSaveStatus(id,error.sessionExpired?'Fondo pendiente. Volvé a ingresar para guardarlo.':'Fondo pendiente de guardar.',true);throw error;}
+    catch(error){if(queues[id]===task)sheetBackgroundSaveStatus(id,error.sessionExpired?'Fondo pendiente. Volvé a ingresar para guardarlo.':'Fondo pendiente de guardar.',true);throw error;}
     finally{if(queues[id]===task)delete queues[id];}
   }
   function renderSheetPreview(key){
-    const root=sheetRoot(key),host=qs('[data-sheet-preview]',root);if(!host)return;host.dataset.designPreviewBackground=designViewerBackground('sheet-'+key);
+    const root=sheetRoot(key),host=qs('[data-sheet-preview]',root);if(!host)return;host.dataset.designPreviewBackground=sheetPreviewBackground(key)||'default';
     const crop=state.sheetCrop?.key===key?state.sheetCrop:null,mark=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
-    const counting=Boolean(state.sheetCountMode?.[key]),drawing=!counting&&Boolean(crop||mark||state.sheetBoxTarget?.key===key);
+    const counting=Boolean(state.sheetCountMode?.[key]),drawing=!counting&&sheetIsMarking(key);
     const markHint=crop?(crop.box?'Ajustá el recuadro y revisá el recorte antes de guardarlo.':'Tocá una estampa o dibujá su contorno.'):
       mark?'Mové el recuadro o ajustá sus bordes antes de confirmarlo.':
       state.sheetRepeatTarget?.key===key?'Hacé clic en la estampa o dibujá su contorno. Elegí Terminar al finalizar.':
@@ -6828,7 +6850,7 @@ function nearestDesignMeasure(options,measurement){
     const status=message=>{const node=qs('.sheet-mark-status',root);if(node)node.textContent=message;};
     const used=rows.flatMap(item=>item.previewBoxes||[]);
     if(used.some(box=>point.x>=box.x&&point.x<=box.x+box.width&&point.y>=box.y&&point.y<=box.y+box.height)){
-      status('Ese lugar ya tiene una marca. Elegí otra aparición.');return;
+      return;
     }
     (state.sheetProposal??={})[key]=task;
     state.sheetMeasureBusy=true;
@@ -7321,7 +7343,8 @@ function nearestDesignMeasure(options,measurement){
 
   async function renderDesigns(){
     state.designListOpen??={};state.designTagFilters??={};qsa('[data-design-list]').forEach(d=>state.designListOpen[d.dataset.designList]=d.open);
-    const [d,m,settings]=await Promise.all([api('/api/admin/design-assets'),state.materials.length?Promise.resolve(null):api('/api/admin/materials'),api('/api/admin/settings')]);state.designAssets=d.items||[];for(const asset of state.designAssets){const draft=state.designAppearanceDrafts?.['asset-'+asset.id];if(draft?.current)Object.assign(asset,draft.current);}if(m)state.materials=m.items||[];
+    const readRevision=sheetBackgroundRevision;
+    const [d,m,settings]=await Promise.all([api('/api/admin/design-assets'),state.materials.length?Promise.resolve(null):api('/api/admin/materials'),api('/api/admin/settings')]);setDesignAssetList(d.items,readRevision);for(const asset of state.designAssets){const draft=state.designAppearanceDrafts?.['asset-'+asset.id];if(draft?.current)Object.assign(asset,draft.current);}if(m)state.materials=m.items||[];
     let saved=[];try{saved=JSON.parse(settings.settings?.design_tag_catalog||'[]')}catch{}const hasTagCatalog=Object.prototype.hasOwnProperty.call(settings.settings||{},'design_tag_catalog');state.designTagCatalog=[...new Set((hasTagCatalog?(Array.isArray(saved)?saved:[]):['rosas','salmos','celestes','yeshua','cruz',...state.designAssets.flatMap(a=>a.tags||[])]).map(x=>String(x).trim().toLocaleLowerCase('es-AR')).filter(Boolean))];
     paintDesignLibrary();
   }
@@ -7331,7 +7354,7 @@ function nearestDesignMeasure(options,measurement){
     designLibraryHost().innerHTML=`<div class="design-library-content">${designLibraryToolbarHtml()}${designGroup('SALMOS',salmos,'salmos')}${designGroup('Clientes',clients,'clients')}${designSection('Planchas mixtas',mixed,'mixed')}</div>`;state.selectedDesignAssets=new Set([...(state.selectedDesignAssets||[])].filter(id=>state.designAssets.some(a=>Number(a.id)===id)));dockDesignGalleryToolbar();updateDesignSelectionUI();observeDesignThumbnails();for(const [id,value] of left){const grid=document.getElementById(id);if(grid)grid.scrollLeft=value;}if(scrollRoot)scrollRoot.scrollTop=top;
   }
   function designDeleteBlockReason(id){const asset=state.designAssets.find(a=>Number(a.id)===Number(id));if(!asset)return'';if(asset.kind==='individual'){const sheets=state.designAssets.filter(a=>a.kind==='sheet'&&[...(a.components||[]),...(a.composition_draft?.components||[]),...(a.composition_draft?.pendingMark?[{designAssetId:a.composition_draft.pendingMark.assetId}]:[])].some(c=>Number(c.designAssetId)===Number(id)));return sheets.length?`No se puede eliminar “${asset.name||asset.file_name}”: forma parte de ${sheets.map(a=>a.name||a.file_name).join(', ')}. Abrí esa plancha y quitá la referencia primero.`:'';}const owners=state.designAssets.filter(a=>a.kind==='individual'&&parseDesignMeasureOptions(a).some(o=>(o.sources||[]).some(source=>Number(source.sheetAssetId)===Number(id))));return owners.length?`No se puede eliminar la plancha “${asset.name||asset.file_name}”: es origen de medidas en ${owners.map(a=>a.name||a.file_name).join(', ')}. Quitá o actualizá esas referencias primero.`:'';}
-  async function refreshDesignAssetsForDelete(){const data=await api('/api/admin/design-assets');state.designAssets=data.items||[];return state.designAssets;}
+  async function refreshDesignAssetsForDelete(){const readRevision=sheetBackgroundRevision,data=await api('/api/admin/design-assets');setDesignAssetList(data.items,readRevision);return state.designAssets;}
   function designTags(value){const values=Array.isArray(value)?value:String(value||'').split(',');return [...new Set(values.map(x=>String(x).trim().toLocaleLowerCase('es-AR')).filter(Boolean))]}
   function designPickerSelections(root){return designTags(qsa('[data-design-tag-choice]:checked',root||document).map(el=>el.value))}
   function designTagPickerHtml(key,selected=[]){
@@ -7442,9 +7465,15 @@ function nearestDesignMeasure(options,measurement){
     stage.innerHTML=String(a.mime_type||'').startsWith('image/')?`<div data-image-status role="status">Cargando imagen…</div><div class="design-preview-fit checkerboard" ${a.kind==='sheet'?sheetBackgroundAttrs('detail'):designVisualAttrs(a)}><img crossorigin="use-credentials" src="${url}" alt="${escapeHtml(a.name||a.file_name||'Diseño')}"></div>`:`<iframe src="${url}" title="Vista previa"></iframe>`;
     const composition=a.kind==='sheet'?`<h3>Superficie: ${Number(a.width_cm)||'—'} × ${Number(a.height_cm)||'—'} cm</h3>${a.components?.length?`<div class="sheet-cost-table">${a.components.map((c,i)=>`<div>${state.designAssets.find(x=>Number(x.id)===Number(c.designAssetId))?designSmallImage(state.designAssets.find(x=>Number(x.id)===Number(c.designAssetId))):''}<span><strong>${escapeHtml(c.name)} × ${c.quantity}</strong><small>${escapeHtml(designMeasureLabel(c))}</small></span><b>${printMoney(a.sheet_metrics?.componentCostsCents?.[i]||0)}</b></div>`).join('')}</div>${sheetMetricsHtml(Number(a.width_cm),Number(a.height_cm),a.components,Number(a.cost_cents)||1000000)}`:'<p class="muted">Agregá la composición para calcular el desperdicio de esta plancha.</p>'}`:measures.length?designMeasuresOriginsHtml(a,measures):'';
     clearMissingSheetQueue('detail');
-    qs('#designPreviewMeta').innerHTML=`${a.kind==='sheet'?`<div class="sheet-preview-tools" data-readonly-sheet-background>${sheetBackgroundControl('detail')}</div>`:`${designBackgroundControlHtml('detail')}${designQuickColorsHtml(a)}`}<div class="design-detail-summary"><div><strong>${escapeHtml(designScopeLabel(a))} · ${escapeHtml(designKindLabel(a))}</strong>${composition}${a.note?`<p>${escapeHtml(a.note)}</p>`:''}${Number(a.printed)?'<span class="status success">Impreso</span>':''}</div><div class="admin-actions"><a class="btn btn-ghost" href="${url}" target="_blank" rel="noopener">Abrir original</a><button class="btn btn-primary" type="button" id="editDesignDetailBtn">Editar</button></div></div>
-      <div class="design-detail-editor hidden" id="designDetailEditor"><div class="form-grid design-edit-grid"><div class="field"><label>Sección</label><select class="select" data-design-scope><option value="salmos" ${a.scope==='salmos'?'selected':''}>SALMOS</option><option value="clients" ${a.scope==='clients'?'selected':''}>Clientes</option><option value="mixed" ${a.scope==='mixed'?'selected':''}>Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" data-design-kind ${a.scope==='mixed'?'disabled':''}><option value="individual" ${a.kind==='individual'?'selected':''}>Individual</option><option value="sheet" ${a.kind==='sheet'?'selected':''}>Plancha</option></select></div><div class="design-name-row field full"><label class="field"><span>Nombre</span><input class="input" data-design-name value="${escapeHtml(a.name||'')}"></label>${a.kind==='individual'?designTagPickerHtml('detail',a.tags||[]):''}</div><div class="field" data-sheet-size><label>Superficie (cm)</label><div class="design-measures"><input class="input" data-design-width type="number" min=".01" step=".01" value="${Number(a.width_cm)||''}" placeholder="Ancho"><span>×</span><input class="input" data-design-height type="number" min=".01" step=".01" value="${Number(a.height_cm)||''}" placeholder="Alto"></div></div><div class="field"><label>Impresión / costo</label><select class="select" data-design-print-type><option value="dtf_textile" ${a.print_material_type!=='dtf_uv'&&a.print_material_type!=='none'?'selected':''}>DTF textil</option><option value="dtf_uv" ${a.print_material_type==='dtf_uv'?'selected':''}>DTF UV</option><option value="none" ${a.print_material_type==='none'?'selected':''}>Sin DTF</option></select></div><div class="field" data-sheet-size><label>Costo ($)</label><input class="input" type="number" min="0" step=".01" data-design-cost value="${centsToPesos(Number(a.cost_cents)||1000000)}"></div><div class="field full sheet-detail-note"><label>Nota</label><textarea class="textarea" data-design-note rows="2">${escapeHtml(a.note||'')}</textarea></div></div><div data-individual-options>${measures.length?designMeasuresOriginsHtml(a,measures):''}<button type="button" class="btn btn-ghost" data-link-saved-design-sheet="${a.id}">Relacionar plancha impresa</button></div><div data-sheet-composition-host></div>${a.kind==='sheet'?`<label class="sheet-confirm-composition"><input type="checkbox" data-sheet-complete ${Number(a.composition_complete??1)?'checked':''}>Plancha completa</label>${sheetPurchasePanelHtml('detail')}`:''}<div class="design-card-actions"><label class="toggle-label"><input type="checkbox" data-design-printed ${Number(a.printed)?'checked':''}> Impreso</label><button class="btn btn-danger small-delete" type="button" id="deleteDesignDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelDesignEditBtn">Cancelar</button>${a.kind==='sheet'?'<button class="btn btn-ghost" type="button" data-save-sheet-draft="detail">Guardar como borrador</button>':''}<button class="btn btn-primary" type="button" id="saveDesignDetailBtn">Guardar cambios</button></div></div>`;
-    const dialog=qs('#designPreviewDialog');dialog.dataset.designPreviewBackground=designViewerBackground('detail');document.body.appendChild(dialog);if(!dialog.open)dialog.showModal();syncDesignAppearanceActions('asset-'+a.id);const img=qs('img',stage);if(img){watchDesignPreview(img,stage,()=>cacheDesignThumbnail(a,img).catch(()=>{}));}
+    qs('#designPreviewMeta').innerHTML=`<div class="design-detail-toolbar">
+        ${a.kind==='individual'?designBackgroundControlHtml('detail'):''}
+        <button class="btn btn-primary" type="button" id="editDesignDetailBtn">Editar detalles</button>
+        <a class="btn btn-ghost" href="${url}" target="_blank" rel="noopener">Abrir original</a>
+      </div>
+      ${a.kind==='sheet'?`<div class="sheet-preview-tools" data-readonly-sheet-background>${sheetBackgroundControl('detail')}</div>`:designQuickColorsHtml(a)}
+      <div class="design-detail-summary"><div><strong>${escapeHtml(designScopeLabel(a))} · ${escapeHtml(designKindLabel(a))}</strong>${composition}${a.note?`<p>${escapeHtml(a.note)}</p>`:''}${Number(a.printed)?'<span class="status success">Impreso</span>':''}</div></div>
+      <div class="design-detail-editor hidden" id="designDetailEditor"><div class="form-grid design-edit-grid"><div class="field"><label>Sección</label><select class="select" data-design-scope><option value="salmos" ${a.scope==='salmos'?'selected':''}>SALMOS</option><option value="clients" ${a.scope==='clients'?'selected':''}>Clientes</option><option value="mixed" ${a.scope==='mixed'?'selected':''}>Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" data-design-kind ${a.scope==='mixed'?'disabled':''}><option value="individual" ${a.kind==='individual'?'selected':''}>Individual</option><option value="sheet" ${a.kind==='sheet'?'selected':''}>Plancha</option></select></div><div class="design-name-row field"><label class="field"><span>Nombre</span><input class="input" data-design-name value="${escapeHtml(a.name||'')}"></label></div><div class="field" data-sheet-size><label>Superficie (cm)</label><div class="design-measures"><input class="input" data-design-width type="number" min=".01" step=".01" value="${Number(a.width_cm)||''}" placeholder="Ancho"><span>×</span><input class="input" data-design-height type="number" min=".01" step=".01" value="${Number(a.height_cm)||''}" placeholder="Alto"></div></div><div class="field"><label>Impresión / costo</label><select class="select" data-design-print-type><option value="dtf_textile" ${a.print_material_type!=='dtf_uv'&&a.print_material_type!=='none'?'selected':''}>DTF textil</option><option value="dtf_uv" ${a.print_material_type==='dtf_uv'?'selected':''}>DTF UV</option><option value="none" ${a.print_material_type==='none'?'selected':''}>Sin DTF</option></select></div><div class="field" data-sheet-size><label>Costo ($)</label><input class="input" type="number" min="0" step=".01" data-design-cost value="${centsToPesos(Number(a.cost_cents)||1000000)}"></div>${a.kind==='individual'?designTagPickerHtml('detail',a.tags||[]):''}<div class="field full sheet-detail-note"><label>Nota</label><textarea class="textarea" data-design-note rows="2">${escapeHtml(a.note||'')}</textarea></div></div><div data-individual-options>${measures.length?designMeasuresOriginsHtml(a,measures):''}<button type="button" class="btn btn-ghost" data-link-saved-design-sheet="${a.id}">Relacionar plancha impresa</button></div><div data-sheet-composition-host></div>${a.kind==='sheet'?`<label class="sheet-confirm-composition"><input type="checkbox" data-sheet-complete ${Number(a.composition_complete??1)?'checked':''}>Plancha completa</label>${sheetPurchasePanelHtml('detail')}`:''}<div class="design-card-actions"><label class="toggle-label"><input type="checkbox" data-design-printed ${Number(a.printed)?'checked':''}> Impreso</label><button class="btn btn-danger small-delete" type="button" id="deleteDesignDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelDesignEditBtn">Cancelar</button>${a.kind==='sheet'?'<button class="btn btn-ghost" type="button" data-save-sheet-draft="detail">Guardar como borrador</button>':''}<button class="btn btn-primary" type="button" id="saveDesignDetailBtn">Guardar cambios</button></div></div>`;
+    const dialog=qs('#designPreviewDialog');dialog.dataset.designPreviewBackground=a.kind==='sheet'?sheetPreviewBackground('detail')||'default':designViewerBackground('detail');document.body.appendChild(dialog);if(!dialog.open)dialog.showModal();syncDesignAppearanceActions('asset-'+a.id);const img=qs('img',stage);if(img){watchDesignPreview(img,stage,()=>cacheDesignThumbnail(a,img).catch(()=>{}));}
     if(a.kind==='sheet'&&a.composition_draft)restoreCloudSheetDraft(a);
     if(a.kind==='sheet'&&Object.hasOwn(state.sheetBackgroundPending||{},a.id))sheetBackgroundSaveStatus(a.id,'Fondo pendiente de guardar.',true);
   }
@@ -8061,7 +8090,10 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         }catch(error){toast(error.message,'error');}
         return;
       }
-      const pin=e.target.closest('[data-sheet-pin]');if(pin){focusSheetOccurrence(pin.dataset.sheetKey,Number(pin.dataset.sheetPin),Number(pin.dataset.pinIndex));return;}
+      const pin=e.target.closest('[data-sheet-pin]');if(pin){
+        if(!pin.closest('[data-sheet-canvas]')||!sheetIsMarking(pin.dataset.sheetKey))focusSheetOccurrence(pin.dataset.sheetKey,Number(pin.dataset.sheetPin),Number(pin.dataset.pinIndex));
+        return;
+      }
       const canvas=e.target.closest('[data-sheet-canvas]');if(canvas){const target=state.sheetMarkTarget,key=canvas.dataset.sheetCanvas;if(!state.sheetCountMode?.[key]&&target?.key===key){const c=state.designSheetDrafts[key][target.index];if(c){c.previewMarks??=[];if(c.previewMarks.length>=Number(c.quantity)){toast('Ya marcaste todas las unidades de esta fila.','error');return;}c.previewMarks.push(sheetBoxCoordinate(canvas,e));renderSheetSelected(key)}}return;}
       const addMeasure=e.target.closest('[data-add-measure-option]');if(addMeasure){qs('[data-measure-rows]',addMeasure.closest('[data-measure-editor]')).insertAdjacentHTML('beforeend',designMeasureRow());return;}
       const removeMeasure=e.target.closest('[data-remove-measure-option]');if(removeMeasure){removeMeasure.closest('[data-measure-option]').remove();return;}
@@ -8429,7 +8461,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const crop=state.sheetCrop?.key===key?state.sheetCrop:null;
       const mark=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
       const target=repeat||(state.sheetBoxTarget?.key===key?state.sheetBoxTarget:null);
-      if(canvas&&e.button===0&&!e.shiftKey&&!state.sheetCountMode?.[key]&&!mark&&!crop){
+      if(canvas&&e.button===0&&!e.shiftKey&&!state.sheetCountMode?.[key]&&!sheetIsMarking(key)){
         const hit=sheetSavedMarkAtPoint(key,sheetBoxCoordinate(canvas,e));
         if(hit){e.preventDefault();focusSheetOccurrence(key,hit.rowIndex,hit.boxIndex);return;}
       }
