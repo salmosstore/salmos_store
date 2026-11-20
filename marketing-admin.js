@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   if(window.SalmosMarketing)return;
-  const studioURL=new URL('marketing/reels.html?v=27.1',document.currentScript?.src||document.baseURI);
+  const studioURL=new URL('marketing/reels.html?v=27.2',document.currentScript?.src||document.baseURI);
   let dialog,iframe,closeButton,pending=null,ready=false,closeRequest=null;
   function requestClose(){
     if(!ready){dialog.close();return;}
