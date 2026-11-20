@@ -7,7 +7,20 @@
   function effects(s){const v=s.effect||{},duration=Number(s.duration)||12;return{start:clamp(v.start??.1,0,duration-.1),length:clamp(v.length??Math.min(2,duration*.35),.1,duration),soft:clamp(v.soft??.65,.05,3),zoom:clamp(v.zoom??(s.template==='zoom'?3:s.zoom||1.15),1,8),count:clamp(v.count??.65,.2,2),enter:!!v.enter,exit:!!v.exit};}
   function progress(seconds,start,length){const t=clamp((seconds-start)/Math.max(.05,length),0,1);return t*t*(3-2*t);}
   async function gifAsset(src){if(typeof ImageDecoder==='undefined'||!await ImageDecoder.isTypeSupported('image/gif'))throw new Error('Para este GIF usá Chrome o Edge actualizado, o cargá el mismo fondo como MP4.');const bytes=await(await fetch(src)).arrayBuffer(),decoder=new ImageDecoder({data:bytes,type:'image/gif'});await decoder.tracks.ready;const count=decoder.tracks.selectedTrack.frameCount,frames=[];let duration=0,pixels=0;try{for(let i=0;i<count;i++){const {image}=await decoder.decode({frameIndex:i});pixels+=image.displayWidth*image.displayHeight;if(pixels>24000000||count>240){image.close();throw new Error('Este GIF es pesado para editar. Convertí el fondo a MP4 o usá un GIF más corto.');}const bitmap=await createImageBitmap(image),ms=Math.max(20,(image.duration||100000)/1000);image.close();frames.push({bitmap,start:duration});duration+=ms;}}catch(e){frames.forEach(f=>f.bitmap.close());throw e;}finally{decoder.close();}const first=frames[0].bitmap;return{complete:true,width:first.width,height:first.height,naturalWidth:first.width,naturalHeight:first.height,frames,duration,frame(seconds){const at=(seconds*1000)%duration;let selected=frames[0];for(const f of frames){if(f.start>at)break;selected=f;}return selected.bitmap;}};}
-  function waveBlob(buffer){const size=buffer.length*2,bytes=new ArrayBuffer(44+size),v=new DataView(bytes),text=(at,s)=>{for(let i=0;i<s.length;i++)v.setUint8(at+i,s.charCodeAt(i));};text(0,'RIFF');v.setUint32(4,36+size,true);text(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,buffer.sampleRate,true);v.setUint32(28,buffer.sampleRate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);text(36,'data');v.setUint32(40,size,true);const samples=buffer.getChannelData(0);for(let i=0;i<samples.length;i++)v.setInt16(44+i*2,clamp(samples[i],-1,1)*32767,true);return new Blob([bytes],{type:'audio/wav'});}
+  function waveBlob(buffer){
+    const channels=buffer.numberOfChannels, stride=channels*2, size=buffer.length*stride;
+    const bytes=new ArrayBuffer(44+size), v=new DataView(bytes);
+    const text=(at,value)=>{for(let i=0;i<value.length;i++)v.setUint8(at+i,value.charCodeAt(i));};
+    text(0,'RIFF');v.setUint32(4,36+size,true);text(8,'WAVEfmt ');v.setUint32(16,16,true);
+    v.setUint16(20,1,true);v.setUint16(22,channels,true);v.setUint32(24,buffer.sampleRate,true);
+    v.setUint32(28,buffer.sampleRate*stride,true);v.setUint16(32,stride,true);v.setUint16(34,16,true);
+    text(36,'data');v.setUint32(40,size,true);
+    for(let ch=0;ch<channels;ch++){
+      const data=buffer.getChannelData(ch);
+      for(let i=0;i<data.length;i++)v.setInt16(44+i*stride+ch*2,clamp(data[i],-1,1)*32767,true);
+    }
+    return new Blob([bytes],{type:'audio/wav'});
+  }
   function finishAudio(buffer,target=.22){const data=buffer.getChannelData(0);let sum=0;for(let i=0;i<data.length;i++)sum+=data[i]*data[i];const gain=Math.min(12,target/Math.max(.001,Math.sqrt(sum/data.length)));let peak=0;for(let i=0;i<data.length;i++){const f=Math.min(1,i/400,(data.length-i)/800);data[i]=Math.tanh(data[i]*gain)*f;peak=Math.max(peak,Math.abs(data[i]));}const k=.94/Math.max(.001,peak);for(let i=0;i<data.length;i++)data[i]*=k;return waveBlob(buffer);}
   async function makeMusic(style='piano'){
     const Offline=globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext;if(!Offline)throw Error('Este navegador no permite preparar la música.');
@@ -81,5 +94,5 @@
     }
     const buffer=await c.startRendering(),data=buffer.getChannelData(0);let peak=0,sum=0;for(let i=0;i<data.length;i++){const fade=Math.min(1,i/(rate*.02),(data.length-i)/(rate*.06));data[i]*=fade;peak=Math.max(peak,Math.abs(data[i]));sum+=data[i]*data[i];}const rms=Math.sqrt(sum/data.length),gain=Math.min(.93/Math.max(.0001,peak),.19/Math.max(.0001,rms));for(let i=0;i<data.length;i++)data[i]*=gain;return waveBlob(buffer);
   }
-  return{points,resize,effects,progress,gifAsset,makeMusic,makeLegacyMusic,makeSound};
+  return{points,resize,effects,progress,gifAsset,makeMusic,makeLegacyMusic,makeSound,waveBlob};
 });

@@ -1,7 +1,12 @@
-"""Local music jobs. Uses the installed ACE-Step Python; no model downloads."""
+"""Local ACE-Step jobs, Spanish transcription and saved WAV mixes for SALMOS."""
 from __future__ import annotations
 
+import filecmp
 import json
+import io
+import tempfile
+import urllib.parse
+import wave
 import os
 import re
 import socket
@@ -112,8 +117,10 @@ def start(data, wan_running=False):
     return state()
 
 
-def cancel():
+def cancel(expected_id=None):
     with LOCK:
+        if expected_id and (not JOB or JOB['id'] != expected_id):
+            raise ValueError('Cambió la canción que está en curso.')
         if JOB and JOB['process'].poll() is None:
             JOB['process'].terminate()
             try:
@@ -142,7 +149,7 @@ def tracks():
         rows.append({'id': folder.name, 'name': request.get('name', 'Mi canción'),
                      'duration': request.get('duration', 20), 'request': request,
                      'createdAt': (folder / 'cancion.wav').stat().st_mtime})
-    return sorted(rows, key=lambda r: r['createdAt'], reverse=True)[:60]
+    return sorted(rows, key=lambda r: r['createdAt'], reverse=True)
 
 
 def get(handler, path):
@@ -203,7 +210,103 @@ def manage(data, action):
         return {'id': track_id, 'name': request.get('name'), 'saved': request.get('saved', False)}
 
 
+TRANSCRIPTION_LOCK = threading.Lock()
+
+
+def transcribe_recording(handler):
+    """Receive normalized mono PCM. The user's recording stays on their PC."""
+    size = int(handler.headers.get('Content-Length', '0'))
+    if handler.headers.get('Content-Type', '').split(';')[0] != 'audio/wav' or not 44 < size <= 16000 * 2 * 600 + 44:
+        raise ValueError('Elegí un audio de hasta diez minutos.')
+    if not TRANSCRIPTION_LOCK.acquire(blocking=False):
+        raise ValueError('Ya se está transcribiendo otra grabación.')
+    try:
+        data = handler.rfile.read(size)
+        if len(data) != size:
+            raise ValueError('La carga de la grabación se interrumpió.')
+        with wave.open(io.BytesIO(data)) as source:
+            if (source.getframerate(), source.getnchannels(), source.getsampwidth()) != (16000, 1, 2) or not 0 < source.getnframes() <= 16000 * 600:
+                raise ValueError('No se recibió una grabación válida.')
+            source.setpos(source.getnframes() - 1)
+            if len(source.readframes(1)) != 2:
+                raise ValueError('La grabación está incompleta.')
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError as exc:
+            raise RuntimeError('Descargá el iniciador actualizado y abrilo para habilitar la transcripción.') from exc
+        model = WhisperModel('base', device='cpu', compute_type='int8', download_root=str(DATA.parent / 'modelos-transcripcion'))
+        segments, _ = model.transcribe(io.BytesIO(data), language='es', beam_size=5, condition_on_previous_text=False)
+        lyrics = '\n'.join(s.text.strip() for s in segments if s.text.strip() and s.no_speech_prob < .85)
+        if not lyrics:
+            raise ValueError('No se distinguieron palabras. Podés escribir la letra o elegir otra grabación.')
+        return {'lyrics': lyrics}
+    finally:
+        TRANSCRIPTION_LOCK.release()
+
+
+def save_audio_version(handler, track_id):
+    if not re.fullmatch(r'[a-f0-9]{32}', track_id):
+        raise ValueError('La versión no es válida.')
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(handler.path).query)
+    name = query.get('name', [''])[0].strip()
+    parent_id = query.get('parent', [''])[0]
+    if not name or len(name) > 100 or (parent_id and not re.fullmatch(r'[a-f0-9]{32}', parent_id)) or track_id == parent_id:
+        raise ValueError('Revisá el nombre de la versión.')
+    size = int(handler.headers.get('Content-Length', '0'))
+    if handler.headers.get('Content-Type', '').split(';')[0] != 'audio/wav' or not 44 < size <= 108 * 1024 * 1024:
+        raise ValueError('La versión debe ser un archivo WAV de hasta diez minutos.')
+    DATA.mkdir(parents=True, exist_ok=True)
+    destination = DATA / track_id
+    with tempfile.TemporaryDirectory(dir=DATA, prefix='.audio-') as temp:
+        folder = Path(temp) / 'version'
+        folder.mkdir()
+        audio = folder / 'cancion.wav'
+        with audio.open('wb') as output:
+            remaining = size
+            while remaining:
+                chunk = handler.rfile.read(min(remaining, 1024 * 1024))
+                if not chunk:
+                    raise ValueError('La carga del audio se interrumpió.')
+                output.write(chunk)
+                remaining -= len(chunk)
+        with wave.open(str(audio)) as audio_file:
+            duration = audio_file.getnframes() / audio_file.getframerate()
+            if not 0 < duration <= 601 or audio_file.getnchannels() not in (1, 2) or audio_file.getsampwidth() != 2:
+                raise ValueError('El audio de esta versión no es válido.')
+            audio_file.setpos(audio_file.getnframes()-1)
+            if len(audio_file.readframes(1)) != audio_file.getnchannels()*2:
+                raise ValueError('El audio de esta versión está incompleto.')
+        request = {}
+        if parent_id:
+            try:
+                request = json.loads((DATA / parent_id / 'request.json').read_text(encoding='utf-8'))
+            except FileNotFoundError:
+                pass  # The original can also be a recording saved only in the browser.
+        request.update(name=name, duration=duration, saved=True, parentId=parent_id, audioEdit=True)
+        (folder / 'request.json').write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
+        write_status(folder, {'state':'done','message':'Versión guardada','progress':1})
+        with LOCK:
+            if destination.exists():
+                previous = json.loads((destination / 'request.json').read_text(encoding='utf-8'))
+                if (not previous.get('audioEdit') or previous.get('parentId') != parent_id or
+                        previous.get('name') != name or not filecmp.cmp(audio, destination / 'cancion.wav', shallow=False)):
+                    raise ValueError('Ya existe otro audio con este identificador.')
+            else:
+                folder.rename(destination)
+    return {'id': track_id, 'saved': True}
+
+
 def post(handler, path, wan_running=False):
+    if path == '/api/music/transcribe' or path.startswith('/api/music/versions/'):
+        try:
+            result = transcribe_recording(handler) if path.endswith('/transcribe') else save_audio_version(handler, path.rsplit('/', 1)[-1])
+        except (ValueError, wave.Error, EOFError) as exc:
+            handler.json_response({'error': str(exc) or 'No se pudo leer el audio.'}, 422)
+        except Exception as exc:
+            handler.json_response({'error': 'No se pudo completar el audio. ' + str(exc)}, 503)
+        else:
+            handler.json_response(result)
+        return True
     if path not in ('/api/music/generate', '/api/music/cancel', '/api/music/rename', '/api/music/save', '/api/music/delete'):
         return False
     try:
@@ -217,7 +320,7 @@ def post(handler, path, wan_running=False):
         if action in ('rename', 'save', 'delete'):
             handler.json_response(manage(data, action))
         else:
-            handler.json_response(cancel() if action == 'cancel' else start(data, wan_running), 202)
+            handler.json_response(cancel(data.get('id')) if action == 'cancel' else start(data, wan_running), 202)
     except (ValueError, TypeError, OverflowError) as exc:
         handler.json_response({'error': str(exc)}, 400)
     except (OSError, RuntimeError) as exc:
