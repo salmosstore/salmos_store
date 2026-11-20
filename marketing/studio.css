@@ -183,8 +183,9 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
   .production-reels .background-layout19 > .background-tools20{grid-row:2}
 }
 
-.production-reels .scene-scope button.is-pending{border-color:var(--production-accent);outline:1px solid var(--production-accent)}
-.production-reels .scene-scope .icon-action10{padding:5px;min-width:32px}
+.production-reels #scenes .scope-target{box-shadow:inset 3px 0 var(--production-accent,#f4a1c6)}
+.production-reels .background-body19 > label{display:flex;align-items:center;gap:8px;margin:6px 0}
+.production-reels .background-body19 > label select{width:auto}
 .production-reels .background-tools20 .scene-duration{display:flex;align-items:end;gap:6px}
 .production-reels .scene-duration label{margin:0}
 .production-reels .scene-duration .number-stepper{margin:0}
@@ -200,26 +201,59 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 #reelRetryBackup:not([hidden]) { padding: 2px 5px; font-size: 10px; }
 .production-reels.reel-home #reelRetryBackup { display: none; }
 
-#audioOnlyStudio { width:min(70rem,calc(100vw - 2rem)); max-height:94dvh; padding:0; color:var(--production-text,var(--text)); background:var(--production-panel,var(--panel)); border:1px solid var(--production-line); border-radius:16px; overflow:auto; }
+#audioOnlyStudio {
+  box-sizing:border-box;
+  width:min(1260px,calc(100vw - 40px));
+  max-width:none;
+  max-height:calc(100dvh - 36px);
+  padding:0;
+  color:var(--production-ink,#fff0f7);
+  background:var(--production-background,#361a2a);
+  border:1px solid var(--production-line,#825369);
+  border-radius:18px;
+  overflow:auto;
+}
 #audioOnlyStudio::backdrop { background:#190912b8; }
 #audioOnlyStudio header,.audio-layer-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
-#audioOnlyStudio header { position:sticky; top:0; z-index:1; padding:.8rem 1.2rem; background:var(--production-panel,var(--panel)); border-bottom:1px solid var(--production-line); }
+#audioOnlyStudio header { position:sticky; top:0; z-index:1; padding:14px 22px; background:var(--production-panel,#442234); border-bottom:1px solid var(--production-line,#825369); }
 #audioOnlyStudio h1,#audioOnlyStudio h2,#audioOnlyStudio h3 { margin:0; }
-#audioOnlyStudio h1 { font:700 1.5rem Georgia,serif; }
-#audioOnlyStudio h2 { font-size:1.1rem; }
-.audio-studio-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; padding:1rem; }
-.audio-studio-body section { min-width:0; border:1px solid var(--production-line); border-radius:.8rem; padding:1rem; }
+#audioOnlyStudio h1 { font:700 25px Georgia,serif; }
+#audioOnlyStudio h2 { font:700 19px Georgia,serif; }
+.audio-studio-body { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:16px; padding:16px 22px 22px; }
+.audio-studio-body section { min-width:0; background:var(--production-panel,#442234); border:1px solid var(--production-line,#825369); border-radius:12px; padding:16px; }
 .audio-studio-body section,.audio-studio-body fieldset,.audio-source-input { display:grid; align-content:start; gap:.75rem; }
 .audio-studio-body fieldset { min-width:0; border:0; margin:0; padding:0; }
 .audio-studio-body fieldset:disabled { opacity:.65; }
 .audio-studio-body audio,.audio-studio-body textarea,.audio-studio-body input,.audio-studio-body select { width:100%; min-width:0; box-sizing:border-box; }
-.audio-studio-body textarea { resize:vertical; }
-.audio-studio-body label { display:grid; gap:.25rem; }
+.audio-studio-body label { display:grid; gap:5px; }
+#audioOnlyStudio :is(input:not([type=range]),select,textarea) {
+  padding:8px 10px;
+  font-size:14px;
+  background:var(--production-background,#361a2a);
+  color:var(--production-ink,#fff0f7);
+  border:1px solid var(--production-line,#825369);
+}
+#audioOnlyStudio :is(input,textarea)::placeholder { color:var(--production-muted,#dbb3c7); }
+#audioOnlyStudio input::file-selector-button { cursor:pointer; margin-right:8px; padding:5px 9px; border:0; border-radius:6px; background:var(--production-accent,#f4a1c6); color:#351827; }
+.audio-studio-body textarea { resize:vertical; min-height:108px; }
+.audio-studio-body .button-row { margin:0; }
+.audio-connection { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:12px 16px; background:var(--production-panel,#442234); border:1px solid var(--production-line,#825369); border-radius:10px; }
+.audio-connection p { margin:4px 0 0; }
+.audio-connection [data-connection-title] { display:inline-block; padding:3px 8px; border-radius:8px; }
+.audio-connection[data-state=online] [data-connection-title] { color:#244b35; background:#d6f2de; }
+.audio-connection[data-state=offline] [data-connection-title] { color:#60351f; background:#ffd9c0; }
+.audio-launcher-help { flex:1 0 100%; display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; padding-top:10px; border-top:1px solid var(--production-line,#825369); }
+.audio-launcher-help p { margin:0; }
 .audio-studio-body .audio-beat-row { display:grid; grid-template-columns:minmax(0,2fr) minmax(4.5rem,1fr) auto; align-items:center; gap:.5rem; margin-bottom:.5rem; }
 .audio-studio-body [data-status],.audio-saved { grid-column:1/-1; }
-.audio-studio-body [data-status] { margin:0; }
+.audio-studio-body [data-status] { margin:0; padding:0 4px; }
 .audio-studio-body [data-status]:empty { display:none; }
 .audio-studio-body [data-library] { display:grid; grid-template-columns:repeat(auto-fill,minmax(10rem,1fr)); gap:.5rem; }
 .audio-studio-body [data-library] button { display:grid; text-align:left; gap:.25rem; overflow-wrap:anywhere; }
 #audioOnlyStudio [hidden] { display:none; }
-@media(max-width:700px){.audio-studio-body{grid-template-columns:1fr}.audio-studio-body section{padding:.75rem}}
+@media(max-width:740px){
+  #audioOnlyStudio{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}
+  #audioOnlyStudio header,.audio-studio-body{padding:12px}
+  .audio-studio-body{grid-template-columns:1fr;gap:10px}
+  .audio-studio-body section{padding:12px}
+}

@@ -327,7 +327,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
         if path == '/api/health':
-            return self.json_response({'name': 'SALMOS complemento local', 'version': 9, 'wan': wan_state(), 'music': music_bridge.state(),
+            return self.json_response({'name': 'SALMOS complemento local', 'version': 10, 'wan': wan_state(), 'music': music_bridge.state(),
                 'tts': bool(all_voices()), 'ffmpeg': ffmpeg_executable() is not None, 'voices': all_voices(), 'onlineVoice': has_edge()})
         if project_storage.get(self,path):return
         if music_bridge.get(self,path):return
@@ -418,7 +418,7 @@ def main():
         return
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     url = f'http://127.0.0.1:{args.port}/'
-    print('\nSALMOS: complemento abierto en', url)
+    print('\nSALMOS listo. Conexión local en', url, flush=True)
     print('Dejá esta ventana abierta mientras generás música, usás el relator o convertís a MP4.')
     print('Para cerrar: Ctrl+C. La voz con internet envia el texto a Microsoft; la conversion de video es local.\n')
     if not args.no_browser:
