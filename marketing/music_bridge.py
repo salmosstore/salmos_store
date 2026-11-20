@@ -12,9 +12,15 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import threading
 import uuid
 from pathlib import Path
+
+try:
+    from music_worker import memory_error_status
+except ImportError:
+    memory_error_status = None  # Older worker during an initiator update.
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('SALMOS_DATA', 'E:/SALMOS-IA-datos')) / 'musica'
@@ -49,16 +55,29 @@ def busy():
         return bool(JOB and JOB['process'].poll() is None)
 
 
+def stopped_status(folder, exit_code):
+    try:
+        with (folder / 'motor.log').open('rb') as log:
+            end = log.seek(0, os.SEEK_END)
+            log.seek(max(0, end - 16_384))
+            last_lines = log.read().decode('utf-8', errors='replace')
+    except OSError:
+        last_lines = ''
+    memory = memory_error_status(last_lines, exit_code) if memory_error_status else None
+    return memory or {'state': 'error', 'message': 'El motor se cerró. El detalle quedó en motor.log.', 'progress': 0}
+
+
 def state():
     with LOCK:
         status = None
         if JOB:
             status = read_status(JOB['folder'])
-            if JOB['process'].poll() is not None and status.get('state') not in ('done', 'error', 'cancelled'):
-                status = {'state': 'error', 'message': 'El motor se cerró. Podés intentar otra vez; el detalle quedó en motor.log.', 'progress': 0}
+            exit_code = JOB['process'].poll()
+            if exit_code is not None and status.get('state') not in ('done', 'error', 'cancelled'):
+                status = stopped_status(JOB['folder'], exit_code)
                 write_status(JOB['folder'], status)
             status['id'] = JOB['id']
-        return {'audioApi': 2, 'installed': bool(ace_root()),
+        return {'audioApi': 2, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
                 'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
 
@@ -116,6 +135,7 @@ def start(data, wan_running=False):
         env = dict(os.environ)
         env['PYTHONPATH'] = str(root.resolve())
         env['PYTHONUTF8'] = '1'
+        env['SALMOS_EDITOR_PYTHON'] = sys.executable
         with (folder / 'motor.log').open('wb') as log:
             process = subprocess.Popen([str((root / 'python_embeded/python.exe').resolve()),
                 str(ROOT / 'music_worker.py'), str(root.resolve()), str(folder.resolve())],

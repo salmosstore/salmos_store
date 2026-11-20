@@ -5,6 +5,18 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
+  const launcherFile='INICIAR_SALMOS.bat?v=27.2';
+
+  function jobMessage(job,readerVersion){
+    const message=job?.message||'';
+    const memoryError=job?.errorCode==='windows_commit_limit'||
+      /(?:os error|winerror)\s*[:=]?\s*1455\b|paging file is too small|archivo de paginación es demasiado pequeño/i.test(message);
+    if(!memoryError)return message;
+    const reason='Windows se quedó sin memoria virtual al cargar ACE-Step (error 1455). ';
+    return reason+(readerVersion?
+      'Cerrá otros programas pesados y revisá la memoria virtual de Windows antes de reintentar.':
+      'Descargá el iniciador actualizado, cerrá el anterior y abrí el nuevo.');
+  }
   async function decode(blob,rate=44100){
     const buffer=await offline(2,1,rate).decodeAudioData(await blob.arrayBuffer());
     if(!buffer.length||buffer.duration>600)throw Error('Elegí un audio de hasta diez minutos para esta edición.');
@@ -64,8 +76,9 @@
       <p data-status role="status" aria-live="polite" aria-atomic="true"></p></header>
       <div class="audio-studio-body"><div class="audio-connection" data-connection>
         <div role="status"><strong data-connection-title>Iniciador sin conectar</strong><p data-connection-help></p></div>
+        <a class="button" href="${launcherFile}" download="INICIAR_SALMOS.bat" data-update-launcher hidden>Descargar iniciador actualizado</a>
         <ol class="audio-launcher-steps" data-launcher-steps>
-          <li><a class="button primary" href="INICIAR_SALMOS.bat?v=26.9" download="INICIAR_SALMOS.bat" data-download-launcher>Descargar iniciador</a></li>
+          <li><a class="button primary" href="${launcherFile}" download="INICIAR_SALMOS.bat" data-download-launcher>Descargar iniciador</a></li>
           <li>Abrí <strong>INICIAR_SALMOS.bat</strong> desde Descargas y dejá su ventana abierta.</li>
           <li><button type="button" data-connect>Ya abrí el iniciador</button></li>
         </ol>
@@ -117,6 +130,7 @@
       find('connection-help').textContent=help;
       find('connection').dataset.state=mode;
       find('launcher-steps').hidden=mode==='online'&&connection?.transcription;
+      find('update-launcher').hidden=mode!=='online'||!connection?.installed||!!connection?.musicReaderVersion;
     }
     async function request(path,options={},timeout){
       try{return await helperFetch('/api/music'+path,options,timeout);}
@@ -146,6 +160,7 @@
       const available=[];
       if(!response.transcription)available.push('Cerrá y volvé a abrir el iniciador para instalar la extracción de letra.');
       if(!response.installed)available.push('Para generar canciones hace falta ACE-Step en la PC.');
+      if(response.installed&&!response.musicReaderVersion)available.push('Hay una actualización para cargar el motor de música con menos memoria.');
       showConnection('Iniciador conectado',available.join(' ')||'Extracción de letra y motor de canciones disponibles.','online');
       return true;
     }
@@ -187,7 +202,7 @@
       void checkOpeningInitiator();
     }
     async function connect(){
-      const response=connection||await api('',{cache:'no-store'},4000);
+      const response=await api('',{cache:'no-store'},4000);
       if(!updateConnection(response)){
         waitForInitiator();
         throw Error('El iniciador sigue preparando SALMOS. Esta acción estará disponible cuando termine.');
@@ -323,7 +338,7 @@
     }
     async function action(message,fn){
       if(busy)return;busy=true;say(message,'working');sync();
-      try{await fn();}catch(e){say(e.message,'error');}
+      try{await fn();}catch(e){say(jobMessage(e,connection?.musicReaderVersion),'error');}
       finally{busy=false;sync();}
     }
     function resetMix(){
@@ -411,7 +426,7 @@
           return;
         }
         if(current?.id===id&&['error','cancelled'].includes(current.state)){
-          keyJob('');say(current.message||'La generación se interrumpió.','error');
+          keyJob('');say(jobMessage(current,data.musicReaderVersion)||'La generación se interrumpió.','error');
           return;
         }
         remoteTracks=(await api('/tracks')).tracks||[];
@@ -531,12 +546,14 @@
     find('new-lyrics').onclick=()=>action('Abriendo una letra nueva…',()=>openLyrics());
     find('show-lyrics').onclick=()=>find('lyrics-library').closest('section').scrollIntoView({block:'nearest'});
     player.onplay=()=>recordPlayer.pause();recordPlayer.onplay=()=>player.pause();
-    find('download-launcher').onclick=event=>{
+    find('download-launcher').onclick=find('update-launcher').onclick=event=>{
       if(downloadPending||connectionDeadline||busy||job){event.preventDefault();return;}
       downloadPending=true;
-      const button=find('download-launcher');
+      const button=event.currentTarget;
       button.setAttribute('aria-disabled','true');
-      say('Descarga solicitada. Cuando termine, abrí INICIAR_SALMOS.bat desde Descargas.','success');
+      say(connection?
+        'Descarga solicitada. Cerrá el iniciador anterior y abrí el que acabás de descargar.':
+        'Descarga solicitada. Cuando termine, abrí INICIAR_SALMOS.bat desde Descargas.','success');
       setTimeout(()=>{downloadPending=false;button.removeAttribute('aria-disabled');},1600);
     };
     find('connect').onclick=waitForInitiator;
@@ -552,5 +569,5 @@
     showConnection('Iniciador sin conectar','Conectalo para extraer letra o generar canciones. Podés guardar y editar tus audios subidos desde el navegador.','idle');
     sync();
   }
-  window.SalmosAudioStudio={install};
+  window.SalmosAudioStudio={install,jobMessage};
 })();
