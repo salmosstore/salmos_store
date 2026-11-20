@@ -1359,3 +1359,9 @@ body .purchased-material-links strong { color: inherit; font-size: 13px; }
   #designPreviewMeta .design-origin-cost-row { grid-template-columns: 52px minmax(0,1fr) auto !important; }
   #designPreviewMeta .design-origin-cost-row .design-small-image { width: 52px; height: 64px; }
 }
+
+.design-tag-button16 span, .design-tag-picker summary, [data-design-tag-value], [data-design-tag-new],
+[data-new-gallery-tag], [data-move-gallery-target], .design-tag-gallery-title strong { text-transform: uppercase; }
+.design-waste-label { color: var(--text, currentColor); font-weight: 800; }
+
+.design-tag-picker-row[data-derived-tag] :is([data-design-tag-value],[data-design-tag-save],[data-design-tag-delete]){display:none}

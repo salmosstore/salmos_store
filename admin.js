@@ -1296,7 +1296,7 @@
   async function ensureCostingData(force=false){if(state.costingLoaded&&!force&&Date.now()-(state.costingLoadedAt||0)<10000){await ensureAdminOptionSettings();return;}const readRevision=sheetBackgroundRevision;const [m,d]=await Promise.all([api('/api/admin/materials',force?{cache:'reload'}:{}),api('/api/admin/design-assets',force?{cache:'reload'}:{}),ensureAdminOptionSettings()]);state.materials=m.items||[];setDesignAssetList(d.items,readRevision);state.costingLoaded=true;state.costingLoadedAt=Date.now();}
   function materialFamilies(){const seen=new Set(),out=[];for(const m of state.materials){if(!m.name||materialIsDtf(m.material_type))continue;const key=`${m.material_type}|||${m.name}`.toLowerCase();if(seen.has(key))continue;seen.add(key);out.push({type:m.material_type,name:m.name});}return out.sort((a,b)=>materialTypeLabel(a.type).localeCompare(materialTypeLabel(b.type),'es')||a.name.localeCompare(b.name,'es'));}
   function recipeFamilyValue(type='',name=''){return type&&name?`${type}|||${name}`:''}
-  function productRecipeDesignRow(row={},i=0){const selected=Number(row.designAssetId??row.design_asset_id)||0,qty=Math.max(.01,Number(row.quantity)||1);const options=state.designAssets.filter(d=>d.kind==='individual').map(d=>`<option value="${d.id}" ${Number(d.id)===selected?'selected':''}>${escapeHtml(d.name||d.file_name)} · ${Number(d.width_cm)||'?'}×${Number(d.height_cm)||'?'} cm · ${d.print_material_type==='dtf_uv'?'DTF UV':d.print_material_type==='none'?'Sin DTF':'DTF textil'}</option>`).join('');return `<div class="recipe-design-row" data-recipe-design-row="${i}"><select class="select" data-recipe-design-id><option value="">Elegir diseño...</option>${options}</select><input class="input" data-recipe-design-qty type="number" min=".01" step="1" value="${qty}" title="Cantidad de estampas"><button type="button" class="icon-btn" data-remove-recipe-design="${i}" aria-label="Quitar">×</button>${row.measureLabel?`<small class="recipe-measure-note">${escapeHtml(row.measureLabel)}</small>`:''}</div>`;}
+  function productRecipeDesignRow(row={},i=0){const selected=Number(row.designAssetId??row.design_asset_id)||0,qty=Math.max(.01,Number(row.quantity)||1);const options=orderedDesigns(state.designAssets.filter(d=>d.kind==='individual')).map(d=>`<option value="${d.id}" ${Number(d.id)===selected?'selected':''}>${escapeHtml(d.name||d.file_name)} · ${Number(d.width_cm)||'?'}×${Number(d.height_cm)||'?'} cm · ${d.print_material_type==='dtf_uv'?'DTF UV':d.print_material_type==='none'?'Sin DTF':'DTF textil'}</option>`).join('');return `<div class="recipe-design-row" data-recipe-design-row="${i}"><select class="select" data-recipe-design-id><option value="">Elegir diseño...</option>${options}</select><input class="input" data-recipe-design-qty type="number" min=".01" step="1" value="${qty}" title="Cantidad de estampas"><button type="button" class="icon-btn" data-remove-recipe-design="${i}" aria-label="Quitar">×</button>${row.measureLabel?`<small class="recipe-measure-note">${escapeHtml(row.measureLabel)}</small>`:''}</div>`;}
   function renderProductRecipeDesigns(){const host=qs('#productRecipeDesignRows');if(host)host.innerHTML=state.productRecipeDesigns.length?state.productRecipeDesigns.map(productRecipeDesignRow).join(''):'<div class="muted">Sin diseños vinculados todavía.</div>';updateProductCostEstimate();}
   function productRecipeMaterialRow(row={},i=0){const selected=Number(row.materialId??row.material_id)||0,qty=Math.max(.001,Number(row.quantity)||1);const options=state.materials.filter(m=>!materialIsDtf(m.material_type)).map(m=>{const bits=[materialTypeLabel(m.material_type),m.name,m.color,m.size,m.fit].filter(Boolean).join(' · ');return `<option value="${m.id}" ${Number(m.id)===selected?'selected':''}>${escapeHtml(bits)} · stock ${Number(m.stock_qty||0).toLocaleString('es-AR',{maximumFractionDigits:2})}</option>`}).join('');return `<div class="recipe-design-row recipe-material-row" data-recipe-material-row="${i}"><select class="select" data-recipe-material-id><option value="">Elegir insumo...</option>${options}</select><input class="input" data-recipe-material-qty type="number" min=".001" step=".1" value="${qty}" title="Cantidad por producto"><button type="button" class="icon-btn" data-remove-recipe-material="${i}" aria-label="Quitar">×</button></div>`;}
   function renderProductRecipeMaterials(){const host=qs('#productRecipeMaterialRows');if(host)host.innerHTML=state.productRecipeMaterials.length?state.productRecipeMaterials.map(productRecipeMaterialRow).join(''):'<div class="muted">Sin insumos adicionales. Útil para bolsa, packaging, etiqueta u otros consumibles.</div>';updateProductCostEstimate();}
@@ -1813,7 +1813,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     const allowed=new Set(garmentPhotoChoices(item).map(photo=>Number(photo.id)));
     return purchasePhotoSelection(item).filter(id=>allowed.has(id));
   }
-  function galleryOrder(kind,items){let saved={};try{saved=JSON.parse(state.settings.admin_gallery_order||'{}')}catch{}const ids=state.galleryOrders?.[kind]||saved[kind]||[],positions=new Map(ids.map((id,i)=>[Number(id),i]));return [...items].sort((a,b)=>(positions.get(Number(a.id))??1e6)-(positions.get(Number(b.id))??1e6));}
+  function galleryOrder(kind,items){if(kind==='designs')return orderedDesigns(items);let saved={};try{saved=JSON.parse(state.settings.admin_gallery_order||'{}')}catch{}const ids=state.galleryOrders?.[kind]||saved[kind]||[],positions=new Map(ids.map((id,i)=>[Number(id),i]));return [...items].sort((a,b)=>(positions.get(Number(a.id))??1e6)-(positions.get(Number(b.id))??1e6));}
   function femaleGarmentFit(value){
     return /\b(?:crop|baby\s*(?:-\s*)?tee)\b/.test(String(value||'').toLowerCase());
   }
@@ -1879,7 +1879,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   }
   function reorderPhotoThumbnails(owner,fromId,toId){
     if(String(fromId)===String(toId))return;const before=new Map(qsa('[data-sort-photo]').map(card=>[`${card.dataset.photoOwner}:${card.dataset.sortPhoto}`,card.getBoundingClientRect()]));
-    if(owner.startsWith('catalog-')){const kind=owner.slice(8),items=kind==='photos'?state.mockupAssets:kind==='designs'?state.designAssets:state.materials,ordered=galleryOrder(kind,items).map(a=>Number(a.id)),from=ordered.indexOf(Number(fromId)),to=ordered.indexOf(Number(toId));if(from<0||to<0)return;const [id]=ordered.splice(from,1);ordered.splice(to,0,id);state.galleryOrders??={};let saved={};try{saved=JSON.parse(state.settings.admin_gallery_order||'{}')}catch{}state.galleryOrders={...saved,...state.galleryOrders,[kind]:ordered};state.settings.admin_gallery_order=JSON.stringify(state.galleryOrders);const revision=state.galleryOrderSeq=(state.galleryOrderSeq||0)+1;renderMockupStudioOptions();renderProductionDesignGallery();renderProductionMaterialGallery();renderMockupAssetList();animateGalleryOrder(document,before);state.galleryOrderSave=(state.galleryOrderSave||Promise.resolve()).catch(()=>{}).then(()=>api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{admin_gallery_order:state.settings.admin_gallery_order}})})).catch(err=>{if(revision===state.galleryOrderSeq)toast('No se pudo guardar el orden. Mové una miniatura para reintentar. '+err.message,'error');});return;}
+    if(owner.startsWith('catalog-')){const kind=owner.slice(8),items=kind==='photos'?state.mockupAssets:kind==='designs'?state.designAssets.filter(a=>a.kind==='individual'):state.materials,ordered=galleryOrder(kind,items).map(a=>Number(a.id)),from=ordered.indexOf(Number(fromId)),to=ordered.indexOf(Number(toId));if(from<0||to<0)return;const [id]=ordered.splice(from,1);ordered.splice(to,0,id);state.galleryOrders??={};let saved={};try{saved=JSON.parse(state.settings.admin_gallery_order||'{}')}catch{}state.galleryOrders={...saved,...state.galleryOrders,[kind]:ordered};state.settings.admin_gallery_order=JSON.stringify(state.galleryOrders);const revision=state.galleryOrderSeq=(state.galleryOrderSeq||0)+1;if(kind==='designs'){if(qs('#productionDialog')?.open)renderProductionDesignGallery();if(qs('.design-library-content'))paintDesignLibrary();}else{renderMockupStudioOptions();renderProductionDesignGallery();renderProductionMaterialGallery();renderMockupAssetList();}animateGalleryOrder(document,before);state.galleryOrderSave=(state.galleryOrderSave||Promise.resolve()).catch(()=>{}).then(()=>api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{admin_gallery_order:state.settings.admin_gallery_order}})})).catch(err=>{if(revision===state.galleryOrderSeq)toast('No se pudo guardar el orden. Mové una miniatura para reintentar. '+err.message,'error');});return;}
     if(owner==='product'){
       const from=state.mediaItems.findIndex(item=>item.key===fromId),to=state.mediaItems.findIndex(item=>item.key===toId);if(from<0||to<0)return;
       const [item]=state.mediaItems.splice(from,1);state.mediaItems.splice(to,0,item);state.newFiles=state.mediaItems.filter(item=>!item.existing).map(item=>item.file);renderMediaManager('productionMediaOrderList');renderMockupProductViews();animateGalleryOrder(document,before);return;
@@ -2466,7 +2466,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   function productionDesignMatchesSearch(asset,query){
     const needle=productionDesignSearchText(query);if(!needle)return true;
     const clientIds=Array.isArray(asset.client_ids)?asset.client_ids.map(Number):[],clients=[...(Array.isArray(asset.clients)?asset.clients:[]),...(state.clients||[]).filter(client=>clientIds.includes(Number(client.id)))];
-    const text=productionDesignSearchText([asset.name,asset.file_name,asset.note,asset.description,asset.verse_text,asset.verse_reference,asset.client_name,asset.print_material_type,...asset.tags||[],...clients.map(client=>[client.name,client.phone,client.address].join(' ')),...parseDesignMeasureOptions(asset).map(option=>[option.label,option.destination,option.detail].join(' '))].filter(Boolean).join(' '));
+    const text=productionDesignSearchText([asset.name,asset.file_name,asset.note,asset.description,asset.verse_text,asset.verse_reference,asset.client_name,asset.print_material_type,...asset.tags||[],...(needle.includes('desper')&&markedWasteDesigns().has(Number(asset.id))?['desperdicios']:[]),...clients.map(client=>[client.name,client.phone,client.address].join(' ')),...parseDesignMeasureOptions(asset).map(option=>[option.label,option.destination,option.detail].join(' '))].filter(Boolean).join(' '));
     return text.replace(/\s/g,'').includes(needle.replace(/\s/g,''))||needle.split(' ').every(word=>text.includes(word));
   }
   function setProductionDesignSearch(value){state.productionDesignSearch=String(value||'');state.productionDesignSearchReset=true;renderProductionDesignGallery();}
@@ -2488,13 +2488,55 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     const grouped=(state.designGrouping??={})[context]==='tags';
     return `<label class="design-grouping-control">Agrupar<select class="select" data-design-grouping="${context}"><option value="none" ${grouped?'':'selected'}>Sin agrupar</option><option value="tags" ${grouped?'selected':''}>Etiquetas</option></select></label><button type="button" class="btn btn-ghost" data-design-new-gallery="${context}" title="Crear una galería por etiqueta">+ Galería</button>`;
   }
+  function markedWasteDesigns(){
+    const ids=new Set();
+    for(const sheet of state.designAssets)if(sheet.kind==='sheet'){
+      const rows=sheet.composition_draft?.components??sheet.components??[];
+      for(const row of rows)if(row.previewBoxes?.some(box=>box.waste===true))ids.add(Number(row.designAssetId));
+    }
+    return ids;
+  }
+  function designGalleryTags(asset,waste){
+    const tags=designTags(asset.tags||[]);
+    if(Number(asset.hidden))return ['@hidden'];
+    const override=asset.gallery_tag_override;
+    if(override===''&&!tags.length)return [''];
+    if(override&&tags.includes(override))return [override,...tags.filter(tag=>tag!==override)];
+    if(waste.has(Number(asset.id))||tags.includes('desperdicios'))return ['desperdicios'];
+    if(tags.includes('talles'))return ['talles'];
+    return tags.length?tags:[''];
+  }
+  function galleryTagSequence(assets){
+    let saved=[];try{saved=JSON.parse(state.settings.design_tag_catalog||'[]');}catch{}
+    const existing=designTags(Array.isArray(saved)?saved:[]);
+    const other=designTags([...(state.designTagCatalog||[]),...assets.flatMap(a=>a.tags||[])]).filter(t=>!existing.includes(t)).sort((a,b)=>a.localeCompare(b,'es'));
+    return ['',...[...existing,...other].filter(t=>!['talles','desperdicios','@hidden'].includes(t)),'talles','desperdicios','@hidden'];
+  }
+  function orderedDesigns(items){
+    const waste=markedWasteDesigns(),sequence=galleryTagSequence(items),rank=new Map(sequence.map((tag,index)=>[tag,index]));
+    const ranks=new Map(items.map(a=>{
+      const tags=designGalleryTags(a,waste);
+      return [a,Math.min(...(a.gallery_tag_override!=null?tags.slice(0,1):tags).map(t=>rank.get(t)??1))];
+    }));
+    const ordered=[...items].sort((a,b)=>ranks.get(a)-ranks.get(b));
+    let saved={};try{saved=JSON.parse(state.settings.admin_gallery_order||'{}');}catch{}
+    const manual=new Map((state.galleryOrders?.designs||saved.designs||[]).map((id,i)=>[Number(id),i]));
+    const position=a=>manual.get(Number(a.id))??(Number(a.sort_order)>0?manual.size+Number(a.sort_order):Infinity);
+    const moved=ordered.filter(a=>Number.isFinite(position(a))).sort((a,b)=>position(a)-position(b));
+    let index=0;
+    return ordered.map(a=>Number.isFinite(position(a))?moved[index++]:a);
+  }
   function taggedDesignGalleries(assets,context,render){
-    const tags=[...new Set([...(state.designTagCatalog||[]),...assets.flatMap(asset=>asset.tags||[])])];
-    const groups=[...tags.map(tag=>({tag,title:tag,items:assets.filter(asset=>(asset.tags||[]).includes(tag))})),{tag:'',title:'Sin etiquetas',items:assets.filter(asset=>!(asset.tags||[]).length)}];
+    const waste=markedWasteDesigns(),tags=galleryTagSequence(assets),buckets=new Map(tags.map(t=>[t,[]]));
+    for(const asset of assets)for(const tag of designGalleryTags(asset,waste))buckets.get(tag)?.push(asset);
+    const groups=tags.filter(tag=>!['@hidden','desperdicios','talles'].includes(tag)||buckets.get(tag).length||(state.designTagCatalog||[]).includes(tag)).map(tag=>({
+      tag,title:tag==='@hidden'?'OCULTOS':(tag||'SIN ETIQUETAS').toLocaleUpperCase('es-AR'),items:buckets.get(tag)
+    }));
     return groups.map(group=>`<section class="design-tag-gallery" data-tag-gallery="${escapeHtml(group.tag)}" data-design-context="${context}"><div class="design-tag-gallery-title"><strong>${escapeHtml(group.title)}</strong><small>${group.items.length}</small></div><div class="design-tag-gallery-grid">${group.items.map(asset=>`<div class="design-tag-movable" data-tag-design="${asset.id}" draggable="true">${render(asset)}<button type="button" class="icon-btn design-gallery-move" data-design-move-handle draggable="true" aria-label="Mover ${escapeHtml(asset.name||asset.file_name)}" title="Arrastrar a otra galería"><i class="fa-solid fa-up-down-left-right" aria-hidden="true"></i></button></div>`).join('')||'<small class="design-tag-gallery-empty">Arrastrá diseños a esta galería</small>'}</div></section>`).join('');
   }
   async function moveDesignsToGallery(ids,sourceTag,targetTag){
     if(sourceTag===targetTag)return;
+    if(targetTag==='@hidden')throw new Error('Para ocultar diseños, usá Visibilidad en la edición de los marcados.');
     const data=await api('/api/admin/design-assets/bulk',{method:'PATCH',body:JSON.stringify({ids,sourceTag,targetTag})});
     const changed=new Map((data.items||[]).map(asset=>[Number(asset.id),asset]));
     state.designAssets=state.designAssets.map(asset=>changed.has(Number(asset.id))?{...asset,...changed.get(Number(asset.id))}:asset);
@@ -2523,7 +2565,9 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
       if(current.handle.hasPointerCapture(event.pointerId))current.handle.releasePointerCapture(event.pointerId);
       clearPointerDrag();if(!current.active)return;
       event.preventDefault();suppressMoveClick=Date.now()+500;
-      if(target)try{await moveDesignsToGallery(current.ids,current.sourceTag,target.dataset.tagGallery);}catch(error){toast(error.message,'error');}
+      if(target)try{const tile=document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-tag-design]');
+        if(target.dataset.tagGallery===current.sourceTag&&tile&&current.ids.length===1)reorderPhotoThumbnails('catalog-designs',current.ids[0],tile.dataset.tagDesign);
+        else await moveDesignsToGallery(current.ids,current.sourceTag,target.dataset.tagGallery);}catch(error){toast(error.message,'error');}
     });
     document.addEventListener('pointercancel',()=>clearPointerDrag());
     document.addEventListener('click',event=>{if(Date.now()<suppressMoveClick&&event.target.closest?.('[data-design-move-handle]')){event.preventDefault();event.stopImmediatePropagation();}},true);
@@ -2534,8 +2578,8 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
       if(move){
         event.preventDefault();event.stopPropagation();const card=move.closest('[data-tag-design]'),group=card.closest('[data-tag-gallery]'),id=Number(card.dataset.tagDesign),selected=group.dataset.designContext==='production'?state.productionDesignBatchSelected:state.selectedDesignAssets;
         const ids=selected?.has(id)?[...selected].filter(id=>state.designAssets.some(asset=>Number(asset.id)===id&&asset.kind==='individual')):[id],dialog=ensureAdminDialog('moveTagGalleryDialog',`Mover ${ids.length} diseño${ids.length===1?'':'s'}`);
-        dialog.classList.add('tiny-dialog');const tags=[...new Set([...(state.designTagCatalog||[]),...state.designAssets.flatMap(asset=>asset.tags||[])])];
-        qs('.dialog-body',dialog).innerHTML=`<label class="field">Galería de destino<select class="select" data-move-gallery-target>${tags.filter(tag=>tag!==group.dataset.tagGallery).map(tag=>`<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('')}<option value="">Sin etiquetas</option></select></label><p role="status" data-move-gallery-status></p><div class="admin-actions"><button type="button" class="btn btn-ghost" data-move-gallery-cancel>Cancelar</button><button type="button" class="btn btn-primary" data-move-gallery-save>Mover diseños</button></div>`;
+        dialog.classList.add('tiny-dialog');const tags=galleryTagSequence(state.designAssets).filter(tag=>tag&&tag!=='@hidden');
+        qs('.dialog-body',dialog).innerHTML=`<label class="field">Galería de destino<select class="select" data-move-gallery-target>${tags.filter(tag=>tag!==group.dataset.tagGallery).map(tag=>`<option value="${escapeHtml(tag)}">${escapeHtml(tag.toLocaleUpperCase('es-AR'))}</option>`).join('')}<option value="">Sin etiquetas</option></select></label><p role="status" data-move-gallery-status></p><div class="admin-actions"><button type="button" class="btn btn-ghost" data-move-gallery-cancel>Cancelar</button><button type="button" class="btn btn-primary" data-move-gallery-save>Mover diseños</button></div>`;
         qs('[data-move-gallery-cancel]',dialog).onclick=()=>dialog.close();qs('[data-move-gallery-save]',dialog).onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{await moveDesignsToGallery(ids,group.dataset.tagGallery,qs('[data-move-gallery-target]',dialog).value);dialog.close();}catch(error){qs('[data-move-gallery-status]',dialog).textContent=error.message;}finally{button.disabled=false;}};dialog.showModal();return;
       }
       const button=event.target.closest('[data-design-new-gallery]');if(!button)return;
@@ -2553,7 +2597,9 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
       drag={ids,sourceTag:group.dataset.tagGallery};card.classList.add('dragging');event.dataTransfer?.setData('application/x-salmos-designs',JSON.stringify(drag));if(event.dataTransfer)event.dataTransfer.effectAllowed='move';
     },true);
     document.addEventListener('dragover',event=>{const group=event.target.closest?.('[data-tag-gallery]');if(!group||!drag)return;event.preventDefault();event.stopImmediatePropagation();qsa('.design-tag-gallery.drop-target').forEach(node=>node.classList.remove('drop-target'));group.classList.add('drop-target');},true);
-    document.addEventListener('drop',async event=>{const group=event.target.closest?.('[data-tag-gallery]');if(!group||!drag)return;event.preventDefault();event.stopImmediatePropagation();const current=drag;drag=null;qsa('.drop-target,.design-tag-movable.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));try{await moveDesignsToGallery(current.ids,current.sourceTag,group.dataset.tagGallery);}catch(error){toast(error.message,'error');}},true);
+    document.addEventListener('drop',async event=>{const group=event.target.closest?.('[data-tag-gallery]');if(!group||!drag)return;event.preventDefault();event.stopImmediatePropagation();const current=drag;drag=null;qsa('.drop-target,.design-tag-movable.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));try{const tile=event.target.closest('[data-tag-design]');
+      if(group.dataset.tagGallery===current.sourceTag&&tile&&current.ids.length===1)reorderPhotoThumbnails('catalog-designs',current.ids[0],tile.dataset.tagDesign);
+      else await moveDesignsToGallery(current.ids,current.sourceTag,group.dataset.tagGallery);}catch(error){toast(error.message,'error');}},true);
     document.addEventListener('dragend',()=>{drag=null;qsa('.design-tag-gallery.drop-target,.design-tag-movable.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));});
   }
   function bindMaterialListSorting(){
@@ -2912,8 +2958,9 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   function productionPhotoMatchesAudience(asset,audiences,fit=photoProductDetails(asset).variant){
     if(!audiences.length)return true;
     if(mockupAssetCategory(asset)==='Persona'&&!asset.source_media_id){
-      const kind=modelPhotoKind(asset);
-      return !(kind==='Hombre'&&femaleGarmentFit(fit))&&modelKindAudience(kind).some(value=>audiences.includes(value));
+      const kind=modelPhotoKind(asset),known=modelKindAudience(kind);
+      if(known.length)return !(kind==='Hombre'&&femaleGarmentFit(fit))&&known.some(value=>audiences.includes(value));
+      return garmentPhotoMembership(asset).some(row=>audiences.some(value=>row.line===(value==='Kids'?'kids':'adult')));
     }
     if(isHangerPhoto(asset))return !femaleGarmentFit(fit)||audiences.some(value=>value!=='Hombre');
     if(isProductCapPhoto(asset)){
@@ -2943,6 +2990,56 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     });
   }
   function productionPhotoKind39(){const filters=state.mockupVariantFilters??={};return Object.hasOwn(filters,'kind')?filters.kind:window.SalmosBook.current().kind||'';}
+  function productionGarmentPhotos(assets,type,selection,materialLine){
+    const fitOf=value=>['sin corte','sin definir'].includes(photoFit(value))?'':photoFit(value);
+    const colorOf=value=>value&&photoColor(value)!=='sin color'?photoColor(value):'';
+    const wantedFit=fitOf(selection.cut),wantedColor=colorOf(selection.color);
+    const photos=assets.filter(a=>a.product_type===type&&(a.asset_type==='base'||a.asset_type==='product'));
+    const details=new Map(photos.map(a=>[a,photoProductDetails(a)]));
+    const byId=new Map(photos.map(a=>[Number(a.id),a])), pairs=new Map(), identities=new Map();
+    for(const a of photos){
+      const d=details.get(a),fit=fitOf(d.variant),color=colorOf(d.color);
+      const person=!isHangerPhoto(a)&&!a.source_media_id;
+      const audience=person?modelKindAudience(modelPhotoKind(a)):[];
+      const line=audience.length?(audience.includes('Kids')?'kids':'adult'):
+        a.material_class?(kidClass25(a.material_class)?'kids':'adult'):'';
+      const options=[];
+      const add=(f,c,l)=>{
+        f=fitOf(f);c=colorOf(c);
+        if((fit&&f&&f!==fit)||(color&&c&&c!==color))return;
+        options.push({fit:fit||f,color:color||c,line:line||l||''});
+      };
+      for(const family of garmentPhotoMembership(a))add(family.fit,family.color,family.line);
+      for(const id of a.associated_product_ids||[]){
+        const parent=details.get(byId.get(Number(id)));
+        if(parent)add(parent.variant,parent.color,line);
+      }
+      if(!options.length)add(fit,color,line);
+      const model=person&&window.SalmosProductionGallery.key(a.model_name);
+      const pairKey=model&&JSON.stringify([model,line]);
+      identities.set(a,{options,pairKey});
+      if(pairKey&&['front','back'].includes(a.pose)){
+        if(!pairs.has(pairKey))pairs.set(pairKey,[]);
+        pairs.get(pairKey).push(a);
+      }
+    }
+    return photos.filter(a=>{
+      const {options,pairKey}=identities.get(a);
+      if(!productionPhotoMatchesAudience(a,selection.audiences||[],selection.cut))return false;
+      return options.some(option=>{
+        let {fit,color,line}=option;
+        if(materialLine&&line&&line!==materialLine)return false;
+        if((fit&&wantedFit&&fit!==wantedFit)||(color&&wantedColor&&color!==wantedColor))return false;
+        if((!fit||!color)&&pairKey&&(fit||color)&&['front','back'].includes(a.pose)){
+          const siblings=(pairs.get(pairKey)||[]).filter(other=>other.pose!==a.pose)
+            .flatMap(other=>identities.get(other).options).filter(other=>other.fit&&other.color&&(!fit||other.fit===fit)&&(!color||other.color===color));
+          const values=new Set(siblings.map(other=>JSON.stringify([other.fit,other.color])));
+          if(values.size===1){fit=siblings[0].fit;color=siblings[0].color;}
+        }
+        return (!wantedFit||fit===wantedFit)&&(!wantedColor||color===wantedColor);
+      });
+    });
+  }
   function renderProductionPhotoFilters39(photos,selection){
     const section=qs('#productionVariantSection');if(!section)return;let host=qs('#productionPhotoFilters39');if(!host){host=document.createElement('div');host.id='productionPhotoFilters39';host.className='production-photo-filters39';qs('.production-picker-head',section).after(host);}
     const type=qs('#productionMaterialType').value,book=window.SalmosBook.isBookType(type),filters=state.mockupVariantFilters??={};
@@ -2975,24 +3072,40 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     const type=qs('#productionMaterialType').value,book=window.SalmosBook.isBookType(type),virtual=productionVirtualStock(),primary=productionPrimaryMaterial();
     const garment=materialIsGarment(type),materialFilters=garment?state.productionMaterialFilters?.[type]:null;
     const fromProduct=materialFilters?.fromProduct;
-    const compatible=assets.filter(asset=>productionPhotoMatchesMaterial(asset,fromProduct?null:primary)
+    const compatible=assets.filter(asset=>(garment?asset.product_type===type:productionPhotoMatchesMaterial(asset,fromProduct?null:primary))
       &&(garment||book||virtual||asset.source_media_id||state.materials.some(material=>photoMatchesItem(asset,material)
         &&(Number(material.stock_qty)>0||state.productionEditingProduct&&state.productionMaterialsSelected.some(item=>Number(item.materialId)===Number(material.id))))));
     let sourceAvailable=compatible;
-    if(!book&&primary&&!fromProduct&&(virtual||state.productionLimitMaterialPhotos)){
+    if(!book&&!garment&&primary&&!fromProduct&&(virtual||state.productionLimitMaterialPhotos)){
       const matching=compatible.filter(asset=>productionPhotoMatchesItem(asset,primary)||asset.source_media_id);
-      if(matching.length||virtual)sourceAvailable=matching;
+      sourceAvailable=matching;
     }
-    const selection={cut:materialFilters?.fit||'',color:materialFilters?.color||'',audiences:garment?state.productionAudiences||[]:[]};
+    const chosen=garment&&(state.productionVirtualMaterial?.material_type===type?state.productionVirtualMaterial:
+      state.productionMaterialsSelected.map(row=>state.materials.find(m=>Number(m.id)===Number(row.materialId))).find(m=>m?.material_type===type));
+    const costMaterial=chosen||(fromProduct?primary:null);
+    const materialLine=costMaterial?.material_class?(kidClass25(costMaterial.material_class)?'kids':'adult'):'';
+    let audiences=garment?state.productionAudiences||[]:[];
+    if(materialLine==='kids')audiences=['Kids'];
+    else if(materialLine==='adult')audiences=audiences.filter(a=>a!=='Kids');
+    const selection={cut:costMaterial?.fit||materialFilters?.fit||'',color:costMaterial?.color||materialFilters?.color||'',audiences};
     const photoMatches=window.SalmosProductionGallery.matches,matchingKeys={fitKey:photoFit,colorKey:photoColor};
-    const productPhotos=productionFilteredPhotos(sourceAvailable,selection);
+    const productPhotos=garment?productionGarmentPhotos(sourceAvailable,type,selection,materialLine):productionFilteredPhotos(sourceAvailable,selection);
     renderProductionPhotoFilters39(productPhotos,selection);
     const {cut,color,line,...other}=filters;
-    const narrowed=productionFilteredPhotos(productPhotos,{cut,color,audiences:line?[line]:[]});
+    let narrowed=productPhotos;
+    if(garment){
+      if(cut||color)narrowed=productionGarmentPhotos(sourceAvailable,type,{cut:cut||selection.cut,color:color||selection.color,audiences},materialLine);
+      if(line)narrowed=narrowed.filter(a=>productionPhotoMatchesAudience(a,[line],selection.cut));
+    }else narrowed=productionFilteredPhotos(productPhotos,{cut,color,audiences:line?[line]:[]});
     const available=narrowed.filter(asset=>photoMatches(asset,other,{...matchingKeys,book,kind:book?productionPhotoKind39():''}));
     const photoCount=qs('#productionPhotoCount39');if(photoCount)photoCount.textContent=available.length+' foto'+(available.length===1?'':'s');
     const description=a=>[a.model_name||a.name,a.garment_style,a.color,a.pose==='both'?'Ambos':a.pose==='back'?'Espalda / lado B':'Frente / lado A',a.variant_label].filter(Boolean).join(' · ');
-    baseSelect.innerHTML='<option value="">Elegir una variante de la galería</option>'+compatible.map(a=>`<option value="${a.id}">${escapeHtml(description(a))}</option>`).join('');baseSelect.value=compatible.some(a=>String(a.id)===oldBase)?oldBase:'';
+    const choices=garment?productPhotos:compatible;
+    const saved=state.productionMountViews?.[mockupViewKey(oldBase)]&&compatible.find(a=>String(a.id)===oldBase&&!choices.includes(a));
+    baseSelect.innerHTML='<option value="">Elegir una variante de la galería</option>'+choices.map(a=>`<option value="${a.id}">${escapeHtml(description(a))}</option>`).join('')+(saved?`<option hidden value="${saved.id}">${escapeHtml(description(saved))}</option>`:'');
+    baseSelect.value=(saved||choices.some(a=>String(a.id)===oldBase))?oldBase:'';
+    const allButton=qs('#showAllMockupVariants');
+    if(allButton)allButton.textContent=garment&&costMaterial?'Todas las vistas del producto':'Ver todas';
     const gallery=qs('#mockupVariantGallery');if(gallery){const scroll=gallery.scrollLeft;gallery.innerHTML=available.length?renderGalleryLayout(available,'production-models',a=>`<div class="production-photo-tile"><button type="button" class="mockup-variant-card ${Number(a.id)===Number(baseSelect.value)?'selected':''}" data-select-mockup-variant="${a.id}" ${sortablePhotoAttrs(a.id,'catalog-photos')} title="Elegir ${escapeHtml(description(a))}">${sortablePhotoHandle()}<img draggable="false" src="${mockupAssetUrl(a)}" alt="${escapeHtml(description(a))}" loading="lazy"></button>${Number(a.id)>0?`<button type="button" class="production-photo-edit icon-btn" data-edit-mockup-asset="${Number(a.id)}" aria-label="Editar foto de ${escapeHtml(description(a))}" title="Editar foto"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1 12-12a3 3 0 0 0-4-4L4 15z"/></svg></button>`:''}</div>`,{rerender:renderMockupStudioOptions,title:'Modelos y productos',leafClass:'gallery-layout-photo-items'}):'<p class="muted">No hay fotos de este producto con estos filtros. Podés cambiar el filtro o agregar una foto.</p>';gallery.scrollLeft=scroll;mountGalleryLayoutButton(gallery,'production-models');}
     const count=qs('#mockupVariantCount');if(count)count.textContent=`${available.length} de ${assets.length} variantes · Filtros junto a la vista previa.`;
     const backgrounds=state.mockupAssets.filter(a=>a.asset_type==='background'&&!Number(a.duplicate_of));backgroundSelect.innerHTML='<option value="">Sin fondo agregado</option>'+backgrounds.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');const oldBackgroundAsset=state.mockupAssets.find(a=>String(a.id)===oldBackground),backgroundId=String(oldBackgroundAsset?.duplicate_of||oldBackground);backgroundSelect.value=backgrounds.some(a=>String(a.id)===backgroundId)?backgroundId:'';
@@ -3016,11 +3129,20 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   }
   function selectMockupVariant(id){state.mockupCalibration=null;state.mockupChoosingCenter=false;state.mockupTool='move';
     if(state.mockupViewBusy)return;
-    const previous=snapshotActiveMockupView(),asset=mockupBaseAsset(id);if(!asset)return;const filters=state.productionMaterialFilters?.[qs('#productionMaterialType')?.value];
-    if(!productionPhotoMatchesMaterial(asset,filters?.fromProduct?null:productionPrimaryMaterial())){toast('Esta foto no coincide con el corte de la materia prima elegida.','error');return;}
-    const current=productionPrimaryMaterial(),wanted=state.productionAudiences||[];
-    const availableForPrimary=!materialIsGarment(qs('#productionMaterialType')?.value)||productionPhotoMatchesAudience(asset,purchaseItemAudiences(current||{}));
-    if(productionVirtualStock()&&(!current||!availableForPrimary||wanted.length&&wanted.every(value=>value==='Kids')&&!kidClass25(current.material_class))){
+    const asset=mockupBaseAsset(id);if(!asset)return;
+    const type=qs('#productionMaterialType').value,garment=materialIsGarment(type),baseSelect=qs('#mockupBaseSelect');
+    const current=productionPrimaryMaterial(),filters=state.productionMaterialFilters?.[type];
+    const inPicker=Array.from(baseSelect.options).some(option=>option.value===String(asset.id));
+    const savedView=state.productionMountViews?.[mockupViewKey(asset.id)];
+    const matches=garment?inPicker||savedView:productionPhotoMatchesMaterial(asset,filters?.fromProduct?null:current);
+    if(!matches){
+      toast('Esta foto no coincide con el producto elegido en Costos.','error');return;
+    }
+    snapshotActiveMockupView();
+    if(garment&&savedView&&!inPicker){const option=new Option(asset.model_name||asset.name,String(asset.id));option.hidden=true;baseSelect.add(option);}
+    const chosenMaterial=state.productionVirtualMaterial?.material_type===type||state.productionMaterialsSelected.some(row=>state.materials.find(m=>Number(m.id)===Number(row.materialId))?.material_type===type);
+    const wanted=state.productionAudiences||[],availableForPrimary=!garment||productionPhotoMatchesAudience(asset,purchaseItemAudiences(current||{}));
+    if(productionVirtualStock()&&!chosenMaterial&&(!current||!availableForPrimary||wanted.length&&wanted.every(value=>value==='Kids')&&!kidClass25(current.material_class))){
       state.productionVirtualMaterial=productionVirtualMaterialFromPhoto(asset);renderProductionSelectedMaterials();renderProductionMaterialGallery();}
     qs('#mockupBaseSelect').value=String(asset.id);const view=rememberMockupView(asset.id);
     const clipboard=state.mockupClipboard,targetKey=mockupViewKey(asset.id);if(clipboard&&targetKey!==clipboard.sourceKey){if(clipboard.targetKey&&clipboard.targetKey!==targetKey)state.mockupClipboard=null;else clipboard.targetKey=targetKey;}else if(clipboard?.targetKey&&clipboard.targetKey!==targetKey)state.mockupClipboard=null;qs('#mockupBackgroundSelect').value=String(view.backgroundId||'');state.mockupPointer=null;state.mockupZoom=1;state.mockupPanX=0;state.mockupPanY=0;
@@ -3056,7 +3178,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   function syncProductionCapControls(){const base=mockupBaseAsset(),hasCap=base?.cap_style&&base.cap_style!=='none',box=qs('#productionCapPriceBox'),select=qs('#mockupCapMaterialSelect');if(!box||!select)return;box.classList.toggle('hidden',!hasCap);if(!hasCap)return;const old=select.value,mats=state.materials.filter(m=>m.material_type==='cap');select.innerHTML='<option value="">Elegir gorra para conocer su costo</option>'+mats.map(m=>`<option value="${m.id}">${escapeHtml(m.name)} · ${escapeHtml(m.color||'')} · ${money(m.average_cost_cents)}</option>`).join('');select.value=mats.some(m=>String(m.id)===old)?old:(mats[0]?String(mats[0].id):'');if(select.value&&!qs('#mockupCapSalePrice').value)loadCapPriceSuggestion(select.value);}
   async function loadCapPriceSuggestion(id){try{const d=await api(`/api/admin/production/price-suggestion?materialId=${Number(id)}`);if(Number(d.price_cents)>0&&!qs('#mockupCapSalePrice')?.value){qs('#mockupCapSalePrice').value=centsToPesos(d.price_cents);calcProductionBuilderCost()}}catch{}}
   function renderMockupCapDesignOptions(){
-    const designSelect=qs('#mockupCapDesignSelect'),measureSelect=qs('#mockupCapMeasureSelect');if(!designSelect||!measureSelect)return;const designs=state.designAssets.filter(a=>a.kind==='individual'),old=Number(state.mockupCapDesign?.designAssetId)||Number(designSelect.value),design=designs.find(a=>Number(a.id)===old);designSelect.innerHTML='<option value="">Elegir estampa de gorra</option>'+designs.map(a=>`<option value="${a.id}">${escapeHtml(a.name||a.file_name)}</option>`).join('');designSelect.value=design?String(design.id):'';
+    const designSelect=qs('#mockupCapDesignSelect'),measureSelect=qs('#mockupCapMeasureSelect');if(!designSelect||!measureSelect)return;const designs=orderedDesigns(state.designAssets.filter(a=>a.kind==='individual')),old=Number(state.mockupCapDesign?.designAssetId)||Number(designSelect.value),design=designs.find(a=>Number(a.id)===old);designSelect.innerHTML='<option value="">Elegir estampa de gorra</option>'+designs.map(a=>`<option value="${a.id}">${escapeHtml(a.name||a.file_name)}</option>`).join('');designSelect.value=design?String(design.id):'';
     const options=design?productionMeasureOptions(design):[],oldMeasure=state.mockupCapDesign?.measureOptionId;measureSelect.innerHTML='<option value="">Elegir medida</option>'+options.map(o=>`<option value="${escapeHtml(o.id)}">${escapeHtml(designMeasureLabel(o))}</option>`).join('');const chosen=options.find(o=>designMeasureMatchesId(o,oldMeasure))||options[0];measureSelect.value=chosen?.id||'';if(chosen){state.mockupCapDesign={...(state.mockupCapDesign||{}),designAssetId:Number(design.id),measureOptionId:chosen.id,widthCm:Number(chosen.widthCm)||0,heightCm:Number(chosen.heightCm)||0,measureLabel:designMeasureLabel(chosen),printSide:'front'};}else state.mockupCapDesign=null;
     qsa('.mockup-cap-field').forEach(el=>el.classList.toggle('hidden',!qs('#mockupAddCap')?.checked));
   }
@@ -4882,7 +5004,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   function updateProductionMeasureSuggestion(force=false){const design=state.designAssets.find(a=>Number(a.id)===Number(state.productionMeasureDesignId)),input=qs('#productionMeasureCost'),hint=qs('#productionMeasureCostHint');if(!input||!design)return;const w=Number(qs('#productionMeasureWidth')?.value)||0,h=Number(qs('#productionMeasureHeight')?.value)||0,suggestion=generalPrintCostCents(design,w,h);if(force||!state.productionMeasureCostDirty)input.value=w&&h?centsToPesos(suggestion):'';if(force)state.productionMeasureCostDirty=false;if(hint)hint.textContent=`Sugerido: ${money(suggestion)} por estampa`;}
   function designPrintCostCents(design,width,height,optionId=''){
     const option=parseDesignMeasureOptions(design).find(o=>designMeasureMatchesId(o,optionId)||(!optionId&&Math.abs(Number(o.widthCm)-width)<.02&&Math.abs(Number(o.heightCm)-height)<.02));
-    for(const source of option?.sources||[]){const sheet=state.designAssets.find(a=>Number(a.id)===Number(source.sheetAssetId));if(!sheet?.sheet_metrics)continue;const i=(sheet.components||[]).findIndex(c=>Number(c.designAssetId)===Number(design.id)&&designMeasureMatchesId(option,String(c.measureOptionId)));if(i>=0)return Math.round((sheet.sheet_metrics.componentCostsCents?.[i]||0)/Math.max(1,Number(sheet.components[i].quantity)||1));}
+    for(const source of option?.sources||[]){const sheet=state.designAssets.find(a=>Number(a.id)===Number(source.sheetAssetId));if(!sheet?.sheet_metrics)continue;const i=(sheet.components||[]).findIndex(c=>Number(c.designAssetId)===Number(design.id)&&designMeasureMatchesId(option,String(c.measureOptionId)));if(i>=0){const qty=Number(sheet.components[i].quantity)-(sheet.sheet_metrics.componentWasteCounts?.[i]||0);if(qty>0)return Math.round((sheet.sheet_metrics.componentCostsCents?.[i]||0)/qty);}}
     const material=designPrintMaterial(design);if(!material)return null;const area=Math.max(0,Number(width)||0)*Math.max(0,Number(height)||0);return Math.round(area/(100*designPrintRollWidth(design))*(Number(material.average_cost_cents)||0));
   }
   function designOriginCostCents(design,option,source){
@@ -5544,19 +5666,71 @@ function nearestDesignMeasure(options,measurement){
   function sheetScope(key){return qs(key==='upload'?'#designUploadScope':'[data-design-scope]',sheetRoot(key))}
   function sheetSize(key){const root=sheetRoot(key);return {width:Number(qs(key==='upload'?'#designUploadWidth':'[data-design-width]',root)?.value)||0,height:Number(qs(key==='upload'?'#designUploadHeight':'[data-design-height]',root)?.value)||0}}
   function sheetComponents(key){return (state.designSheetDrafts?.[key]||[]).map(c=>{const a=sheetIndividualAsset(key,c.designAssetId),o=a&&parseDesignMeasureOptions(a).find(x=>designMeasureMatchesId(x,c.measureOptionId))||c.pendingMeasureOption;return {...c,...(o||{}),measureOptionId:c.measureOptionId,name:a?.name||c.name,scope:a?.scope||c.scope}})}
-  function sheetMetrics(width,height,components,costCents=1000000){
-    const total=width*height,boxes=[];components.forEach((c,i)=>(c.previewBoxes||[]).forEach(b=>boxes.push({x:Number(b.x),y:Number(b.y),x2:Number(b.x)+Number(b.width),y2:Number(b.y)+Number(b.height),i})));
-    const marked=components.length>0&&components.every(c=>(c.previewBoxes||[]).length===Number(c.quantity));let used=0;const areas=components.map(()=>0);
-    if(marked&&boxes.length){const xs=[...new Set(boxes.flatMap(b=>[b.x,b.x2]))].sort((a,b)=>a-b),ys=[...new Set(boxes.flatMap(b=>[b.y,b.y2]))].sort((a,b)=>a-b);
-      for(let x=0;x<xs.length-1;x++)for(let y=0;y<ys.length-1;y++){const cx=(xs[x]+xs[x+1])/2,cy=(ys[y]+ys[y+1])/2,active=boxes.filter(b=>b.x<=cx&&b.x2>=cx&&b.y<=cy&&b.y2>=cy);if(!active.length)continue;const area=(xs[x+1]-xs[x])*(ys[y+1]-ys[y])*total;used+=area;active.forEach(b=>areas[b.i]+=area/active.length)}
-    }else components.forEach((c,i)=>{areas[i]=(Number(c.widthCm)||0)*(Number(c.heightCm)||0)*(Number(c.quantity)||0);used+=areas[i]});
-    const componentCosts=areas.map(a=>total>0?Math.round(a/total*costCents):0),allocated=componentCosts.reduce((a,b)=>a+b,0);
-    return {total,used,waste:Math.max(0,total-used),percent:total>0?Math.max(0,total-used)/total*100:0,valid:total>0&&used>0&&used<=total+.0001,componentCosts,allocated,wasteCost:Math.max(0,costCents-allocated),marked};
+function designSheetMetrics(width,height,components=[],costCents=1000000){
+  const total=Number(width)*Number(height), cost=Math.max(0,Math.round(Number(costCents)||0));
+  const useful=components.map(()=>0), discarded=components.map(()=>0), wasteCounts=components.map(()=>0);
+  const rects=[], clamp=value=>Math.min(1,Math.max(0,Number(value)||0));
+  const marked=components.length>0&&components.every(c=>(c.previewBoxes||[]).length===Number(c.quantity));
+  components.forEach((c,index)=>{
+    for(const box of c.previewBoxes||[]){
+      const x=clamp(box.x), y=clamp(box.y), right=clamp(x+Number(box.width)), bottom=clamp(y+Number(box.height));
+      const waste=box.waste===true;
+      if(waste)wasteCounts[index]++;
+      if(x<right&&y<bottom)rects.push({x,y,right,bottom,index,waste});
+    }
+  });
+  if(marked){
+    const xs=[...new Set(rects.flatMap(r=>[r.x,r.right]))].sort((a,b)=>a-b);
+    for(let i=1;i<xs.length;i++){
+      const left=xs[i-1], strip=(xs[i]-left)*total, edges=[];
+      for(const r of rects)if(r.x<=left&&r.right>left)edges.push({y:r.y,start:true,r},{y:r.bottom,start:false,r});
+      edges.sort((a,b)=>a.y-b.y);
+      // Integral of 1 / overlapping boxes. Each box receives its share of every covered strip.
+      const starts=new Map();let previous=0,share=0;
+      for(const edge of edges){
+        if(starts.size)share+=(edge.y-previous)/starts.size;
+        previous=edge.y;
+        if(edge.start)starts.set(edge.r,share);
+        else{
+          const r=edge.r;
+          (r.waste?discarded:useful)[r.index]+=(share-starts.get(r))*strip;
+          starts.delete(r);
+        }
+      }
+    }
+  }else{
+    components.forEach((c,i)=>{
+      const area=(Number(c.widthCm)||0)*(Number(c.heightCm)||0);
+      useful[i]=area*Math.max(0,Number(c.quantity||0)-wasteCounts[i]);
+      discarded[i]=area*wasteCounts[i];
+    });
   }
-  function sheetMetricsHtml(width,height,components,costCents=1000000){
-    const m=sheetMetrics(width,height,components,costCents),n=v=>Number(v).toLocaleString('es-AR',{maximumFractionDigits:2});
+  const sum=items=>items.reduce((a,b)=>a+b,0), used=sum(useful), explicit=sum(discarded), covered=used+explicit;
+  const wasteArea=Math.max(0,total-used), empty=Math.max(0,total-covered);
+  const areas=[...useful,...discarded,empty], exact=areas.map(a=>total>0?a/total*cost:0);
+  const cents=exact.map(Math.floor);
+  // Apportion rounding cents once so rows and totals agree, even on a completely full sheet.
+  const remaining=Math.max(0,Math.min(cents.length,cost-sum(cents)));
+  const fractions=exact.map((n,i)=>({i,f:n-cents[i]})).sort((a,b)=>b.f-a.f);
+  if(total>0)for(const {i} of fractions.slice(0,remaining))cents[i]++;
+  const componentCostsCents=cents.slice(0,useful.length), componentWasteCostsCents=cents.slice(useful.length,-1);
+  const allocatedCostCents=sum(componentCostsCents);
+  return {valid:total>0&&covered>0&&covered<=total+.0001,totalAreaCm2:total,usedAreaCm2:used,
+    wasteAreaCm2:wasteArea,wastePercent:total>0?100*wasteArea/total:0,costExtraPercent:used>0?100*wasteArea/used:0,
+    componentAreasCm2:useful,componentCostsCents,allocatedCostCents,wasteCostCents:Math.max(0,cost-allocatedCostCents),
+    componentWasteCounts:wasteCounts,componentWasteCostsCents,markedWasteAreaCm2:explicit,markedWasteCostCents:sum(componentWasteCostsCents),
+    allocationMethod:marked?'marked_boxes':'dimensions_estimate'};
+}
+  function sheetMetrics(width,height,components,costCents){
+    const m=designSheetMetrics(width,height,components,costCents);
+    return {total:m.totalAreaCm2,used:m.usedAreaCm2,waste:m.wasteAreaCm2,percent:m.wastePercent,valid:m.valid,
+      componentCosts:m.componentCostsCents,allocated:m.allocatedCostCents,wasteCost:m.wasteCostCents,marked:m.allocationMethod==='marked_boxes',
+      markedWaste:m.markedWasteAreaCm2,markedCost:m.markedWasteCostCents,counts:m.componentWasteCounts,wasteCosts:m.componentWasteCostsCents};
+  }
+  function sheetMetricsHtml(width,height,components,costCents=1000000,m=sheetMetrics(width,height,components,costCents)){
+    const n=v=>Number(v).toLocaleString('es-AR',{maximumFractionDigits:2});
     if(!width||!height)return '<p class="muted">Ingresá la superficie total para calcular el desperdicio.</p>';
-    return `<div class="sheet-surface-summary"><span>Plancha <b>${n(m.total)} cm² · ${printMoney(costCents)}</b></span><span>Diseños <b>${n(m.used)} cm² · ${printMoney(m.allocated)}</b></span><span>Desperdicio <b>${n(m.waste)} cm² · ${n(m.percent)}% · ${printMoney(m.wasteCost)}</b></span></div>${m.used>m.total?'<p class="sheet-area-error" role="alert">Los diseños superan la superficie de la plancha.</p>':''}<small class="field-help">${m.marked?'Costo proporcional a los recuadros marcados. En cruces de recuadros, la superficie compartida se reparte sin cobrarla dos veces.':'Estimación con medidas y cantidades: corregí los recuadros de esta plancha para obtener el cálculo del acomodo.'}</small>`;
+    return `<div class="sheet-surface-summary"><span>Plancha <b>${n(m.total)} cm² · ${money(costCents)}</b></span><span>Diseños <b>${n(m.used)} cm² · ${money(m.allocated)}</b></span><span>Desperdicio <b>${n(m.waste)} cm² · ${n(m.percent)}% · ${money(m.wasteCost)}</b></span></div>${m.counts.some(Boolean)?`<small class="field-help">Del desperdicio, ${n(m.markedWaste)} cm² · ${money(m.markedCost)} corresponden a marcas descartadas.</small>`: ''}${!m.valid&&m.used+m.markedWaste>m.total+.0001?'<p class="sheet-area-error" role="alert">Los diseños superan la superficie de la plancha.</p>':''}<small class="field-help">${m.marked?'Costo proporcional a los recuadros marcados. En cruces de recuadros, la superficie compartida se reparte sin cobrarla dos veces.':'Estimación con medidas y cantidades: corregí los recuadros de esta plancha para obtener el cálculo del acomodo.'}</small>`;
   }
   function fitSheetPreview(canvas){
     const viewport=canvas?.closest('.sheet-preview-viewport'),image=canvas&&qs('img',canvas);
@@ -5734,7 +5908,7 @@ function nearestDesignMeasure(options,measurement){
       ${sheetArtworkZoomHtml(asset,key)}</div>`;
   }
   function sheetDesignLibraryHtml(key){
-    const assets=state.designAssets.filter(asset=>asset.kind==='individual'&&['salmos','clients'].includes(asset.scope)&&!Number(asset.hidden));
+    const assets=orderedDesigns(state.designAssets.filter(asset=>asset.kind==='individual'&&['salmos','clients'].includes(asset.scope)&&!Number(asset.hidden)));
     return `<div class="sheet-sample-gallery">${assets.map(asset=>sheetArtworkTile(asset,key)).join('')}</div>`;
   }
   function openSheetArtworkZoom(key,id){
@@ -6012,8 +6186,7 @@ function nearestDesignMeasure(options,measurement){
     <div class="production-expanded-grid" data-sheet-picker-grid></div>`;
     const grid=qs('[data-sheet-picker-grid]',dialog),input=qs('[data-sheet-picker-search]',dialog);
     const render=()=>{
-      const assets=state.designAssets.filter(asset=>asset.kind==='individual'&&asset.scope===scope&&!Number(asset.hidden)&&productionDesignMatchesSearch(asset,input.value));
-      if(suggestion)assets.sort((a,b)=>Number(b.id===suggestion.id)-Number(a.id===suggestion.id));
+      const assets=orderedDesigns(state.designAssets.filter(asset=>asset.kind==='individual'&&asset.scope===scope&&!Number(asset.hidden)&&productionDesignMatchesSearch(asset,input.value)));
       qs('[data-sheet-picker-count]',dialog).textContent=assets.length+' diseños';
       for(const button of qsa('[data-sheet-picker-scope]',dialog)){
         const active=button.dataset.sheetPickerScope===scope;
@@ -6177,7 +6350,7 @@ function nearestDesignMeasure(options,measurement){
         <span class="sheet-mark-number">${number}</span><span>${detectedSizeLabel(measure)}</span>
       </button>
       <button type="button" class="icon-btn sheet-edit-mark" data-edit-sheet-box="${rowIndex}" data-box-index="${boxIndex}" data-sheet-key="${key}" aria-label="Editar recuadro de la marca ${number}" title="Editar recuadro"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
-      <strong class="sheet-mark-price">${printMoney(price(measure))}</strong>
+      <strong class="sheet-mark-price">${box.waste?'Desperdicio':printMoney(price(measure))}</strong>
       <label class="sheet-waste-choice"><input type="checkbox" aria-label="Desperdicio de la marca ${number}" data-sheet-waste="${rowIndex}" data-box-index="${boxIndex}" data-sheet-key="${key}" ${box.waste?'checked':''}></label>
     </li>`;
   }
@@ -6185,6 +6358,7 @@ function nearestDesignMeasure(options,measurement){
     const root=sheetRoot(key),host=qs('[data-sheet-selected]',root);
     if(!host)return;
     const components=sheetComponents(key),size=sheetSize(key),cost=sheetCostCents(key);
+    const metrics=sheetMetrics(size.width,size.height,components,cost);
     const count=qs('[data-sheet-list-count]',root),numbers=sheetMarkNumbers(components),scroll=host.scrollTop;
     const price=option=>proportionalPrintCost(option.widthCm,option.heightCm,size.width,size.height,cost)??0;
     const groups=new Map();
@@ -6212,7 +6386,7 @@ function nearestDesignMeasure(options,measurement){
       const index=target?.index??marks[0]?.rowIndex??rows[0].index;
       const actions=marks.length?`<button type="button" class="btn btn-ghost" data-sheet-repeat="${index}" data-sheet-key="${key}">${target?'Terminar':'Hay más'}</button>`:
         `<button type="button" class="btn btn-ghost" data-sheet-box="${index}" data-sheet-key="${key}">${marking?'✓ Marcando':'Marcar este diseño'}</button>`;
-      const openKey=key+':'+id,expanded=open.has(openKey),total=marks.reduce((sum,mark)=>sum+price(mark.measure),0)+estimates.reduce((sum,{component})=>sum+price(component)*Number(component.quantity),0);
+      const openKey=key+':'+id,expanded=open.has(openKey),total=rows.reduce((sum,{index})=>sum+metrics.componentCosts[index],0);
       return `<div class="sheet-component-row ${marking||highlighted?'sheet-component-active':''} ${!marks.length?'sheet-component-pending':''}" ${!marks.length?'title="Pendiente de marcar en la plancha"':''}>
         <div class="sheet-component-identity">
           ${asset?`<span class="sheet-artwork-tile sheet-added-artwork">${designSmallImage(asset)}${sheetArtworkZoomHtml(asset,key)}</span>`:''}
@@ -6224,7 +6398,7 @@ function nearestDesignMeasure(options,measurement){
           <button type="button" class="sheet-marked-count sheet-count-toggle" data-toggle-sheet-sizes="${id}" data-sheet-key="${key}" aria-expanded="${expanded}">
             <span class="sheet-mark-number">${marks.length}</span><span>Marcas</span><span aria-hidden="true">${expanded?'⌃':'⌄'}</span>
           </button>
-          <span class="sheet-component-cost sheet-mark-price" title="Costo en esta plancha">${printMoney(total)}</span>
+          <span class="sheet-component-cost sheet-mark-price" title="Costo en esta plancha">${money(total)}</span>
           <span class="sheet-waste-icon" role="img" aria-label="Desperdicio" title="Desperdicio"><i class="fa-solid fa-trash-arrow-up" aria-hidden="true"></i></span>
         </div>
         ${expanded?`<ol class="sheet-size-list">
@@ -6454,7 +6628,7 @@ function nearestDesignMeasure(options,measurement){
     const body=qs('.dialog-body',dialog),defaultScope=sheetScope(key)?.value==='clients'?'clients':'salmos';
     body.innerHTML=`<div class="sheet-crop-fields"><label class="field">Nombre del diseño<input class="input" type="text" maxlength="160" data-sheet-crop-name value="${escapeHtml(crop.name)}"></label>${sheetArtworkScopeHtml(crop.scope||defaultScope,'data-sheet-crop-scope')}<label class="sheet-waste-choice"><input type="checkbox" data-sheet-crop-waste ${crop.waste?'checked':''}> Desperdicio</label></div>
       <div class="sheet-crop-review-tools"><button type="button" class="btn btn-ghost active" data-review-tool="crop">Recortar</button><button type="button" class="btn btn-ghost" data-review-tool="erase">Goma</button>${sheetShapeSelect(shape,'data-crop-review-shape',key)}<button type="button" class="btn btn-primary" data-apply-review-crop disabled>Aplicar recorte</button><label data-eraser-control hidden>Tamaño de la goma<input type="range" min="5" max="90" value="20" data-crop-eraser></label><button type="button" class="btn btn-ghost" data-crop-rotate="-90">Girar a la izquierda</button><button type="button" class="btn btn-ghost" data-crop-rotate="90">Girar a la derecha</button><button type="button" class="btn btn-ghost" data-crop-reset>Restablecer</button><button type="button" class="icon-btn" data-crop-larger aria-label="Ampliar recorte" aria-pressed="false">${sheetZoomIcon()}</button></div>
-      <p class="muted" data-review-crop-help>Dibujá sobre esta imagen la parte que querés conservar y tocá Aplicar recorte.</p><div class="sheet-crop-stage checkerboard"></div>${designTagPickerHtml('sheet-crop',crop.tags||[])}<p data-crop-measure role="status"></p><div class="admin-actions"><button type="button" class="btn btn-ghost" data-close-crop-review>Volver a la plancha</button><button type="button" class="btn btn-primary" data-save-crop-review>Guardar individual</button></div><p class="sheet-upload-error" data-crop-warning role="status"></p>`;
+      <p class="muted" data-review-crop-help>Dibujá la parte que querés conservar. Arrastrá desde adentro para moverla o desde el borde para ajustar el tamaño.</p><div class="sheet-crop-stage checkerboard"></div>${designTagPickerHtml('sheet-crop',crop.tags||[])}<p data-crop-measure role="status"></p><div class="admin-actions"><button type="button" class="btn btn-ghost" data-close-crop-review>Volver a la plancha</button><button type="button" class="btn btn-primary" data-save-crop-review>Guardar individual</button></div><p class="sheet-upload-error" data-crop-warning role="status"></p>`;
     qs('[data-design-tag-picker] details',body).open=true;
     const stage=qs('.sheet-crop-stage',body),overlay=document.createElement('div'),cursor=document.createElement('span'),range=qs('[data-crop-eraser]',body),apply=qs('[data-apply-review-crop]',body);
     overlay.className='sheet-review-selection';overlay.hidden=true;cursor.className='sheet-crop-cursor';cursor.hidden=true;stage.append(canvas,overlay,cursor);
@@ -6475,25 +6649,30 @@ function nearestDesignMeasure(options,measurement){
     };
     apply.onclick=applySelection;
     qs('[data-crop-review-shape]',body).onchange=event=>{shape=event.target.value;drawSelection();};
-    for(const button of qsa('[data-review-tool]',body))button.onclick=()=>{tool=button.dataset.reviewTool;cursor.hidden=true;qsa('[data-review-tool]',body).forEach(node=>node.classList.toggle('active',node===button));qs('[data-eraser-control]',body).hidden=tool!=='erase';qs('[data-review-crop-help]',body).textContent=tool==='erase'?'Arrastrá la goma para borrar lo que no corresponde.':'Dibujá sobre esta imagen la parte que querés conservar y tocá Aplicar recorte.';canvas.style.cursor=tool==='crop'?'crosshair':'none';};
+    for(const button of qsa('[data-review-tool]',body))button.onclick=()=>{tool=button.dataset.reviewTool;cursor.hidden=true;qsa('[data-review-tool]',body).forEach(node=>node.classList.toggle('active',node===button));qs('[data-eraser-control]',body).hidden=tool!=='erase';qs('[data-review-crop-help]',body).textContent=tool==='erase'?'Arrastrá la goma para borrar lo que no corresponde.':'Dibujá la parte que querés conservar. Arrastrá desde adentro para moverla o desde el borde para ajustar el tamaño.';canvas.style.cursor=tool==='crop'?'crosshair':'none';};
     const erase=(p,from=p)=>{const r=canvas.getBoundingClientRect(),radius=Number(range.value)*canvas.width/r.width/2,ctx=canvas.getContext('2d');ctx.save();ctx.globalCompositeOperation='destination-out';ctx.lineCap='round';ctx.lineWidth=radius*2;ctx.beginPath();ctx.moveTo(from.x*canvas.width,from.y*canvas.height);ctx.lineTo(p.x*canvas.width,p.y*canvas.height);ctx.stroke();ctx.beginPath();ctx.arc(p.x*canvas.width,p.y*canvas.height,radius,0,Math.PI*2);ctx.fill();ctx.restore();invalidate();};
+    const inside=p=>selection&&p.x>=selection.x&&p.x<=selection.x+selection.width&&p.y>=selection.y&&p.y<=selection.y+selection.height;
     canvas.onpointerdown=event=>{
-      if(event.button>0||crop.saving||crop.record?.savedItem)return;event.preventDefault();const p=point(event),r=canvas.getBoundingClientRect();
-      const edge=selection&&tool==='crop'?[[selection.x,'w'],[selection.x+selection.width,'e']].find(([x])=>Math.abs((p.x-x)*r.width)<12&&p.y>=selection.y-.02&&p.y<=selection.y+selection.height+.02)?.[1]:'';
-      const vertical=selection&&tool==='crop'?[[selection.y,'n'],[selection.y+selection.height,'s']].find(([y])=>Math.abs((p.y-y)*r.height)<12&&p.x>=selection.x-.02&&p.x<=selection.x+selection.width+.02)?.[1]:'';
-      stroke={id:event.pointerId,start:p,last:p,original:selection&&{...selection},edge:(vertical||'')+(edge||'')};
+      if(stroke||event.button>0||crop.saving||crop.record?.savedItem)return;event.preventDefault();const p=point(event),r=canvas.getBoundingClientRect();
+      const edge=selection&&tool==='crop'?[[selection.x,'w'],[selection.x+selection.width,'e']].find(([x])=>Math.abs((p.x-x)*r.width)<Math.min(10,selection.width*r.width/4)&&p.y>=selection.y-.02&&p.y<=selection.y+selection.height+.02)?.[1]:'';
+      const vertical=selection&&tool==='crop'?[[selection.y,'n'],[selection.y+selection.height,'s']].find(([y])=>Math.abs((p.y-y)*r.height)<Math.min(10,selection.height*r.height/4)&&p.x>=selection.x-.02&&p.x<=selection.x+selection.width+.02)?.[1]:'';
+      const move=tool==='crop'&&!edge&&!vertical&&inside(p);
+      stroke={id:event.pointerId,start:p,last:p,original:selection&&{...selection},edge:(vertical||'')+(edge||''),move};
+      if(move)canvas.style.cursor='grabbing';
       if(tool==='erase')erase(p);canvas.setPointerCapture(event.pointerId);
     };
     canvas.onpointermove=event=>{
       const p=point(event);if(tool==='erase'){const s=stage.getBoundingClientRect(),diameter=Number(range.value);Object.assign(cursor.style,{left:event.clientX-s.left+stage.scrollLeft+'px',top:event.clientY-s.top+stage.scrollTop+'px',width:diameter+'px',height:diameter+'px'});cursor.hidden=false;}
-      if(stroke?.id!==event.pointerId||crop.saving)return;
+      if(stroke?.id!==event.pointerId||crop.saving){if(!stroke&&tool==='crop')canvas.style.cursor=inside(p)?'move':'crosshair';return;}
       if(tool==='erase'){erase(p,stroke.last);stroke.last=p;return;}
-      const a=stroke.start,o=stroke.original;let left=Math.min(a.x,p.x),top=Math.min(a.y,p.y),right=Math.max(a.x,p.x),bottom=Math.max(a.y,p.y);
+      const a=stroke.start,o=stroke.original;
+      if(stroke.move){selection={...o,x:Math.max(0,Math.min(1-o.width,o.x+p.x-a.x)),y:Math.max(0,Math.min(1-o.height,o.y+p.y-a.y))};drawSelection();return;}
+      let left=Math.min(a.x,p.x),top=Math.min(a.y,p.y),right=Math.max(a.x,p.x),bottom=Math.max(a.y,p.y);
       if(o&&stroke.edge){left=stroke.edge.includes('w')?Math.min(p.x,o.x+o.width):o.x;right=stroke.edge.includes('e')?Math.max(p.x,o.x):o.x+o.width;top=stroke.edge.includes('n')?Math.min(p.y,o.y+o.height):o.y;bottom=stroke.edge.includes('s')?Math.max(p.y,o.y):o.y+o.height;}
       if(shape==='circle'){const side=Math.min((right-left)*canvas.width,(bottom-top)*canvas.height);right=left+side/canvas.width;bottom=top+side/canvas.height;}
       selection={x:left,y:top,width:right-left,height:bottom-top};drawSelection();
     };
-    const end=event=>{if(stroke?.id===event.pointerId){if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);stroke=null;}cursor.hidden=true;};canvas.onpointerup=canvas.onpointercancel=end;canvas.onpointerleave=()=>{cursor.hidden=true;};
+    const end=event=>{if(stroke?.id===event.pointerId){if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);stroke=null;if(tool==='crop')canvas.style.cursor=inside(point(event))?'move':'crosshair';}cursor.hidden=true;};canvas.onpointerup=canvas.onpointercancel=end;canvas.onpointerleave=()=>{cursor.hidden=true;};
     for(const control of qsa('[data-crop-rotate]',body))control.onclick=()=>{if(!crop.saving&&!crop.record?.savedItem)replacePixels(detector.rotateArtworkCanvas(canvas,Number(control.dataset.cropRotate)),(rotation+Number(control.dataset.cropRotate)+360)%360);};
     qs('[data-crop-reset]',body).onclick=()=>{if(!crop.saving&&!crop.record?.savedItem){box={...initial.box};crop.box={...box};shape=initialBox.shape||'rectangle';qs('[data-crop-review-shape]',body).value=shape;replacePixels(detector.cropArtworkCanvas(crop.image,initialBox).canvas,Number(initial.box.rotation)||0);renderSheetPreview(key);}};
     qs('[data-crop-larger]',body).onclick=event=>{event.currentTarget.setAttribute('aria-pressed',String(stage.classList.toggle('crop-larger')));requestAnimationFrame(drawSelection);};
@@ -7172,8 +7351,10 @@ function nearestDesignMeasure(options,measurement){
     const paint=(ctx,w,h,crop)=>{ctx.clearRect(0,0,w,h);ctx.drawImage(image,crop.x*image.naturalWidth,crop.y*image.naturalHeight,crop.w*image.naturalWidth,crop.h*image.naturalHeight,0,0,w,h);if(draft.ink){ctx.globalCompositeOperation='source-atop';ctx.globalAlpha=(draft.inkOpacity??100)/100;ctx.fillStyle=draft.ink;ctx.fillRect(0,0,w,h);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';}applyCanvasBrightness(ctx,ctx.canvas,draft.brightness,draft.saturation);if(draft.background){ctx.globalCompositeOperation='destination-over';ctx.fillStyle=draft.background;ctx.fillRect(0,0,w,h);ctx.globalCompositeOperation='source-over';}};
     const draw=()=>{paint(filtered.getContext('2d'),canvas.width,canvas.height,{x:0,y:0,w:1,h:1});const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(filtered,0,0);const c=draft.crop,x=c.x*canvas.width,y=c.y*canvas.height,w=c.w*canvas.width,h=c.h*canvas.height;ctx.fillStyle='#0007';ctx.fillRect(0,0,canvas.width,y);ctx.fillRect(0,y,x,h);ctx.fillRect(x+w,y,canvas.width-x-w,h);ctx.fillRect(0,y+h,canvas.width,canvas.height-y-h);ctx.strokeStyle='#ffb7d7';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);for(const [cx,cy] of [[x,y],[x+w,y],[x,y+h],[x+w,y+h]]){ctx.fillStyle='#fff';ctx.fillRect(cx-5,cy-5,10,10);}qs('[data-artwork-brightness-value]',dialog).textContent=draft.brightness+'%';qs('[data-artwork-saturation-value]',dialog).textContent=draft.saturation+'%';};
     const point=e=>{const r=canvas.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};};let drag=null;
-    canvas.onpointerdown=e=>{if(e.button>0)return;e.preventDefault();const p=point(e),c=draft.crop,r=canvas.getBoundingClientRect(),corners=[['tl',c.x,c.y],['tr',c.x+c.w,c.y],['bl',c.x,c.y+c.h],['br',c.x+c.w,c.y+c.h]],near=corners.find(([,x,y])=>Math.hypot((p.x-x)*r.width,(p.y-y)*r.height)<18);drag={id:e.pointerId,start:p,original:{...c},corner:near?.[0]};canvas.setPointerCapture(e.pointerId);};
-    canvas.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;const p=point(e),c=drag.original;let left=drag.corner?(drag.corner.includes('l')?p.x:c.x):Math.min(drag.start.x,p.x),top=drag.corner?(drag.corner.includes('t')?p.y:c.y):Math.min(drag.start.y,p.y),right=drag.corner?(drag.corner.includes('r')?p.x:c.x+c.w):Math.max(drag.start.x,p.x),bottom=drag.corner?(drag.corner.includes('b')?p.y:c.y+c.h):Math.max(drag.start.y,p.y);draft.crop=normalizedArtworkCrop({x:Math.min(left,right),y:Math.min(top,bottom),w:Math.abs(right-left),h:Math.abs(bottom-top)});draw();};canvas.onpointerup=canvas.onpointercancel=()=>{drag=null;};
+    canvas.onpointerdown=e=>{if(e.button>0)return;e.preventDefault();const p=point(e),c=draft.crop,r=canvas.getBoundingClientRect(),corners=[['tl',c.x,c.y],['tr',c.x+c.w,c.y],['bl',c.x,c.y+c.h],['br',c.x+c.w,c.y+c.h]],near=corners.find(([,x,y])=>Math.hypot((p.x-x)*r.width,(p.y-y)*r.height)<18);drag={id:e.pointerId,start:p,original:{...c},corner:near?.[0],move:!near&&(c.w<1||c.h<1)&&p.x>=c.x&&p.x<=c.x+c.w&&p.y>=c.y&&p.y<=c.y+c.h};canvas.setPointerCapture(e.pointerId);};
+    canvas.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;const p=point(e),c=drag.original;
+      if(drag.move){draft.crop={...c,x:Math.max(0,Math.min(1-c.w,c.x+p.x-drag.start.x)),y:Math.max(0,Math.min(1-c.h,c.y+p.y-drag.start.y))};draw();return;}
+      let left=drag.corner?(drag.corner.includes('l')?p.x:c.x):Math.min(drag.start.x,p.x),top=drag.corner?(drag.corner.includes('t')?p.y:c.y):Math.min(drag.start.y,p.y),right=drag.corner?(drag.corner.includes('r')?p.x:c.x+c.w):Math.max(drag.start.x,p.x),bottom=drag.corner?(drag.corner.includes('b')?p.y:c.y+c.h):Math.max(drag.start.y,p.y);draft.crop=normalizedArtworkCrop({x:Math.min(left,right),y:Math.min(top,bottom),w:Math.abs(right-left),h:Math.abs(bottom-top)});draw();};canvas.onpointerup=canvas.onpointercancel=()=>{drag=null;};
     qsa('input',dialog).forEach(input=>input.oninput=()=>{if(input.matches('[data-artwork-ink],[data-artwork-ink-enabled]')&&qs('[data-artwork-ink-enabled]',dialog).checked)qs('[data-artwork-ink-opacity]',dialog).value='50';draft.brightness=Number(qs('[data-artwork-brightness]',dialog).value);draft.saturation=Number(qs('[data-artwork-saturation]',dialog).value);draft.inkOpacity=Number(qs('[data-artwork-ink-opacity]',dialog).value);draft.ink=qs('[data-artwork-ink-enabled]',dialog).checked?qs('[data-artwork-ink]',dialog).value:'';draft.background=qs('[data-artwork-background-enabled]',dialog).checked?qs('[data-artwork-background]',dialog).value:'';draw();});
     qs('[data-artwork-reset]',dialog).onclick=()=>{draft={crop:{x:0,y:0,w:1,h:1},brightness:100,saturation:100,ink:'',inkOpacity:50,background:''};qs('[data-artwork-ink-opacity]',dialog).value='50';qs('[data-artwork-brightness]',dialog).value=100;qs('[data-artwork-saturation]',dialog).value=100;qs('[data-artwork-ink-enabled]',dialog).checked=false;qs('[data-artwork-background-enabled]',dialog).checked=false;draw();};
     qs('[data-artwork-apply]',dialog).onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{const output=document.createElement('canvas'),c=normalizedArtworkCrop(draft.crop);output.width=Math.max(1,Math.round(c.w*image.naturalWidth));output.height=Math.max(1,Math.round(c.h*image.naturalHeight));paint(output.getContext('2d'),output.width,output.height,c);const blob=await new Promise(resolve=>output.toBlob(resolve,'image/png'));if(!blob)throw new Error('No se pudo guardar el recorte.');record.originalArtworkFile=original;record.artworkDraft=structuredClone(draft);record.file=new File([blob],original.name.replace(/\.[^.]+$/,'')+'.png',{type:'image/png'});if(record.previewUrl?.startsWith('blob:'))URL.revokeObjectURL(record.previewUrl);record.previewUrl=URL.createObjectURL(record.file);record.appearance={preview_color:'',preview_background:'',preview_brightness:100,preview_saturation:100};delete record.uploadId;delete record.uploadMetadata;await onApplied?.();dialog.close();}catch(error){qs('[data-artwork-status]',dialog).textContent=error.message;}finally{button.disabled=false;}};dialog.showModal();draw();
@@ -7298,7 +7479,7 @@ function nearestDesignMeasure(options,measurement){
   }
   function designTagFilterHtml(key,items){const tags=[...new Set(items.flatMap(a=>a.tags||[]))];const selected=state.designTagFilters?.[key]||[];return `<div class="design-filter-line">${designTagPickerHtml('filter-'+key,selected).replace('class="field design-tag-picker"','class="field design-tag-picker design-tag-filter-dropdown"').replace(/data-design-tag-choice value="([^"]*)"/g,(_,tag)=>`data-design-tag-choice data-design-filter="${escapeHtml(key)}" data-tag="${tag}" value="${tag}"`).replace('<label>Etiquetas</label>','<label>Filtrar por etiquetas</label>').replace('Elegir etiquetas','Filtrar etiquetas')}<button type="button" class="icon-btn" data-clear-design-tags="${escapeHtml(key)}" aria-label="Limpiar filtros de etiquetas"><i class="fa-solid fa-eraser"></i></button></div>`;}
 
-  function designVisible(key,a){if(a.kind==='sheet')return true;return (state.designTagFilters?.[key]||[]).every(tag=>(a.tags||[]).includes(tag))}
+  function designVisible(key,a){if(a.kind==='sheet')return true;return (state.designTagFilters?.[key]||[]).every(tag=>designTags(a.tags||[]).includes(tag)||(tag==='desperdicios'&&designGalleryTags(a,markedWasteDesigns()).includes(tag)))}
   function updateDesignSelectionUI(){
     const selected=state.selectedDesignAssets??new Set(),button=qs('#deleteSelectedDesignsBtn');
     if(button){button.classList.toggle('is-empty',!selected.size);button.disabled=!selected.size;button.setAttribute('aria-label',selected.size?`Eliminar ${selected.size} seleccionados`:'Eliminar seleccionados');button.title=button.getAttribute('aria-label');}
@@ -7310,7 +7491,7 @@ function nearestDesignMeasure(options,measurement){
   function designCard(a){return `<article class="design-gallery-card" data-design-card="${a.id}" draggable="true"><button type="button" class="design-bulk-check" data-design-select="${a.id}" data-design-name="${escapeHtml(a.name||a.file_name)}" aria-pressed="${state.selectedDesignAssets?.has(Number(a.id))?'true':'false'}" aria-label="Marcar ${escapeHtml(a.name||a.file_name)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></button>${a.kind==='sheet'?`<label class="design-sheet-check" title="Seleccionar plancha"><input type="checkbox" data-design-sheet="${a.id}" ${state.selectedDesignSheets?.has(Number(a.id))?'checked':''}><span>✓</span></label>`:''}<button type="button" class="design-gallery-thumb checkerboard" data-image-state="pending" data-preview-design="${a.id}" ${designVisualAttrs(a)} title="${escapeHtml(a.name||a.file_name)}">${String(a.mime_type||'').startsWith('image/')?`${designThumbnailHtml(a)}`:`<div class="design-file-placeholder">${escapeHtml((a.file_name||'ARCHIVO').split('.').pop().toUpperCase())}</div>`}</button>${a.kind==='sheet'&&a.composition_draft?'<small class="design-sheet-pending is-cloud-draft">Borrador guardado</small>':a.kind==='sheet'&&!Number(a.composition_complete??1)?'<small class="design-sheet-pending">Pendiente de completar</small>':''}<button class="icon-btn design-original-download" type="button" data-download-original-design="${a.id}" title="Descargar diseño original" aria-label="Descargar diseño original"><i class="fa-solid fa-download" aria-hidden="true"></i></button></article>`}
   function designSection(title,items,key){
     const gid=`designGallery-${key}`,grouped=key.endsWith('-individual')&&state.designGrouping?.library==='tags';
-    const visible=items.filter(asset=>designVisible(key,asset)&&productionDesignMatchesSearch(asset,state.designLibrarySearch));
+    const visible=(key.endsWith('-individual')?orderedDesigns(items):items).filter(asset=>designVisible(key,asset)&&productionDesignMatchesSearch(asset,state.designLibrarySearch));
     return `<details class="design-library-section" data-design-list="${key}" ${(state.designListOpen?.[key]??!key.startsWith('clients'))?'open':''}><summary class="admin-section-head"><h3>${title}</h3><span class="muted">${visible.length} archivos</span><span class="design-fold-label"><span class="when-open" aria-label="Comprimir">⌃</span><span class="when-closed" aria-label="Expandir">⌄</span></span></summary><div class="design-gallery-actions"><button type="button" class="btn btn-ghost" data-select-all-designs="${gid}">Marcar todos</button>${items.some(asset=>asset.kind==='individual')?designTagFilterHtml(key,items.filter(asset=>asset.kind==='individual')):''}</div><div class="horizontal-gallery-shell"><button type="button" class="gallery-arrow gallery-arrow-left" data-scroll-target="${gid}" data-scroll-dir="-1" aria-label="Anterior">‹</button><div class="design-grid ${grouped?'is-tag-grouped':''}" id="${gid}">${grouped?taggedDesignGalleries(visible,'library',designCard):visible.length?visible.map(designCard).join(''):'<div class="empty-state"><strong>Sin diseños en esta sección.</strong></div>'}</div><button type="button" class="gallery-arrow gallery-arrow-right" data-scroll-target="${gid}" data-scroll-dir="1" aria-label="Siguiente">›</button></div></details>`;
   }
   function designGroup(title,items,key){return `<details class="design-library-group" data-design-list="${key}" ${(state.designListOpen?.[key]??!key.startsWith('clients'))?'open':''}><summary class="design-group-head"><h2>${title}</h2><span class="design-fold-label"><span class="when-open" aria-label="Comprimir">⌃</span><span class="when-closed" aria-label="Expandir">⌄</span></span></summary><div class="design-group-body">${designSection('Diseños individuales',items.filter(x=>x.kind==='individual'),key+'-individual')}${designSection('Planchas',items.filter(x=>x.kind==='sheet'),key+'-sheet')}</div></details>`}
@@ -7345,7 +7526,7 @@ function nearestDesignMeasure(options,measurement){
     state.designListOpen??={};state.designTagFilters??={};qsa('[data-design-list]').forEach(d=>state.designListOpen[d.dataset.designList]=d.open);
     const readRevision=sheetBackgroundRevision;
     const [d,m,settings]=await Promise.all([api('/api/admin/design-assets'),state.materials.length?Promise.resolve(null):api('/api/admin/materials'),api('/api/admin/settings')]);setDesignAssetList(d.items,readRevision);for(const asset of state.designAssets){const draft=state.designAppearanceDrafts?.['asset-'+asset.id];if(draft?.current)Object.assign(asset,draft.current);}if(m)state.materials=m.items||[];
-    let saved=[];try{saved=JSON.parse(settings.settings?.design_tag_catalog||'[]')}catch{}const hasTagCatalog=Object.prototype.hasOwnProperty.call(settings.settings||{},'design_tag_catalog');state.designTagCatalog=[...new Set((hasTagCatalog?(Array.isArray(saved)?saved:[]):['rosas','salmos','celestes','yeshua','cruz',...state.designAssets.flatMap(a=>a.tags||[])]).map(x=>String(x).trim().toLocaleLowerCase('es-AR')).filter(Boolean))];
+    let saved=[];try{saved=JSON.parse(settings.settings?.design_tag_catalog||'[]')}catch{}const hasTagCatalog=Object.prototype.hasOwnProperty.call(settings.settings||{},'design_tag_catalog');if(hasTagCatalog)state.settings.design_tag_catalog=settings.settings.design_tag_catalog;state.designTagCatalog=[...new Set((hasTagCatalog?(Array.isArray(saved)?saved:[]):['rosas','salmos','celestes','yeshua','cruz',...state.designAssets.flatMap(a=>a.tags||[])]).map(x=>String(x).trim().toLocaleLowerCase('es-AR')).filter(Boolean))];
     paintDesignLibrary();
   }
   function paintDesignLibrary(){
@@ -7359,8 +7540,8 @@ function nearestDesignMeasure(options,measurement){
   function designPickerSelections(root){return designTags(qsa('[data-design-tag-choice]:checked',root||document).map(el=>el.value))}
   function designTagPickerHtml(key,selected=[]){
     if(!Array.isArray(state.designTagCatalog)){let saved;try{saved=JSON.parse(state.settings.design_tag_catalog||'null')}catch{}state.designTagCatalog=designTags(Array.isArray(saved)?saved:['rosas','salmos','celestes','yeshua','cruz',...state.designAssets.flatMap(a=>a.tags||[])]);}
-    const tags=designTags(selected),list=[...new Set([...state.designTagCatalog,...tags])];
-    return `<div class="field design-tag-picker" data-design-tag-picker="${escapeHtml(key)}"><label>Etiquetas</label><details ${key.startsWith('filter-')?'':'open'}><summary>${tags.length?escapeHtml(tags.join(', ')):'Elegir etiquetas'}</summary><div class="design-tag-dropdown"><div class="design-tag-search-row"><input class="input" data-design-tag-new type="search" placeholder="Buscar o agregar" aria-label="Buscar o agregar etiqueta"><button type="button" class="icon-btn" data-design-tag-add aria-label="Agregar etiqueta"><i class="fa-solid fa-plus"></i></button><button type="button" class="icon-btn" data-design-tag-manage aria-label="Editar opciones" title="Editar opciones"><i class="fa-solid fa-pen"></i></button><button type="button" class="icon-btn" data-design-tag-done aria-label="Cerrar lista" title="Cerrar lista"><i class="fa-solid fa-check"></i></button></div><div class="design-tag-picker-options">${list.map((tag,index)=>`<div class="design-tag-picker-row" draggable="true" data-sort-design-tag="${escapeHtml(tag)}" title="Arrastrar para ordenar"><label class="design-tag-button16"><input type="checkbox" data-design-tag-choice value="${escapeHtml(tag)}" ${tags.includes(tag)?'checked':''}><span>${escapeHtml(tag)}</span></label><input class="input" data-design-tag-value value="${escapeHtml(tag)}" aria-label="Editar etiqueta ${escapeHtml(tag)}"><button type="button" class="icon-btn" data-design-tag-save data-index="${index}" aria-label="Guardar etiqueta"><i class="fa-solid fa-check"></i></button><button type="button" class="icon-btn" data-design-tag-delete data-index="${index}" aria-label="Eliminar ${escapeHtml(tag)}"><i class="fa-solid fa-trash-can"></i></button></div>`).join('')}</div></div></details></div>`;
+    const tags=designTags(selected),list=[...new Set([...state.designTagCatalog,...tags,...(key.startsWith('filter-')&&markedWasteDesigns().size?['desperdicios']:[])])];
+    return `<div class="field design-tag-picker" data-design-tag-picker="${escapeHtml(key)}"><label>Etiquetas</label><details ${key.startsWith('filter-')?'':'open'}><summary>${tags.length?escapeHtml(tags.join(', ').toLocaleUpperCase('es-AR')):'Elegir etiquetas'}</summary><div class="design-tag-dropdown"><div class="design-tag-search-row"><input class="input" data-design-tag-new type="search" placeholder="Buscar o agregar" aria-label="Buscar o agregar etiqueta"><button type="button" class="icon-btn" data-design-tag-add aria-label="Agregar etiqueta"><i class="fa-solid fa-plus"></i></button><button type="button" class="icon-btn" data-design-tag-manage aria-label="Editar opciones" title="Editar opciones"><i class="fa-solid fa-pen"></i></button><button type="button" class="icon-btn" data-design-tag-done aria-label="Cerrar lista" title="Cerrar lista"><i class="fa-solid fa-check"></i></button></div><div class="design-tag-picker-options">${list.map((tag,index)=>`<div class="design-tag-picker-row" draggable="true" ${state.designTagCatalog.includes(tag)?`data-sort-design-tag="${escapeHtml(tag)}" title="Arrastrar para ordenar"`:'data-derived-tag'}><label class="design-tag-button16"><input type="checkbox" data-design-tag-choice value="${escapeHtml(tag)}" ${tags.includes(tag)?'checked':''}><span>${escapeHtml(tag.toLocaleUpperCase('es-AR'))}</span></label><input class="input" data-design-tag-value value="${escapeHtml(tag)}" aria-label="Editar etiqueta ${escapeHtml(tag)}"><button type="button" class="icon-btn" data-design-tag-save data-index="${index}" aria-label="Guardar etiqueta"><i class="fa-solid fa-check"></i></button><button type="button" class="icon-btn" data-design-tag-delete data-index="${index}" aria-label="Eliminar ${escapeHtml(tag)}"><i class="fa-solid fa-trash-can"></i></button></div>`).join('')}</div></div></details></div>`;
   }
   function bindDesignTagSorting(){
     let drag=null;
@@ -7396,7 +7577,11 @@ function nearestDesignMeasure(options,measurement){
     document.addEventListener('dragend',()=>{drag?.row.classList.remove('dragging');drag=null;});
   }
   bindDesignTagSorting();
-  async function persistDesignTagCatalog(){await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{design_tag_catalog:JSON.stringify(state.designTagCatalog||[])}})});}
+  async function persistDesignTagCatalog(){
+    const catalog=JSON.stringify(state.designTagCatalog||[]);
+    await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{design_tag_catalog:catalog}})});
+    state.settings.design_tag_catalog=catalog;
+  }
   async function saveDesignTagCatalog(nextCatalog,oldTag=null,replacement=null){const previousCatalog=[...(state.designTagCatalog||[])],changed=[];try{if(oldTag)for(const asset of state.designAssets.filter(a=>(a.tags||[]).includes(oldTag))){const previous=[...(asset.tags||[])],tags=[...new Set(previous.map(tag=>tag===oldTag?replacement:tag).filter(Boolean))];await api(`/api/admin/design-assets/${Number(asset.id)}`,{method:'PATCH',body:JSON.stringify({tags})});changed.push({id:Number(asset.id),previous});asset.tags=tags;}state.designTagCatalog=nextCatalog;await persistDesignTagCatalog();if(oldTag){state.designTagFilters??={};for(const key of Object.keys(state.designTagFilters))state.designTagFilters[key]=[...new Set(state.designTagFilters[key].map(tag=>tag===oldTag?replacement:tag).filter(Boolean))];}}catch(err){state.designTagCatalog=previousCatalog;for(const change of changed.reverse()){try{await api(`/api/admin/design-assets/${change.id}`,{method:'PATCH',body:JSON.stringify({tags:change.previous})});const asset=state.designAssets.find(a=>Number(a.id)===change.id);if(asset)asset.tags=change.previous;}catch{}}throw err;}}
   function refreshDesignTagPicker(picker,selected){const old=qsa('[data-design-tag-picker]').find(el=>el.dataset.designTagPicker===picker);if(old){const open=qs('details',old)?.open,managing=old.classList.contains('managing');if(picker.startsWith('filter-')){const key=picker.slice(7);state.designTagFilters??={};state.designTagFilters[key]=selected;const wrapper=old.closest('.design-filter-line')||old;wrapper.outerHTML=designTagFilterHtml(key,[]);}else old.outerHTML=designTagPickerHtml(picker,selected);const next=qsa('[data-design-tag-picker]').find(el=>el.dataset.designTagPicker===picker);if(next){qs('details',next).open=open;next.classList.toggle('managing',managing);}}}
   function designDialogPayload(){const root=qs('#designDetailEditor');return {scope:qs('[data-design-scope]',root)?.value||'salmos',kind:qs('[data-design-kind]',root)?.value||'individual',name:qs('[data-design-name]',root)?.value||'',note:qs('[data-design-note]',root)?.value||'',tags:qs('[data-design-kind]',root)?.value==='sheet'?[]:designPickerSelections(root),costCents:pesosToCents(qs('[data-design-cost]',root)?.value||10000),printMaterialType:qs('[data-design-print-type]',root)?.value||'dtf_textile',printed:Boolean(qs('[data-design-printed]',root)?.checked),
@@ -7453,6 +7638,27 @@ function nearestDesignMeasure(options,measurement){
     };
     if(image?.complete&&image.naturalWidth)restorePending();else image?.addEventListener('load',restorePending,{once:true});
   }
+  function sheetCompositionSummary(sheet){
+    const draft=sheet.composition_draft,fields=draft?.fields||{};
+    const width=Number(fields.width||sheet.width_cm),height=Number(fields.height||sheet.height_cm);
+    const cost=fields.cost!=null&&fields.cost!==''?pesosToCents(fields.cost):Number(sheet.cost_cents??1000000);
+    const components=draft?draft.components.filter(c=>c.previewBoxes?.length).map(c=>{
+      const asset=state.designAssets.find(a=>Number(a.id)===Number(c.designAssetId));
+      const saved=(sheet.components||[]).find(row=>row.designAssetId===c.designAssetId&&row.measureOptionId===c.measureOptionId);
+      const measure=c.pendingMeasureOption||(asset&&parseDesignMeasureOptions(asset).find(m=>m.id===c.measureOptionId))||saved;
+      const fallback=sheetBoxMeasures(c.previewBoxes[0],{width,height});
+      return {...fallback,...measure,...c,name:asset?.name||saved?.name||asset?.file_name,quantity:c.previewBoxes.length};
+    }):sheet.components||[];
+    const heading=(draft?'<small class="status">Borrador guardado</small>':'')+`<h3>Superficie: ${width||'—'} × ${height||'—'} cm</h3>`;
+    if(!components.length)return heading+'<p class="muted">Agregá la composición para calcular el desperdicio de esta plancha.</p>';
+    const m=sheetMetrics(width,height,components,cost);
+    const rows=components.flatMap((c,i)=>{
+      const asset=state.designAssets.find(d=>Number(d.id)===Number(c.designAssetId));
+      return [[c.quantity-m.counts[i],m.componentCosts[i],false],[m.counts[i],m.wasteCosts[i],true]].filter(([qty])=>qty>0).map(([qty,value,waste])=>
+        `<div>${asset?designSmallImage(asset):''}<span><strong>${escapeHtml(c.name||asset?.name||asset?.file_name||'Estampa')} × ${qty}</strong><small>${waste?'<b class="design-waste-label">DESPERDICIO</b> · ':''}${escapeHtml(designMeasureLabel(c))}</small></span><b>${money(value)}</b></div>`);
+    });
+    return heading+'<div class="sheet-cost-table">'+rows.join('')+'</div>'+sheetMetricsHtml(width,height,components,cost,m);
+  }
   function openDesignPreview(id){
     const a=state.designAssets.find(x=>Number(x.id)===Number(id));if(!a)return;
     clearSheetDetection('detail');
@@ -7463,7 +7669,7 @@ function nearestDesignMeasure(options,measurement){
     const download=qs('#downloadDesignOriginalBtn');if(download){download.dataset.downloadOriginalDesign=String(a.id);download.title=download.ariaLabel=String(a.mime_type||'').startsWith('image/')?'Descargar PNG original':'Descargar archivo original';}
     const measures=parseDesignMeasureOptions(a),stage=qs('#designPreviewStage'),url=apiUrl(`/api/admin/design-assets/${a.id}/file`);qs('#designPreviewTitle').textContent=a.name||a.file_name;
     stage.innerHTML=String(a.mime_type||'').startsWith('image/')?`<div data-image-status role="status">Cargando imagen…</div><div class="design-preview-fit checkerboard" ${a.kind==='sheet'?sheetBackgroundAttrs('detail'):designVisualAttrs(a)}><img crossorigin="use-credentials" src="${url}" alt="${escapeHtml(a.name||a.file_name||'Diseño')}"></div>`:`<iframe src="${url}" title="Vista previa"></iframe>`;
-    const composition=a.kind==='sheet'?`<h3>Superficie: ${Number(a.width_cm)||'—'} × ${Number(a.height_cm)||'—'} cm</h3>${a.components?.length?`<div class="sheet-cost-table">${a.components.map((c,i)=>`<div>${state.designAssets.find(x=>Number(x.id)===Number(c.designAssetId))?designSmallImage(state.designAssets.find(x=>Number(x.id)===Number(c.designAssetId))):''}<span><strong>${escapeHtml(c.name)} × ${c.quantity}</strong><small>${escapeHtml(designMeasureLabel(c))}</small></span><b>${printMoney(a.sheet_metrics?.componentCostsCents?.[i]||0)}</b></div>`).join('')}</div>${sheetMetricsHtml(Number(a.width_cm),Number(a.height_cm),a.components,Number(a.cost_cents)||1000000)}`:'<p class="muted">Agregá la composición para calcular el desperdicio de esta plancha.</p>'}`:measures.length?designMeasuresOriginsHtml(a,measures):'';
+    const composition=a.kind==='sheet'?sheetCompositionSummary(a):measures.length?designMeasuresOriginsHtml(a,measures):'';
     clearMissingSheetQueue('detail');
     qs('#designPreviewMeta').innerHTML=`<div class="design-detail-toolbar">
         ${a.kind==='individual'?designBackgroundControlHtml('detail'):''}
@@ -7483,6 +7689,12 @@ function nearestDesignMeasure(options,measurement){
   }
   async function moveDesignCard(id,direction,targetId=0){
     if(state.designOrderPending)return;const asset=state.designAssets.find(a=>Number(a.id)===Number(id));if(!asset)return;
+    if(asset.kind==='individual'){
+      const items=orderedDesigns(state.designAssets.filter(a=>a.kind==='individual'&&a.scope===asset.scope));
+      const target=targetId||items[items.findIndex(a=>Number(a.id)===Number(id))+direction]?.id;
+      if(target)reorderPhotoThumbnails('catalog-designs',id,target);
+      return;
+    }
     const group=state.designAssets.filter(a=>a.scope===asset.scope&&a.kind===asset.kind),from=group.findIndex(a=>Number(a.id)===Number(id)),to=targetId?group.findIndex(a=>Number(a.id)===Number(targetId)):from+direction;
     if(to<0||to>=group.length||to===from)return;const [item]=group.splice(from,1);group.splice(to,0,item);state.designOrderPending=true;
     try{await api('/api/admin/design-assets/order',{method:'PATCH',body:JSON.stringify({scope:asset.scope,kind:asset.kind,ids:group.map(a=>Number(a.id))})});let i=0;state.designAssets=state.designAssets.map(a=>a.scope===asset.scope&&a.kind===asset.kind?group[i++]:a);
@@ -7970,7 +8182,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
 
       const filter=e.target.closest('[data-design-filter]');if(filter){const key=filter.dataset.designFilter,selected=new Set(state.designTagFilters?.[key]||[]);selected.has(filter.dataset.tag)?selected.delete(filter.dataset.tag):selected.add(filter.dataset.tag);state.designTagFilters??={};state.designTagFilters[key]=[...selected];
         if(key==='production')renderProductionDesignGallery();else if(key.startsWith('sheet-')){filter.parentElement.querySelectorAll('[data-design-filter]').forEach(b=>{const active=selected.has(b.dataset.tag);b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))});filterSheetGallery(filter.closest('[data-sheet-editor]').dataset.sheetEditor)}
-        else{const section=filter.closest('.design-library-section'),gallery=qs('.design-grid',section),parts=key.split('-'),scope=parts[0],kind=parts.at(-1)==='individual'?'individual':'sheet',items=state.designAssets.filter(a=>a.scope===scope&&a.kind===kind);gallery.innerHTML=(scope==='mixed'?state.designAssets.filter(a=>a.scope==='mixed'):items).filter(a=>designVisible(key,a)).map(designCard).join('')||'<div class="empty-state"><strong>Sin diseños con esos filtros.</strong></div>';updateDesignSelectionUI();observeDesignThumbnails();filter.parentElement.querySelectorAll('[data-design-filter]').forEach(b=>{const active=selected.has(b.dataset.tag);b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))})}return;}
+        else paintDesignLibrary();return;}
       const tagManage=e.target.closest('[data-design-tag-manage]');if(tagManage){const picker=tagManage.closest('[data-design-tag-picker]'),managing=picker.classList.toggle('managing');tagManage.innerHTML='<i class="fa-solid '+(managing?'fa-check':'fa-pen')+'"></i>';tagManage.setAttribute('aria-label',managing?'Terminar edición':'Editar opciones');return;}
       const tagAdd=e.target.closest('[data-design-tag-add]');if(tagAdd){const picker=tagAdd.closest('[data-design-tag-picker]'),key=picker?.dataset.designTagPicker,selected=designPickerSelections(picker),input=qs('[data-design-tag-new]',picker),value=String(input?.value||'').trim().toLocaleLowerCase('es-AR');if(!value)return;const catalog=[...(state.designTagCatalog||[])];if(!catalog.includes(value))catalog.push(value);selected.push(value);try{await saveDesignTagCatalog(catalog);refreshDesignTagPicker(key,selected)}catch(err){toast(err.message,'error')}return;}
       const tagSave=e.target.closest('[data-design-tag-save]');if(tagSave){const picker=tagSave.closest('[data-design-tag-picker]'),key=picker?.dataset.designTagPicker,index=Number(tagSave.dataset.index),selected=designPickerSelections(picker),value=String(qs('[data-design-tag-value]',tagSave.parentElement)?.value||'').trim().toLocaleLowerCase('es-AR');if(!value)return;const old=qs('[data-design-tag-choice]',tagSave.parentElement)?.value||state.designTagCatalog[index];if(old&&old!==value&&state.designTagCatalog.includes(value)){toast('Esa opción ya existe.','error');return;}const catalog=[...(state.designTagCatalog||[])];catalog[index]=value;const next=selected.map(x=>x===old?value:x);try{await saveDesignTagCatalog(catalog,old&&old!==value?old:null,old&&old!==value?value:null);refreshDesignTagPicker(key,next)}catch(err){toast(err.message,'error')}return;}
