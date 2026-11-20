@@ -237,6 +237,10 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 #audioOnlyStudio input::file-selector-button { cursor:pointer; margin-right:8px; padding:5px 9px; border:0; border-radius:6px; background:var(--production-accent,#f4a1c6); color:#351827; }
 .audio-studio-body textarea { resize:vertical; min-height:108px; }
 .audio-studio-body .button-row { margin:0; }
+.audio-lyrics-editor { display:grid; gap:8px; }
+.audio-lyrics-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr)); gap:10px; }
+.audio-lyrics-list article { display:grid; gap:8px; align-content:start; padding:11px; border:1px solid var(--production-line,#825369); border-radius:9px; overflow-wrap:anywhere; }
+.audio-lyrics-list article p { margin:0; white-space:pre-wrap; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .audio-connection { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:12px 16px; background:var(--production-panel,#442234); border:1px solid var(--production-line,#825369); border-radius:10px; }
 .audio-connection p { margin:4px 0 0; }
 .audio-connection [data-connection-title] { display:inline-block; padding:3px 8px; border-radius:8px; }
