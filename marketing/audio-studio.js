@@ -57,15 +57,15 @@
     const launcher=document.createElement('button');launcher.textContent='Crear solo audio';launcher.className='primary';
     document.querySelector('#createReel').after(launcher);
     const dialog=document.createElement('dialog');dialog.id='audioOnlyStudio';dialog.setAttribute('aria-labelledby','audioStudioTitle');
-    dialog.innerHTML=`<header><h1 id="audioStudioTitle">Estudio de audio</h1><button type="button" data-close aria-label="Cerrar estudio de audio">×</button></header>
+    dialog.innerHTML=`<header><div class="audio-studio-title"><h1 id="audioStudioTitle">Estudio de audio</h1><button type="button" data-close aria-label="Cerrar estudio de audio">×</button></div>
+      <p data-status role="status" aria-live="polite" aria-atomic="true"></p></header>
       <div class="audio-studio-body"><div class="audio-connection" data-connection>
         <div role="status"><strong data-connection-title>Iniciador sin conectar</strong><p data-connection-help></p></div>
-        <div class="button-row"><button type="button" class="primary" data-open-launcher aria-expanded="false" aria-controls="audioLauncherHelp">Abrir iniciador</button>
-          <button type="button" data-connect>Conectar iniciador</button></div>
-        <div id="audioLauncherHelp" class="audio-launcher-help" data-launcher-help hidden>
-          <p>En Descargas, abrí <strong>INICIAR_SALMOS.bat</strong>. Dejá esa ventana abierta y, cuando diga «SALMOS listo», volvé acá y tocá <strong>Conectar iniciador</strong>.</p>
-          <a class="button" href="INICIAR_SALMOS.bat?v=26.8" download="INICIAR_SALMOS.bat">Descargar iniciador</a>
-        </div>
+        <ol class="audio-launcher-steps" data-launcher-steps>
+          <li><a class="button primary" href="INICIAR_SALMOS.bat?v=26.9" download="INICIAR_SALMOS.bat" data-download-launcher>Descargar iniciador</a></li>
+          <li>Abrí <strong>INICIAR_SALMOS.bat</strong> desde Descargas y dejá su ventana abierta.</li>
+          <li><button type="button" data-connect>Ya abrí el iniciador</button></li>
+        </ol>
       </div><section class="audio-create"><h2>Crear canción</h2>
         <div class="audio-source-input"><label>Tu grabación<input type="file" accept="audio/*,.ogg,.opus,.m4a,.wav,.mp3,.webm,.aac,.flac" data-file></label>
           <audio data-upload-player controls hidden></audio><div class="button-row"><button data-transcribe disabled>Extraer letra</button>
@@ -84,25 +84,32 @@
         <label>Efecto<select data-effect><option value="">Sin efecto</option><option value="echo">Eco suave</option><option value="bass">Realzar graves</option><option value="fade">Entrada y salida suaves</option></select></label>
         <label>Nombre de la versión<input data-version-name maxlength="100"></label>
         <div class="button-row"><button data-preview>Escuchar mezcla</button><button data-save-new class="primary">Guardar como nuevo</button></div></fieldset></section>
-        <p data-status role="status" aria-live="polite"></p><section class="audio-saved"><div class="audio-layer-heading"><h2>Mis audios</h2><button data-refresh>Actualizar</button></div><div data-library></div></section></div>`;
+        <section class="audio-saved"><div class="audio-layer-heading"><h2>Mis audios</h2><button data-refresh>Actualizar</button></div><div data-library></div></section></div>`;
     document.body.append(dialog);
-    const find=key=>dialog.querySelector('[data-'+key+']'),say=message=>{find('status').textContent=message;};
+    const find=key=>dialog.querySelector('[data-'+key+']');
+    function say(message,state='notice'){
+      const status=find('status');
+      if(status.textContent!==message)status.textContent=message;
+      status.dataset.state=state;
+    }
     for(const [id,[name]] of Object.entries(genres))find('genre').add(new Option(name,id));
     const player=find('player'),recordPlayer=find('upload-player');
     let recording=null,recordingURL='',active=null,sourceURL='',mixURL='',mix=null,busy=false,job='',timer=0,polling=false,gallerySeq=0;
-    let connection=null;
+    let connection=null, connectionDeadline=0, retries=0, downloadPending=false;
     try{job=localStorage.getItem('salmos-active-audio-job')||'';}catch{}
     const keyJob=value=>{job=value;try{if(value)localStorage.setItem('salmos-active-audio-job',value);else localStorage.removeItem('salmos-active-audio-job');}catch{}};
-    const startHelp='Abrí INICIAR_SALMOS.bat desde Descargas, dejá su ventana abierta y tocá Conectar iniciador.';
+    const startHelp='Si ya lo descargaste, abrilo desde Descargas. Cuando su ventana esté abierta, tocá «Ya abrí el iniciador».';
+    const isUnavailable=error=>error instanceof TypeError||error.name==='AbortError';
     function showConnection(title,help,mode){
       find('connection-title').textContent=title;
       find('connection-help').textContent=help;
       find('connection').dataset.state=mode;
+      find('launcher-steps').hidden=mode==='online'&&connection?.transcription;
     }
     async function request(path,options={},timeout){
       try{return await helperFetch('/api/music'+path,options,timeout);}
       catch(error){
-        if(error instanceof TypeError||error.name==='AbortError'){
+        if(isUnavailable(error)){
           connection=null;
           showConnection('Iniciador sin conexión',startHelp+' Si Chrome pide permiso para acceder a la red local, permitilo.','offline');
           throw Error('La PC no respondió. Podés editar tu grabación y descargar el WAV mientras conectás el iniciador.');
@@ -111,17 +118,8 @@
       }
     }
     const api=async(path,options={},timeout)=>(await request(path,options,timeout)).json();
-    async function connect(){
-      showConnection('Buscando el iniciador…','Si se está instalando, esperá a que su ventana diga «SALMOS listo».','checking');
-      let response;
-      try{response=await api('',{cache:'no-store'},4000);}
-      catch(error){
-        if(find('connection').dataset.state==='checking'){
-          connection=null;
-          showConnection('No se pudo comprobar el iniciador',startHelp,'offline');
-        }
-        throw error;
-      }
+    const readConnection=async()=>(await helperFetch('/api/music',{cache:'no-store'},4000)).json();
+    function updateConnection(response){
       if(response.audioApi!==2){
         connection=null;
         const update='Cerrá la ventana anterior de SALMOS, descargá el iniciador actualizado y abrilo.';
@@ -129,30 +127,93 @@
         throw Error(update);
       }
       connection=response;
+      if(response.setup?.state==='preparing'){
+        showConnection('Iniciador preparando SALMOS',response.setup.message||'Dejá la ventana del iniciador abierta.','checking');
+        return false;
+      }
       const available=[];
       if(!response.transcription)available.push('Cerrá y volvé a abrir el iniciador para instalar la extracción de letra.');
       if(!response.installed)available.push('Para generar canciones hace falta ACE-Step en la PC.');
       showConnection('Iniciador conectado',available.join(' ')||'Extracción de letra y motor de canciones disponibles.','online');
+      return true;
+    }
+    async function checkOpeningInitiator(){
+      let delay=2400;
+      try{
+        if(updateConnection(await readConnection())){
+          connectionDeadline=0;
+          if(!busy)say(job?'Iniciador conectado. Consultando la generación…':'Iniciador conectado.',job?'working':'success');
+          sync();
+          if(job)poll();
+          library().catch(error=>{if(!busy&&!job)say(error.message,'error');});
+          return;
+        }
+        retries=0;
+        connectionDeadline=Date.now()+5*60*1000;
+        if(!busy)say('El iniciador ya respondió y está preparando SALMOS. Te aviso cuando esté listo.','working');
+      }catch(error){
+        if(!isUnavailable(error)||Date.now()>=connectionDeadline){
+          connectionDeadline=0;connection=null;
+          if(isUnavailable(error))showConnection('El iniciador aún no respondió','Revisá su ventana. Si está instalando, dejala abierta y tocá «Reintentar conexión».','offline');
+          if(!busy)say(isUnavailable(error)?'Se cumplió el tiempo de espera. Podés reintentar la conexión.':error.message,'error');
+          sync();
+          return;
+        }
+        connection=null;
+        showConnection('Esperando al iniciador…','Dejá su ventana abierta. El Estudio comprueba la conexión automáticamente.','checking');
+        delay=Math.min(12000,2400*2**retries++);
+      }
+      sync();
+      setTimeout(checkOpeningInitiator,delay);
+    }
+    function waitForInitiator(){
+      if(connectionDeadline)return;
+      retries=0;connectionDeadline=Date.now()+5*60*1000;
+      showConnection('Buscando el iniciador…','La conexión se comprueba automáticamente.','checking');
+      say('Comprobación iniciada. Dejá abierta la ventana del iniciador.','working');
+      sync();
+      void checkOpeningInitiator();
+    }
+    async function connect(){
+      const response=connection||await api('',{cache:'no-store'},4000);
+      if(!updateConnection(response)){
+        waitForInitiator();
+        throw Error('El iniciador sigue preparando SALMOS. Esta acción estará disponible cuando termine.');
+      }
       return response;
+    }
+    function monitorTranscription(){
+      let stopped=false,timer;
+      const check=async()=>{
+        try{
+          const {transcriptionStage}=await readConnection();
+          if(!stopped&&transcriptionStage==='model')say('Grabación recibida. Preparando el modelo de voz en tu PC…','working');
+          if(!stopped&&transcriptionStage==='reading')say('Grabación recibida. Extrayendo la letra en tu PC…','working');
+        }catch{}finally{if(!stopped)timer=setTimeout(check,2200);}
+      };
+      if(Object.hasOwn(connection||{},'transcriptionStage'))timer=setTimeout(check,800);
+      return()=>{stopped=true;clearTimeout(timer);};
     }
     const jsonPost=data=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     const localTracks=async()=>(await dbAction('assets','readonly',store=>store.getAll())).filter(a=>a.kind==='ai-music19');
     const put=record=>dbAction('assets','readwrite',store=>store.put(record));
     function sync(){
-      find('edit-controls').disabled=!active||busy;
-      find('file').disabled=busy;find('transcribe').disabled=!recording||busy||!!job;
-      find('use-upload').disabled=!recording||busy;find('generate').disabled=busy||!!job;
+      const locked=busy||!!job, preparing=!!connectionDeadline||connection?.setup?.state==='preparing';
+      find('edit-controls').disabled=!active||locked;
+      find('file').disabled=locked;find('transcribe').disabled=!recording||locked||preparing;
+      find('use-upload').disabled=!recording||locked;find('generate').disabled=locked||preparing;
       find('cancel-job').hidden=!job;find('cancel-job').disabled=busy;
-      find('refresh').disabled=busy;find('connect').disabled=busy;
-      for(const el of dialog.querySelectorAll('[data-library] button, .audio-create select, .audio-create textarea, .audio-create input:not([type=file])'))el.disabled=busy;
+      find('refresh').disabled=locked;find('connect').disabled=busy||!!connectionDeadline;
+      find('connect').textContent=connectionDeadline?'Esperando conexión…':find('connection').dataset.state==='offline'?'Reintentar conexión':'Ya abrí el iniciador';
+      for(const el of dialog.querySelectorAll('[data-library] button, .audio-create select, .audio-create textarea, .audio-create input:not([type=file])'))el.disabled=locked;
       const hasEdits=!!find('layers').children.length||!!find('effect').value;
       find('preview').disabled=find('save-new').disabled=!hasEdits;
       find('save-original').textContent=active?.localOnly?'Guardar copia en la PC':active?.saved?'✓ Guardado':'Guardar original';find('save-original').disabled=!!active?.saved&&!active.localOnly;
       const instrumental=find('mode').value==='instrumental';find('lyrics-field').hidden=find('voice-field').hidden=instrumental;
     }
-    async function action(fn){
-      if(busy)return;busy=true;sync();
-      try{await fn();}catch(e){say(e.message);}
+    async function action(message,fn){
+      if(busy)return;busy=true;say(message,'working');sync();
+      try{await fn();}catch(e){say(e.message,'error');}
       finally{busy=false;sync();}
     }
     function resetMix(){
@@ -181,8 +242,8 @@
       for(const t of [...entries.values()].filter(t=>!hiddenSongs().has(t.id)).sort((a,b)=>b.createdAt-a.createdAt)){
         const button=document.createElement('button'),title=document.createElement('strong'),detail=document.createElement('small');
         title.textContent=t.name;detail.textContent=[t.request?.parentId?'Mezcla':'Audio',Math.round(t.duration||0)+' s',(t.saved20||t.request?.saved)?'Guardado':'Generado'].join(' · ');
-        button.append(title,detail);button.onclick=()=>action(async()=>{await loadTrack(t);say(t.name);});
-        button.disabled=busy;host.append(button);
+        button.append(title,detail);button.onclick=()=>action('Abriendo el audio…',async()=>{await loadTrack(t);say(t.name,'success');});
+        button.disabled=busy||!!job;host.append(button);
       }
       if(!host.childElementCount)host.textContent='Todavía no hay audios guardados.';
     }
@@ -211,7 +272,7 @@
       const record={kind:'ai-music19',id:t.id,name:t.name,duration:t.duration,createdAt:t.createdAt||Date.now()/1000,
         request:{...t.request,name:t.name,duration:t.duration,saved:true,parentId},saved20:true,remote,localOnly:!remote,generated,src:''};
       try{record.src=await blobData(blob);await put(record);}catch(e){if(!remote)throw Error('No se pudo guardar el audio en la PC ni en este navegador. Podés descargar el WAV.');}
-      say(remote?'Audio guardado en tu PC.':['Audio guardado en este navegador.',reason].filter(Boolean).join(' '));
+      say(remote?'Audio guardado en tu PC.':['Audio guardado en este navegador.',reason].filter(Boolean).join(' '),'success');
       await library();if(connection)refreshSongs().catch(()=>{});return record;
     }
     async function poll(){
@@ -220,16 +281,25 @@
       try{
         const data=await api(''),current=data.job;
         if(job!==id)return;
-        if(current?.id===id&&current.state==='running'){say(current.message||'Generando canción…');return;}
-        if(current?.id===id&&['error','cancelled'].includes(current.state)){keyJob('');say(current.message||'La generación se interrumpió.');return;}
+        if(current?.id===id&&current.state==='running'){
+          say(current.message||'Generando canción…','working');
+          return;
+        }
+        if(current?.id===id&&['error','cancelled'].includes(current.state)){
+          keyJob('');say(current.message||'La generación se interrumpió.','error');
+          return;
+        }
         const track=(await api('/tracks')).tracks?.find(t=>t.id===id);
         if(!track){keyJob('');say('El iniciador ya no tiene esa generación activa. Podés volver a generar.');return;}
         if(job!==id)return;
         if(busy)return;
         busy=true;sync();
-        try{await loadTrack({...track,remote:true});keyJob('');say('Canción lista. Podés guardar el original o escuchar una mezcla.');await library();}
+        try{await loadTrack({...track,remote:true});keyJob('');say('Canción lista. Podés guardar el original o escuchar una mezcla.','success');await library();}
         finally{busy=false;}
-      }catch(e){say(e.message);}
+      }catch(e){
+        if(!connection)waitForInitiator();
+        else say(e.message,'error');
+      }
       finally{polling=false;sync();if(job&&dialog.open&&connection)timer=setTimeout(poll,1800);}
     }
     find('file').onchange=()=>{
@@ -238,64 +308,76 @@
       if(recording){recordPlayer.src=recordingURL;if(!find('name').value)find('name').value=recording.name.replace(/\.[^.]+$/,'').slice(0,100);}
       else{recordPlayer.removeAttribute('src');recordPlayer.load();}sync();
     };
-    find('transcribe').onclick=()=>action(async()=>{
-      const status=connection||await connect();
+    find('transcribe').onclick=()=>action('Preparando la grabación para extraer la letra…',async()=>{
+      const status=await connect();
       if(!status.transcription)throw Error('Cerrá y volvé a abrir el iniciador para instalar la extracción de letra.');
       recordPlayer.pause();
-      say('Extrayendo la letra en tu PC. La primera vez se descarga el modelo de voz…');
       const wav=await recordingForLyrics(recording,tools);
-      const data=await api('/transcribe',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},20*60*1000);
+      say('Enviando la grabación a tu iniciador…','working');
+      const stop=monitorTranscription();
+      let data;
+      try{data=await api('/transcribe',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},20*60*1000);}
+      finally{stop();}
       if(!data.lyrics?.trim())throw Error('No se distinguió una letra.');
-      find('mode').value='vocal';find('lyrics').value=data.lyrics;sync();say('Letra extraída. Revisala antes de generar la canción.');
+      find('mode').value='vocal';find('lyrics').value=data.lyrics;sync();say('Letra extraída. Revisala antes de generar la canción.','success');
     });
-    find('use-upload').onclick=()=>action(async()=>{
+    find('use-upload').onclick=()=>action('Abriendo tu grabación…',async()=>{
       const b=await decode(recording);selectAudio({id:newId(),name:recording.name.replace(/\.[^.]+$/,'').slice(0,100),duration:b.duration,saved:false,remote:false},tools.waveBlob(b));
-      say('Grabación lista para editar.');
+      say('Grabación lista para editar.','success');
     });
-    find('generate').onclick=()=>action(async()=>{
+    find('generate').onclick=()=>action('Preparando el pedido de generación…',async()=>{
+      if(job)return;
       const style=find('genre').value,lyrics=find('lyrics').value.trim(),instrumental=find('mode').value==='instrumental';
       if(!instrumental&&(!lyrics||lyrics.length>3000))throw Error('Escribí o ajustá la letra a un máximo de 3.000 caracteres para generar.');
-      const status=connection||await connect();
+      const status=await connect();
       if(!status.installed)throw Error('El iniciador está conectado. Para generar canciones hace falta ACE-Step en la PC.');
       const bpm=find('bpm').value,payload={name:find('name').value.trim()||'Mi canción',style,caption:genres[style][1]+', '+bpm+' BPM.',lyrics:instrumental?'':lyrics,
         rhythm:({'100':'slow','122':'medium','132':'fast'})[bpm],duration:Number(find('duration').value),voice:find('voice').value,instrumental};
-      say('Enviando la canción al motor de música…');
+      say('Enviando la canción al motor de música…','working');
       const data=await api('/generate',jsonPost(payload));if(!data.job?.id)throw Error('El motor no devolvió la generación.');
-      keyJob(data.job.id);say('Generando audio…');timer=setTimeout(poll,250);
+      keyJob(data.job.id);say('El iniciador recibió el pedido. Generando audio…','working');timer=setTimeout(poll,250);
     });
-    find('cancel-job').onclick=()=>action(async()=>{
+    find('cancel-job').onclick=()=>{
+      if(!job||busy||!window.confirm('¿Querés cancelar la generación de esta canción?'))return;
+      void action('Cancelando la generación…',async()=>{
       const data=connection?await api(''):await connect();
       if(data.job?.id===job&&data.job.state==='running')await api('/cancel',jsonPost({id:job}));
       keyJob('');clearTimeout(timer);say('Generación finalizada o cancelada.');
-    });
-    find('save-original').onclick=()=>action(async()=>{
+      });
+    };
+    find('save-original').onclick=()=>action('Guardando el audio…',async()=>{
       if(active.localOnly&&!connection)await connect();
       const record=await saveBlob(active,active.blob,active.request?.parentId||'',!!(active.generated||active.remote&&!active.request?.audioEdit));
       active={...active,...record,saved:true};
     });
-    find('save-new').onclick=()=>action(async()=>{
+    find('save-new').onclick=()=>action('Preparando la nueva versión…',async()=>{
       const name=find('version-name').value.trim();if(!name)throw Error('Escribí un nombre para la nueva versión.');
       await preview();
       const record=await saveBlob({id:mix.id,name,duration:mix.duration,request:active.request},mix.blob,active.id);
       selectAudio({...record,saved:true},mix.blob);
     });
-    find('preview').onclick=()=>action(async()=>{await preview();await player.play();say('Escuchando la mezcla.');});
+    find('preview').onclick=()=>action('Preparando la mezcla…',async()=>{await preview();await player.play();say('Escuchando la mezcla.');});
     find('download').onclick=()=>{const link=document.createElement('a');link.href=mixURL||sourceURL;
       link.download=(mixURL?find('version-name').value:active.name)+'.wav';link.click();};
     find('add-beat').onclick=addLayer;find('effect').onchange=resetMix;find('mode').onchange=sync;
     player.onplay=()=>recordPlayer.pause();recordPlayer.onplay=()=>player.pause();
-    find('open-launcher').onclick=()=>{
-      const help=find('launcher-help');
-      help.hidden=!help.hidden;
-      find('open-launcher').setAttribute('aria-expanded',String(!help.hidden));
+    find('download-launcher').onclick=event=>{
+      if(downloadPending||connectionDeadline||busy||job){event.preventDefault();return;}
+      downloadPending=true;
+      const button=find('download-launcher');
+      button.setAttribute('aria-disabled','true');
+      say('Descarga solicitada. Cuando termine, abrí INICIAR_SALMOS.bat desde Descargas.','success');
+      setTimeout(()=>{downloadPending=false;button.removeAttribute('aria-disabled');},1600);
     };
-    find('connect').onclick=()=>action(async()=>{
-      await connect();say('');await library();if(job)timer=setTimeout(poll,100);
-    });
-    find('refresh').onclick=()=>action(library);find('close').onclick=()=>dialog.close();
+    find('connect').onclick=waitForInitiator;
+    find('refresh').onclick=()=>action('Actualizando tus audios…',async()=>{await library();say('Audios actualizados.','success');});
+    find('close').onclick=()=>dialog.close();
     dialog.onclose=()=>{clearTimeout(timer);player.pause();recordPlayer.pause();};
-    launcher.onclick=()=>{pause();dialog.showModal();sync();library().catch(e=>say(e.message));if(job)poll();};
-    showConnection('Iniciador sin conectar','Usá Abrir iniciador para extraer letra o generar canciones. Podés editar tu grabación desde acá.','idle');
+    launcher.onclick=()=>{
+      pause();dialog.showModal();sync();library().catch(e=>say(e.message,'error'));
+      if(job){if(connection)poll();else waitForInitiator();}
+    };
+    showConnection('Iniciador sin conectar','Conectalo para extraer letra o generar canciones. Podés editar grabaciones directamente en el navegador.','idle');
     sync();
   }
   window.SalmosAudioStudio={install};

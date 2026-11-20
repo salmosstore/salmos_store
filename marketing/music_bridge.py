@@ -59,7 +59,8 @@ def state():
                 write_status(JOB['folder'], status)
             status['id'] = JOB['id']
         return {'audioApi': 2, 'installed': bool(ace_root()),
-                'transcription': importlib.util.find_spec('faster_whisper') is not None, 'job': status}
+                'transcription': importlib.util.find_spec('faster_whisper') is not None,
+                'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
 
 
 def validate_request(data):
@@ -218,11 +219,12 @@ def manage(data, action):
 
 TRANSCRIPTION_LOCK = threading.Lock()
 TRANSCRIPTION_MODEL = None
+TRANSCRIPTION_STAGE = None
 
 
 def transcribe_recording(handler):
     """Receive normalized mono PCM. The user's recording stays on their PC."""
-    global TRANSCRIPTION_MODEL
+    global TRANSCRIPTION_MODEL, TRANSCRIPTION_STAGE
     size = int(handler.headers.get('Content-Length', '0'))
     if handler.headers.get('Content-Type', '').split(';')[0] != 'audio/wav' or not 44 < size <= 16000 * 2 * 600 + 44:
         raise ValueError('Elegí un audio de hasta diez minutos.')
@@ -243,8 +245,10 @@ def transcribe_recording(handler):
         except ImportError as exc:
             raise RuntimeError('Descargá el iniciador actualizado y abrilo para habilitar la transcripción.') from exc
         if TRANSCRIPTION_MODEL is None:
+            TRANSCRIPTION_STAGE = 'model'
             TRANSCRIPTION_MODEL = WhisperModel('base', device='cpu', compute_type='int8',
                                                download_root=str(DATA.parent / 'modelos-transcripcion'))
+        TRANSCRIPTION_STAGE = 'reading'
         segments, _ = TRANSCRIPTION_MODEL.transcribe(io.BytesIO(data), language='es', beam_size=5,
                                                      condition_on_previous_text=False)
         lyrics = '\n'.join(s.text.strip() for s in segments if s.text.strip() and s.no_speech_prob < .85)
@@ -252,6 +256,7 @@ def transcribe_recording(handler):
             raise ValueError('No se distinguieron palabras. Podés escribir la letra o elegir otra grabación.')
         return {'lyrics': lyrics}
     finally:
+        TRANSCRIPTION_STAGE = None
         TRANSCRIPTION_LOCK.release()
 
 

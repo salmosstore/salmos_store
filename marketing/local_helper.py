@@ -23,6 +23,42 @@ ALLOWED_ORIGINS = {'https://salmos.com.ar', 'https://www.salmos.com.ar', 'https:
 DEFAULT_VOICE = 'es_MX-ald-medium'
 MAX_VIDEO_BYTES = 240 * 1024 * 1024
 GENERATION_LOCK = threading.Lock()
+EDITOR_SETUP = {'state': 'ready'}
+
+
+def prepare_editor_dependencies():
+    global EDITOR_SETUP
+    dependencies = (
+        ('edge_tts', 'edge-tts==7.3.1', 'Voces del relator'),
+        ('imageio_ffmpeg', 'imageio-ffmpeg==0.6.0', 'Conversión a MP4'),
+        ('faster_whisper', 'faster-whisper==1.2.1', 'Extracción de letra'),
+    )
+    missing = []
+    for index, (module, package, label) in enumerate(dependencies, 1):
+        message = f'{label} · Paso {index} de {len(dependencies)}'
+        EDITOR_SETUP = {'state': 'preparing', 'message': message}
+        print(f'Preparando {message}…', flush=True)
+        check = [sys.executable, '-c', f'import {module}']
+        try:
+            if subprocess.run(check, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+                print(f'Instalando {label}. Dejá esta ventana abierta.', flush=True)
+                subprocess.run([sys.executable, '-m', 'pip', 'install', '--disable-pip-version-check',
+                                '--timeout', '15', '--retries', '1', package], check=True)
+                subprocess.run(check, check=True)
+                importlib.invalidate_caches()
+        except (OSError, subprocess.CalledProcessError):
+            missing.append(module)
+            print(f'No se pudo preparar {label}. Las demás funciones siguen disponibles.', flush=True)
+    EDITOR_SETUP = {'state': 'ready', 'missing': missing}
+    print('SALMOS listo. Volvé al Estudio de audio.', flush=True)
+
+
+def editor_music_state():
+    setup = EDITOR_SETUP
+    state = music_bridge.state()
+    if 'faster_whisper' in setup.get('missing', ()):
+        state['transcription'] = False
+    return {**state, 'setup': setup}
 
 def ffmpeg_executable():
     try:
@@ -326,8 +362,10 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.allowed_origin():
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
+        if path == '/api/music':
+            return self.json_response(editor_music_state())
         if path == '/api/health':
-            return self.json_response({'name': 'SALMOS complemento local', 'version': 10, 'wan': wan_state(), 'music': music_bridge.state(),
+            return self.json_response({'name': 'SALMOS complemento local', 'version': 11, 'wan': wan_state(), 'music': editor_music_state(),
                 'tts': bool(all_voices()), 'ffmpeg': ffmpeg_executable() is not None, 'voices': all_voices(), 'onlineVoice': has_edge()})
         if project_storage.get(self,path):return
         if music_bridge.get(self,path):return
@@ -348,6 +386,8 @@ class Handler(SimpleHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         if project_storage.post(self,path):return
         if path.startswith('/api/music/'):
+            if EDITOR_SETUP['state'] == 'preparing' and path in ('/api/music/transcribe', '/api/music/generate'):
+                return self.json_response({'error': 'El iniciador sigue preparando el audio. Esperá a que diga SALMOS listo.'}, 409)
             wan_job=wan_state().get('job') or {}
             if music_bridge.post(self,path,wan_job.get('state')=='running'):return
         if wan_post(self,path):return
@@ -406,10 +446,12 @@ class Handler(SimpleHTTPRequestHandler):
             self.json_response({'error': str(error) if isinstance(error, RuntimeError) else 'No se pudo completar la tarea local. Revisá la ventana del complemento.'}, 500)
 
 def main():
+    global EDITOR_SETUP
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--prepare', action='store_true')
+    parser.add_argument('--prepare-editor', action='store_true')
     args = parser.parse_args()
     if args.prepare:
         MODELS.mkdir(exist_ok=True)
@@ -418,7 +460,12 @@ def main():
         return
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     url = f'http://127.0.0.1:{args.port}/'
-    print('\nSALMOS listo. Conexión local en', url, flush=True)
+    if args.prepare_editor:
+        EDITOR_SETUP = {'state': 'preparing', 'message': 'Comprobando las herramientas de audio…'}
+        print('\nSALMOS se está preparando en', url, flush=True)
+        threading.Thread(target=prepare_editor_dependencies, daemon=True).start()
+    else:
+        print('\nSALMOS listo. Conexión local en', url, flush=True)
     print('Dejá esta ventana abierta mientras generás música, usás el relator o convertís a MP4.')
     print('Para cerrar: Ctrl+C. La voz con internet envia el texto a Microsoft; la conversion de video es local.\n')
     if not args.no_browser:
