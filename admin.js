@@ -159,7 +159,10 @@
   }
   function designVisualOwner(owner){return ['detail','sheet-detail'].includes(owner)?'asset-'+state.activeDesignId:owner==='upload'?'sheet-upload':owner;}
   function designViewerBackground(owner='detail'){return previewColor(designAppearanceTarget(owner)?.preview_background)||'default';}
-  function initDesignBackground(){delete document.documentElement.dataset.designBackground;}
+  function initDesignBackground(){
+    delete document.documentElement.dataset.designBackground;
+    try{state.sheetBackgroundPending=JSON.parse(localStorage.getItem('salmos_sheet_background_pending')||'{}')||{};}catch{state.sheetBackgroundPending={};}
+  }
   function designVisualAttrs(assetOrOwner){
     const owner=typeof assetOrOwner==='string'?designVisualOwner(assetOrOwner):'asset-'+assetOrOwner.id;
     const asset=typeof assetOrOwner==='string'?designAppearanceTarget(owner):assetOrOwner;
@@ -2243,6 +2246,15 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     for(const type of types){if(!type||window.SalmosBook.isMaterial(type)||['dtf_textile','dtf_uv','packaging','background'].includes(type)||[...select.options].some(option=>option.value===type))continue;select.add(new Option(materialTypeLabel(type),type));}
   }
   function productionVirtualStock(){return qs('#productionStockKind')?.value==='to_stock';}
+  function normalizeProductionInventory(){
+    qs('#productionStockKind').value='to_stock';
+    qs('#productionQuantity').value='1';delete qs('#productionQuantity').dataset.stockDraftKey;
+    state.productionOriginalStockKind='to_stock';state.productionStockDrafts={};state.productionPendingStart=null;
+    const type=qs('#productionMaterialType').value;
+    if(window.SalmosBook.isBookType(type))return;
+    const primary=state.productionVirtualMaterial||state.materials.find(material=>Number(material.id)===Number(state.productionMaterialsSelected[0]?.materialId));
+    if(primary){state.productionVirtualMaterial=virtualMaterialDescription(primary);state.productionMaterialsSelected=state.productionMaterialsSelected.filter(row=>state.materials.find(material=>Number(material.id)===Number(row.materialId))?.material_type!==type);}
+  }
   function virtualMaterialDescription(material){
     if(!material)return null;
     const {id,sourceMaterialId,stock_qty,physicalStock,gender,...details}=material;
@@ -2686,7 +2698,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
           }
         };
         restoreFields();
-        if(productionVirtualStock()&&qs('#productionMaterialType').value==='shirt'){const primary=state.productionVirtualMaterial||state.materials.find(material=>Number(material.id)===Number(state.productionMaterialsSelected[0]?.materialId));if(primary)state.productionVirtualMaterial=virtualMaterialDescription(primary);state.productionMaterialsSelected=state.productionMaterialsSelected.filter(row=>state.materials.find(material=>Number(material.id)===Number(row.materialId))?.material_type!=='shirt');}
+        normalizeProductionInventory();
         renderProductionMaterialGallery();
         renderProductionSelectedMaterials();
         renderProductionDesignGallery();
@@ -2694,7 +2706,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
         renderProductionSelectedDesigns();
         renderMediaManager('productionMediaOrderList');
         renderProductionVariantStock();
-        restoreFields();
+        restoreFields();normalizeProductionInventory();
         renderProductionAudiences();
         for(const value of draft.variants){
           const input=qs(`[data-production-variant-stock="${value.id}"]`);
@@ -2763,7 +2775,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     state.productionSavedPhotoBases=legacy.map(source=>{const saved=sourceRows.find(row=>Number(row.source_media_id)===Number(source.mediaId)),image=(product.images||[]).find(row=>Number(row.id)===Number(source.mediaId));if(!saved&&!image)return null;return {id:-Number(source.mediaId),source_media_id:Number(source.mediaId),source_url:saved?apiUrl(saved.url):image.url,asset_type:'base',product_type:type,gender:'Producto',variant_label:project?.book?.kind||product.production_catalog?.book?.kind||'',material_class:window.SalmosAudience.parse(product.audience).includes('Kids')?'NIÑOS':'ADULTOS',model_name:'Fotos guardadas',name:source.name||product.name,color:primary?.color||'',garment_style:primary?.fit||'',pose:source.pose||'front',cap_style:'none'};}).filter(Boolean);
     for(const base of state.productionSavedPhotoBases){if(!state.productionMountViews[mockupViewKey(base.id)]){const key=mockupViewKey(base.id);state.productionMountViews[key]={baseId:base.id,backgroundId:0,included:true,layers:[],outputMediaId:base.source_media_id};const media=state.mediaItems.find(item=>Number(item.id)===Number(base.source_media_id));if(media)media.viewKey=key;for(const layer of state.productionDesignsSelected)layer.bakedViewKeys=[...(layer.bakedViewKeys||[]),key];}}
     state.productionStockDrafts={};const mainVariant=product.variants?.find(v=>v.active&&Number(v.id)===Number(job?.variant_id))||product.variants?.find(v=>v.active&&['physical','to_stock'].includes(v.stock_kind))||product.variants?.find(v=>v.active);qs('#productionQuantity').value=String(pending?.quantity??state.productionPendingStart?.quantity??job?.quantity??(mainVariant?.stock_kind==='to_stock'?mainVariant.prepare_qty:mainVariant?.stock)??1);state.productionOriginalQuantity=Number(qs('#productionQuantity').value)||1;qs('#productionWaste').value=String(pending?.wastePercent??recipe.waste_percent??10);qs('#productionSalePrice').value=centsToPesos(product.price_cents);qs('#productionNotes').value=pending?.notes??state.productionPendingStart?.notes??job?.notes??'';qs('#productionProductName').value=product.name;qs('#productionPublicationVariant').value=product.publication_variant||'';qs('#productionCategory').value=String(product.category_id);state.productionOriginalStockKind=Number(mainVariant?.physical_qty??mainVariant?.stock)>0?'physical':'to_stock';if(!pending&&!project?.pendingStockKind&&state.productionOriginalStockKind==='physical'&&['physical','to_stock'].includes(project?.stockKind))state.productionOriginalStockKind=project.stockKind;qs('#productionStockKind').value=project?.pendingStockKind||pending?.stockKind||project?.stockKind||state.productionOriginalStockKind;
-    if(productionVirtualStock()&&type==='shirt'){if(primary)state.productionVirtualMaterial=virtualMaterialDescription(primary);state.productionMaterialsSelected=state.productionMaterialsSelected.filter(row=>state.materials.find(material=>Number(material.id)===Number(row.materialId))?.material_type!=='shirt');}
+    normalizeProductionInventory();
     qs('#productionStatus').value=product.status||'draft';
     for(const [id,key] of [['productionDescription','short_description'],['productionMeaning','meaning_text'],['productionVerse','verse_text'],['productionVerseReference','verse_reference'],['productionCapacity','capacity_ml'],['productionWeight','weight_grams'],['productionHeight','height_cm'],['productionWidth','width_cm'],['productionDepth','depth_cm']])qs('#'+id).value=String(product[key]??'');for(const [id,key] of [['productionIsNew','is_new'],['productionFeatured','is_featured'],['productionBestseller','is_bestseller']])qs('#'+id).checked=Boolean(Number(product[key]));
     state.productionDescriptionDirty=project?.descriptionAutomatic===false||project?.descriptionAutomatic!==true&&Boolean(String(product.short_description||'').trim());
@@ -2792,23 +2804,14 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     catch(error){toast('No se pudo abrir el producto. '+error.message,'error');}
     finally{state.openingProductionPhoto=false;}
   }
-  function productionStockModeChanged(){return Boolean(state.productionEditingProduct)&&qs('#productionStockKind').value!==state.productionOriginalStockKind;}
+  function productionStockModeChanged(){return false;}
   function renderProductionVariantStock(){
-    let host=qs('#productionVariantStock');if(!host){host=document.createElement('div');host.id='productionVariantStock';qs('#productionStockNote').after(host);}
-    const drafts=state.productionStockDrafts??={},quantity=qs('#productionQuantity');for(const input of [...qsa('[data-production-variant-stock]',host),quantity])if(input.dataset.stockDraftKey)drafts[input.dataset.stockDraftKey]=input.value;
-    if(state.productionPendingStart&&!state.productionEditingJob&&qs('#productionStockKind').value==='physical'){
-      const key='initial:'+state.productionEditingProduct?.id;
-      host.hidden=true;host.replaceChildren();quantity.closest('.field').hidden=false;quantity.closest('.field').classList.remove('hidden');
-      qs('.production-top-grid')?.classList.remove('virtual-production');
-      quantity.min='1';quantity.value=drafts[key]??state.productionPendingStart.quantity;quantity.dataset.stockDraftKey=key;
-      return;
-    }
-    const variants=(state.productionEditingProduct?.variants||[]).filter(v=>v.active!==0&&stockRowSizeAllowed({...v,product_id:state.productionEditingProduct?.id,category_name:state.productionEditingProduct?.category_name})),changed=productionStockModeChanged(),kind=qs('#productionStockKind').value,virtual=kind==='to_stock',multiple=!virtual&&(!state.productionEditingJob||changed)&&variants.length>1;host.hidden=virtual&&!variants.length;quantity.closest('.field').hidden=virtual||multiple;qs('.production-top-grid')?.classList.toggle('virtual-production',virtual);if(virtual){host.hidden=true;host.replaceChildren();delete quantity.dataset.stockDraftKey;return;}
-    const value=v=>{const target='physical',key=target+':'+v.id;return {key,quantity:drafts[key]??(target==='to_stock'?Number(v.prepare_qty)||0:Number(v.physical_qty??v.stock)||0),label:'Stock real'};};
-    host.innerHTML=multiple?`<div class="production-variant-stock"><strong>Cantidades por variante</strong>${variants.map(v=>{const current=value(v);return `<label class="production-variant-stock-row"><span>${escapeHtml([v.color,v.size,v.sku].filter(Boolean).join(' · ')||'Única')} · ${current.label}</span><input class="input" type="number" min="0" step="1" data-production-variant-stock="${v.id}" data-stock-draft-key="${current.key}" value="${current.quantity}" aria-label="Cantidad ${escapeHtml([v.color,v.size].join(' '))}"></label>`;}).join('')}</div>`:'';
-    quantity.closest('.field').classList.toggle('hidden',multiple);qs('#productionStockKind').disabled=false;quantity.min=state.productionEditingProduct&&(!state.productionEditingJob||changed)?'0':'1';
-    if(variants.length===1&&!multiple&&(!state.productionEditingJob||changed)){const current=value(variants[0]);quantity.value=current.quantity;quantity.dataset.stockDraftKey=current.key;}else if(state.productionEditingJob&&!changed){const key='job:'+state.productionEditingJob.id;quantity.value=drafts[key]??state.productionEditingJob.quantity;quantity.dataset.stockDraftKey=key;}else delete quantity.dataset.stockDraftKey;
+    const quantity=qs('#productionQuantity'),host=qs('#productionVariantStock');
+    quantity.closest('.field').hidden=true;delete quantity.dataset.stockDraftKey;
+    if(host){host.hidden=true;host.replaceChildren();}
+    qs('.production-top-grid')?.classList.add('virtual-production');
   }
+
   function productionStockModeChange(){
     if(!productionStockModeChanged())return undefined;const variants=(state.productionEditingProduct.variants||[]).filter(v=>v.active!==0),multiple=variants.length>1;
     return {stockKind:qs('#productionStockKind').value,keepPhysical:true,variants:variants.map(v=>{const quantity=productionVirtualStock()?Number(qs(`[data-production-variant-stock="${v.id}"]`)?.value??v.physical_qty??v.stock??0):Number(multiple?qs(`[data-production-variant-stock="${v.id}"]`)?.value??state.productionStockDrafts?.['physical:'+v.id]??v.physical_qty??v.stock??0:qs('#productionQuantity').value);if(!Number.isSafeInteger(quantity)||quantity<0)throw new Error('Revisá las cantidades de las variantes.');return {id:Number(v.id),stockKind:v.stock_kind||'physical',stock:Number(v.stock)||0,physicalQuantity:Number(v.physical_qty??v.stock)||0,prepareQuantity:Number(v.prepare_qty)||0,quantity};})};
@@ -5093,23 +5096,26 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
   function productionCopyButton(id){
     return Number(id)>0?`<button type="button" class="icon-btn" data-duplicate-product="${Number(id)}" title="Duplicar producto" aria-label="Duplicar producto"><i class="fa-solid fa-copy" aria-hidden="true"></i></button>`:'';
   }
-  function productionListVariants(product,job=null){const variants=(state.productionListStock||[]).filter(variant=>Number(variant.product_id)===Number(product.id));if(job){const current=variants.find(variant=>Number(variant.id)===Number(job.variant_id));return [current||{color:job.color||'',size:job.size||'',fit:job.fit||product.fit||'',stock_kind:job.stock_kind||''}];}return variants.length?variants:[{fit:product.fit||''}];}
+  function productionListVariants(product,job=null){
+    const variants=(state.productionListStock||[]).filter(variant=>Number(variant.product_id)===Number(product.id));
+    return variants.length?variants.map(variant=>({color:variant.color,fit:variant.fit||product.fit||job?.fit||''})):[{color:job?.color||'',fit:product.fit||job?.fit||''}];
+  }
   function productionListMatches(product,job=null,ignoreColor=false){
-    const filter=state.productionListFilter||{},variants=productionListVariants(product,job),text=productionDesignSearchText([product.name,product.category_name,product.fit,job?.notes,...variants.flatMap(variant=>[variant.color,variant.size,variant.fit])].filter(Boolean).join(' ')),words=productionDesignSearchText(filter.search).split(' ').filter(Boolean);
-    return words.every(word=>text.includes(word))&&(!filter.category||String(product.category_id)===filter.category)&&(!filter.fit||photoFit(product.fit||job?.fit)===photoFit(filter.fit))&&(!filter.publication||product.status===filter.publication)&&(!filter.stage||(job?.status||'saved')===filter.stage)&&variants.some(variant=>(!filter.size||variant.size===filter.size)&&(ignoreColor||!filter.color||photoColor(variant.color)===photoColor(filter.color))&&(!filter.stockKind||(filter.stockKind==='physical'?Number(variant.stock)>0:Number(variant.virtual_stock??100)>0)));
+    const filter=state.productionListFilter||{},variants=productionListVariants(product,job),text=productionDesignSearchText([product.name,product.category_name,product.fit,job?.notes,...variants.flatMap(variant=>[variant.color,variant.fit])].filter(Boolean).join(' ')),words=productionDesignSearchText(filter.search).split(' ').filter(Boolean);
+    return words.every(word=>text.includes(word))&&(!filter.category||String(product.category_id)===filter.category)&&(!filter.fit||photoFit(product.fit||job?.fit)===photoFit(filter.fit))&&(!filter.publication||product.status===filter.publication)&&(!filter.stage||(job?.status||'saved')===filter.stage)&&variants.some(variant=>(ignoreColor||!filter.color||photoColor(variant.color)===photoColor(filter.color)));
   }
   function productionListFiltersHtml(){
     const filter=state.productionListFilter??={search:'',category:'',fit:'',color:'',size:'',stage:'',publication:'',stockKind:''},products=productionListProducts(),variants=products.flatMap(product=>productionListVariants(product)),select=(key,label,options)=>`<label class="field">${label}<select class="select" data-production-list-filter="${key}"><option value="">Todos</option>${options.map(([value,text])=>`<option value="${escapeHtml(value)}" ${String(filter[key]||'')===String(value)?'selected':''}>${escapeHtml(text)}</option>`).join('')}</select></label>`,options=values=>uniqOptions(values).sort((a,b)=>a.localeCompare(b,'es',{numeric:true})).map(value=>[value,value]),categories=[...new Map(products.map(product=>[String(product.category_id),product.category_name||'Sin categoría'])).entries()],colors=options(variants.map(variant=>variant.color));
-    return `<div class="production-list-filter-bar"><input type="search" class="input" id="productionListSearch" value="${escapeHtml(filter.search)}" placeholder="Buscar…" aria-label="Buscar en producción"><details class="production-list-filter-popover"><summary class="btn btn-ghost">Filtrar</summary><div class="production-list-filter-fields">${select('category','Categoría',categories)}${select('fit','Corte / variante',options(products.map(product=>product.fit)))}${select('size','Talle',options(variants.map(variant=>variant.size)))}${select('stockKind','Stock',[['physical','Real'],['virtual','Virtual']])}${select('stage','Producción',[['in_progress','En producción'],['completed','Terminado'],['cancelled','Cancelado'],['saved','Producto armado']])}${select('publication','Publicación',[['published','Publicado'],['draft','Borrador'],['archived','Archivado']])}<div class="field production-list-color-field"><label>Color</label><div class="production-list-color-options">${colors.map(([color])=>`<button type="button" data-production-list-color-option="${escapeHtml(color)}" aria-pressed="${filter.color===color}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(color))}" aria-hidden="true"></span><span>${escapeHtml(color)}</span></button>`).join('')}</div></div><button type="button" class="btn btn-ghost" data-clear-production-list-filters>Limpiar filtros</button></div></details><small id="productionListCount" class="sr-only" role="status"></small></div><div class="production-list-quick-filters"><div class="product-quick-sizes" id="productionQuickSizes" role="group" aria-label="Filtrar producción por talle"></div><div class="product-quick-colors" id="productionQuickColors" role="group" aria-label="Filtrar producción por color"></div></div>`;
+    return `<div class="production-list-filter-bar"><input type="search" class="input" id="productionListSearch" value="${escapeHtml(filter.search)}" placeholder="Buscar…" aria-label="Buscar en producción"><details class="production-list-filter-popover"><summary class="btn btn-ghost">Filtrar</summary><div class="production-list-filter-fields">${select('category','Categoría',categories)}${select('fit','Corte / variante',options(products.map(product=>product.fit)))}${select('stage','Producción',[['in_progress','En producción'],['completed','Terminado'],['cancelled','Cancelado'],['saved','Producto armado']])}${select('publication','Publicación',[['published','Publicado'],['draft','Borrador'],['archived','Archivado']])}<div class="field production-list-color-field"><label>Color</label><div class="production-list-color-options">${colors.map(([color])=>`<button type="button" data-production-list-color-option="${escapeHtml(color)}" aria-pressed="${filter.color===color}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(color))}" aria-hidden="true"></span><span>${escapeHtml(color)}</span></button>`).join('')}</div></div><button type="button" class="btn btn-ghost" data-clear-production-list-filters>Limpiar filtros</button></div></details><small id="productionListCount" class="sr-only" role="status"></small></div><div class="production-list-quick-filters"><div class="product-quick-colors" id="productionQuickColors" role="group" aria-label="Filtrar producción por color"></div></div>`;
   }
   function productionSavedProductsHtml(products=productionListProducts().filter(product=>!state.productionJobs.some(job=>Number(job.product_id)===Number(product.id))&&productionListMatches(product))){if(!products.length)return '';return `<section class="admin-section"><h3>Productos armados</h3><div class="montage-photo-grid">${products.map(product=>`<article class="montage-photo-card" data-production-product="${product.id}">${product.primary_image_url?`<button class="montage-photo-thumb checkerboard" type="button" data-edit-product-mount="${product.id}"><img src="${escapeHtml(product.primary_image_url)}" alt="${escapeHtml(product.name)}" loading="lazy"></button>`:''}<div class="montage-photo-info"><strong title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong><div class="admin-actions"><button type="button" class="btn btn-ghost" data-edit-product-mount="${product.id}" aria-label="Editar producción y publicación"><i class="fa-solid fa-pen"></i></button><button type="button" class="icon-btn" data-download-product-photos="${product.id}" title="Descargar vistas" aria-label="Descargar vistas"><i class="fa-solid fa-download"></i></button><button type="button" class="icon-btn" data-delete-production-product="${product.id}" aria-label="Eliminar producto armado"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div></div></article>`).join('')}</div></section>`;}
   function renderProductionListContent(){
     const host=qs('#productionListContent');if(!host)return;const products=productionListProducts(),byId=new Map(products.map(product=>[Number(product.id),product])),jobs=state.productionJobs.filter(job=>productionListMatches(byId.get(Number(job.product_id))||{id:job.product_id,name:job.product_name,fit:job.fit},job)),saved=products.filter(product=>!state.productionJobs.some(job=>Number(job.product_id)===Number(product.id))&&productionListMatches(product)),active=jobs.filter(job=>job.status==='in_progress'),filter=state.productionListFilter||{};
     const entries=[...jobs.map(job=>({job,product:byId.get(Number(job.product_id))||{id:job.product_id,name:job.product_name}})),...saved.map(product=>({product}))];entries.sort((a,b)=>Math.max(productEditedTime(b.product),productEditedTime(b.job))-Math.max(productEditedTime(a.product),productEditedTime(a.job))||Number(b.product.id)-Number(a.product.id));
-    const jobRow=job=>`<tr data-production-job="${job.id}"><td>${productionJobPreviewHtml(job)}</td><td><strong title="${escapeHtml(job.product_name)}">${escapeHtml(job.product_name)}</strong><small class="table-sub">${adminDateTimeHtml(job.started_at)}</small></td><td class="production-variant-actions"><span>${escapeHtml([job.color,job.size,job.fit].filter(Boolean).join(' · ')||'Única')}</span><div class="admin-actions"><button type="button" class="icon-btn" data-edit-production="${job.id}" aria-label="Editar producción y publicación" title="Editar producción y publicación"><i class="fa-solid fa-pen"></i></button>${productionCopyButton(job.product_id)}<button type="button" class="icon-btn" data-download-product-photos="${job.product_id}" aria-label="Descargar vistas" title="Descargar vistas"><i class="fa-solid fa-download"></i></button>${job.status==='in_progress'?`<button type="button" class="icon-btn btn-primary" data-complete-production="${job.id}" title="Marcar terminado" aria-label="Marcar terminado"><i class="fa-solid fa-check" aria-hidden="true"></i></button>`:''}<button type="button" class="icon-btn btn-danger" data-delete-production="${job.id}" title="Eliminar" aria-label="Eliminar"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div></td><td>${Number(job.quantity)||0}</td><td class="production-money">${money(job.unit_cost_cents)}</td><td class="production-money">${money(byId.get(Number(job.product_id))?.price_cents||0)}</td><td class="production-money ${Number(byId.get(Number(job.product_id))?.price_cents||0)-Number(job.unit_cost_cents||0)>=0?'profit-positive':'profit-negative'}">${money(Number(byId.get(Number(job.product_id))?.price_cents||0)-Number(job.unit_cost_cents||0))}</td><td><span class="status ${job.status==='completed'?'success':job.status==='cancelled'?'danger':'warning'}">${job.status==='completed'?'Terminado':job.status==='cancelled'?'Cancelado':'En producción'}</span></td></tr>`;
-    const savedRow=product=>{const variants=productionListVariants(product),virtual=!variants.some(row=>Number(row.stock)>0);return `<tr data-production-product="${product.id}"><td>${product.primary_image_url?`<button type="button" class="production-job-preview" data-edit-product-mount="${product.id}" aria-label="Editar ${escapeHtml(product.name)}"><img src="${escapeHtml(product.primary_image_url)}" alt="${escapeHtml(product.name)}" loading="lazy"></button>`:''}</td><td><strong title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong><small class="table-sub">${adminDateTimeHtml(product.updated_at||product.created_at)}</small></td><td class="production-variant-actions"><span>${escapeHtml([product.fit,...uniqOptions(variants.map(row=>row.color))].filter(Boolean).join(' · '))}</span><div class="admin-actions"><button type="button" class="icon-btn" data-edit-product-mount="${product.id}" title="Editar producción y publicación" aria-label="Editar producción y publicación"><i class="fa-solid fa-pen"></i></button>${productionCopyButton(product.id)}<button type="button" class="icon-btn" data-download-product-photos="${product.id}" title="Descargar vistas" aria-label="Descargar vistas"><i class="fa-solid fa-download"></i></button><button type="button" class="icon-btn btn-danger" data-delete-production-product="${product.id}" title="Eliminar producto armado" aria-label="Eliminar producto armado"><i class="fa-solid fa-trash-can"></i></button></div></td><td>${virtual?'Virtual':variants.reduce((sum,row)=>sum+Number(row.stock||0),0)}</td><td class="production-money">${money(product.cost_cents)}</td><td class="production-money">${money(product.price_cents)}</td><td class="production-money ${Number(product.price_cents)-Number(product.cost_cents)>=0?'profit-positive':'profit-negative'}">${money(Number(product.price_cents)-Number(product.cost_cents))}</td><td><span class="status">${virtual?'Stock virtual':'Producto armado'}</span></td></tr>`;};
-    host.innerHTML=`<div class="kpi-grid"><div class="kpi"><small>En producción</small><strong>${active.reduce((sum,job)=>sum+Number(job.quantity||0),0)}</strong></div><div class="kpi"><small>Trabajos en curso</small><strong>${active.length}</strong></div></div><section class="admin-section"><div class="admin-card admin-table-wrap"><table class="admin-table production-table"><thead><tr><th>Imagen</th><th>Producto</th><th>Detalle / acciones</th><th class="production-quantity">Cantidad</th><th>Costo</th><th>Precio</th><th>Ganancia</th><th>Estado</th></tr></thead><tbody>${entries.length?entries.map(entry=>entry.job?jobRow(entry.job):savedRow(entry.product)).join(''):'<tr><td colspan="8">Sin productos para esta selección.</td></tr>'}</tbody></table></div></section>`;
-    const variants=products.flatMap(product=>productionListVariants(product)),sizes=uniqOptions(variants.filter(variant=>Number(variant.stock)>0).map(variant=>variant.size)).sort((a,b)=>{const order=['S','M','L','XL','XXL'];return (order.includes(a)?order.indexOf(a):100)-(order.includes(b)?order.indexOf(b):100)||a.localeCompare(b,'es',{numeric:true});});qs('#productionQuickSizes').innerHTML=sizes.map(size=>`<button class="stock-count-chip ${filter.size===size?'active':''}" type="button" data-production-list-size="${escapeHtml(size)}" aria-pressed="${filter.size===size}">${escapeHtml(size)}</button>`).join('');
+    const jobRow=job=>`<tr data-production-job="${job.id}"><td>${productionJobPreviewHtml(job)}</td><td><strong title="${escapeHtml(job.product_name)}">${escapeHtml(job.product_name)}</strong><small class="table-sub">${adminDateTimeHtml(job.started_at)}</small></td><td class="production-variant-actions"><span>${escapeHtml([job.fit,...uniqOptions(productionListVariants(byId.get(Number(job.product_id))||{},job).map(variant=>variant.color))].filter(Boolean).join(' · ')||'Única')}</span><div class="admin-actions"><button type="button" class="icon-btn" data-edit-production="${job.id}" aria-label="Editar producción y publicación" title="Editar producción y publicación"><i class="fa-solid fa-pen"></i></button>${productionCopyButton(job.product_id)}<button type="button" class="icon-btn" data-download-product-photos="${job.product_id}" aria-label="Descargar vistas" title="Descargar vistas"><i class="fa-solid fa-download"></i></button><button type="button" class="icon-btn btn-danger" data-delete-production="${job.id}" title="Eliminar" aria-label="Eliminar"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></div></td><td class="production-money">${money(job.unit_cost_cents)}</td><td class="production-money">${money(byId.get(Number(job.product_id))?.price_cents||0)}</td><td class="production-money ${Number(byId.get(Number(job.product_id))?.price_cents||0)-Number(job.unit_cost_cents||0)>=0?'profit-positive':'profit-negative'}">${money(Number(byId.get(Number(job.product_id))?.price_cents||0)-Number(job.unit_cost_cents||0))}</td><td><span class="status ${job.status==='completed'?'success':job.status==='cancelled'?'danger':'warning'}">${job.status==='completed'?'Terminado':job.status==='cancelled'?'Cancelado':'En producción'}</span></td></tr>`;
+    const savedRow=product=>{const variants=productionListVariants(product);return `<tr data-production-product="${product.id}"><td>${product.primary_image_url?`<button type="button" class="production-job-preview" data-edit-product-mount="${product.id}" aria-label="Editar ${escapeHtml(product.name)}"><img src="${escapeHtml(product.primary_image_url)}" alt="${escapeHtml(product.name)}" loading="lazy"></button>`:''}</td><td><strong title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong><small class="table-sub">${adminDateTimeHtml(product.updated_at||product.created_at)}</small></td><td class="production-variant-actions"><span>${escapeHtml([product.fit,...uniqOptions(variants.map(row=>row.color))].filter(Boolean).join(' · '))}</span><div class="admin-actions"><button type="button" class="icon-btn" data-edit-product-mount="${product.id}" title="Editar producción y publicación" aria-label="Editar producción y publicación"><i class="fa-solid fa-pen"></i></button>${productionCopyButton(product.id)}<button type="button" class="icon-btn" data-download-product-photos="${product.id}" title="Descargar vistas" aria-label="Descargar vistas"><i class="fa-solid fa-download"></i></button><button type="button" class="icon-btn btn-danger" data-delete-production-product="${product.id}" title="Eliminar producto armado" aria-label="Eliminar producto armado"><i class="fa-solid fa-trash-can"></i></button></div></td><td class="production-money">${money(product.cost_cents)}</td><td class="production-money">${money(product.price_cents)}</td><td class="production-money ${Number(product.price_cents)-Number(product.cost_cents)>=0?'profit-positive':'profit-negative'}">${money(Number(product.price_cents)-Number(product.cost_cents))}</td><td><span class="status">Producto armado</span></td></tr>`;};
+    host.innerHTML=`<div class="kpi-grid"><div class="kpi"><small>Creaciones</small><strong>${entries.length}</strong></div><div class="kpi"><small>Trabajos en curso</small><strong>${active.length}</strong></div></div><section class="admin-section"><div class="admin-card admin-table-wrap"><table class="admin-table production-table"><thead><tr><th>Imagen</th><th>Producto</th><th>Detalle / acciones</th><th>Costo</th><th>Precio</th><th>Ganancia</th><th>Estado</th></tr></thead><tbody>${entries.length?entries.map(entry=>entry.job?jobRow(entry.job):savedRow(entry.product)).join(''):'<tr><td colspan="7">Sin productos para esta selección.</td></tr>'}</tbody></table></div></section>`;
+
     const colors=uniqOptions(products.filter(product=>productionListMatches(product,null,true)||state.productionJobs.some(job=>Number(job.product_id)===Number(product.id)&&productionListMatches(product,job,true))).flatMap(product=>productionListVariants(product).map(variant=>variant.color))).sort((a,b)=>a.localeCompare(b,'es'));qs('#productionQuickColors').innerHTML=colors.map(color=>`<button type="button" class="product-quick-color ${photoColor(filter.color)===photoColor(color)?'active':''}" data-production-list-color="${escapeHtml(color)}" aria-pressed="${photoColor(filter.color)===photoColor(color)}" title="${escapeHtml(color)}" aria-label="${escapeHtml(color)}"><span class="color-dot" style="--swatch:${escapeHtml(colorSwatch(color))}" aria-hidden="true"></span></button>`).join('');qs('#productionListCount').textContent=`${jobs.length} trabajos · ${saved.length} productos armados`;qsa('[data-production-list-color-option]').forEach(button=>button.setAttribute('aria-pressed',String(photoColor(button.dataset.productionListColorOption)===photoColor(filter.color))));prepareProductionTables();
   }
   async function renderProduction(){const seq=state.productionPageSeq=(state.productionPageSeq||0)+1;if(state.productionSection==='photos'){await loadMontagePhotos();if(seq===state.productionPageSeq)renderProductionPhotosPage();return;}const [jobs,products,stock]=await Promise.all([api('/api/admin/production'),api('/api/admin/products'),api('/api/admin/stock')]);if(seq!==state.productionPageSeq)return;state.productionJobs=jobs.items||[];state.products=products.items||[];state.productionListStock=stock.items||[];state.stockItems=state.productionListStock;qs('#adminContent').innerHTML=`${productionPageHeader()}${productionListFiltersHtml()}<div id="productionListContent"></div>`;const toolbar=qs('.production-page-toolbar'),bar=qs('.production-list-filter-bar');if(toolbar&&bar)toolbar.insertBefore(bar,qs('.production-page-actions',toolbar));renderProductionListContent();}
@@ -5135,6 +5141,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     });
   }
   async function finalizeProduction(){
+    normalizeProductionInventory();
     syncProductionPublicationDefaults();
     window.SalmosBook.refreshSummary();
     snapshotActiveMockupView();
@@ -5178,6 +5185,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     await navigate('production');
   }
   async function saveProductionBuilder({status,holdStock,cost,persistDigital}){
+    normalizeProductionInventory();
     const bookMode=Boolean(cost.bookPlan),primary=productionPrimaryMaterial();
     const type=qs('#productionMaterialType').value,stockKind=qs('#productionStockKind').value,qty=Math.max(1,Math.floor(Number(qs('#productionQuantity').value)||1));
     const name=qs('#productionProductName').value.trim(),notes=qs('#productionNotes').value;
@@ -5205,7 +5213,7 @@ ${differences.map(([kind,change])=>`Stock ${kind==='physical'?'real':'virtual'}:
     const mount={...collectProductionMount(),pendingStart,pendingJobEdit,pendingStockKind};
     if(pendingStockKind)mount.stockKind=state.productionOriginalStockKind;
     const save=async(data)=>{
-      const mounted=await api(`/api/admin/products/${productId}/production-mount`,{method:'PATCH',body:JSON.stringify({...data,allowUnpricedPublication:status==='published'&&cost.sale<=0,saveToken:state.productionMountSaveToken,expectedMountRevision:state.productionMountRevision||0,mediaIds:orderedIds,removeMediaIds:state.productionRemovedMediaIds||[]})});
+      const mounted=await api(`/api/admin/products/${productId}/production-mount`,{method:'PATCH',body:JSON.stringify({...data,inventoryNeutral:true,allowUnpricedPublication:status==='published'&&cost.sale<=0,saveToken:state.productionMountSaveToken,expectedMountRevision:state.productionMountRevision||0,mediaIds:orderedIds,removeMediaIds:state.productionRemovedMediaIds||[]})});
       state.productionMountRevision=Number(mounted.revision);
       if(job&&mounted.jobRevision!=null)job.revision=Number(mounted.jobRevision);
       await persistProductionDraft(false);
@@ -5571,50 +5579,86 @@ function nearestDesignMeasure(options,measurement){
     return `<label class="field">Sección<select class="select" ${attribute}><option value="salmos">SALMOS</option>
       <option value="clients" ${scope==='clients'?'selected':''}>Clientes</option></select></label>`;
   }
-  function openSheetArtworkFields(key,record,mark=true){
+  function openSheetArtworkFields(key,record,mark=true,batch=null){
     if(!record)return;
-    const dialog=ensureAdminDialog('sheetNewArtworkDialog',mark?'Agregar diseño individual':'Editar nombre y etiquetas'),body=qs('.dialog-body',dialog);
-    body.innerHTML=`<form class="sheet-new-artwork-form"><div class="sheet-new-artwork-top">
-      <figure><img class="checkerboard" data-sheet-new-preview src="${escapeHtml(record.previewUrl)}" alt="">
-        <button type="button" class="icon-btn" data-sheet-zoom-artwork="${record.temporaryId}" data-sheet-key="${key}" title="Ampliar diseño" aria-label="Ampliar diseño">${sheetZoomIcon()}</button>
-        <button type="button" class="icon-btn" data-edit-missing-artwork="${record.id}" data-sheet-key="${key}" title="Editar imagen" aria-label="Editar imagen"><i class="fa-solid fa-pen"></i></button>
-      </figure>
-      <label class="field">Nombre <input class="input" name="name" required maxlength="160" value="${escapeHtml(record.name)}"></label>
-      ${sheetArtworkScopeHtml(record.scope,'name="scope"')}
-    </div>
-    ${designTagPickerHtml('sheet-new-artwork',record.tags||[])}
-    <div class="admin-actions"><button type="button" class="btn btn-ghost" data-close-sheet-fields>Volver</button>
-      <button type="submit" class="btn btn-primary">${mark?'Marcar en la plancha':'Guardar cambios'}</button></div>
-    <p class="sheet-upload-error" data-new-sheet-error role="status"></p></form>`;
-    const form=qs('form',body),submit=qs('[type="submit"]',body);
-    qs('[data-close-sheet-fields]',body).onclick=()=>dialog.close();
+    const records=batch?.length?batch:[record];
+    const dialog=ensureAdminDialog('sheetNewArtworkDialog',mark?'Agregar diseños individuales':'Editar nombre y etiquetas'),body=qs('.dialog-body',dialog);
+    dialog.classList.add('sheet-artwork-batch-dialog');
+    let current=record,busy=false;
+    body.innerHTML=`<form class="sheet-new-artwork-form"><div class="sheet-artwork-batch-layout">
+      <nav class="sheet-artwork-batch-list" data-sheet-artwork-files aria-label="Archivos seleccionados"></nav>
+      <section data-sheet-artwork-fields></section>
+    </div><div class="admin-actions"><button type="button" class="btn btn-ghost" data-close-sheet-fields>Volver</button>
+      <button type="submit" class="btn btn-primary">${mark?'Agregar y marcar el primero':'Guardar cambios'}</button></div>
+    <p class="sheet-upload-error" data-new-sheet-error role="status" aria-live="polite"></p></form>`;
+    const form=qs('form',body),submit=qs('[type="submit"]',body),fields=qs('[data-sheet-artwork-fields]',body),list=qs('[data-sheet-artwork-files]',body),status=qs('[data-new-sheet-error]',body);
+    const remember=()=>{
+      if(!form.elements.name||current.savedItem)return;
+      current.name=form.elements.name.value.trim();current.scope=form.elements.scope.value;
+      current.tags=designPickerSelections(fields);
+    };
+    const renderList=()=>{
+      list.innerHTML=`<strong>${records.length} ${records.length===1?'diseño':'diseños'}</strong>${records.map((item,index)=>`<button type="button" class="sheet-artwork-file ${item===current?'active':''}" data-sheet-artwork-file="${index}" aria-pressed="${item===current}" ${busy?'disabled':''}>
+        <img class="checkerboard" src="${escapeHtml(item.previewUrl)}" alt=""><span><strong>${escapeHtml(item.name||item.file.name)}</strong><small>${index+1} de ${records.length} · ${item.tags?.length||0} etiquetas</small></span>
+      </button>`).join('')}`;
+    };
+    const renderFields=()=>{
+      fields.innerHTML=`<div class="sheet-new-artwork-top"><figure><img class="checkerboard" data-sheet-new-preview src="${escapeHtml(current.previewUrl)}" alt="">
+        <button type="button" class="icon-btn" data-sheet-zoom-artwork="${current.temporaryId}" data-sheet-key="${key}" title="Ampliar diseño" aria-label="Ampliar diseño">${sheetZoomIcon()}</button>
+        ${current.savedItem?'':`<button type="button" class="icon-btn" data-edit-missing-artwork="${current.id}" data-sheet-key="${key}" title="Editar imagen" aria-label="Editar imagen"><i class="fa-solid fa-pen"></i></button>`}
+      </figure><label class="field">Nombre <input class="input" name="name" required maxlength="160" value="${escapeHtml(current.name)}"></label>
+      ${sheetArtworkScopeHtml(current.scope,'name="scope"')}</div>${designTagPickerHtml('sheet-new-artwork-'+current.id,current.tags||[])}`;
+      const details=qs('[data-design-tag-picker] details',fields);if(details)details.open=true;
+      if(current.savedItem)qsa('input,select,button',fields).forEach(input=>{if(!input.hasAttribute('data-sheet-zoom-artwork'))input.disabled=true;});
+      renderList();
+    };
+    list.onclick=event=>{
+      const button=event.target.closest('[data-sheet-artwork-file]');if(!button||busy)return;
+      remember();current=records[Number(button.dataset.sheetArtworkFile)];renderFields();
+    };
+    fields.addEventListener('input',()=>{remember();renderList();});
+    fields.addEventListener('change',()=>{remember();renderList();});
+    qs('[data-close-sheet-fields]',body).onclick=()=>{remember();renderMissingSheetQueue(key);dialog.close();};
+    qs('[data-close-review-dialog]',dialog).onclick=event=>{event.stopPropagation();if(busy)return;remember();renderMissingSheetQueue(key);dialog.close();};
+    dialog.oncancel=event=>{if(busy)event.preventDefault();else remember();};
     form.onsubmit=async event=>{
-      event.preventDefault();
-      if(!form.reportValidity()||!form.elements.name.value.trim())return;
-      submit.disabled=true;
+      event.preventDefault();if(busy)return;
+      remember();if(!form.reportValidity())return;
+      const missing=records.find(item=>!item.name);
+      if(missing){current=missing;renderFields();form.elements.name.reportValidity();return;}
+      busy=true;submit.disabled=true;qs('[data-close-sheet-fields]',body).disabled=true;renderList();
       try{
         if(mark){
-          const format=await checkUploadSheetFormat(record.originalArtworkFile||record.file);
-          if(format)throw new Error('Ese archivo corresponde a una plancha completa. Elegilo como archivo de la plancha.');
-          if(!dialog.open||!sheetRoot(key).closest('dialog').open||sheetKind(key)!=='sheet')return;
+          for(const [index,item] of records.entries()){
+            status.textContent=`Revisando ${index+1} de ${records.length}: ${item.name}…`;
+            if(await checkUploadSheetFormat(item.originalArtworkFile||item.file)){
+              current=item;renderFields();throw new Error(item.name+': corresponde a una plancha completa. Elegilo como archivo de la plancha.');
+            }
+          }
+          if(!dialog.open||!sheetRoot(key)?.closest('dialog')?.open||sheetKind(key)!=='sheet')return;
           ensureSheetReviewsComplete(key);
-        }
-        record.name=form.elements.name.value.trim();record.scope=form.elements.scope.value;
-        record.tags=designPickerSelections(form);
-        dialog.close();
-        if(mark)chooseSheetArtwork(key,record.temporaryId);
-        else{syncSheetScope(key);renderSheetSelected(key);}
+          // Se incorporan todos antes de activar el primero; ninguno depende de marcar el anterior.
+          for(const item of records){item.metadataReady=true;addSheetDesign(key,Number(item.savedItem?.id||item.temporaryId),false);}
+          state.designUploadBusy=true;
+          qsa('input,select,button',fields).forEach(input=>input.disabled=true);
+          try{
+            await saveStagedSheetDesigns(key,item=>{status.textContent=`Subiendo ${item.name}…`;});
+          }finally{state.designUploadBusy=false;}
+          const library=qs('.sheet-design-library',sheetRoot(key));if(library)library.innerHTML=sheetDesignLibraryHtml(key);
+          chooseSheetArtwork(key,Number(records[0].savedItem?.id||records[0].temporaryId));
+        }else{syncSheetScope(key);renderSheetSelected(key);}
         renderMissingSheetQueue(key);
-      }catch(error){qs('[data-new-sheet-error]',body).textContent=error.message;}
-      finally{submit.disabled=false;}
+        if(key==='upload')await persistSheetDraft();
+        dialog.close();
+      }catch(error){status.textContent=error.message;renderSheetSelected(key);renderMissingSheetQueue(key);}
+      finally{busy=false;submit.disabled=false;qs('[data-close-sheet-fields]',body).disabled=false;if(dialog.open){qsa('input,select,button',fields).forEach(input=>input.disabled=false);renderFields();}}
     };
-    qs('[data-design-tag-picker] details',body).open=Boolean(record.tags?.length);
-    dialog.showModal();form.elements.name.focus();form.elements.name.select();
+    renderFields();dialog.showModal();form.elements.name.focus();form.elements.name.select();
   }
   function renderMissingSheetQueue(key){
     const host=qs('[data-missing-sheet-queue]',sheetRoot(key));
     if(!host)return;
-    host.innerHTML=sheetMissingQueue(key).map(item=>`<div class="sheet-missing-entry">
+    host.innerHTML=sheetMissingQueue(key).filter(item=>!item.savedItem).map(item=>`<div class="sheet-missing-entry">
       <button class="btn btn-ghost" type="button" data-configure-sheet-design="${item.id}" data-sheet-key="${key}">${escapeHtml(item.name)}</button>
       <button class="icon-btn" type="button" data-remove-missing-sheet-file="${item.id}" data-sheet-key="${key}" aria-label="Quitar archivo">×</button>
     </div>`).join('');
@@ -5640,7 +5684,7 @@ function nearestDesignMeasure(options,measurement){
   function syncSheetUploadGate(key){
     const root=sheetRoot(key);
     const cancel=root&&qs('[data-cancel-missing-sheet-design]',root);
-    if(cancel)cancel.classList.toggle('hidden',!sheetMissingQueue(key).length);
+    if(cancel)cancel.classList.toggle('hidden',!sheetMissingQueue(key).some(record=>!record.savedItem));
   }
   function filterSheetGallery(key){
     const root=sheetRoot(key),query=String(qs('[data-sheet-search]',root)?.value||'').trim().toLocaleLowerCase();
@@ -6016,6 +6060,7 @@ function nearestDesignMeasure(options,measurement){
   }
 
   function sheetCompositionEditor(key){
+    (state.sheetCountMode??={})[key]=false;
     return `<section class="sheet-composition" data-sheet-editor="${key}">
       <header class="sheet-composition-heading">
         <h3>Diseños que componen la plancha</h3>
@@ -6157,12 +6202,13 @@ function nearestDesignMeasure(options,measurement){
       const actions=marks.length?`<button type="button" class="btn btn-ghost" data-sheet-repeat="${index}" data-sheet-key="${key}">${target?'Terminar':'Hay más'}</button>`:
         `<button type="button" class="btn btn-ghost" data-sheet-box="${index}" data-sheet-key="${key}">${marking?'✓ Marcando':'Marcar este diseño'}</button>`;
       const openKey=key+':'+id,expanded=open.has(openKey),total=marks.reduce((sum,mark)=>sum+price(mark.measure),0)+estimates.reduce((sum,{component})=>sum+price(component)*Number(component.quantity),0);
-      return `<div class="sheet-component-row ${marking||highlighted?'sheet-component-active':''}">
+      return `<div class="sheet-component-row ${marking||highlighted?'sheet-component-active':''} ${!marks.length?'sheet-component-pending':''}" ${!marks.length?'title="Pendiente de marcar en la plancha"':''}>
         <div class="sheet-component-identity">
           ${asset?`<span class="sheet-artwork-tile sheet-added-artwork">${designSmallImage(asset)}${sheetArtworkZoomHtml(asset,key)}</span>`:''}
           <button type="button" class="sheet-design-name" data-focus-sheet-design="${id}" data-sheet-key="${key}" aria-pressed="${highlighted}">${escapeHtml(name)}</button>
           ${asset?`<button type="button" class="icon-btn" data-rename-sheet-design="${id}" data-sheet-key="${key}" aria-label="Editar nombre" title="Editar nombre"><i class="fa-solid fa-pen"></i></button>`:''}
         </div>
+        ${!marks.length?'<span class="sheet-pending-label">Pendiente de marcar</span>':''}
         ${marks.length||estimates.length?`<div class="sheet-mark-heading">
           <button type="button" class="sheet-marked-count sheet-count-toggle" data-toggle-sheet-sizes="${id}" data-sheet-key="${key}" aria-expanded="${expanded}">
             <span class="sheet-mark-number">${marks.length}</span><span>Marcas</span><span aria-hidden="true">${expanded?'⌃':'⌄'}</span>
@@ -6198,6 +6244,8 @@ function nearestDesignMeasure(options,measurement){
       ${attributes}>${handles}</div>`;
   }
   function sheetPreviewMarks(rows,key){
+    if(state.sheetCountMode?.[key])return rows.flatMap(row=>(row.previewBoxes||[]).map(box=>
+      `<div class="sheet-count-outline" style="left:${Number(box.x)*100}%;top:${Number(box.y)*100}%;width:${Number(box.width)*100}%;height:${Number(box.height)*100}%" aria-hidden="true"></div>`)).join('');
     const markNumbers=sheetMarkNumbers(rows);
     const pending=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
     const saved=rows.flatMap((c,i)=>(c.previewBoxes||[]).map((b,j)=>{
@@ -6205,13 +6253,32 @@ function nearestDesignMeasure(options,measurement){
       const markNumber=markNumbers.get(Number(b.order));
       const active=state.sheetActiveBox?.key===key&&state.sheetActiveBox.rowIndex===i&&state.sheetActiveBox.boxIndex===j;
       const highlighted=state.sheetHighlightedDesign?.key===key&&state.sheetHighlightedDesign.id===Number(c.designAssetId);
-      const pin=`<button type="button" class="sheet-preview-pin ${active||highlighted?'is-highlighted':''} ${b.waste?'is-waste':''}" style="left:${(Number(b.x)+Number(b.width)/2)*100}%;top:${(Number(b.y)+Number(b.height)/2)*100}%" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" title="Ajustar recuadro de ${escapeHtml(c.name||'diseño')}">${markNumber}</button>`;
+      const pin=`<button type="button" class="sheet-preview-pin ${active||highlighted?'is-highlighted':''} ${b.waste?'is-waste':''}" style="left:${(Number(b.x)+Number(b.width)/2)*100}%;top:${(Number(b.y)+Number(b.height)/2)*100}%" data-sheet-pin="${i}" data-pin-index="${j}" data-sheet-key="${key}" title="Mostrar marca ${markNumber} en la lista" aria-label="Mostrar marca ${markNumber} en la lista">${markNumber}</button>`;
       if(!active)return pin;
-      return sheetEditableBox(b,`data-sheet-row="${i}" data-sheet-index="${j}" data-sheet-key="${key}"`)+pin;
+      return `<div class="sheet-selection-outline" data-outline-shape="${b.shape||'rectangle'}" style="left:${b.x*100}%;top:${b.y*100}%;width:${b.width*100}%;height:${b.height*100}%" aria-hidden="true"></div>`+pin;
     })).join('');
     const crop=state.sheetCrop;
     return saved+(crop?.key===key&&crop.box?sheetEditableBox(crop.box,`data-sheet-crop-outline data-sheet-key="${key}"`):'')+
       (pending?sheetEditableBox(pending.box,`data-sheet-proposal-outline data-sheet-key="${key}"`):'');
+  }
+  function sheetSavedMarkAtPoint(key,point){
+    const matches=[];
+    (state.designSheetDrafts[key]||[]).forEach((row,rowIndex)=>(row.previewBoxes||[]).forEach((box,boxIndex)=>{
+      if(point.x>=box.x&&point.x<=box.x+box.width&&point.y>=box.y&&point.y<=box.y+box.height)matches.push({key,rowIndex,boxIndex,area:box.width*box.height});
+    }));
+    return matches.sort((a,b)=>a.area-b.area)[0]||null;
+  }
+  function focusSheetOccurrence(key,rowIndex,boxIndex){
+    const row=state.designSheetDrafts[key]?.[rowIndex];if(!row?.previewBoxes?.[boxIndex])return;
+    state.sheetActiveBox={key,rowIndex,boxIndex};state.sheetHighlightedDesign=null;state.sheetMarkTarget=null;
+    (state.sheetOpenSizes??=new Set()).add(key+':'+Number(row.designAssetId));
+    renderSheetSelected(key);
+    const host=qs('[data-sheet-selected]',sheetRoot(key)),line=qs(`[data-sheet-pin="${rowIndex}"][data-pin-index="${boxIndex}"]`,host)?.closest('li');
+    if(host&&line){const area=host.getBoundingClientRect(),rect=line.getBoundingClientRect();if(rect.top<area.top)host.scrollTop+=rect.top-area.top-8;else if(rect.bottom>area.bottom)host.scrollTop+=rect.bottom-area.bottom+8;}
+  }
+  function sheetCountControlsHtml(key,rows){
+    const active=Boolean(state.sheetCountMode?.[key]),total=rows.reduce((sum,row)=>sum+(row.previewBoxes?.length||0),0);
+    return `<button type="button" class="btn btn-ghost ${active?'active':''}" data-sheet-count="${key}" aria-pressed="${active}">Conteo</button><output class="sheet-count-total" data-sheet-count-total ${active?'':'hidden'} aria-live="polite">${total} ${total===1?'marca':'marcas'}</output>`;
   }
   function sheetShapeSelect(shape,attribute,key=''){
     return `<label class="sheet-shape-field">Forma <select class="select" ${attribute} data-sheet-key="${key}" aria-label="Forma del recorte">${[['rectangle','Rectángulo'],['circle','Círculo'],['ellipse','Óvalo'],['rounded','Esquinas redondeadas']].map(([value,label])=>`<option value="${value}" ${value===(shape||'rectangle')?'selected':''}>${label}</option>`).join('')}</select></label>`;
@@ -6299,16 +6366,16 @@ function nearestDesignMeasure(options,measurement){
     if(pending){pending.abort();delete state.sheetProposal[key];}
   }
   function discardUnmarkedSheetArtwork(key,nextAssetId){
-    const target=state.sheetBoxTarget,rows=state.designSheetDrafts[key];
-    const row=target?.key===key?rows?.[target.index]:null;
-    if(row&&!row.quantity&&Number(row.designAssetId)>0&&Number(row.designAssetId)!==nextAssetId){
-      rows.splice(target.index,1);
+    // Elegir otro diseño nunca elimina los que todavía esperan su primera marca.
+    const target=state.sheetBoxTarget,row=target?.key===key?state.designSheetDrafts[key]?.[target.index]:null;
+    if(row&&!row.previewBoxes?.length&&Number(row.designAssetId)!==Number(nextAssetId)){
       state.sheetBoxTarget=null;state.sheetActiveBox=null;
     }
   }
   function chooseSheetArtwork(key,id){
     const asset=sheetIndividualAsset(key,id);
     if(!asset||state.designUploadBusy)return;
+    (state.sheetCountMode??={})[key]=false;
     cancelSheetProposal(key);
     if(state.sheetPendingMark?.key===key)discardSheetMark(key);
     discardUnmarkedSheetArtwork(key,id);
@@ -6348,6 +6415,7 @@ function nearestDesignMeasure(options,measurement){
   }
   function toggleSheetCrop(key){
     if(state.designUploadBusy)return;
+    (state.sheetCountMode??={})[key]=false;
     if(state.sheetCrop?.key===key){state.sheetCrop=null;renderSheetSelected(key);return;}
     beginSheetCrop(key);
   }
@@ -6484,32 +6552,64 @@ function nearestDesignMeasure(options,measurement){
     }
     if(key==='upload')persistSheetDraft();
   }
+  function sheetBackgroundSaveStatus(id,message='',retry=false){
+    if(Number(state.activeDesignId)!==Number(id))return;
+    const host=qs('[data-readonly-sheet-background]');if(!host)return;
+    let status=qs('[data-sheet-background-save-status]',host);
+    if(!status){status=document.createElement('span');status.dataset.sheetBackgroundSaveStatus='';status.setAttribute('role','status');host.append(status);}
+    status.textContent=message;
+    let button=qs('[data-retry-sheet-background]',host);
+    if(retry&&!button){button=document.createElement('button');button.type='button';button.className='btn btn-ghost';button.dataset.retrySheetBackground=String(id);button.textContent='Guardar fondo';host.append(button);}
+    if(button)button.hidden=!retry;
+  }
+  async function saveSheetBackground(key,color){
+    const value=previewColor(color);updateSheetBackground(key,value);
+    if(key!=='detail'||!qs('#designDetailEditor')?.classList.contains('hidden'))return;
+    const id=Number(state.activeDesignId),asset=state.designAssets.find(item=>Number(item.id)===id);if(!asset)return;
+    const pending=state.sheetBackgroundPending??={};pending[id]=value;
+    const remember=()=>{try{localStorage.setItem('salmos_sheet_background_pending',JSON.stringify(pending));}catch{}};
+    remember();sheetBackgroundSaveStatus(id,'Guardando fondo…');
+    const queues=state.sheetBackgroundSaveQueues??={},previous=queues[id]||Promise.resolve();
+    const task=previous.catch(()=>{}).then(async()=>{
+      const saved=await api(`/api/admin/design-assets/${id}/appearance`,{method:'PATCH',body:JSON.stringify({preview_background:value})});
+      asset.preview_background=previewColor(saved.item.preview_background);
+      if(pending[id]===value){delete pending[id];remember();sheetBackgroundSaveStatus(id,'Fondo guardado');}
+      return saved;
+    });
+    queues[id]=task;
+    try{return await task;}
+    catch(error){if(pending[id]===value)sheetBackgroundSaveStatus(id,error.sessionExpired?'Fondo pendiente. Volvé a ingresar para guardarlo.':'Fondo pendiente de guardar.',true);throw error;}
+    finally{if(queues[id]===task)delete queues[id];}
+  }
   function renderSheetPreview(key){
     const root=sheetRoot(key),host=qs('[data-sheet-preview]',root);if(!host)return;host.dataset.designPreviewBackground=designViewerBackground('sheet-'+key);
     const crop=state.sheetCrop?.key===key?state.sheetCrop:null,mark=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
-    const drawing=Boolean(crop||mark||state.sheetBoxTarget?.key===key);
+    const counting=Boolean(state.sheetCountMode?.[key]),drawing=!counting&&Boolean(crop||mark||state.sheetBoxTarget?.key===key);
     const markHint=crop?(crop.box?'Ajustá el recuadro y revisá el recorte antes de guardarlo.':'Tocá una estampa o dibujá su contorno.'):
       mark?'Mové el recuadro o ajustá sus bordes antes de confirmarlo.':
       state.sheetRepeatTarget?.key===key?'Hacé clic en la estampa o dibujá su contorno. Elegí Terminar al finalizar.':
       state.sheetBoxTarget?.key===key?'Tocá la estampa en la plancha o dibujá su contorno.':'';
-    const status=qs('.sheet-mark-status',host);if(status)status.textContent=markHint;
+    const status=qs('.sheet-mark-status',host);if(status)status.textContent=counting?'':markHint;
     const asset=key==='upload'?state.sheetUploadPreview:state.designAssets.find(x=>Number(x.id)===state.activeDesignId),url=key==='upload'?asset?.url:asset?apiUrl(`/api/admin/design-assets/${asset.id}/file`):'',mime=asset?.mime_type||asset?.file?.type||'',rows=state.designSheetDrafts?.[key]||[];
     if(!url){host._sheetResizeObserver?.disconnect();delete host.dataset.sheetSource;host.innerHTML='<p class="muted">Elegí el archivo de la plancha para verla acá.</p>';return;}
     const existing=qs('[data-sheet-canvas]',host),image=/^image\/(png|jpeg|webp|svg\+xml)$/.test(mime);
     if(image&&host.dataset.sheetSource===url&&existing){
-      qs('.sheet-preview-marks',existing).innerHTML=sheetPreviewMarks(rows,key)+sheetDetectionOutline(key);existing.classList.toggle('drawing',drawing);
+      qs('.sheet-preview-marks',existing).innerHTML=sheetPreviewMarks(rows,key)+(counting?'':sheetDetectionOutline(key));existing.classList.toggle('drawing',drawing);existing.classList.toggle('counting',counting);
+      const countTools=qs('[data-sheet-count-tools]',host);if(countTools)countTools.innerHTML=sheetCountControlsHtml(key,rows);
       renderSheetCropControls(key);
       renderSheetMarkControls(key);
+      for(const controls of qsa('[data-sheet-crop-controls],[data-sheet-mark-controls]',host))if(counting)controls.hidden=true;
       const range=qs('[data-sheet-zoom]',host);if(range)range.value=String(state.sheetZoom||1);
       const label=qs('[data-sheet-zoom-label]',host);if(label)label.textContent=`Zoom ${Math.round((state.sheetZoom||1)*100)}%`;
       const img=qs('img',existing);if(img.naturalWidth&&!syncSheetImageSize(key,img))fitSheetPreview(existing);return;
     }
     const stageImage=key==='detail'&&asset?.kind==='sheet'?qs('#designPreviewStage img'):null,reusedImage=stageImage&&(stageImage.getAttribute('src')===url||stageImage.getAttribute('src')?.startsWith(url+'?'))?stageImage:null;
     host._sheetResizeObserver?.disconnect();host.dataset.sheetSource=url;
-    host.innerHTML=`<div data-sheet-size-notice></div>${image?`<div class="sheet-preview-tools">${designBackgroundControlHtml('sheet-'+key)}<span data-sheet-zoom-label>Zoom ${Math.round((state.sheetZoom||1)*100)}%</span><input type="range" min="1" max="5" step=".25" value="${state.sheetZoom||1}" data-sheet-zoom aria-label="Zoom de la plancha"><button type="button" class="btn btn-ghost" data-reset-sheet-zoom>Restablecer</button></div><div class="sheet-crop-tools" data-sheet-crop-controls hidden></div><div class="sheet-mark-controls" data-sheet-mark-controls hidden></div><p class="sheet-mark-status" role="status">${escapeHtml(markHint)}</p><div data-image-status role="status">Cargando plancha…</div><div class="sheet-preview-viewport"><div class="sheet-preview-frame"><div class="sheet-preview-canvas checkerboard ${drawing?'drawing':''}" data-sheet-canvas="${key}"  ${sheetBackgroundAttrs(key)}><img crossorigin="use-credentials" ${reusedImage?'':`src="${escapeHtml(url)}"`} alt="Plancha a cargar"><div class="sheet-preview-marks">${sheetPreviewMarks(rows,key)+sheetDetectionOutline(key)}</div></div></div></div>`:mime==='application/pdf'?`<iframe src="${escapeHtml(url)}" title="Plancha"></iframe><small>Usá la lista con miniaturas para revisar los diseños.</small>`:`<a class="btn btn-ghost" href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir archivo original</a><small>Este formato no tiene vista previa en el navegador.</small>`}`;
+    host.innerHTML=`<div data-sheet-size-notice></div>${image?`<div class="sheet-preview-tools">${designBackgroundControlHtml('sheet-'+key)}<span data-sheet-zoom-label>Zoom ${Math.round((state.sheetZoom||1)*100)}%</span><input type="range" min="1" max="5" step=".25" value="${state.sheetZoom||1}" data-sheet-zoom aria-label="Zoom de la plancha"><button type="button" class="btn btn-ghost" data-reset-sheet-zoom>Restablecer</button><span class="sheet-count-tools" data-sheet-count-tools>${sheetCountControlsHtml(key,rows)}</span></div><div class="sheet-crop-tools" data-sheet-crop-controls hidden></div><div class="sheet-mark-controls" data-sheet-mark-controls hidden></div><p class="sheet-mark-status" role="status">${escapeHtml(counting?'':markHint)}</p><div data-image-status role="status">Cargando plancha…</div><div class="sheet-preview-viewport"><div class="sheet-preview-frame"><div class="sheet-preview-canvas checkerboard ${drawing?'drawing':''} ${counting?'counting':''}" data-sheet-canvas="${key}"  ${sheetBackgroundAttrs(key)}><img crossorigin="use-credentials" ${reusedImage?'':`src="${escapeHtml(url)}"`} alt="Plancha a cargar"><div class="sheet-preview-marks">${sheetPreviewMarks(rows,key)+(counting?'':sheetDetectionOutline(key))}</div></div></div></div>`:mime==='application/pdf'?`<iframe src="${escapeHtml(url)}" title="Plancha"></iframe><small>Usá la lista con miniaturas para revisar los diseños.</small>`:`<a class="btn btn-ghost" href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir archivo original</a><small>Este formato no tiene vista previa en el navegador.</small>`}`;
     const viewport=qs('.sheet-preview-viewport',host),canvas=qs('[data-sheet-canvas]',host);if(reusedImage&&canvas){const placeholder=qs('img',canvas);placeholder.before(reusedImage);placeholder.remove();}
     const img=canvas&&qs('img',canvas);
     renderSheetCropControls(key);renderSheetMarkControls(key);
+    for(const controls of qsa('[data-sheet-crop-controls],[data-sheet-mark-controls]',host))if(counting)controls.hidden=true;
     if(viewport&&img){
       watchDesignPreview(img,host,()=>{if(host.dataset.sheetSource!==url||qs('[data-sheet-canvas]',host)!==canvas)return;if(!syncSheetImageSize(key,img))fitSheetPreview(canvas);});
       if(window.ResizeObserver){host._sheetResizeObserver=new ResizeObserver(()=>{if(qs('[data-sheet-canvas]',host)===canvas)fitSheetPreview(canvas)});host._sheetResizeObserver.observe(viewport);}
@@ -6831,14 +6931,16 @@ function nearestDesignMeasure(options,measurement){
     record.savedItem=result.item;
     return result.item;
   }
-  async function saveStagedSheetDesigns(key){
+  async function saveStagedSheetDesigns(key,onProgress){
     rememberMissingSheetFields(key);
     const rows=state.designSheetDrafts[key]||[],queue=sheetMissingQueue(key),fileName=key==='upload'?state.sheetUploadPreview?.file?.name:
       state.designAssets.find(asset=>Number(asset.id)===Number(state.activeDesignId))?.file_name;
     for(const record of queue){
       const attached=rows.filter(row=>row.designAssetId===record.temporaryId);
       if(!attached.length)continue;
-      await uploadIndividualSheetDesign(key,record);
+      onProgress?.(record);
+      try{await uploadIndividualSheetDesign(key,record);}
+      catch(error){throw new Error('No se pudo subir '+record.name+'. '+error.message);}
       const asset=record.savedItem;
       if(!state.designAssets.some(item=>Number(item.id)===Number(asset.id)))state.designAssets.unshift(asset);
       for(const row of attached){
@@ -7333,7 +7435,7 @@ function nearestDesignMeasure(options,measurement){
     clearSheetDetection('detail');
     state.sheetPendingMark=null;state.sheetCrop=null;
     state.sheetSizeManual={...state.sheetSizeManual,detail:false};
-    state.sheetDetailBackground=previewColor(a.preview_background);
+    state.sheetDetailBackground=previewColor(state.sheetBackgroundPending?.[Number(a.id)]??a.preview_background);
     qs('#designPreviewDialog')?.classList.remove('sheet-editor-open','sheet-fullscreen');state.activeDesignId=Number(a.id);state.designSheetDrafts??={};state.designSheetDrafts.detail=structuredClone(a.components||[]);state.sheetImageSizes={...state.sheetImageSizes,detail:null};state.sheetBoxTarget=null;state.sheetRepeatTarget=null;state.sheetActiveBox=null;state.sheetZoom=1;
     const download=qs('#downloadDesignOriginalBtn');if(download){download.dataset.downloadOriginalDesign=String(a.id);download.title=download.ariaLabel=String(a.mime_type||'').startsWith('image/')?'Descargar PNG original':'Descargar archivo original';}
     const measures=parseDesignMeasureOptions(a),stage=qs('#designPreviewStage'),url=apiUrl(`/api/admin/design-assets/${a.id}/file`);qs('#designPreviewTitle').textContent=a.name||a.file_name;
@@ -7344,6 +7446,7 @@ function nearestDesignMeasure(options,measurement){
       <div class="design-detail-editor hidden" id="designDetailEditor"><div class="form-grid design-edit-grid"><div class="field"><label>Sección</label><select class="select" data-design-scope><option value="salmos" ${a.scope==='salmos'?'selected':''}>SALMOS</option><option value="clients" ${a.scope==='clients'?'selected':''}>Clientes</option><option value="mixed" ${a.scope==='mixed'?'selected':''}>Planchas mixtas</option></select></div><div class="field"><label>Tipo</label><select class="select" data-design-kind ${a.scope==='mixed'?'disabled':''}><option value="individual" ${a.kind==='individual'?'selected':''}>Individual</option><option value="sheet" ${a.kind==='sheet'?'selected':''}>Plancha</option></select></div><div class="design-name-row field full"><label class="field"><span>Nombre</span><input class="input" data-design-name value="${escapeHtml(a.name||'')}"></label>${a.kind==='individual'?designTagPickerHtml('detail',a.tags||[]):''}</div><div class="field" data-sheet-size><label>Superficie (cm)</label><div class="design-measures"><input class="input" data-design-width type="number" min=".01" step=".01" value="${Number(a.width_cm)||''}" placeholder="Ancho"><span>×</span><input class="input" data-design-height type="number" min=".01" step=".01" value="${Number(a.height_cm)||''}" placeholder="Alto"></div></div><div class="field"><label>Impresión / costo</label><select class="select" data-design-print-type><option value="dtf_textile" ${a.print_material_type!=='dtf_uv'&&a.print_material_type!=='none'?'selected':''}>DTF textil</option><option value="dtf_uv" ${a.print_material_type==='dtf_uv'?'selected':''}>DTF UV</option><option value="none" ${a.print_material_type==='none'?'selected':''}>Sin DTF</option></select></div><div class="field" data-sheet-size><label>Costo ($)</label><input class="input" type="number" min="0" step=".01" data-design-cost value="${centsToPesos(Number(a.cost_cents)||1000000)}"></div><div class="field full sheet-detail-note"><label>Nota</label><textarea class="textarea" data-design-note rows="2">${escapeHtml(a.note||'')}</textarea></div></div><div data-individual-options>${measures.length?designMeasuresOriginsHtml(a,measures):''}<button type="button" class="btn btn-ghost" data-link-saved-design-sheet="${a.id}">Relacionar plancha impresa</button></div><div data-sheet-composition-host></div>${a.kind==='sheet'?`<label class="sheet-confirm-composition"><input type="checkbox" data-sheet-complete ${Number(a.composition_complete??1)?'checked':''}>Plancha completa</label>${sheetPurchasePanelHtml('detail')}`:''}<div class="design-card-actions"><label class="toggle-label"><input type="checkbox" data-design-printed ${Number(a.printed)?'checked':''}> Impreso</label><button class="btn btn-danger small-delete" type="button" id="deleteDesignDetailBtn">Eliminar</button><span class="dialog-spacer"></span><button class="btn btn-ghost" type="button" id="cancelDesignEditBtn">Cancelar</button>${a.kind==='sheet'?'<button class="btn btn-ghost" type="button" data-save-sheet-draft="detail">Guardar como borrador</button>':''}<button class="btn btn-primary" type="button" id="saveDesignDetailBtn">Guardar cambios</button></div></div>`;
     const dialog=qs('#designPreviewDialog');dialog.dataset.designPreviewBackground=designViewerBackground('detail');document.body.appendChild(dialog);if(!dialog.open)dialog.showModal();syncDesignAppearanceActions('asset-'+a.id);const img=qs('img',stage);if(img){watchDesignPreview(img,stage,()=>cacheDesignThumbnail(a,img).catch(()=>{}));}
     if(a.kind==='sheet'&&a.composition_draft)restoreCloudSheetDraft(a);
+    if(a.kind==='sheet'&&Object.hasOwn(state.sheetBackgroundPending||{},a.id))sheetBackgroundSaveStatus(a.id,'Fondo pendiente de guardar.',true);
   }
   function openDesignEdit(){
     if(state.designAssets.find(a=>Number(a.id)===Number(state.activeDesignId))?.kind==='sheet')qs('#designPreviewDialog')?.classList.add('sheet-editor-open');
@@ -7731,7 +7834,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
           queue.push(record);added.push(record);
         }
         e.target.value='';renderMissingSheetQueue(key);syncSheetUploadGate(key);
-        if(added.length)openSheetArtworkFields(key,added[0]);
+        if(added.length)openSheetArtworkFields(key,added[0],true,added);
+        else toast('Los archivos seleccionados ya están en la lista de esta plancha.','info');
       }
       if(e.target.id==='designUploadKind'){setUploadKind(e.target.value);}if(e.target.id==='designSheetCompositionComplete')state.sheetCompositionConfirmation=e.target.checked?sheetCompositionFingerprint():null;
       if(e.target.matches('[data-design-kind]'))refreshDesignKind('detail');
@@ -7811,6 +7915,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(['productionAddMaterialBtn','productionAddMaterialFromEditorBtn'].includes(e.target.id)){try{await openProductionMaterialPurchase()}catch(err){toast(err.message,'error')}return;}
       const zoomStep=e.target.closest('[data-mockup-zoom-step]');if(zoomStep){state.mockupZoom=Math.max(1,Math.min(5,(Number(state.mockupZoom)||1)+Number(zoomStep.dataset.mockupZoomStep)*.25));applyMockupZoom();return;}
       const swapSheet=e.target.closest('[data-swap-sheet-size]');if(swapSheet){const key=swapSheet.dataset.swapSheetSize,inputs=sheetSizeInputs(key),width=inputs.width.value;inputs.width.value=inputs.height.value;inputs.height.value=width;(state.sheetSizeManual??={})[key]=true;updateDrawnSheetSizes(key);return;}
+      const countSheet=e.target.closest('[data-sheet-count]');if(countSheet){const key=countSheet.dataset.sheetCount;(state.sheetCountMode??={})[key]=!state.sheetCountMode[key];renderSheetPreview(key);return;}
       const resetSheetZoom=e.target.closest('[data-reset-sheet-zoom]');if(resetSheetZoom){state.sheetZoom=1;renderSheetPreview(resetSheetZoom.closest('[data-sheet-editor]')?.dataset.sheetEditor||'upload');return;}
       if(e.target.closest('[data-cancel-missing-sheet-design]')){if(state.designUploadBusy)return;clearMissingSheetQueue(e.target.closest('[data-sheet-editor]').dataset.sheetEditor);return;}
       const removePending=e.target.closest('[data-remove-missing-sheet-file]');if(removePending){if(state.designUploadBusy)return;removeMissingSheetFile(removePending.closest('[data-sheet-editor]').dataset.sheetEditor,removePending.dataset.removeMissingSheetFile);return;}
@@ -7911,6 +8016,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const marking=e.target.closest('[data-sheet-repeat],[data-sheet-box]');
       if(marking){
         const key=marking.dataset.sheetKey,isRepeat=marking.hasAttribute('data-sheet-repeat');
+        (state.sheetCountMode??={})[key]=false;
         const index=Number(isRepeat?marking.dataset.sheetRepeat:marking.dataset.sheetBox);
         try{ensureSheetReviewsComplete(key);}catch(error){toast(error.message,'error');return;}
         if(state.sheetCrop?.key===key)state.sheetCrop=null;
@@ -7927,7 +8033,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       if(editSheetBox){
         const key=editSheetBox.dataset.sheetKey,index=Number(editSheetBox.dataset.editSheetBox),boxIndex=Number(editSheetBox.dataset.boxIndex);
         const box=state.designSheetDrafts[key]?.[index]?.previewBoxes?.[boxIndex];
-        try{ensureSheetReviewsComplete(key);if(box){resizeSheetBox(key,index,boxIndex,{...box});showSheetPreview(key);}}catch(error){toast(error.message,'error');}return;
+        try{ensureSheetReviewsComplete(key);if(box){(state.sheetCountMode??={})[key]=false;resizeSheetBox(key,index,boxIndex,{...box});showSheetPreview(key);}}catch(error){toast(error.message,'error');}return;
       }
       const viewSheetMark=e.target.closest('[data-view-sheet-mark]');if(viewSheetMark){reviewSheetMark(viewSheetMark.dataset.viewSheetMark);return;}
       const sheetGroupAction=e.target.closest('[data-toggle-sheet-sizes],[data-focus-sheet-design],[data-rename-sheet-design],[data-remove-sheet-design]');
@@ -7955,8 +8061,8 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         }catch(error){toast(error.message,'error');}
         return;
       }
-      const pin=e.target.closest('[data-sheet-pin]');if(pin){state.sheetHighlightedDesign=null;if(state.sheetCrop?.key===pin.dataset.sheetKey)return;const selected={key:pin.dataset.sheetKey,rowIndex:Number(pin.dataset.sheetPin),boxIndex:Number(pin.dataset.pinIndex)};state.sheetActiveBox=selected;state.sheetBoxTarget=state.sheetRepeatTarget?.key===selected.key?state.sheetRepeatTarget:{key:selected.key,index:selected.rowIndex};renderSheetSelected(selected.key);return;}
-      const canvas=e.target.closest('[data-sheet-canvas]');if(canvas){const target=state.sheetMarkTarget,key=canvas.dataset.sheetCanvas;if(target?.key===key){const c=state.designSheetDrafts[key][target.index];if(c){c.previewMarks??=[];if(c.previewMarks.length>=Number(c.quantity)){toast('Ya marcaste todas las unidades de esta fila.','error');return;}c.previewMarks.push(sheetBoxCoordinate(canvas,e));renderSheetSelected(key)}}return;}
+      const pin=e.target.closest('[data-sheet-pin]');if(pin){focusSheetOccurrence(pin.dataset.sheetKey,Number(pin.dataset.sheetPin),Number(pin.dataset.pinIndex));return;}
+      const canvas=e.target.closest('[data-sheet-canvas]');if(canvas){const target=state.sheetMarkTarget,key=canvas.dataset.sheetCanvas;if(!state.sheetCountMode?.[key]&&target?.key===key){const c=state.designSheetDrafts[key][target.index];if(c){c.previewMarks??=[];if(c.previewMarks.length>=Number(c.quantity)){toast('Ya marcaste todas las unidades de esta fila.','error');return;}c.previewMarks.push(sheetBoxCoordinate(canvas,e));renderSheetSelected(key)}}return;}
       const addMeasure=e.target.closest('[data-add-measure-option]');if(addMeasure){qs('[data-measure-rows]',addMeasure.closest('[data-measure-editor]')).insertAdjacentHTML('beforeend',designMeasureRow());return;}
       const removeMeasure=e.target.closest('[data-remove-measure-option]');if(removeMeasure){removeMeasure.closest('[data-measure-option]').remove();return;}
       if(e.target.id==='applyProductionMeasureBtn'){try{applyProductionMeasure()}catch(err){toast(err.message,'error')}return;}
@@ -7982,12 +8088,13 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const chooseBackground=e.target.closest('[data-sheet-background]');
       if(chooseBackground){
         const key=chooseBackground.dataset.sheetBackground;
-        try{window.SalmosColors.openAdvanced(chooseBackground,{value:sheetPreviewBackground(key),clearLabel:'Transparente',save:color=>updateSheetBackground(key,color)});}
+        try{window.SalmosColors.openAdvanced(chooseBackground,{value:sheetPreviewBackground(key),clearLabel:'Transparente',save:color=>saveSheetBackground(key,color)});}
         catch(error){toast(error.message,'error');}
         return;
       }
       const clearBackground=e.target.closest('[data-clear-sheet-background]');
-      if(clearBackground){updateSheetBackground(clearBackground.dataset.clearSheetBackground,'');return;}
+      if(clearBackground){try{await saveSheetBackground(clearBackground.dataset.clearSheetBackground,'');}catch(error){toast(error.message,'error');}return;}
+      const retryBackground=e.target.closest('[data-retry-sheet-background]');if(retryBackground){try{await saveSheetBackground('detail',state.sheetBackgroundPending?.[Number(retryBackground.dataset.retrySheetBackground)]??sheetPreviewBackground('detail'));}catch(error){toast(error.message,'error');}return;}
       if(e.target.id==='closeDesignEmailBtn'||e.target.id==='cancelDesignEmailBtn'){qs('#designEmailDialog')?.close();return}
       if(e.target.id==='closeDesignPreviewBtn'){if(canCloseDesignDialog('detail')&&(qs('#designDetailEditor')?.classList.contains('hidden')||confirm('¿Salir sin guardar?')))qs('#designPreviewDialog')?.close();return}
       if(e.target.id==='openFlyerUploadBtn'){const form=qs('#flyerUploadForm');form?.reset();qs('#flyerUploadDialog')?.showModal();return}
@@ -8322,14 +8429,18 @@ function calculatePromotions(rules,items,shippingCostCents=0){
       const crop=state.sheetCrop?.key===key?state.sheetCrop:null;
       const mark=state.sheetPendingMark?.key===key?state.sheetPendingMark:null;
       const target=repeat||(state.sheetBoxTarget?.key===key?state.sheetBoxTarget:null);
-      if(viewport&&(e.button===1||e.button===0&&(e.shiftKey||(!target&&!crop&&!e.target.closest('button,[data-sheet-move]'))))){
+      if(canvas&&e.button===0&&!e.shiftKey&&!state.sheetCountMode?.[key]&&!mark&&!crop){
+        const hit=sheetSavedMarkAtPoint(key,sheetBoxCoordinate(canvas,e));
+        if(hit){e.preventDefault();focusSheetOccurrence(key,hit.rowIndex,hit.boxIndex);return;}
+      }
+      if(viewport&&(e.button===1||e.button===0&&(e.shiftKey||((state.sheetCountMode?.[key]||!target&&!crop)&&!e.target.closest('button,[data-sheet-move]'))))){
         e.preventDefault();
         viewport.setPointerCapture?.(e.pointerId);
         viewport.classList.add('is-panning');
         state.sheetPan={viewport,pointerId:e.pointerId,x:e.clientX,y:e.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};
         return;
       }
-      if(!canvas||state.sheetMeasureBusy||state.designUploadBusy||e.button!==0)return;
+      if(!canvas||state.sheetCountMode?.[key]||state.sheetMeasureBusy||state.designUploadBusy||e.button!==0)return;
       const problem=sheetMeasurementProblem(key);if(problem){toast(problem,'error');return;}
       if(e.target.closest('[data-sheet-pin]')||e.target.closest('[data-sheet-scan-select]')&&!target&&!crop&&!mark)return;
       cancelSheetProposal(key);
@@ -8338,7 +8449,7 @@ function calculatePromotions(rules,items,shippingCostCents=0){
         const rowIndex=Number(active.dataset.sheetRow),boxIndex=Number(active.dataset.sheetIndex),key=active.dataset.sheetKey;
         const cropOutline=active.hasAttribute('data-sheet-crop-outline')?crop:null;
         const proposal=active.hasAttribute('data-sheet-proposal-outline')?mark:null;
-        const box=cropOutline?.box||proposal?.box||state.designSheetDrafts[key]?.[rowIndex]?.previewBoxes?.[boxIndex];if(!box)return;
+        const box=cropOutline?.box||proposal?.box;if(!box)return;
         e.preventDefault();e.stopPropagation();state.sheetResizeDrag={canvas,pointerId:e.pointerId,element:active,crop:cropOutline,
           proposal,pin:cropOutline||proposal?null:canvas.querySelector(`[data-sheet-pin="${rowIndex}"][data-pin-index="${boxIndex}"]`),
           key,rowIndex,boxIndex,start:sheetBoxCoordinate(canvas,e),original:{...box},box:{...box},edge:edge?.dataset.sheetResize||'move'};

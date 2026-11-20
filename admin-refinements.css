@@ -1271,3 +1271,52 @@ body .purchased-material-links strong { color: inherit; font-size: 13px; }
 @media(max-width:760px){ #montageWorkspace .montage-filter-three > .montage-level { flex:1 1 100%; grid-template-columns:70px minmax(0,1fr); } }
 
 .sheet-match-preview > .sheet-artwork-zoom { position:absolute !important; top:6px; right:6px; z-index:2; }
+
+/* v48.3 · carga múltiple y revisión de marcas */
+#montageWorkspace .montage-filter-pair {
+  gap: 8px !important;
+}
+#montageWorkspace .montage-filter-pair > .montage-level {
+  box-sizing: border-box;
+  margin: 0;
+}
+#productionDialog .production-stock-field,
+#productionDialog .production-qty-field { display: none !important; }
+#sheetNewArtworkDialog.sheet-artwork-batch-dialog { width: min(1100px,96vw) !important; }
+.sheet-artwork-batch-layout { display: grid; grid-template-columns: minmax(180px,.65fr) minmax(0,1.7fr); gap: 16px; align-items: start; }
+.sheet-artwork-batch-list { display: flex; flex-direction: column; gap: 7px; max-height: 58vh; overflow-y: auto; padding: 3px; }
+.sheet-artwork-file { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px; text-align: left; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: inherit; cursor: pointer; min-width: 0; }
+.sheet-artwork-file.active { background: #e7d7f0; border-color: #b08bc7; color: #392244; box-shadow: inset 3px 0 #8a619f; }
+.sheet-artwork-file > img { width: 54px; height: 62px; object-fit: contain; border-radius: 5px; flex: 0 0 54px; }
+.sheet-artwork-file > span { min-width: 0; }
+.sheet-artwork-file strong { display: block; font-size: 12px; overflow-wrap: anywhere; }
+.sheet-artwork-file small { display: block; margin-top: 4px; font-size: 11px; }
+.sheet-artwork-file:disabled { cursor: wait; }
+#sheetNewArtworkDialog .design-tag-picker-options { display: grid !important; grid-template-columns: repeat(4,minmax(0,1fr)) !important; gap: 7px; }
+#sheetNewArtworkDialog .design-tag-picker-row { min-width: 0; }
+#sheetNewArtworkDialog .design-tag-button16 span { white-space: normal; overflow-wrap: anywhere; width: 100%; box-sizing: border-box; }
+#sheetNewArtworkDialog .design-tag-picker:not(.managing) .design-tag-button16 { display: block !important; width: 100%; position: relative; }
+#sheetNewArtworkDialog .design-tag-picker:not(.managing) .design-tag-button16 input { position: absolute !important; opacity: 0 !important; width: 1px !important; height: 1px !important; }
+#sheetNewArtworkDialog .design-tag-picker-options .design-tag-picker-row[hidden] { display: none !important; }
+#sheetNewArtworkDialog .design-tag-picker-options { align-items: stretch; }
+.sheet-selection-outline { position: absolute; pointer-events: none; border: 2px dashed #f5c566; box-shadow: 0 0 0 1px #52355d; box-sizing: border-box; }
+.sheet-selection-outline[data-outline-shape="circle"], .sheet-selection-outline[data-outline-shape="ellipse"] { border-radius: 50%; }
+.sheet-selection-outline[data-outline-shape="rounded"] { border-radius: 16%; }
+.sheet-size-line.active { background: #e9d9f1 !important; color: #35203e !important; border-color: #c4a1d6 !important; }
+.sheet-size-line.active .sheet-size-target, .sheet-size-line.active .sheet-edit-mark { color: #35203e !important; }
+.sheet-size-line.active .sheet-mark-price { color: #5c3c20; }
+[data-sheet-background-save-status] { font-size: 12px; color: var(--muted); }
+.sheet-component-row.sheet-component-pending { border-left: 3px dashed #cbb0de; padding-left: 8px; }
+.sheet-pending-label { display: inline-block; margin-top: 5px; padding: 4px 7px; border-radius: 6px; background: #e6d9f0; color: #432850; font-size: 11px; font-weight: 700; }
+.sheet-count-tools { display: inline-flex; align-items: center; gap: 8px; }
+.sheet-count-tools .btn[aria-pressed="true"] { background: #d5bcdf !important; border-color: #d5bcdf !important; color: #301d3c !important; text-shadow: none !important; }
+.sheet-count-total { border-radius: 7px; padding: 7px 10px; background: #e7d7f0; color: #392244; font-weight: 750; white-space: nowrap; }
+.sheet-count-total[hidden] { display: none; }
+.sheet-count-outline { position: absolute; border: 2px dashed #fff1aa; filter: drop-shadow(1px 0 #37213f) drop-shadow(-1px 0 #37213f); box-sizing: border-box; pointer-events: none; }
+.sheet-preview-canvas.counting { cursor: default !important; }
+@media(max-width:650px) {
+  .sheet-artwork-batch-layout { grid-template-columns: minmax(0,1fr); }
+  .sheet-artwork-batch-list { flex-direction: row; max-height: 135px; overflow: auto; }
+  .sheet-artwork-batch-list > strong { display: none; }
+  .sheet-artwork-file { flex: 0 0 180px; }
+}

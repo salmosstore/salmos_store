@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="production-fonts.css?v=25.44">
   <link rel="stylesheet" href="admin-books.css?v=46.7">
   <link rel="stylesheet" href="admin-management.css?v=38.0">
-  <link rel="stylesheet" href="admin-refinements.css?v=48.2">
+  <link rel="stylesheet" href="admin-refinements.css?v=48.3">
   <link rel="stylesheet" href="production-gallery.css?v=39.0">
   <link rel="stylesheet" href="storefront-refinements.css?v=46.4">
   <link rel="stylesheet" href="book-digital.css?v=28.0">
@@ -115,8 +115,8 @@
         <section class="production-tab-panel" data-production-panel="1">
           <div class="production-top-grid">
             <div class="field production-type-field"><label for="productionMaterialType">Tipo de producto</label><select class="select" id="productionMaterialType"><option value="shirt">Remera</option><option value="chomba">Chomba</option><option value="hoodie">Buzo</option><option value="cap">Gorra</option><option value="mug">Taza</option><option value="glass">Vaso</option><option value="thermos">Termo</option><option value="bag">Bolso</option><option value="custom_libro">Libro / cuaderno</option><option value="other">Sin clasificar</option></select></div>
-            <div class="field production-stock-field"><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="physical">Stock real</option><option value="to_stock">Stock virtual</option></select></div>
-            <div class="field production-qty-field"><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
+            <div class="field production-stock-field" hidden><label>Disponibilidad</label><select class="select" id="productionStockKind"><option value="to_stock">Stock virtual</option></select></div>
+            <div class="field production-qty-field" hidden><label>Cantidad</label><div class="purchase-stepper"><button type="button" data-production-step="-1">−</button><input class="input" id="productionQuantity" type="number" min="1" value="1"><button type="button" data-production-step="1">+</button></div></div>
             
             <div class="field production-print-type-field"><label>DTF</label><select class="select" id="productionPrintType"><option value="dtf_textile">Textil</option><option value="dtf_uv">UV</option></select></div><div class="field production-print-rate-field"><label id="productionPrintRateLabel">Costo del metro ($)</label><input class="input" id="productionPrintRate" type="number" min="0" step="any" value="10000"></div>
             <div class="field production-waste-field"><label>Extra DTF por desperdicio (%)</label><input class="input" id="productionWaste" type="number" min="0" step=".01" value="10"></div>
@@ -301,8 +301,8 @@
   <script src="admin-shipping-request.js?v=40.0" defer></script>
   <script src="web-projects-shared.js?v=46.0" defer></script>
   <script src="web-projects-admin.js?v=46.0" defer></script>
-  <script src="sheet-detection.js?v=48.2" defer></script>
-  <script src="admin.js?v=48.2&amp;mkt=26.6" defer></script>
+  <script src="sheet-detection.js?v=48.3" defer></script>
+  <script src="admin.js?v=48.3&amp;mkt=26.6" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=46.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
