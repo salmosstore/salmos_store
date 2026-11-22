@@ -5,11 +5,11 @@ from importlib import metadata
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
 import traceback
+import unicodedata
 from pathlib import Path
 
 
@@ -74,6 +74,65 @@ def use_windows_checkpoint_reader(cache, status):
     safetensors.safe_open = open_checkpoint
 
 
+SPANISH_SECTIONS = {'introducción': 'Intro', 'intro': 'Intro', 'verso': 'Verse',
+                    'estrofa': 'Verse', 'coro': 'Chorus', 'estribillo': 'Chorus',
+                    'pre-coro': 'Pre-Chorus', 'puente': 'Bridge', 'final': 'Outro',
+                    'cierre': 'Outro', 'salida': 'Outro'}
+SECTION_TAG = re.compile(r'^\[([^\]\n]+)\]', re.MULTILINE)
+
+
+def song_lyrics(request):
+    if request['instrumental']:
+        return '[Instrumental]\n\n[Outro]'
+    text = unicodedata.normalize('NFC', request['lyrics']).replace('\r\n', '\n').replace('\r', '\n')
+
+    def section(match):
+        tag = match[1]
+        name, separator, suffix = tag.partition(' ')
+        return '[' + SPANISH_SECTIONS.get(name.casefold(), name) + separator + suffix + ']'
+
+    lines = []
+    for line in SECTION_TAG.sub(section, text).splitlines():
+        if not line.lstrip().startswith('[') and len(line.split()) > 12:
+            # Use punctuation as a breath cue in long transcribed phrases.
+            line = re.sub(r'([,;.!?…])\s+(?=\S)', r'\1\n', line)
+        lines.append(line.rstrip())
+    text = '\n'.join(lines).strip()
+    if not text.startswith('['):
+        text = '[Verse]\n' + text
+    tags = SECTION_TAG.findall(text)
+    if not any(re.match(r'outro\b', tag, re.IGNORECASE) for tag in tags):
+        text += '\n\n[Outro]'
+    return text
+
+
+def finish_song(source, destination):
+    import numpy as np
+    import soundfile as sf
+
+    temporary = destination.with_suffix('.tmp')
+    try:
+        with sf.SoundFile(source) as original:
+            duration = original.frames / original.samplerate
+            if duration <= 0:
+                raise RuntimeError('El motor devolvió un audio vacío.')
+            count = max(1, min(original.frames, round(original.samplerate * min(2.5, duration * .1))))
+            fade_start = original.frames - count
+            with sf.SoundFile(temporary, 'w', samplerate=original.samplerate, channels=original.channels,
+                              format='WAV', subtype=original.subtype) as output:
+                while original.tell() < fade_start:
+                    output.write(original.read(min(65536, fade_start - original.tell()), dtype='float32', always_2d=True))
+                tail = original.read(count, dtype='float32', always_2d=True)
+                gain = .5 + .5 * np.cos(np.linspace(0, np.pi, count, dtype=np.float32))
+                tail *= gain[:, None]
+                tail[-1] = 0
+                output.write(tail)
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return duration
+
+
 def run(root, folder):
     os.chdir(root)
     sys.path.insert(0, str(root))
@@ -125,9 +184,11 @@ def run(root, folder):
         if request['instrumental']:
             caption += ' Instrumental only, no vocals.'
         else:
-            caption += ' ' + vocal[request['voice']] + ' Clear natural Spanish pronunciation. Vocals begin immediately.'
-        params = GenerationParams(caption=caption, lyrics='[Instrumental]' if request['instrumental'] else request['lyrics'],
-            instrumental=request['instrumental'], vocal_language='es', duration=request['duration'],
+            caption += (' ' + vocal[request['voice']] + ' Native Latin American Spanish singing, natural word stress, '
+                        'clear vowels and consonants. Sing the supplied lyrics in order, with space to breathe between lines.')
+        caption += ' Finish with a short instrumental outro and a resolved final chord that rings out.'
+        params = GenerationParams(caption=caption, lyrics=song_lyrics(request), bpm=request.get('bpm'),
+            instrumental=request['instrumental'], vocal_language='unknown' if request['instrumental'] else 'es', duration=request['duration'],
             inference_steps=8, guidance_scale=1.0, shift=3.0, infer_method='ode', thinking=False,
             use_cot_metas=False, use_cot_caption=False, use_cot_lyrics=False, use_cot_language=False,
             seed=request['seed'])
@@ -142,9 +203,10 @@ def run(root, folder):
         if not result.success or not result.audios:
             raise RuntimeError(result.error or result.status_message or 'No se generó audio.')
         source = Path(result.audios[0]['path'])
-        shutil.copyfile(source, folder / 'cancion.wav')
+        status('running', 'Preparando el cierre y guardando el audio…', .97)
+        duration = finish_song(source, folder / 'cancion.wav')
         (folder / 'resultado.json').write_text(json.dumps(result.audios[0].get('params', {}), ensure_ascii=False, default=str), encoding='utf-8')
-        status('done', 'Canción lista.', 1)
+        status('done', 'Canción lista.', 1, duration=duration)
     except Exception as exc:
         traceback.print_exc()
         memory = memory_error_status(exc)

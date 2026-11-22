@@ -17,7 +17,7 @@ set "SALMOS_PY=%SALMOS_ENV%\Scripts\python.exe"
 set "TEMP=%SALMOS_DATA%\temporales"
 set "TMP=%TEMP%"
 set "PIP_CACHE_DIR=%SALMOS_DATA%\cache-pip"
-set "SALMOS_VERSION=27.2"
+set "SALMOS_VERSION=27.3"
 if not exist "%TEMP%" mkdir "%TEMP%"
 if not exist "%SALMOS_PROGRAM%" mkdir "%SALMOS_PROGRAM%"
 if not exist "%TEMP%\" goto error

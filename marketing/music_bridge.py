@@ -67,17 +67,26 @@ def stopped_status(folder, exit_code):
     return memory or {'state': 'error', 'message': 'El motor se cerró. El detalle quedó en motor.log.', 'progress': 0}
 
 
-def state():
+def state(job_id=None):
     with LOCK:
         status = None
-        if JOB:
-            status = read_status(JOB['folder'])
+        if JOB and (job_id is None or job_id == JOB['id']):
+            folder = JOB['folder']
+            status = read_status(folder)
             exit_code = JOB['process'].poll()
             if exit_code is not None and status.get('state') not in ('done', 'error', 'cancelled'):
-                status = stopped_status(JOB['folder'], exit_code)
-                write_status(JOB['folder'], status)
-            status['id'] = JOB['id']
-        return {'audioApi': 2, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
+                status = stopped_status(folder, exit_code)
+                write_status(folder, status)
+        elif job_id and (DATA / job_id / 'status.json').is_file():
+            folder = DATA / job_id
+            status = read_status(folder)
+            if status.get('state') == 'running':
+                status = {'state': 'error', 'message': 'El iniciador se cerró antes de terminar la canción.', 'progress': 0}
+        if status is not None:
+            status['id'] = folder.name
+            if job_id and status.get('state') == 'done':
+                status['track'] = track_info(folder, status)
+        return {'audioApi': 2, 'songApi': 1, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
                 'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
 
@@ -94,8 +103,11 @@ def validate_request(data):
         raise ValueError('Elegí instrumental o con letra.')
     if not 5 <= len(caption) <= 1200 or len(lyrics) > 3000:
         raise ValueError('Revisá la descripción y la letra.')
-    if not 10 <= duration <= 30:
-        raise ValueError('Elegí una duración entre 10 y 30 segundos.')
+    if not 10 <= duration <= 600:
+        raise ValueError('Elegí una duración entre 10 segundos y 10 minutos.')
+    bpm = data.get('bpm')
+    if bpm is not None and (type(bpm) is not int or not 30 <= bpm <= 300):
+        raise ValueError('Elegí un ritmo válido.')
     if voice not in ('auto', 'male', 'female'):
         raise ValueError('Elegí la voz.')
     if not instrumental and not lyrics:
@@ -106,7 +118,7 @@ def validate_request(data):
     instruments = data.get('instruments', [])
     if not isinstance(instruments, list) or len(instruments) > 16:
         raise ValueError('Revisá los instrumentos elegidos.')
-    return {'caption': caption, 'lyrics': lyrics, 'duration': duration, 'voice': voice,
+    return {'caption': caption, 'lyrics': lyrics, 'duration': duration, 'voice': voice, 'bpm': bpm,
             'mood': str(data.get('mood', 'joyful'))[:30], 'rhythm': str(data.get('rhythm', 'medium'))[:30],
             'instruments': [str(value)[:40] for value in instruments], 'saved': False,
             'instrumental': instrumental, 'style': str(data.get('style','house'))[:30], 'details': str(data.get('details',''))[:700], 'seed': seed, 'name': str(data.get('name', 'Mi canción'))[:100]}
@@ -115,6 +127,9 @@ def validate_request(data):
 def start(data, wan_running=False):
     global JOB
     request = validate_request(data)
+    job_id = data.get('requestId')
+    if job_id is not None and (not isinstance(job_id, str) or not re.fullmatch(r'[a-f0-9]{32}', job_id)):
+        raise ValueError('El identificador del pedido de música no es válido.')
     root = ace_root()
     if not root:
         raise RuntimeError('No encuentro ACE-Step 1.5 en esta PC.')
@@ -126,9 +141,11 @@ def start(data, wan_running=False):
             if sock.connect_ex(('127.0.0.1', port)) == 0:
                 raise RuntimeError('Cerrá el motor de ACE-Step o WanGP que abriste aparte. Dejá abierta solamente la conexión SALMOS.')
     with LOCK:
+        folder = DATA / (job_id or uuid.uuid4().hex)
+        if folder.is_dir():
+            return state(folder.name)
         if busy():
             raise RuntimeError('Ya se está generando una canción.')
-        folder = DATA / uuid.uuid4().hex
         folder.mkdir(parents=True)
         (folder / 'request.json').write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
         write_status(folder, {'state': 'running', 'message': 'Cargando el motor de música…', 'progress': .02})
@@ -136,19 +153,23 @@ def start(data, wan_running=False):
         env['PYTHONPATH'] = str(root.resolve())
         env['PYTHONUTF8'] = '1'
         env['SALMOS_EDITOR_PYTHON'] = sys.executable
-        with (folder / 'motor.log').open('wb') as log:
-            process = subprocess.Popen([str((root / 'python_embeded/python.exe').resolve()),
-                str(ROOT / 'music_worker.py'), str(root.resolve()), str(folder.resolve())],
-                cwd=str(root), env=env, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            with (folder / 'motor.log').open('wb') as log:
+                process = subprocess.Popen([str((root / 'python_embeded/python.exe').resolve()),
+                    str(ROOT / 'music_worker.py'), str(root.resolve()), str(folder.resolve())],
+                    cwd=str(root), env=env, stdout=log, stderr=subprocess.STDOUT)
+        except OSError as exc:
+            write_status(folder, {'state': 'error', 'message': 'No se pudo abrir ACE-Step. ' + str(exc), 'progress': 0})
+            return state(folder.name)
         JOB = {'id': folder.name, 'folder': folder, 'process': process}
-    return state()
+        return state(folder.name)
 
 
 def cancel(expected_id=None):
     with LOCK:
         if expected_id and (not JOB or JOB['id'] != expected_id):
             raise ValueError('Cambió la canción que está en curso.')
-        if JOB and JOB['process'].poll() is None:
+        if JOB and JOB['process'].poll() is None and read_status(JOB['folder']).get('state') == 'running':
             JOB['process'].terminate()
             try:
                 JOB['process'].wait(timeout=10)
@@ -159,6 +180,19 @@ def cancel(expected_id=None):
     return state()
 
 
+def track_info(folder, status):
+    if status.get('state') != 'done':
+        return None
+    try:
+        request = json.loads((folder / 'request.json').read_text(encoding='utf-8'))
+        modified = (folder / 'cancion.wav').stat().st_mtime
+    except (OSError, ValueError):
+        return None
+    return {'id': folder.name, 'name': request.get('name', 'Mi canción'),
+            'duration': status.get('duration', request.get('duration', 20)), 'request': request,
+            'createdAt': modified}
+
+
 def tracks():
     rows = []
     if not DATA.is_dir():
@@ -166,16 +200,9 @@ def tracks():
     for folder in DATA.iterdir():
         if not folder.is_dir() or not re.fullmatch(r'[a-f0-9]{32}', folder.name):
             continue
-        status = read_status(folder)
-        if status.get('state') != 'done' or not (folder / 'cancion.wav').is_file():
-            continue
-        try:
-            request = json.loads((folder / 'request.json').read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            continue
-        rows.append({'id': folder.name, 'name': request.get('name', 'Mi canción'),
-                     'duration': request.get('duration', 20), 'request': request,
-                     'createdAt': (folder / 'cancion.wav').stat().st_mtime})
+        track = track_info(folder, read_status(folder))
+        if track:
+            rows.append(track)
     return sorted(rows, key=lambda r: r['createdAt'], reverse=True)
 
 
@@ -185,6 +212,13 @@ def get(handler, path):
         return True
     if path == '/api/music/tracks':
         handler.json_response({'tracks': tracks()})
+        return True
+    if path.startswith('/api/music/jobs/'):
+        job_id = path.rsplit('/', 1)[-1]
+        if not re.fullmatch(r'[a-f0-9]{32}', job_id):
+            handler.json_response({'error': 'Pedido de música no válido.'}, 400)
+        else:
+            handler.json_response(state(job_id))
         return True
     if path.startswith('/api/music/audio/'):
         track_id = path.rsplit('/', 1)[-1]
