@@ -364,8 +364,12 @@
     const previews=new Map();
     for(const p of entries){
       const row=document.createElement('article');row.className='saved-card';
-      const title=document.createElement('strong');title.textContent=p.title;
-      const small=document.createElement('small'),count=p.scenes?.length??p.sceneCount;
+      const title=document.createElement('strong');
+      const projectTitle=String(p.title||'Reel sin título');
+      title.textContent=projectTitle.length>58&&projectTitle.includes(' · ')?
+        'Reel'+(p.savedAt?' · '+new Date(p.savedAt).toLocaleDateString('es-AR'):''):projectTitle;
+      title.title=title.textContent;
+      const small=document.createElement('small'),count=p.scenes?.length||Number(p.sceneCount)||1;
       const duration=p.cloudOnly?p.duration:C.totalDuration(p.scenes);
       small.textContent=(p.status==='draft'?'Borrador · ':'')+count+(count===1?' escena · ':' escenas · ')+C.formatTime(duration)+' · ';
       const location=document.createElement('span');
@@ -376,13 +380,8 @@
       const actions=document.createElement('div');actions.className='project-actions';
       const open=document.createElement('button');open.textContent='Editar';
       open.onclick=()=>openSavedProject(p).catch(error=>notify(error.message,'error'));
-      const preview=document.createElement('button'),cover=new Image(),previewStatus=document.createElement('span');
-      preview.className='project-preview';preview.type='button';preview.onclick=open.onclick;
-      preview.setAttribute('aria-label','Abrir reel '+p.title);
-      cover.className='project-cover';cover.alt='';cover.hidden=true;
-      previewStatus.textContent='Cargando vista previa…';
-      preview.append(cover,previewStatus);
-      previews.set(preview,{record:p,cover,status:previewStatus});
+      const preview=createReelPreview(p,title.textContent,count);
+      previews.set(preview.element,preview.load);
       const down=document.createElement('button');down.textContent='↓ Video';down.title='Descargar video';down.onclick=()=>projectVideoAction(p,false);
       const share=document.createElement('button');share.textContent='Compartir';share.onclick=()=>projectVideoAction(p,true);
       const backup=document.createElement('button');backup.textContent='Respaldo';
@@ -420,7 +419,7 @@
         }catch(error){notify(error.message,'error');}
         finally{del.disabled=false;}
       };
-      actions.append(open,down,share,backup,copy,del);row.append(preview,title,small,actions);cards.append(row);
+      actions.append(open,down,share,backup,copy,del);row.append(preview.element,title,small,actions);cards.append(row);
     }
     host.replaceChildren(cards);
     showReelPreviews(previews);
@@ -619,7 +618,7 @@
     for(const b of $$('[data-template]'))b.onclick=()=>{pause();checkpoint();const l=selectedLayer(),id=b.dataset.template;if(l){l.inheritSceneEffect=false;l.fx=id;l.effect={...T.effects({...l,template:id})};}else{current().template=id;if(['pencil','brush','wipe','before'].includes(id))for(const print of current().components.filter(x=>x.kind==='print')){print.fx=id;print.inheritSceneEffect=true;}current().effect={...T.effects({...current(),template:id})};}syncForm();changed();time=project.scenes.slice(0,active).reduce((n,s)=>n+s.duration,0);play();};
     for(const input of $$('[data-effect]')){input.onfocus=()=>input._before=structuredClone(project);input.oninput=()=>{pause();beginEffectTrial11();const target=effectTarget();effectTrial.touched.add(target.id+':'+input.dataset.effect);target.effect={...T.effects(target),[input.dataset.effect]:checkedValue(input)};changed();};input.onchange=()=>{input._before=null;syncForm();changed();};}$('#rows').removeAttribute('data-scene');$('#rows').onchange=()=>{beginEffectTrial11();effectTarget().rows=Number($('#rows').value);syncForm();changed();};$('#resetEffect').onclick=()=>{cancelEffectTrial();checkpoint();const source=selectedLayer();for(const target of source?scopedLayers(source).map(row=>row.layer):scopeScenes())delete target.effect;syncForm();changed();};$('#previewEffect').textContent='OK';$('#previewEffect').onclick=()=>{pause();syncForm();changed();};
     for(const id of ['palette','ratio','transition','musicCatalog','musicGenre','musicVocals','ttsVoice','ttsPitch','quality','exportFormat','storyFilter','postChannel'])pillSelect(id);compactNumbers();
-    const narrator=$('.narrator-card'),audioPanel=$('[data-panel="audio"]');audioPanel.querySelector('h1').after(narrator);const updater=document.createElement('a');updater.className='button';updater.href='INICIAR_SALMOS.bat?v=27.4';updater.download='INICIAR_SALMOS.bat';updater.textContent='Actualizar conexión local';narrator.querySelector('.button-row').append(updater);const connection=$('#helperUrl').closest('details');if(connection){connection.querySelector('summary').textContent='Si la conexión falla';$('#helperUrl').closest('label').hidden=true;connection.open=false;}$('#ttsStatus').textContent='La conexión de voz se comprueba sola al generar. Si está cerrada o es anterior, usá Actualizar conexión local y abrí el archivo descargado.';$('#connectLocal').textContent='Volver a comprobar conexión';
+    const narrator=$('.narrator-card'),audioPanel=$('[data-panel="audio"]');audioPanel.querySelector('h1').after(narrator);const updater=document.createElement('a');updater.className='button';updater.href='INICIAR_SALMOS.bat?v=27.5';updater.download='INICIAR_SALMOS.bat';updater.textContent='Actualizar conexión local';narrator.querySelector('.button-row').append(updater);const connection=$('#helperUrl').closest('details');if(connection){connection.querySelector('summary').textContent='Si la conexión falla';$('#helperUrl').closest('label').hidden=true;connection.open=false;}$('#ttsStatus').textContent='La conexión de voz se comprueba sola al generar. Si está cerrada o es anterior, usá Actualizar conexión local y abrí el archivo descargado.';$('#connectLocal').textContent='Volver a comprobar conexión';
     for(const card of [...audioPanel.querySelectorAll('.audio-card')])if(card!==narrator&&!card.querySelector('#musicResults')){const heading=card.querySelector('h2'),[d,b]=createFold(heading.textContent,true);heading.remove();b.append(...card.childNodes);card.replaceChildren(d);}
     $('#musicCatalog').dispatchEvent(new Event('change'));$('#musicListen').before(Object.assign(document.createElement('p'),{className:'hint',textContent:'Para escuchar el volumen final usá Escuchar con mi video. La música puede subir hasta 200%. La opción Bajar música reduce suavemente el fondo mientras habla la voz.'}));
     const trial=document.createElement('div');trial.id='musicTrialBar';trial.hidden=true;trial.className='note';trial.innerHTML='<strong id="musicTrialName"></strong><button id="cancelMusicTrial">Terminar prueba y volver a mi música</button>';$('#musicResults').before(trial);$('#cancelMusicTrial').onclick=cancelMusicTrial;$('#playMix').onclick=async()=>{pause();time=0;await play();};$('#stopMix').onclick=pause;$('#saveMusicLibrary').onclick=()=>{if(!project.audio.music||musicTrial)return notify('Elegí una pista antes de guardarla.');libraryTracks=readTracks();if(libraryTracks.some(x=>x.src===project.audio.music))return notify('Ya está guardada.');if(libraryTracks.length>=12)return notify('El listado admite 12 canciones.');try{libraryTracks.push({id:C.uid(),name:project.audio.musicName,src:project.audio.music,genre:$('#musicGenre').value==='all'?'pop':$('#musicGenre').value,vocals:$('#musicVocals').value==='all'?'instrumental':$('#musicVocals').value});writeTracks();notify('Canción guardada en este navegador.');}catch{libraryTracks.pop();notify('No hay espacio. Descargá tu proyecto para conservar el audio.','error');}};
@@ -675,8 +674,23 @@
   const syncSoundV4=syncSound;syncSound=function(){syncSoundV4();for(const event of project.audio.sfx||[]){const node=soundNodes.get(event.id);if(!node)continue;const sceneIndex=project.scenes.findIndex(s=>s.id===event.sceneId);if(event.sceneId&&sceneIndex<0){node.audio.pause();continue;}const scene=project.scenes[sceneIndex],layer=scene?.components?.find(l=>l.id===event.componentId);if(event.componentId&&!layer){node.audio.pause();continue;}const offset=sceneIndex>=0?project.scenes.slice(0,sceneIndex).reduce((n,s)=>n+s.duration,0)+(layer?T.effects(layer).start:0):0;const pos=(time-offset-event.start)*(event.rate||1);node.audio.playbackRate=event.rate||1;node.audio.preservesPitch=false;const length=event.duration>0?event.duration:node.audio.duration/(event.rate||1),elapsed=time-offset-event.start;syncOneAudio(node.audio,Math.max(0,pos%node.audio.duration),elapsed>=0&&elapsed<length);if(node.gain)node.gain.gain.value=event.volume??.65;}};
   const stopSoundV4=stopSound;stopSound=function(){stopSoundV4();for(const node of soundNodes.values())node.audio.pause();};
   let activeDock='effects',blankPreview=false,viewZoom=1;
-  function openDock(id){activeDock=id;document.querySelectorAll('[data-drawer]').forEach(el=>el.hidden=el.dataset.drawer!==id);document.querySelectorAll('[data-dock]').forEach(el=>el.classList.toggle('active',el.dataset.dock===id));}
-  async function homeView(){
+  function openDock(id){activeDock=id;document.querySelectorAll('[data-drawer]').forEach(el=>el.hidden=el.dataset.drawer!==id);document.querySelectorAll('[data-dock]').forEach(el=>el.classList.toggle('active',el.dataset.dock===id));if(id==='music')syncReelSongDuration();}
+  function showMarketingSection(section){
+    const home=$('#studioHome'),tabs=[...home.querySelectorAll('[data-home-tab]')];
+    if(!tabs.some(button=>button.dataset.homeTab===section))section='videos';
+    for(const button of tabs){
+      const selected=button.dataset.homeTab===section;
+      button.setAttribute('aria-selected',String(selected));
+      button.tabIndex=selected?0:-1;
+      $('#home-'+button.dataset.homeTab).hidden=!selected;
+    }
+    if(section==='canciones')audioStudioEditor?.activate();
+    else audioStudioEditor?.deactivate();
+    if(section==='ideas')mountContentIdeas($('#home-ideas'));
+    home.scrollTop=0;
+  }
+
+  async function homeView(section='videos'){
     cancelEffectTrial();closeWanPreview();pause();
     if(editorActive13){
       try{await cancelMusicTrial();await flushReelAutosave();}catch(error){notify(error.message,'error');return;}
@@ -684,10 +698,11 @@
       flushReelBackups();
     }
     $('#studioHome').hidden=false;$('.workspace').hidden=true;document.body.classList.add('reel-home');
-    await loadSaved().catch(error=>notify(error.message,'error'));
+    showMarketingSection(section);
+    if(section==='videos'||typeof section!=='string')await loadSaved().catch(error=>notify(error.message,'error'));
   }
 
-  function editorView(ai=false){editorActive13=true;closeWanPreview();document.body.classList.remove('reel-home');document.body.classList.toggle('wan-mode',ai);$('#studioHome').hidden=true;$('.workspace').hidden=false;document.querySelectorAll('[data-main-mode]').forEach(b=>b.classList.toggle('active',(b.dataset.mainMode==='wan')===ai));if(ai){openDock('wan');}else openDock(activeDock==='wan'?'effects':activeDock);draw();}
+  function editorView(ai=false){editorActive13=true;audioStudioEditor?.deactivate();closeWanPreview();document.body.classList.remove('reel-home');document.body.classList.toggle('wan-mode',ai);$('#studioHome').hidden=true;$('.workspace').hidden=false;document.querySelectorAll('[data-main-mode]').forEach(b=>b.classList.toggle('active',(b.dataset.mainMode==='wan')===ai));if(ai){openDock('wan');}else openDock(activeDock==='wan'?'effects':activeDock);draw();}
   function installProductionLayout(){
     document.body.classList.add('production-reels','reel-home');const hidden=document.createElement('div');hidden.hidden=true;hidden.id='oldReelsPanels';document.body.append(hidden);const work=$('.workspace'),preview=$('.preview-panel'),oldControls=$('.controls-panel'),resource=document.createElement('div'),rail=document.createElement('aside'),side=document.createElement('aside'),dock=document.createElement('section');resource.id='resourceRail';rail.id='viewRail';side.id='reelInspector';dock.id='reelDock';
     resource.innerHTML='<button id="chooseReelProducts" title="Elegir productos">＋ Productos</button><div id="sourceAssets"></div><div class="choice-buttons"><button id="showFinished" class="active">Estampadas</button><button id="showBlank">Lisas</button></div>';
@@ -705,8 +720,43 @@
     drawer('wan','Movimiento','✦');
     const viewport=document.createElement('div');viewport.id='stageViewport';const shell=$('.canvas-shell');viewport.append(shell);preview.prepend(viewport);const oldTime=$('#time');oldTime.title='Tiempo del reel';$('#previewHint').hidden=true;$('.preview-top').hidden=true;$('.preview-options').hidden=true;
     hidden.append(oldControls);work.replaceChildren(resource,rail,preview,side,dock);
-    const home=document.createElement('section');home.id='studioHome';home.innerHTML='<div class="home-heading"><h1>Marketing y reels</h1><button id="createReel" class="primary">＋ Nuevo reel</button></div><div id="homeProjects"></div>';home.querySelector('#homeProjects').append($('#savedProjects'));work.before(home);
-    $('.top-title strong').textContent='SALMOS MARKETING Y REELS · ESTUDIO DE CONTENIDO';const nav=$('.tabs');nav.replaceChildren();for(const[id,label]of[['reel','Reel'],['wan','Movimientos · WanGP']]){const b=document.createElement('button');b.dataset.mainMode=id;b.textContent=label;b.onclick=()=>editorView(id==='wan');nav.append(b);}const back=document.createElement('button');back.textContent='▦ Proyectos';back.onclick=homeView;$('.head-actions').prepend(back);const leave=document.createElement('button');leave.textContent='Volver al panel';leave.onclick=async()=>{await homeView();parent.postMessage({type:'salmos-marketing-close'},location.origin);};$('.head-actions').append(leave);const ideas=document.createElement('button');ideas.id='ideasIcon';ideas.title='Ideas visuales';ideas.setAttribute('aria-label','Ideas visuales');ideas.innerHTML='<i class="fa-solid fa-lightbulb" aria-hidden="true"></i>';ideas.onclick=()=>{const dialog=document.createElement('dialog');dialog.className='ideas-dialog';const content=$('[data-panel="ideas"]');content.hidden=false;dialog.append(content);const close=document.createElement('button');close.textContent='Cerrar';close.onclick=()=>dialog.close();dialog.prepend(close);document.body.append(dialog);dialog.onclose=()=>{hidden.append(content);dialog.remove();};dialog.showModal();};$('.head-actions').prepend(ideas);
+    const home=document.createElement('section');
+    home.id='studioHome';
+    home.innerHTML='<h1>Marketing y reels</h1><div class="marketing-tabs" role="tablist" aria-label="Marketing y reels"></div>';
+    const homeTabs=home.querySelector('.marketing-tabs');
+    for(const [id,label] of [['videos','Videos'],['canciones','Canciones'],['ideas','Ideas']]){
+      const button=document.createElement('button'),panel=document.createElement('section');
+      button.type='button';button.id='tab-'+id;button.dataset.homeTab=id;button.textContent=label;
+      button.setAttribute('role','tab');button.setAttribute('aria-controls','home-'+id);
+      button.onclick=()=>showMarketingSection(id);
+      panel.id='home-'+id;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',button.id);
+      panel.hidden=id!=='videos';homeTabs.append(button);home.append(panel);
+    }
+    homeTabs.onkeydown=event=>{
+      const buttons=[...homeTabs.children],index=buttons.indexOf(event.target);
+      if(index<0||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();
+      const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:
+        (index+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;
+      buttons[next].click();buttons[next].focus();
+    };
+    const videos=home.querySelector('#home-videos');
+    videos.innerHTML='<div class="home-heading"><button id="createReel" class="primary">＋ Nuevo reel</button></div><div id="homeProjects"></div>';
+    videos.querySelector('#homeProjects').append($('#savedProjects'));
+    work.before(home);
+
+    $('.top-title strong').textContent='SALMOS MARKETING Y REELS · ESTUDIO DE CONTENIDO';
+    const nav=$('.tabs');nav.replaceChildren();
+    for(const [id,label] of [['reel','Reel'],['wan','Movimientos · WanGP']]){
+      const button=document.createElement('button');button.dataset.mainMode=id;button.textContent=label;
+      button.onclick=()=>editorView(id==='wan');nav.append(button);
+    }
+    const back=document.createElement('button');back.textContent='▦ Proyectos';back.onclick=()=>homeView();$('.head-actions').prepend(back);
+    const leave=document.createElement('button');leave.textContent='Volver al panel';
+    leave.onclick=async()=>{await homeView();parent.postMessage({type:'salmos-marketing-close'},location.origin);};$('.head-actions').append(leave);
+    const ideas=document.createElement('button');ideas.id='ideasIcon';ideas.title='Ideas y textos';
+    ideas.setAttribute('aria-label','Ideas y textos');ideas.innerHTML='<i class="fa-solid fa-lightbulb" aria-hidden="true"></i>';
+    ideas.onclick=()=>homeView('ideas');$('.head-actions').prepend(ideas);
     $('#createReel').onclick=()=>selectProductsForReel(true);$('#chooseReelProducts').onclick=()=>selectProductsForReel(false);$('#showBlank').onclick=()=>{blankPreview=true;syncStageAssets();draw();};$('#showFinished').onclick=()=>{blankPreview=false;syncStageAssets();draw();};
     const zoomTools=document.createElement('div');zoomTools.id='viewZoomTools';for(const[label,action,title]of[['−',()=>applyViewZoom(viewZoom/1.25),'Alejar'],['100%',()=>applyViewZoom(1),'Ajustar vista'],['+',()=>applyViewZoom(viewZoom*1.25),'Acercar · Ctrl + rueda']]){const button=document.createElement('button');button.textContent=label;button.title=title;button.onclick=action;zoomTools.append(button);}preview.append(zoomTools);viewport.addEventListener('wheel',e=>{if(!e.ctrlKey)return;e.preventDefault();applyViewZoom(viewZoom*Math.exp(-e.deltaY*.002));},{passive:false});
     installReelsV6();installReelsV7();requestParent('appearance').then(theme=>{for(const[k,v]of Object.entries(theme))if(v)document.body.style.setProperty('--production-'+k,v);}).catch(()=>{});compactNumbers();installSoundControls();installReelsV9();backgroundShelf();homeView();
@@ -721,7 +771,7 @@
     const render=async type=>{mode=type;gallery.classList.toggle('giphy-gallery',type==='giphy');gallery.replaceChildren();choices.forEach(b=>b.classList.toggle('active',b.dataset.bgMode===type));if(type==='giphy'){mountGiphyGallery(gallery);return;}if(type==='salmos'){try{const entries=await requestParent('backgrounds');if(reuse&&current().productionBackground)gallery.append(reuse);for(const item of entries){const b=document.createElement('button'),im=new Image();im.src=item.url;im.alt=item.name;b.title=item.name;b.append(im);b.onclick=async()=>{const targets=sceneVisualTargets();b.disabled=true;try{const data=await requestParent('background',{assetId:item.id});await applyScopedBackground({src:await blobData(data.blob),name:item.name},targets);}catch(e){notify(e.message,'error');}finally{b.disabled=false;}};gallery.append(b);}}catch(e){gallery.textContent='Los fondos guardados se cargan al abrir desde SALMOS.';}return;}if(type==='add'){gallery.append(add);return;}for(const [name,motion,palette] of (type==='masculine'?[['Acero','steel','slate'],['Plano azul','blueprint','navy'],['Brasas','embers','coal'],['Niebla','smoke','slate'],['Relieve bosque','terrain','forest'],['Velocidad','speed','burgundy']]:[['Corazones','hearts','pink'],['Pétalos','petals','pink'],['Destellos dorados','stars','gold'],['Luces suaves','bokeh','blue'],['Ondas','waves','lilac'],['Confeti','confetti','cream']])){const b=document.createElement('button'),c=document.createElement('canvas'),label=document.createElement('span');c.width=130;c.height=150;label.textContent=name;b.append(c,label);b.onclick=()=>{applyScopedBackground({motion,palette,name});};gallery.append(b);const context=c.getContext('2d');const tick=now=>{if(!c.isConnected||!['motion','masculine'].includes(mode))return;if(!c.getClientRects().length){requestAnimationFrame(tick);return;}const colors=C.palettes[palette],g=context.createLinearGradient(0,0,130,150);g.addColorStop(0,colors[0]);g.addColorStop(1,colors[1]);context.fillStyle=g;context.fillRect(0,0,130,150);context.save();context.scale(130/720,150/1280);paintBackdrop(context,{bgMotion:motion},now/1000,720,1280);context.restore();requestAnimationFrame(tick);};requestAnimationFrame(tick);}};
     for(const[id,label]of[['salmos','Fondos SALMOS'],['motion','Suaves'],['masculine','Varoniles'],['giphy','GIPHY'],['add','＋ Agregar']]){const b=document.createElement('button');b.textContent=label;b.dataset.bgMode=id;b.onclick=()=>render(id);choices.push(b);bar.append(b);}clear.textContent='Sin fondo';bar.append(clear);bg.replaceChildren(bar,gallery);$('#oldReelsPanels').append(oldShelf,salmos);oldShelf.hidden=true;salmos.hidden=true;render('motion');
     const startLink=document.createElement('a');
-    startLink.className='button';startLink.href='INICIAR_SALMOS.bat?v=27.4';startLink.download='INICIAR_SALMOS.bat';
+    startLink.className='button';startLink.href='INICIAR_SALMOS.bat?v=27.5';startLink.download='INICIAR_SALMOS.bat';
     startLink.textContent='Descargar iniciador';$('[data-drawer="narration"] .button-row').append(startLink);compactNumbers();
   }
 
@@ -735,15 +785,12 @@
     const visual=read(sceneVisual(scene),!!scene.video);
     if(!(visual?.videoWidth||visual?.width)||scene.video&&visual.readyState<2)return '';
     const geometry=componentGeometry,last=lastGeometry;
-    const frame=document.createElement('canvas'),out=document.createElement('canvas');
-    frame.width=out.width=360;out.height=450;
+    const frame=document.createElement('canvas');
+    frame.width=360;
     frame.height=dimensions(360,source.ratio||'9:16').h;
     try{
       paintScene(frame.getContext('2d'),scene,.75,frame.width,frame.height,false,{style:source,read,still:true});
-      const c=out.getContext('2d');
-      c.fillStyle='#301a29';c.fillRect(0,0,out.width,out.height);
-      drawFit(c,frame,fitRect(frame,0,0,out.width,out.height));
-      return out.toDataURL('image/jpeg',.86);
+      return frame.toDataURL('image/jpeg',.86);
     }finally{
       componentGeometry=geometry;lastGeometry=last;
     }
@@ -772,54 +819,141 @@
       for(const item of cache.values())if(item instanceof HTMLVideoElement){item.removeAttribute('src');item.load();}
     }
   }
-  async function loadReelPreview({record,cover,status}){
-    const show=async src=>{
-      if(typeof src!=='string'||!src||!cover.isConnected)return false;
-      cover.src=src;
-      try{await cover.decode();}catch{return false;}
-      cover.hidden=false;status.hidden=true;
-      return true;
-    };
-    if(await show(record.cover))return;
+  function removeLegacyCoverMargins(cover,ratio){
+    // Earlier project covers centered the portrait in a 360 × 450 matte.
+    if(cover.naturalWidth!==360||cover.naturalHeight!==450)return null;
+    const height=dimensions(360,ratio||'9:16').h,width=Math.round(450*360/height);
+    if(width>=358||width<1)return null;
+    const canvas=document.createElement('canvas'),context=canvas.getContext('2d');
+    canvas.width=360;canvas.height=450;
+    try{
+      context.drawImage(cover,0,0);
+      for(const x of [2,357]){
+        const color=context.getImageData(x,225,1,1).data;
+        if([48,26,41].some((value,i)=>Math.abs(value-color[i])>12))return null;
+      }
+      const crop=document.createElement('canvas');crop.width=width;crop.height=450;
+      crop.getContext('2d').drawImage(canvas,(360-width)/2,0,width,450,0,0,width,450);
+      return crop.toDataURL('image/jpeg',.9);
+    }catch{return null;}
+  }
+
+  function createReelPreview(record,title,count){
+    const element=document.createElement('div'),viewport=document.createElement('div'),position=document.createElement('span');
+    const previous=document.createElement('button'),next=document.createElement('button'),slides=[];
+    element.className='reel-card-preview';
+    viewport.className='reel-card-frames';element.append(viewport);
+    viewport.setAttribute('role','group');viewport.setAttribute('aria-label','Escenas de '+title);
+    previous.type=next.type='button';
+    previous.className='reel-card-arrow previous';next.className='reel-card-arrow next';
+    previous.textContent='‹';next.textContent='›';
+    previous.setAttribute('aria-label','Escena anterior');next.setAttribute('aria-label','Escena siguiente');
+    position.className='reel-card-position';position.setAttribute('aria-live','polite');
+    if(count>1)element.append(previous,next,position);
     const id=reelCoverCacheId(record),revision=record.revision||record._reelRevision||String(record.savedAt);
-    const cached=await dbAction('assets','readonly',store=>store.get(id)).catch(()=>null);
-    if(cached?.revision===revision&&await show(cached.src))return;
-    reelCoverQueue=reelCoverQueue.then(async()=>{
-      if(!cover.isConnected)return;
+    let current=0,lastWheel=0,snapshot;
+    const source=()=>{
+      if(!record.cloudOnly)return Promise.resolve(record);
+      return snapshot??=downloadReelSnapshot(record).catch(error=>{snapshot=null;throw error;});
+    };
+    for(let index=0;index<count;index++){
+      const button=document.createElement('button'),cover=new Image(),status=document.createElement('span');
+      button.className='project-preview';button.type='button';button.tabIndex=index===0?0:-1;
+      button.setAttribute('aria-label','Abrir '+title+' en la escena '+(index+1));
+      button.onclick=()=>openSavedProject(record,index).catch(error=>notify(error.message,'error'));
+      cover.className='project-cover';cover.alt='';cover.hidden=true;
+      status.textContent='Cargando vista previa…';
+      button.append(cover,status);viewport.append(button);slides.push({button,cover,status,loaded:false});
+    }
+    async function show(slide,src,ratio,legacy=false){
+      if(typeof src!=='string'||!src||!element.isConnected)return false;
+      slide.cover.src=src;
       try{
-        const source=record.cloudOnly?await downloadReelSnapshot(record):record;
-        let src=record.cloudOnly&&await show(source.cover)?source.cover:'';
-        for(const scene of source.scenes){
-          if(src||!cover.isConnected)break;
-          const composed=await renderSavedSceneCover(source,scene);
-          for(const candidate of [composed,scene.thumbnail,scene.final,scene.base,scene.back,scene.background]){
-            if(await show(candidate)){src=candidate;break;}
-          }
+        await slide.cover.decode();
+        const cropped=legacy&&removeLegacyCoverMargins(slide.cover,ratio);
+        if(cropped){slide.cover.src=cropped;await slide.cover.decode();}
+      }catch{return false;}
+      slide.cover.hidden=false;slide.status.hidden=true;
+      return true;
+    }
+    async function loadSlide(index){
+      const slide=slides[index];
+      if(slide.loaded||!element.isConnected)return;
+      slide.loaded=true;
+      slide.status.textContent='Cargando vista previa…';
+      try{
+        if(index===0){
+          if(await show(slide,record.cover,record.ratio,true))return;
+          const cached=await dbAction('assets','readonly',store=>store.get(id)).catch(()=>null);
+          if(cached?.revision===revision&&await show(slide,cached.src,record.ratio,true))return;
         }
-        if(src){
-          if(cover.isConnected&&src.startsWith('data:image/')&&src.length<=300000){
-            await dbAction('assets','readwrite',store=>store.put({id,kind:'reel-cover',revision,src})).catch(()=>{});
+        const saved=await source(),scene=saved.scenes[index];
+        if(!element.isConnected)return;
+        if(index===0&&await show(slide,saved.cover,saved.ratio,true))return;
+        if(scene){
+          const composed=await renderSavedSceneCover(saved,scene);
+          for(const candidate of [composed,scene.thumbnail,scene.final,scene.base,scene.back,scene.background]){
+            if(!await show(slide,candidate,saved.ratio))continue;
+            if(index===0&&candidate.startsWith('data:image/')&&candidate.length<=300000){
+              await dbAction('assets','readwrite',store=>store.put({id,kind:'reel-cover',revision,src:candidate})).catch(()=>{});
+            }
+            return;
           }
-          return;
         }
       }catch{}
-      cover.removeAttribute('src');
-      status.textContent='Vista previa no disponible';
-    });
+      slide.loaded=false;
+      slide.cover.removeAttribute('src');
+      slide.status.textContent='Vista previa no disponible';
+    }
+    function load(){
+      reelCoverQueue=reelCoverQueue.then(()=>loadSlide(0));
+    }
+    function update(index){
+      current=index;
+      previous.disabled=index===0;next.disabled=index===count-1;
+      position.textContent=(index+1)+' / '+count;
+      slides.forEach((slide,i)=>{slide.button.tabIndex=i===index?0:-1;});
+    }
+    function move(index){
+      if(index<0||index>=count)return;
+      update(index);
+      void loadSlide(index);
+      viewport.scrollTo({left:viewport.clientWidth*index,behavior:'instant'});
+    }
+    update(0);
+    previous.onclick=()=>move(current-1);next.onclick=()=>move(current+1);
+    viewport.onscroll=()=>{
+      if(!viewport.clientWidth)return;
+      const index=C.clamp(Math.round(viewport.scrollLeft/viewport.clientWidth),0,count-1);
+      if(index!==current){update(index);void loadSlide(index);}
+    };
+    viewport.addEventListener('wheel',event=>{
+      if(event.ctrlKey||Math.abs(event.deltaX)>=Math.abs(event.deltaY))return;
+      const index=current+Math.sign(event.deltaY);
+      if(index<0||index>=count)return;
+      event.preventDefault();
+      if(performance.now()-lastWheel<240)return;
+      lastWheel=performance.now();move(index);
+    },{passive:false});
+    viewport.onkeydown=event=>{
+      if(!['ArrowLeft','ArrowRight'].includes(event.key))return;
+      event.preventDefault();
+      move(current+(event.key==='ArrowLeft'?-1:1));slides[current].button.focus({preventScroll:true});
+    };
+    return {element,load};
   }
   function showReelPreviews(previews){
     reelCoverObserver?.disconnect();
-    const load=preview=>loadReelPreview(preview).catch(()=>{preview.status.textContent='Vista previa no disponible';});
-    if(typeof IntersectionObserver!=='function'){previews.forEach(load);return;}
+    if(typeof IntersectionObserver!=='function'){previews.forEach(load=>load());return;}
     reelCoverObserver=new IntersectionObserver(entries=>{
       for(const entry of entries)if(entry.isIntersecting){
         reelCoverObserver.unobserve(entry.target);
-        load(previews.get(entry.target));
+        previews.get(entry.target)();
       }
     },{root:$('#studioHome'),rootMargin:'120px'});
     for(const button of previews.keys())reelCoverObserver.observe(button);
   }
-  async function openSavedProject(record){
+  async function openSavedProject(record,sceneIndex=0){
     pause();
     await flushReelAutosave();
     const saved=reelRecord(record.cloudOnly?await restoreCloudReel(record):record);
@@ -837,7 +971,9 @@
       scene.template||='clean';
       scene.duration=Number(scene.duration)||5;
     }
-    normalizeProject();active=0;time=0;
+    normalizeProject();
+    active=C.clamp(sceneIndex,0,project.scenes.length-1);
+    time=C.totalDuration(project.scenes.slice(0,active));
     await prepareMedia().catch(error=>notify(error.message,'error'));
     syncForm();editorView();syncReelSaveState();
   }
@@ -1459,13 +1595,18 @@
   async function saveDraft14(){pause();clearTimeout(autosaveTimer);cancelEffectTrial();await cancelMusicTrial();project.status='draft';await saveRecord();notify('Borrador guardado en Proyectos.');}
   async function renderOwnGifShelf14(host){let shelf=host.querySelector('.own-gif-shelf14');if(!shelf){shelf=document.createElement('div');shelf.className='own-gif-shelf14';host.insertBefore(shelf,host.querySelector('.giphy-search-fold'));}const rows=await dbAction('assets','readonly',s=>s.getAll());if(!shelf.isConnected)return;shelf.replaceChildren();for(const gif of ownGifs13().filter(g=>g.username==='salmosstore7')){const card=document.createElement('article'),b=document.createElement('button'),img=new Image();img.src=gif.images?.fixed_height?.url||gif.images?.original?.url;img.alt=gif.title;b.title=gif.title;b.setAttribute('aria-label','Aplicar mi GIF '+gif.title);b.append(img);b.onclick=async()=>{b.disabled=true;try{await applyScopedBackground({giphy:{id:gif.id,title:gif.title,author:'salmosstore7',source:gif.url,permission:true}});}catch(e){notify(e.message,'error');}finally{b.disabled=false;}};card.append(b);shelf.append(card);}for(const gif of rows.filter(x=>x.kind==='gif')){const card=document.createElement('article'),b=document.createElement('button'),img=new Image(),del=document.createElement('button');img.src=gif.src;img.alt=gif.name;b.title=gif.name;b.setAttribute('aria-label','Aplicar mi GIF '+gif.name);b.append(img);b.onclick=()=>applyScopedBackground({src:gif.src,name:gif.name}).catch(e=>notify(e.message,'error'));del.textContent='×';del.title='Quitar de Mis GIFs';del.onclick=async()=>{if(!confirm('¿Quitar este GIF de tu galería? Los reels que ya lo usan lo conservan.'))return;await dbAction('assets','readwrite',s=>s.delete(gif.id));renderOwnGifShelf14(host);};card.append(b,del);shelf.append(card);}}
   function installGifUpload14(row,host){const label=document.createElement('label');label.className='file-button';label.textContent='＋ Subir mis GIFs';const input=document.createElement('input');input.type='file';input.accept='image/gif';input.multiple=true;input.setAttribute('aria-label','Subir mis GIFs');label.append(input);input.onchange=async()=>{try{for(const file of input.files){if(file.type!=='image/gif')throw Error('Elegí archivos GIF.');const src=await fileData(file);await dbAction('assets','readwrite',s=>s.put({id:C.uid(),kind:'gif',name:file.name,src}));}await renderOwnGifShelf14(host);notify('Tus GIFs quedaron guardados. Tocá uno para usarlo.');}catch(e){notify(e.message,'error');}input.value='';};row.append(label);}
-  function contentIdeas14(){const dialog=document.createElement('dialog');dialog.className='ideas-dialog';const close=document.createElement('button');close.textContent='Cerrar';close.onclick=()=>dialog.close();const tabs=document.createElement('div');tabs.className='subtabs';const body=document.createElement('section');const choices={
+  function mountContentIdeas(host){
+    if(host.childElementCount)return;
+    const tabs=document.createElement('div'),body=document.createElement('section');
+    tabs.className='subtabs';body.className='marketing-ideas-content';
+    const visual=$('[data-panel="ideas"]');
+    const choices={
     'Ideas visuales':null,
     'Descripciones':[
       'Tu fe también puede acompañarte en lo que vestís. ♡ Elegí tu diseño SALMOS y consultanos por talle y color.',
       'Así queda el diseño terminado ✨ ¿Lo usarías en blanco o en negro? Escribinos y armamos el tuyo.',
       'Una palabra que inspira. Una prenda para llevarla con vos. Conocé los diseños de SALMOS: creer, amar, crear.',
-      'Este es '+(project.title||'nuestro nuevo diseño')+' ♡ Mirá el frente y la espalda. ¿Qué detalle te gustó más?',
+      'Mirá el frente y la espalda de nuestro nuevo diseño ♡ ¿Qué detalle te gustó más?',
       '¿Tenés una idea para tu remera, taza o gorra? Contanos qué imaginaste y consultanos por la personalización.',
       '¿Buscás un regalo con un mensaje especial? Decinos para quién es y te mostramos diseños SALMOS para esa persona.',
       '¿Clásica u oversize? Si te cuesta elegir, mandanos por mensaje las medidas de una remera que ya te queda bien y te guiamos.',
@@ -1498,11 +1639,32 @@
       '¿Qué diseño abrimos en la próxima colección?\nEl más discreto / El que ocupa toda la espalda',
       '¿Cómo te gustaría ver los nuevos diseños?\nReel corto / Detalles en historias',
       '¿Qué querés ver en Kids?\nRemeras estampadas / Libros para colorear'
-    ]};let visual=null;const show=name=>{if(visual){$('#oldReelsPanels').append(visual);visual=null;}body.replaceChildren();for(const b of tabs.children)b.classList.toggle('active',b.textContent===name);if(name==='Ideas visuales'){visual=$('[data-panel=ideas]');visual.hidden=false;body.append(visual);buildStories();return;}for(const text of choices[name]){const card=document.createElement('article');card.className='story-card';const p=document.createElement('p');p.textContent=text;const cp=document.createElement('button');cp.textContent='Copiar';cp.onclick=()=>copyText(text);card.append(p,cp);body.append(card);}};for(const name of Object.keys(choices)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>show(name);tabs.append(b);}dialog.append(close,tabs,body);dialog.onclose=()=>{if(visual)$('#oldReelsPanels').append(visual);dialog.remove();};document.body.append(dialog);show('Ideas visuales');dialog.showModal();}
+    ]};
+    function show(name){
+      body.replaceChildren();
+      for(const button of tabs.children)button.classList.toggle('active',button.textContent===name);
+      if(name==='Ideas visuales'){
+        visual.hidden=false;body.append(visual);buildStories();
+        return;
+      }
+      const grid=document.createElement('div');grid.className='marketing-ideas-grid';
+      for(const text of choices[name]){
+        const card=document.createElement('article'),description=document.createElement('p'),copy=document.createElement('button');
+        card.className='story-card';description.textContent=text;copy.textContent='Copiar';
+        copy.onclick=()=>copyText(text);
+        card.append(description,copy);grid.append(card);
+      }
+      body.append(grid);
+    }
+    for(const name of Object.keys(choices)){
+      const button=document.createElement('button');
+      button.type='button';button.textContent=name;button.onclick=()=>show(name);tabs.append(button);
+    }
+    host.append(tabs,body);show('Ideas visuales');
+  }
   function cropOverlay14(){const layer=selectedLayer();if(!layer?.overlay)return notify('Elegí la imagen que agregaste.');pause();const im=asset(layer.src),dialog=document.createElement('dialog');dialog.className='crop-dialog14';const title=document.createElement('h2');title.textContent='Recortar imagen';const c=document.createElement('canvas'),x=c.getContext('2d');const iw=im.naturalWidth||im.width,ih=im.naturalHeight||im.height,k=Math.min(1,680/iw,500/ih,innerWidth*.8/iw,innerHeight*.6/ih);c.width=Math.round(iw*k);c.height=Math.round(ih*k);c.style.width=c.width+'px';c.style.height=c.height+'px';let rect={x:0,y:0,w:c.width,h:c.height},start=null;const paint=()=>{x.clearRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);x.fillStyle='#24112188';x.fillRect(0,0,c.width,c.height);x.save();x.beginPath();x.rect(rect.x,rect.y,rect.w,rect.h);x.clip();x.drawImage(im,0,0,c.width,c.height);x.restore();x.strokeStyle='#ff86bc';x.lineWidth=2;x.strokeRect(rect.x,rect.y,rect.w,rect.h);};const point=e=>{const b=c.getBoundingClientRect();return{x:C.clamp((e.clientX-b.left)*c.width/b.width,0,c.width),y:C.clamp((e.clientY-b.top)*c.height/b.height,0,c.height)};};c.onpointerdown=e=>{start=point(e);c.setPointerCapture(e.pointerId);};c.onpointermove=e=>{if(!start)return;const p=point(e);rect={x:Math.min(start.x,p.x),y:Math.min(start.y,p.y),w:Math.abs(start.x-p.x),h:Math.abs(start.y-p.y)};paint();};c.onpointerup=()=>{start=null;};const reset=document.createElement('button');reset.textContent='Imagen completa';reset.onclick=()=>{rect={x:0,y:0,w:c.width,h:c.height};paint();};const cancel=document.createElement('button');cancel.textContent='Cancelar';cancel.onclick=()=>dialog.close();const ok=document.createElement('button');ok.textContent='Aplicar recorte';ok.className='primary';ok.onclick=async()=>{if(rect.w<4||rect.h<4)return;try{const out=document.createElement('canvas');out.width=Math.round(rect.w/k);out.height=Math.round(rect.h/k);out.getContext('2d').drawImage(im,rect.x/k,rect.y/k,rect.w/k,rect.h/k,0,0,out.width,out.height);const src=out.toDataURL('image/png');await asset(src)._ready;checkpoint();layer.originalSrc14=layer.originalSrc14||layer.src;layer.src=src;delete layer.bounds;delete layer.render;syncForm();changed();dialog.close();}catch(e){notify(e.message,'error');}};const footer=document.createElement('footer');footer.append(reset,cancel,ok);dialog.append(title,c,footer);dialog.onclose=()=>dialog.remove();document.body.append(dialog);paint();dialog.showModal();}
   function installReelsV14(){
     const draft=document.createElement('button');draft.id='saveDraft14';draft.textContent='Guardar como borrador';draft.onclick=()=>saveDraft14().catch(e=>notify(e.message,'error'));$('.head-actions').insertBefore(draft,$('#export'));
-    $('#ideasIcon').onclick=contentIdeas14;$('#ideasIcon').title='Ideas y textos';$('#ideasIcon').setAttribute('aria-label','Ideas y textos');
     const dock=$('#reelDock'),buttons=$('#dockButtons'),drawers=$('#dockDrawers');
     const make=(id,name,icon)=>{const b=document.createElement('button');b.dataset.dock=id;b.innerHTML='<span>'+icon+'</span>'+name;b.onclick=()=>openDock(activeDock===id?'':id);buttons.append(b);const d=document.createElement('div');d.dataset.drawer=id;d.hidden=true;drawers.append(d);return d;};
     const add=make('add','Añadir','＋');const tabs=document.createElement('div');tabs.className='subtabs';const text=document.createElement('section'),images=document.createElement('section');text.dataset.addPanel14='text';images.dataset.addPanel14='image';text.append($('#reelTextToolbar'),$('#layerTextTools'));images.append(text.querySelector('.add-image12'),$('#imageTiming12'));const crop=document.createElement('button');crop.textContent='Recortar PNG';crop.onclick=cropOverlay14;const restore=document.createElement('button');restore.textContent='Restaurar imagen';restore.onclick=async()=>{const l=selectedLayer();if(!l?.overlay||!l.originalSrc14)return;checkpoint();l.src=l.originalSrc14;await asset(l.src)._ready;syncForm();changed();};images.prepend(crop,restore);for(const[id,name]of[['text','Texto'],['image','Imágenes']]){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{text.hidden=id!=='text';images.hidden=id!=='image';for(const x of tabs.children)x.classList.toggle('active',x===b);};tabs.append(b);}add.append(tabs,text,images);tabs.firstChild.click();
@@ -1544,15 +1706,15 @@
   const syncExtraBefore19=syncExtraForm;syncExtraForm=function(){syncExtraBefore19();refreshMotion19();$('#palette').value=current().backgroundPalette||project.palette;};
   const normalizeBefore19=normalizeProject;normalizeProject=function(){const value=normalizeBefore19();for(const s of project.scenes)migrateMotion19(s);return value;};
 
-  const aiDefault19={style:'house',details:'',lyrics:'[Chorus]\nJesús, tu amor me da vida,\ntu luz ilumina mis días.',
+  const aiDefault19={style:'house',details:'',lyrics:'',
     voice:'auto',instrumental:false,duration:null,name:'Mi canción'};
-  let aiTracks19=[],aiSaved19=[],aiLoading19=false,audioStudioEditor=null;
-  function persistAi19(){project.audio.aiMusic19=aiSettings19();changed();}
+  let aiTracks19=[],aiSaved19=[],aiLoading19=false,audioStudioEditor=null,aiSongFilter;
+  function persistAi19(){project.audio.aiMusic19=aiSettings19();syncReelSongDuration();changed();}
   async function aiFetch19(path,options={}){const response=await helperFetch('/api/music'+path,options);return response.json();}
-  async function loadAiTracks19({localOnly=false}={}){
+  async function loadAiTracks19(){
     aiSaved19=(await dbAction('assets','readonly',store=>store.getAll())).filter(entry=>entry.kind==='ai-music19');
     renderAiTracks19();
-    if(localOnly||aiLoading19)return;
+    if(aiLoading19)return;
     aiLoading19=true;
     try{
       aiTracks19=(await aiFetch19('/tracks')).tracks||[];
@@ -1564,7 +1726,7 @@
   const musicCatalogBefore19=musicCatalog;
   musicCatalog=function(){
     const mode=$('#musicCatalog').value,ai=mode==='ai19',own=mode==='library';
-    const panel=$('#aiMusic19'),host=$('#aiMusicTracks19');
+    const panel=$('#aiMusic19'),host=$('#aiMusicLibrary');
     if(panel){
       panel.hidden=!ai;
       const container=own?$('#ownMusicTools'):panel;
@@ -1594,10 +1756,14 @@
       <div id="aiStyleChoices19" class="choice-buttons" aria-label="Estilo musical"></div>
       <label>Detalles (opcional)<textarea id="aiMusicStyle19" rows="2" maxlength="700" placeholder="Por ejemplo: más batería, piano alegre, voz cálida…"></textarea></label>
       <label>Letra<textarea id="aiMusicLyrics19" rows="4" maxlength="3000"></textarea></label>
-      <div class="ai-music-actions19"><label>Duración en segundos<input id="aiMusicDuration19" type="number" min="10" max="${audio.maxSongDuration}" step="1" placeholder="Según la letra"></label>
+      <div class="ai-music-actions19"><label>Duración en segundos<input id="aiMusicDuration19" type="number" min="10" max="${audio.maxSongDuration}" step="1" placeholder="Automática" aria-describedby="reelSongDuration"></label>
       <button id="aiMusicGenerate19" class="primary">Generar</button><button id="aiMusicCancel19" hidden>Cancelar</button></div>
-      <output id="aiMusicStatus19" role="status"></output><progress id="aiMusicProgress19" max="1" hidden></progress><div id="aiMusicTracks19" class="audio-choice-grid"></div>`;
+      <small id="reelSongDuration"></small>
+      <output id="aiMusicStatus19" role="status"></output><progress id="aiMusicProgress19" max="1" hidden></progress>
+      <div id="aiMusicLibrary"><div id="aiMusicTracks19" class="audio-choice-grid"></div></div>`;
     $('#musicResults').before(panel);
+    aiSongFilter=audio.createSongFilter(renderAiTracks19);
+    $('#aiMusicLibrary').prepend(aiSongFilter.element);
     const select=$('#musicCatalog');
     select.add(new Option('Crear con IA','ai19'),0);
     select.querySelector('[value=library]').textContent='Mis audios';
@@ -1612,6 +1778,7 @@
     const song=audio.createSongJob({helperFetch,storageKey:'salmos-active-reel-song',
       report(message,state,data){
         if(status.textContent!==message)status.textContent=message;
+        status.dataset.state=state;
         if(data)progress.value=data.job?.progress||0;
         else if(!progress.value)progress.removeAttribute('value');
         syncSongButtons();
@@ -1631,6 +1798,7 @@
       };
     }
     for(const input of panel.querySelectorAll('input,textarea'))input.onchange=persistAi19;
+    for(const input of [$('#aiMusicLyrics19'),$('#aiMusicDuration19')])input.addEventListener('input',syncReelSongDuration);
     async function checkSongs(manual=false){
       clearTimeout(connectionTimer);connectionTimer=0;
       try{
@@ -1638,7 +1806,7 @@
         if(connection.setup?.state==='preparing'){
           status.textContent='Esperando a que el iniciador diga SALMOS listo…';
           connectionTimer=setTimeout(()=>checkSongs(manual),2400);
-        }else if(!(connection.songApi>=2))status.textContent=audio.updateForSongs;
+        }else if(!(connection.songApi>=audio.songApiVersion))status.textContent=audio.updateForSongs;
         else if(!connection.installed)status.textContent='No encuentro ACE-Step en esta PC.';
         else if(!song.id)status.textContent='SALMOS listo. Podés generar.';
         if(manual&&audio.readyToGenerate(connection))await loadAiTracks19();
@@ -1654,7 +1822,7 @@
       if(sending||song.id||!audio.readyToGenerate(connection))return;
       const request=aiSettings19();
       if(!request.instrumental&&!request.lyrics)return notify('Escribí la letra.');
-      request.duration??=audio.estimateSongDuration(request.instrumental?'':request.lyrics,request.bpm);
+      request.duration??=reelSongEstimate(request);
       if(!Number.isInteger(request.duration)||request.duration<10||request.duration>audio.maxSongDuration){
         return notify('Elegí una duración entre 10 segundos y 10 minutos.','error');
       }
@@ -1676,7 +1844,7 @@
         restoreAi19();
         if(song.id)song.resume();else {void checkSongs();loadAiTracks19().catch(()=>{});}
       }
-      if(select.value==='library')loadAiTracks19({localOnly:true}).catch(error=>notify(error.message,'error'));
+      if(select.value==='library')loadAiTracks19().catch(()=>{});
     });
     restoreAi19();compactNumbers();syncSongButtons();
   }
@@ -1740,6 +1908,18 @@
       instrumental:panel.querySelector('[data-ai-mode19].active')?.dataset.aiMode19==='instrumental',
       duration:duration===''?null:Number(duration),seed:-1};
   }
+  function reelSongEstimate(settings){
+    return window.SalmosAudioStudio.estimateSongDuration(settings.instrumental?'':settings.lyrics,settings.bpm,
+      C.totalDuration(project.scenes));
+  }
+  function syncReelSongDuration(){
+    const label=$('#reelSongDuration');
+    if(!label)return;
+    const settings=aiSettings19(),estimate=reelSongEstimate(settings),duration=C.totalDuration(project.scenes);
+    const seconds=settings.duration??estimate,format=window.SalmosAudioStudio.durationText;
+    label.textContent=(settings.duration===null?'Automática · '+format(estimate)+'. ':'')+
+      'Tu reel dura '+format(duration)+'.'+(seconds>Math.ceil(duration)?' Podés recortar la canción al usarla en el reel.':'');
+  }
   function restoreAi19(){
     const panel=$('#aiMusic19');if(!panel)return;
     const settings={mood:'joyful',rhythm:'style',instruments:[],...aiDefault19,...project.audio.aiMusic19};
@@ -1758,6 +1938,7 @@
       button.classList.toggle('active',settings.instruments.includes(button.dataset.aiInstrument20));
     }
     $('#aiMusicLyrics19').closest('label').hidden=$('#aiVoiceChoices19').hidden=settings.instrumental;
+    syncReelSongDuration();
   }
   const aiHidden20=()=>new Set(jsonStore13('salmos-ai-hidden20',[]));
   function orderedAiTracks20(){const tracks=new Map(aiSaved19.map(t=>[t.id,t]));for(const t of aiTracks19){const local=tracks.get(t.id);tracks.set(t.id,{...local,...t,name:local?.renamed20?local.name:t.name,saved20:local?.saved20||t.request?.saved});}const hidden=aiHidden20();return[...tracks.values()].filter(t=>!hidden.has(t.id)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));}
@@ -1825,10 +2006,11 @@
   function renderAiTracks19(){
     const host=$('#aiMusicTracks19');if(!host)return;
     const own=$('#musicCatalog').value==='library',oldScroll=host.scrollLeft;
-    const tracks=orderedAiTracks20().filter(track=>own?track.saved20||track.request?.saved:!track.uploadKind);
-    const first=tracks[0]?.id,previous=host.dataset.first20,audio=window.SalmosAudioStudio;
+    const tracks=orderedAiTracks20().filter(track=>own||!track.uploadKind);
+    const audio=window.SalmosAudioStudio,groups=audio.groupSongs(tracks).filter(aiSongFilter.includes);
+    const first=groups[0]?.tracks[0]?.id,previous=host.dataset.first20;
     host.replaceChildren();host.dataset.first20=first||'';
-    for(const group of audio.groupSongs(tracks)){
+    for(const group of groups){
       const block=document.createElement('article');block.className='song-group';
       audio.appendLyrics(block,group.lyrics);
       for(const t of group.tracks){
@@ -1842,11 +2024,16 @@
         listen.textContent=auditionTrack==='ai-'+t.id&&playing?'Ⅱ Pausar':'▶ Probar';
         listen.onclick=async()=>{listen.disabled=true;try{await playAi20(t);}catch(error){notify(error.message,'error');}finally{listen.disabled=false;}};
         edit.textContent='Editar canción';edit.onclick=()=>editReelSong(t).catch(error=>notify(error.message,'error'));
-        actions.append(listen,edit);card.append(title,meta,actions);block.append(card);
+        card.append(title,meta);
+        if(t.lyricsCheck?.status==='review'){
+          const review=document.createElement('small');review.className='song-lyric-review';
+          review.textContent=audio.lyricsCheckText(t.lyricsCheck);card.append(review);
+        }
+        actions.append(listen,edit);card.append(actions);block.append(card);
       }
       host.append(block);
     }
-    if(!tracks.length)host.textContent=own?'Tus audios guardados aparecerán acá.':'Tus canciones generadas aparecerán acá.';
+    if(!groups.length)host.textContent=tracks.length?'No hay audios con este filtro.':'Tus canciones aparecerán acá.';
     host.scrollLeft=first!==previous?0:oldScroll;
   }
   function installMusic20(){const panel=$('#aiMusic19'),oldName=$('#aiMusicName19');oldName.closest('label').hidden=true;const genres=$('#aiStyleChoices19');genres.replaceChildren();const group=(host,data,attribute,multi=false)=>{for(const[id,[title]]of Object.entries(data)){const b=document.createElement('button');b.dataset[attribute]=id;b.textContent=title;b.onclick=()=>{if(multi)b.classList.toggle('active');else for(const x of host.children)x.classList.toggle('active',x===b);persistAi19();};host.append(b);}};group(genres,musicGenres20,'aiStyle19');const heading=document.createElement('strong');heading.className='inline-section-title20';heading.textContent='Género';genres.before(heading);let after=genres;for(const[data,label,attr,multi]of[[musicMoods20,'Carácter','aiMood20',false],[musicRhythms20,'Ritmo','aiRhythm20',false],[musicInstruments20,'Instrumentos','aiInstrument20',true]]){const block=document.createElement('div'),h=document.createElement('strong'),row=document.createElement('div');block.className='music-options20';h.textContent=label;row.className='choice-buttons';row.setAttribute('aria-label',label);group(row,data,attr,multi);block.append(h,row);after.after(block);after=block;}restoreAi19();$('#aiMusicTracks19').classList.add('song-gallery20');$('#aiMusicGenerate19').addEventListener('click',()=>{project.audio.aiMusic19=aiSettings19();});}
@@ -2345,7 +2532,7 @@
     project=newProject();normalizeProject();
     bind();bindExtra();tidyEditor();installProductionLayout();installReelsV14();installReelsV19();installReelsV20();
     installReelsV21();installReelsV24();installReelsV25();
-    audioStudioEditor=window.SalmosAudioStudio.install({helperFetch,dbAction,tools:T,genres:musicGenres20,
+    audioStudioEditor=window.SalmosAudioStudio.install({host:$('#home-canciones'),helperFetch,dbAction,tools:T,genres:musicGenres20,
       refreshSongs:()=>loadAiTracks19(),hiddenSongs:aiHidden20,pause});
     const editApplied=document.createElement('button');
     editApplied.textContent='Recortar y editar';

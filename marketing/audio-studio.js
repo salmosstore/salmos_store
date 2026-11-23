@@ -5,19 +5,22 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=27.4';
+  const launcherFile='INICIAR_SALMOS.bat?v=27.5';
   const maxSongDuration=600;
-  const durationChoices=[10,20,30,60,90,120,150,180,240,300,360,600];
+  const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
   const updateForSongs='Descargá el iniciador actualizado. Cerrá el anterior y abrí el nuevo.';
-  const readyToGenerate=data=>!!(data?.songApi>=2&&data.installed&&data.setup?.state==='ready');
+  const songApiVersion=3;
+  const readyToGenerate=data=>!!(data?.songApi>=songApiVersion&&data.installed&&data.setup?.state==='ready');
+  const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
 
   function groupSongs(tracks){
     const groups=new Map();
     for(const track of tracks){
       const lyrics=track.request?.lyrics||track.lyrics||'';
-      const key=lyrics.trim().normalize('NFC').replace(/\s+/g,' ').toLocaleLowerCase('es')||'audio:'+track.id;
-      if(!groups.has(key))groups.set(key,{lyrics,tracks:[]});
-      groups.get(key).tracks.push(track);
+      const key=lyricWords(lyrics).join(' ').normalize('NFC').toLocaleLowerCase('es');
+      const id=key?'lyric:'+key:'audio:'+track.id;
+      if(!groups.has(id))groups.set(id,{lyrics:key?lyrics:'',tracks:[]});
+      groups.get(id).tracks.push(track);
     }
     return [...groups.values()];
   }
@@ -27,6 +30,35 @@
     const first=lyrics.split(/\r?\n/).find(line=>line.trim()&&!/^\s*\[/.test(line))||'Letra';
     summary.textContent='Letra · '+first.trim().slice(0,74);
     text.textContent=lyrics;box.append(summary,text);host.append(box);
+  }
+
+  function createSongFilter(change){
+    const element=document.createElement('div');
+    element.className='song-filter';
+    element.setAttribute('role','group');
+    element.setAttribute('aria-label','Filtrar canciones por letra');
+    let selected='all';
+    for(const [id,label] of [['all','Todas'],['vocal','Con letra'],['instrumental','Sin letra']]){
+      const button=document.createElement('button');
+      button.type='button';button.textContent=label;button.setAttribute('aria-pressed',String(selected===id));
+      button.onclick=()=>{
+        if(id===selected)return;
+        selected=id;
+        for(const item of element.children)item.setAttribute('aria-pressed',String(item===button));
+        change();
+      };
+      element.append(button);
+    }
+    return {element,includes:group=>selected==='all'||(selected==='vocal')===!!group.lyrics};
+  }
+
+  function lyricsCheckText(check){
+    if(check?.status==='match')return 'El reconocimiento local detectó las palabras de la letra.';
+    if(check?.status==='review'){
+      if(check.missing?.includes('dios'))return 'Revisá la pronunciación. El reconocimiento no detectó «Dios».';
+      return 'Escuchá la letra antes de usarla. El reconocimiento detectó diferencias.';
+    }
+    return check?.status==='unchecked'?'La letra se envió completa. Podés revisar lo que se cantó desde Editar canción.':'';
   }
 
   const jsonPost=data=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
@@ -39,10 +71,15 @@
     return [minutes&&minutes+' min',(rest||!minutes)&&rest+' s'].filter(Boolean).join(' ');
   }
 
-  function estimateSongDuration(lyrics,bpm){
-    const words=lyrics.replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)?.length||0;
-    if(!words)return 60;
+  function estimateSongDuration(lyrics,bpm,reelDuration=0){
+    const words=lyricWords(lyrics).length;
+    const reelSeconds=reelDuration>0?Math.min(maxSongDuration,Math.max(10,Math.ceil(reelDuration))):0;
+    if(!words)return reelSeconds||60;
     const beat=60/(Number(bpm)||122);
+    if(words<=32){
+      const seconds=Math.max(10,Math.ceil(words*1.35*beat+3));
+      return reelSeconds>=seconds?reelSeconds:seconds;
+    }
     const seconds=words*1.6*beat+16*beat+5;
     return Math.min(maxSongDuration,Math.max(45,Math.ceil(seconds/15)*15));
   }
@@ -109,7 +146,8 @@
           if(!track){finish('La generación terminó. Actualizá Mis audios para buscar el resultado.','notice',data);return;}
           report('La canción se generó. Abriendo el audio…','working',data);
           await completed(track);
-          finish('Canción lista. Podés escucharla y guardarla.','success',data);
+          const review=track.lyricsCheck?.status==='review';
+          finish(review?lyricsCheckText(track.lyricsCheck):'Canción lista. Podés escucharla y guardarla.',review?'notice':'success',data);
         }
         retries=0;
       }catch(error){
@@ -121,7 +159,7 @@
     }
     async function start(payload,connection){
       if(id)return;
-      if(connection.songApi<2||!connection.songApi)throw Error(updateForSongs);
+      if(!(connection?.songApi>=songApiVersion))throw Error(updateForSongs);
       if(!readyToGenerate(connection))throw Error('Esperá a que el iniciador indique SALMOS listo.');
       remember(newId());
       posting=true;
@@ -159,12 +197,9 @@
     connectSource(ctx,buffer,ctx.destination);
     return tools.waveBlob(await ctx.startRendering());
   }
-  function install({helperFetch,dbAction,tools,genres,refreshSongs,hiddenSongs,pause}){
-    const launcher=document.createElement('button');launcher.textContent='Crear solo audio';launcher.className='primary';
-    document.querySelector('#createReel').after(launcher);
-    const dialog=document.createElement('dialog');dialog.id='audioOnlyStudio';dialog.setAttribute('aria-labelledby','audioStudioTitle');
-    dialog.innerHTML=`<header><div class="audio-studio-title"><h1 id="audioStudioTitle">Estudio de audio</h1><button type="button" data-close aria-label="Cerrar estudio de audio">×</button></div>
-      <p data-status role="status" aria-live="polite" aria-atomic="true"></p></header>
+  function install({host,helperFetch,dbAction,tools,genres,refreshSongs,hiddenSongs,pause}){
+    const dialog=document.createElement('section');dialog.id='audioOnlyStudio';
+    dialog.innerHTML=`<p data-status role="status" aria-live="polite" aria-atomic="true"></p>
       <div class="audio-studio-body"><div class="audio-connection" data-connection>
         <div role="status"><strong data-connection-title>Iniciador sin conectar</strong><p data-connection-help></p></div>
         <a class="button" href="${launcherFile}" download="INICIAR_SALMOS.bat" data-update-launcher hidden>Descargar iniciador actualizado</a>
@@ -198,9 +233,10 @@
         <section class="audio-mix"><h2>Mis audios</h2><p data-source-name>Elegí o subí un audio para escucharlo y editarlo.</p>
         <fieldset data-edit-controls disabled><audio data-player controls preload="metadata"></audio>
         <div class="button-row"><button data-edit-selected class="primary">Editar audio</button><button data-save-original>Guardar original</button></div></fieldset>
-        <button data-refresh>Actualizar audios</button><div data-library></div></section>
+        <div class="audio-layer-heading"><div data-filters></div><button data-refresh>Actualizar audios</button></div>
+        <div data-library></div></section>
         <section class="audio-saved"><div class="audio-layer-heading"><h2>Mis letras</h2><button type="button" data-new-lyrics>Nueva letra</button></div><div class="audio-lyrics-list" data-lyrics-library></div></section></div>`;
-    document.body.append(dialog);
+    host.append(dialog);
     const find=key=>dialog.querySelector('[data-'+key+']');
     function say(message,state='notice'){
       const status=find('status');
@@ -211,6 +247,9 @@
     const player=find('player'),recordPlayer=find('upload-player');
     let recording=null,recordingURL='',savedUpload=null,active=null,sourceURL='',busy=false,gallerySeq=0;
     let connection=null, connectionDeadline=0, retries=0, downloadPending=false;
+    let libraryEntries=new Map();
+    const songFilter=createSongFilter(()=>renderAudioLibrary(libraryEntries));
+    find('filters').append(songFilter.element);
     const song=createSongJob({helperFetch,storageKey:'salmos-active-audio-job',
       report(message,state,data){
         if(data?.audioApi===2)updateConnection(data);
@@ -228,7 +267,7 @@
       find('connection-help').textContent=help;
       find('connection').dataset.state=mode;
       find('launcher-steps').hidden=mode==='online'&&connection?.transcription;
-      find('update-launcher').hidden=mode!=='online'||connection?.songApi>=2;
+      find('update-launcher').hidden=mode!=='online'||connection?.songApi>=songApiVersion;
     }
     async function request(path,options={},timeout){
       try{return await helperFetch('/api/music'+path,options,timeout);}
@@ -259,7 +298,7 @@
       if(!response.transcription)available.push('Cerrá y volvé a abrir el iniciador para instalar la extracción de letra.');
       if(!response.installed)available.push('Para generar canciones hace falta ACE-Step en la PC.');
       if(response.installed&&!response.musicReaderVersion)available.push('Hay una actualización para cargar el motor de música con menos memoria.');
-      else if(!(response.songApi>=2))available.push('Descargá el iniciador actualizado para entrar a la generación.');
+      else if(!(response.songApi>=songApiVersion))available.push('Descargá el iniciador actualizado para generar con el ajuste de letra y duración.');
       showConnection('Iniciador conectado',available.join(' ')||'Extracción de letra y motor de canciones disponibles.','online');
       return true;
     }
@@ -430,7 +469,7 @@
       find('use-upload').disabled=find('arrange-voice').disabled=!uploadReady||locked;
       find('generate').disabled=locked||preparing||!readyToGenerate(connection);
       find('generate-help').textContent=preparing?'Esperando a que el iniciador diga SALMOS listo…':
-        readyToGenerate(connection)?'':connection?(connection.songApi>=2?'ACE-Step debe estar disponible en tu PC.':'Abrí el iniciador actualizado.'):'Conectá el iniciador para generar.';
+        readyToGenerate(connection)?'':connection?(connection.songApi>=songApiVersion?'ACE-Step debe estar disponible en tu PC.':'Abrí el iniciador actualizado.'):'Conectá el iniciador para generar.';
       find('generate-help').hidden=!find('generate-help').textContent;
       find('save-upload').disabled=!uploadReady||locked||uploadSaved;
       find('save-upload').textContent=uploadSaved?'✓ Guardado en Mis audios':'Guardar en Mis audios';
@@ -474,7 +513,9 @@
         entries.set(t.id,{...previous,...t,request:{...t.request,...previous?.request,saved:t.request?.saved||previous?.request?.saved},
           remote:true,localOnly:false,saved20:t.request?.saved||previous?.saved20});
       }
-      if(seq===gallerySeq)renderAudioLibrary(entries);
+      if(seq!==gallerySeq)return;
+      libraryEntries=entries;
+      renderAudioLibrary(entries);
     }
     let remoteTracks=[];
     async function refreshLibrary(){
@@ -488,7 +529,7 @@
       const host=find('library');host.replaceChildren();
       const hidden=hiddenSongs();
       const audios=[...entries.values()].filter(t=>!hidden.has(t.id)).sort((a,b)=>b.createdAt-a.createdAt);
-      for(const group of groupSongs(audios)){
+      for(const group of groupSongs(audios).filter(songFilter.includes)){
         const item=document.createElement('article');item.className='song-group';
         appendLyrics(item,group.lyrics);
         for(const t of group.tracks){
@@ -500,12 +541,17 @@
             t.request?.parentId?'Versión editada':t.request?.audioEdit?'Audio guardado':genres[t.request?.style]?.[0]||'Canción generada',
             t.duration>0?durationText(t.duration):''].filter(Boolean).join(' · ');
           edit.textContent='Escuchar y editar';edit.disabled=busy||!!song.id;
-          edit.onclick=()=>action('Abriendo el audio…',()=>editTrack(t));
-          text.append(title,detail);row.append(text,edit);item.append(row);
+          edit.onclick=()=>action('Abriendo el audio…',async()=>{await editTrack(t);say('');});
+          text.append(title,detail);
+          if(t.lyricsCheck?.status==='review'){
+            const review=document.createElement('small');review.className='song-lyric-review';
+            review.textContent=lyricsCheckText(t.lyricsCheck);text.append(review);
+          }
+          row.append(text,edit);item.append(row);
         }
         host.append(item);
       }
-      if(!host.childElementCount)host.textContent='Todavía no hay audios guardados.';
+      if(!host.childElementCount)host.textContent=audios.length?'No hay audios con este filtro.':'Todavía no hay audios guardados.';
     }
     async function saveOriginal(t,name){
       if(t.uploadKind){await saveUpload({...t,name});return;}
@@ -527,18 +573,39 @@
         onSaveOriginal:name=>saveOriginal(source,name),
         onSaveVersion:version=>saveBlob({...version,id:newId(),request:{...source.request,lyrics:version.lyrics}},version.blob,source.id),
         onLyrics:async lyrics=>{
+          const lyricsCheck=(source.request?.lyrics||source.lyrics)===lyrics?source.lyricsCheck:null;
           if(source.remote&&!source.localOnly){
             await connect();await api('/lyrics',jsonPost({id:source.id,lyrics}));
           }
           source.lyrics=lyrics;
+          source.lyricsCheck=lyricsCheck;
           source.request={...source.request,lyrics};
           const previous=await dbAction('assets','readonly',s=>s.get(source.id));
-          if(previous)await put({...previous,lyrics,request:source.request});
+          if(previous)await put({...previous,lyrics,lyricsCheck,request:source.request});
           else if(source.uploadKind)await saveUpload(source);
-          if(active?.id===source.id)Object.assign(active,{lyrics,request:source.request});
+          if(active?.id===source.id)Object.assign(active,{lyrics,lyricsCheck,request:source.request});
           const remote=remoteTracks.find(track=>track.id===source.id);
-          if(remote)remote.request={...remote.request,lyrics};
+          if(remote)Object.assign(remote,{lyricsCheck,request:{...remote.request,lyrics}});
           await library();await refreshSongs().catch(()=>{});
+          return lyricsCheck;
+        },
+        onCheckLyrics:async lyrics=>{
+          const status=await connect();
+          if(!status.transcription)throw Error('Abrí el iniciador actualizado para revisar la letra.');
+          const normalized=text=>lyricWords(text.normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('es'));
+          const expected=normalized(lyrics);
+          if(!expected.length)throw Error('Escribí la letra que querés comparar.');
+          const wav=await recordingForLyrics(source.blob,tools);
+          let heard='';
+          try {
+            const result=await api('/transcribe',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},20*60*1000);
+            heard=result.lyrics||'';
+          } catch(error) {
+            if(!error.message.includes('No se distinguieron palabras'))throw error;
+          }
+          const recognized=normalized(heard);
+          return {heard,status:expected.join(' ')===recognized.join(' ')?'match':'review',
+            missing:expected.filter(word=>!recognized.includes(word))};
         },
         onMP3:async wav=>{
           const status=await connect();
@@ -573,7 +640,7 @@
         }
         remote=true;
       }catch(e){reason=e.message;}
-      const record={kind:'ai-music19',id:t.id,name:t.name,duration:t.duration,createdAt:t.createdAt||Date.now()/1000,
+      const record={kind:'ai-music19',id:t.id,name:t.name,duration:t.duration,createdAt:t.createdAt||Date.now()/1000,lyricsCheck:t.lyricsCheck,
         request:{...t.request,name:t.name,duration:t.duration,saved:true,parentId,audioEdit:!generated},saved20:true,remote,localOnly:!remote,generated,blob};
       try{await put(record);}catch(e){if(!remote)throw Error('No se pudo guardar el audio en la PC ni en este navegador. Podés descargar el WAV.');}
       say(remote?'Audio guardado en tu PC.':['Audio guardado en este navegador.',reason].filter(Boolean).join(' '),'success');
@@ -682,10 +749,9 @@
     };
     find('connect').onclick=waitForInitiator;
     find('refresh').onclick=()=>action('Actualizando tus audios…',async()=>{await refreshLibrary();say('Audios actualizados.','success');});
-    find('close').onclick=()=>dialog.close();
-    dialog.onclose=()=>{player.pause();recordPlayer.pause();};
-    launcher.onclick=()=>{
-      pause();dialog.showModal();sync();
+    function deactivate(){player.pause();recordPlayer.pause();}
+    function activate(){
+      pause();sync();
       if(song.id){say('Buscando el estado de tu canción…','working');song.resume();}
       else{
         refreshLibrary().catch(error=>say(error.message,'error'));
@@ -695,10 +761,11 @@
         }).catch(()=>{}).finally(sync);
       }
       renderLyrics().catch(()=>{find('lyrics-library').textContent='No se pudieron cargar tus letras. Volvé a abrir el Estudio.';});
-    };
+    }
     showConnection('Iniciador sin conectar','Conectalo para extraer letra o generar canciones. Podés guardar y editar tus audios subidos desde el navegador.','idle');
     sync();
-    return {editTrack};
+    return {editTrack,activate,deactivate};
   }
-  window.SalmosAudioStudio={install,createSongJob,isConnectionError,estimateSongDuration,durationText,maxSongDuration,launcherFile,updateForSongs,readyToGenerate,groupSongs,appendLyrics};
+  window.SalmosAudioStudio={install,createSongJob,isConnectionError,estimateSongDuration,durationText,
+    maxSongDuration,launcherFile,updateForSongs,songApiVersion,readyToGenerate,groupSongs,appendLyrics,createSongFilter,lyricsCheckText};
 })();

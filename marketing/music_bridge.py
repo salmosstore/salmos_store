@@ -86,7 +86,7 @@ def state(job_id=None):
             status['id'] = folder.name
             if job_id and status.get('state') == 'done':
                 status['track'] = track_info(folder, status)
-        return {'audioApi': 2, 'songApi': 2, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
+        return {'audioApi': 2, 'songApi': 3, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
                 'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
 
@@ -190,7 +190,7 @@ def track_info(folder, status):
         return None
     return {'id': folder.name, 'name': request.get('name', 'Mi canción'),
             'duration': status.get('duration', request.get('duration', 20)), 'request': request,
-            'createdAt': modified}
+            'createdAt': modified, 'lyricsCheck': status.get('lyricsCheck')}
 
 
 def tracks():
@@ -267,6 +267,10 @@ def manage(data, action):
             lyrics = data.get('lyrics')
             if not isinstance(lyrics, str) or len(lyrics) > 3000:
                 raise ValueError('La letra puede tener hasta 3.000 caracteres.')
+            if lyrics != request.get('lyrics'):
+                status = read_status(folder)
+                if status.pop('lyricsCheck', None):
+                    write_status(folder, status)
             request['lyrics'] = lyrics
         elif action == 'save':
             request['saved'] = True

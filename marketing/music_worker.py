@@ -82,8 +82,9 @@ SECTION_TAG = re.compile(r'^\[([^\]\n]+)\]', re.MULTILINE)
 
 
 def song_lyrics(request):
+    brief = request['duration'] <= 30
     if request['instrumental']:
-        return '[Instrumental]\n\n[Outro]'
+        return '[Instrumental]' if brief else '[Instrumental]\n\n[Outro]'
     text = unicodedata.normalize('NFC', request['lyrics']).replace('\r\n', '\n').replace('\r', '\n')
 
     def section(match):
@@ -99,14 +100,32 @@ def song_lyrics(request):
         lines.append(line.rstrip())
     text = '\n'.join(lines).strip()
     if not text.startswith('['):
-        text = '[Verse]\n' + text
+        text = ('[Chorus]\n' if brief else '[Verse]\n') + text
     tags = SECTION_TAG.findall(text)
-    if not any(re.match(r'outro\b', tag, re.IGNORECASE) for tag in tags):
+    if not brief and not any(re.match(r'outro\b', tag, re.IGNORECASE) for tag in tags):
         text += '\n\n[Outro]'
     return text
 
 
-def finish_song(source, destination):
+def song_caption(request):
+    style, _, other_details = request['caption'].partition('. ')
+    if request['instrumental']:
+        directions = 'Instrumental only, no vocals.'
+    else:
+        voice = {'male': 'Male', 'female': 'Female', 'auto': 'Solo'}[request['voice']]
+        directions = (f'{voice} lead vocal in native Latin American Spanish with clear diction. '
+                      'Sing the written words verbatim, in order, without ad libs.')
+        if re.search(r'\bDios\b', request['lyrics'], re.IGNORECASE):
+            directions += ' Pronounce Dios in one clear syllable with an audible final s.'
+        if request['duration'] <= 30:
+            directions += ' Start singing on the first beat. Finish the entire lyric within the clip.'
+    ending = (' End on a resolved final chord.' if request['duration'] <= 30 else
+              ' Finish with a short instrumental outro and a resolved final chord.')
+    description = f'{style[:194].rstrip(".")}. {directions}{ending}'
+    return (description + ' ' + other_details).strip()[:512]
+
+
+def finish_song(source, destination, fade_seconds=2.5):
     import numpy as np
     import soundfile as sf
 
@@ -116,7 +135,7 @@ def finish_song(source, destination):
             duration = original.frames / original.samplerate
             if duration <= 0:
                 raise RuntimeError('El motor devolvió un audio vacío.')
-            count = max(1, min(original.frames, round(original.samplerate * min(2.5, duration * .1))))
+            count = max(1, min(original.frames, round(original.samplerate * min(fade_seconds, duration * .1))))
             fade_start = original.frames - count
             with sf.SoundFile(temporary, 'w', samplerate=original.samplerate, channels=original.channels,
                               format='WAV', subtype=original.subtype) as output:
@@ -131,6 +150,21 @@ def finish_song(source, destination):
     finally:
         temporary.unlink(missing_ok=True)
     return duration
+
+
+def check_short_song(source, folder):
+    editor_python = os.environ.get('SALMOS_EDITOR_PYTHON')
+    if not editor_python:
+        return {'status': 'unchecked'}
+    command = [editor_python, '-I', str(Path(__file__).resolve().with_name('lyrics_check.py')),
+               str(source), str(folder / 'request.json'), str(folder.parent.parent / 'modelos-transcripcion')]
+    try:
+        result = subprocess.run(command, check=True, stdout=subprocess.PIPE, text=True,
+                                encoding='utf-8', timeout=75)
+        return json.loads(result.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        traceback.print_exc()
+        return {'status': 'unchecked'}
 
 
 def run(root, folder):
@@ -179,15 +213,8 @@ def run(root, folder):
             offload_dit_to_cpu=True, quantization='int8_weight_only', use_mlx_dit=False)
         if not ok:
             raise RuntimeError(str(message))
-        vocal = {'male': 'Solo male lead vocal.', 'female': 'Solo female lead vocal.', 'auto': 'Solo lead vocal.'}
-        caption = request['caption']
-        if request['instrumental']:
-            caption += ' Instrumental only, no vocals.'
-        else:
-            caption += (' ' + vocal[request['voice']] + ' Native Latin American Spanish singing, natural word stress, '
-                        'clear vowels and consonants. Sing the supplied lyrics in order, with space to breathe between lines.')
-        caption += ' Finish with a short instrumental outro and a resolved final chord that rings out.'
-        params = GenerationParams(caption=caption, lyrics=song_lyrics(request), bpm=request.get('bpm'),
+        brief = request['duration'] <= 30
+        params = GenerationParams(caption=song_caption(request), lyrics=song_lyrics(request), bpm=request.get('bpm'),
             instrumental=request['instrumental'], vocal_language='unknown' if request['instrumental'] else 'es', duration=request['duration'],
             inference_steps=8, guidance_scale=1.0, shift=3.0, infer_method='ode', thinking=False,
             use_cot_metas=False, use_cot_caption=False, use_cot_lyrics=False, use_cot_language=False,
@@ -195,18 +222,40 @@ def run(root, folder):
         config = GenerationConfig(batch_size=1, allow_lm_batch=False, audio_format='wav',
             use_random_seed=request['seed'] < 0, seeds=None if request['seed'] < 0 else [request['seed']])
 
-        def progress(value, desc=None, **kwargs):
-            status('running', 'Generando tu canción…', min(.95, .15 + .8 * float(value)))
+        llm = LLMHandler()
 
-        status('running', 'Generando tu canción…', .15)
-        result = generate_music(handler, LLMHandler(), params, config, save_dir=str(folder / 'resultado'), progress=progress)
-        if not result.success or not result.audios:
-            raise RuntimeError(result.error or result.status_message or 'No se generó audio.')
-        source = Path(result.audios[0]['path'])
+        def generate(directory, message):
+            def report_progress(value, desc=None, **kwargs):
+                status('running', message, min(.95, .15 + .8 * float(value)))
+
+            status('running', message, .15)
+            result = generate_music(handler, llm, params, config, save_dir=str(directory), progress=report_progress)
+            if not result.success or not result.audios:
+                raise RuntimeError(result.error or result.status_message or 'No se generó audio.')
+            return result.audios[0]
+
+        candidate = generate(folder / 'resultado', 'Generando tu canción…')
+        check = None
+        if brief and not request['instrumental']:
+            status('running', 'Revisando la letra cantada en tu PC…', .96)
+            check = check_short_song(Path(candidate['path']), folder)
+            if check['status'] == 'review' and request['seed'] < 0:
+                try:
+                    retry = generate(folder / 'resultado-2', 'Probando otra versión para mejorar la letra…')
+                    status('running', 'Revisando la letra de la segunda versión…', .96)
+                    comparison = check_short_song(Path(retry['path']), folder)
+                    def score(value):
+                        mentions_dios = value['status'] != 'unchecked' and 'dios' not in value.get('missing', [])
+                        return value['status'] == 'match', mentions_dios, value.get('coverage', -1)
+
+                    if score(comparison) > score(check):
+                        candidate, check = retry, comparison
+                except Exception:
+                    traceback.print_exc()
         status('running', 'Preparando el cierre y guardando el audio…', .97)
-        duration = finish_song(source, folder / 'cancion.wav')
-        (folder / 'resultado.json').write_text(json.dumps(result.audios[0].get('params', {}), ensure_ascii=False, default=str), encoding='utf-8')
-        status('done', 'Canción lista.', 1, duration=duration)
+        duration = finish_song(Path(candidate['path']), folder / 'cancion.wav', fade_seconds=.35 if brief else 2.5)
+        (folder / 'resultado.json').write_text(json.dumps(candidate.get('params', {}), ensure_ascii=False, default=str), encoding='utf-8')
+        status('done', 'Canción lista.', 1, duration=duration, lyricsCheck=check)
     except Exception as exc:
         traceback.print_exc()
         memory = memory_error_status(exc)

@@ -177,36 +177,50 @@
     dialog.className='song-editor';dialog.setAttribute('aria-labelledby','songEditTitle');
     dialog.innerHTML=`<header><div><h2 id="songEditTitle">Editar canción</h2><p data-song-status role="status"></p></div>
       <button data-close aria-label="Cerrar edición">×</button></header>
-      <div class="song-editor-layout"><main>
+      <div class="song-editor-layout"><div class="song-cut-panel">
         <label>Nombre<input data-name maxlength="100"></label>
         <section aria-label="Recorte de audio">
-          <div class="song-toolbar"><strong>Recorte</strong><label>Zoom<select data-zoom><option value="1">Completo</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="32">32×</option></select></label>
-            <label data-pan-label hidden>Desplazar<input data-pan type="range" min="0" step=".01" value="0"></label></div>
+          <div class="song-toolbar"><h3>Recorte</h3><label>Zoom<select data-zoom><option value="1">Completo</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="32">32×</option></select></label>
+            <label data-pan-label hidden>Desplazar<input data-pan type="range" min="0" step=".01" value="0"></label>
+            <button data-full>Restablecer recorte</button></div>
           <div class="song-ruler" data-ruler></div>
           <div class="song-wave" data-wave><canvas aria-hidden="true"></canvas><div class="song-region" data-region></div>
             <div class="song-playhead" data-head></div><button data-marker="start" aria-label="Mover inicio">I</button><button data-marker="end" aria-label="Mover final">F</button></div>
-          <div class="song-cut-controls"><label>Desde (segundos)<input data-start type="number" min="0" step=".01"></label><button data-set-start>Inicio aquí</button>
-            <label>Hasta (segundos)<input data-end type="number" min="0" step=".01"></label><button data-set-end>Final aquí</button>
-            <button data-full>Completo</button></div>
-          <div class="song-toolbar"><button class="primary" data-play>▶ Escuchar fragmento</button><output data-clock></output><label><input data-loop type="checkbox"> Repetir fragmento</label></div>
+          <div class="song-cut-controls">
+            <div><label>Desde (segundos)<input data-start type="number" min="0" step=".01"></label><button data-set-start>Inicio aquí</button></div>
+            <div><label>Hasta (segundos)<input data-end type="number" min="0" step=".01"></label><button data-set-end>Final aquí</button></div></div>
+          <div class="song-toolbar"><button class="primary" data-play>▶ Escuchar fragmento</button><output data-clock></output><label class="song-repeat"><input data-loop type="checkbox"> Repetir fragmento</label></div>
+          <p class="song-cut-hint">Arrastrá <strong>I</strong> y <strong>F</strong> sobre la onda, o escribí los segundos.</p>
         </section>
-        <details data-lyric-box><summary>Letra de la canción</summary>
-          <label>Letra adjunta<textarea data-lyric rows="4" maxlength="3000" placeholder="Pegá la letra que querés guardar con este audio"></textarea></label>
-          <button data-save-lyric>Guardar letra adjunta</button></details>
-        <section class="song-arrange"><div class="song-toolbar"><h3>Instrumentos</h3><label>Tempo (BPM)<input type="number" data-bpm min="40" max="240" step="1"></label>
+      </div>
+      <div class="song-tools-panel">
+        <section class="song-arrange" aria-labelledby="songInstrumentsTitle">
+          <h3 id="songInstrumentsTitle">Instrumentos</h3>
+          <ol class="song-instructions">
+            <li>Elegí un instrumento y tocá <strong>＋ Pista</strong>.</li>
+            <li>Hacé clic en la pista para colocar un golpe o una nota. Arrastralo para moverlo.</li>
+            <li>Tocá una nota para ajustar su duración, intensidad y repeticiones. Usá <strong>Escuchar fragmento</strong> para probar la mezcla.</li>
+          </ol>
+          <div class="song-toolbar"><label>Tempo (BPM)<input type="number" data-bpm min="40" max="240" step="1"></label>
           <label>Ajuste al pulso<select data-snap><option value=".25">1/16</option><option value="0.5">1/8</option><option value="1">1/4</option><option value="0">Libre</option></select></label></div>
-          <div class="song-toolbar"><select data-instruments aria-label="Instrumento"></select><button data-add>＋ Pista</button><button data-rhythm>Agregar ritmo desde el cursor</button></div>
-          <div data-lanes class="song-lanes"></div>
+          <div class="song-toolbar"><select data-instruments aria-label="Instrumento"></select><button data-add>＋ Pista</button>
+            <button data-rhythm title="Agrega un patrón desde la posición actual de la línea de tiempo">Ritmo desde el cursor</button></div>
+          <div data-lanes class="song-lanes" aria-label="Pistas de instrumentos"></div>
           <fieldset data-note hidden><legend>Nota seleccionada</legend><div class="song-note-fields">
             <label>En (s)<input data-at type="number" min="0" step=".01"></label><label>Duración (s)<input data-length type="number" min=".03" max="10" step=".01"></label>
             <label data-pitch-label>Nota<select data-pitch></select></label><label>Intensidad <input data-velocity type="range" min="1" max="100"></label>
-            <label>Repeticiones<input data-count type="number" min="1" max="5000" step="1"></label><label>Cada (pulsos)<input data-each type="number" min=".125" max="32" step=".125"></label>
+            <label>Repeticiones<input data-count type="number" min="1" max="5000" step="1"></label><label>Intervalo (pulsos)<input data-each type="number" min=".125" max="32" step=".125"></label>
             <button data-note-delete>Quitar nota</button></div></fieldset>
           <div class="song-controls"><label>Volumen original<input data-volume type="range" min="0" max="150"></label>
             <label>Mejorar voz<input data-clean type="range" min="0" max="100"></label>
             <label>Efecto<select data-effect><option value="">Sin efecto</option><option value="echo">Eco suave</option><option value="bass">Realzar graves</option><option value="fade">Entrada y salida suaves</option></select></label></div>
         </section>
-      </main><aside class="song-reel" data-reel hidden><h3>Vista previa del reel</h3><canvas data-frame aria-label="Vista previa del reel"></canvas>
+        <details data-lyric-box><summary>Letra de la canción</summary>
+          <label>Letra adjunta<textarea data-lyric rows="3" maxlength="3000" placeholder="Pegá la letra que querés guardar con este audio"></textarea></label>
+          <div class="song-toolbar"><button data-save-lyric>Guardar letra adjunta</button><button data-check-lyric hidden>Revisar lo cantado</button></div>
+          <p data-lyric-check role="status" hidden></p></details>
+      </div>
+      <aside class="song-reel" data-reel hidden><h3>Vista previa del reel</h3><canvas data-frame aria-label="Vista previa del reel"></canvas>
         <p data-frame-time></p></aside></div>
       <footer><button data-delete class="song-delete">Descartar canción</button><div class="song-toolbar">
         <button data-original>Guardar original</button><button data-wav>Descargar WAV</button><button data-mp3>Descargar MP3</button>
@@ -221,6 +235,15 @@
     find('lyric').value=lyrics||'';
     find('lyric-box').hidden=!options.onLyrics&&!lyrics;
     find('save-lyric').hidden=!options.onLyrics;
+    find('check-lyric').hidden=!options.onCheckLyrics||!lyrics;
+    function showLyricCheck(check){
+      const label=find('lyric-check');
+      const detail=window.SalmosAudioStudio.lyricsCheckText(check);
+      label.hidden=!detail;
+      label.textContent=detail+(check?.heard?'\nSe detectó: '+check.heard:'');
+      if(detail&&check.status==='review')find('lyric-box').open=true;
+    }
+    showLyricCheck(track.lyricsCheck);
     find('original').disabled=!!track.saved&&!track.localOnly;
     if(find('original').disabled)find('original').textContent='✓ Original guardado';
     find('delete').hidden=!options.onDelete;
@@ -470,8 +493,13 @@
       show('Versión guardada. El original sigue disponible.');
     });
     find('save-lyric').onclick=()=>doAction('Guardando la letra…',async()=>{
-      await options.onLyrics(find('lyric').value);
+      showLyricCheck(await options.onLyrics(find('lyric').value));
+      find('check-lyric').hidden=!options.onCheckLyrics||!find('lyric').value.trim();
       show('Letra guardada con el audio.');
+    });
+    find('check-lyric').onclick=()=>doAction('Revisando las palabras de la canción…',async()=>{
+      const check=await options.onCheckLyrics(find('lyric').value);
+      showLyricCheck(check);show('');
     });
     find('wav').onclick=()=>doAction('Preparando el WAV…',async()=>{
       const originalWav=/^audio\/(x-)?wav/i.test(blob.type)&&!edited()&&settings.start===0&&settings.end===duration;
