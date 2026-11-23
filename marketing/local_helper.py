@@ -186,6 +186,15 @@ def wan_root():
         if (root/'env_venv/Scripts/python.exe').is_file() and (root/'wgp.py').is_file():return root
     return None
 
+WAN_CAMERA_MOVES = {'push','pull','left','right','rise','lower','detail'}
+WAN_KEY_COLORS = {'#234cff','#ff18d4','#11d9fa'}
+
+
+def wan_clip_id(path):
+    import hashlib
+    return hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:24]
+
+
 def wan_state():
     root=wan_root()
     with WAN_LOCK:
@@ -196,37 +205,75 @@ def wan_state():
             if job['process'].poll() is not None and status['state'] not in ('done','error','cancelled'):
                 status={'state':'error','message':'El motor se cerró. Revisá la ventana del programa local.','progress':0}
             status['id']=job['id']
+            status['sceneId']=job.get('sceneId')
+            status['projectId']=job.get('projectId')
+            if status['state']=='done':
+                status['clipId']=wan_clip_id(job['folder']/'resultado.mp4')
         else:status=None
-    return {'installed':bool(root),'compatible':bool(root and (root/'shared/api.py').is_file()),'job':status}
+    return {'installed':bool(root),'compatible':bool(root and (root/'shared/api.py').is_file()),
+            'job':status,'setup':EDITOR_SETUP,'wanApi':2,'camera':bool(ffmpeg_executable())}
 
 def wan_start(data):
-    if music_bridge.busy():raise RuntimeError('Esperá a que termine la canción antes de generar movimiento.')
+    if EDITOR_SETUP['state'] != 'ready':
+        raise RuntimeError('Esperá a que el iniciador indique SALMOS listo.')
+    if not isinstance(data,dict):
+        raise ValueError('Pedido de movimiento no válido.')
     global WAN_JOB
-    import base64,re,uuid,socket
-    root=wan_root()
-    if not root or not (root/'shared/api.py').is_file():raise RuntimeError('No encuentro WanGP compatible instalado en E:/WanGP-main.')
-    with socket.socket() as sock:
-        sock.settimeout(.2)
-        if sock.connect_ex(('127.0.0.1',7860))==0:raise RuntimeError('WanGP está abierto en otra ventana. Cerrá ese motor primero para liberar la GPU; SALMOS abrirá el instalado sin descargar modelos.')
+    import base64,re,uuid,socket,struct
+    camera=str(data.get('camera') or '')
+    if camera and camera not in WAN_CAMERA_MOVES:
+        raise ValueError('Elegí un movimiento de cámara.')
+    if not camera and music_bridge.busy():
+        raise RuntimeError('Esperá a que termine la canción antes de generar movimiento.')
+    ffmpeg=ffmpeg_executable()
+    root=ROOT if camera else wan_root()
+    if camera:
+        if not ffmpeg:
+            raise RuntimeError('Falta preparar FFmpeg para los movimientos de cámara.')
+        executable=Path(sys.executable)
+    else:
+        if not root or not (root/'shared/api.py').is_file():
+            raise RuntimeError('No encuentro WanGP compatible instalado en E:/WanGP-main.')
+        executable=root/'env_venv/Scripts/python.exe'
+        with socket.socket() as sock:
+            sock.settimeout(.2)
+            if sock.connect_ex(('127.0.0.1',7860))==0:
+                raise RuntimeError('Cerrá la otra ventana de WanGP para liberar la GPU.')
     image=str(data.get('image',''));prompt=str(data.get('prompt','')).strip()
-    if not 5<=len(prompt)<=2000:raise ValueError('Escribí una indicación de entre 5 y 2000 caracteres.')
+    if not camera and not 5<=len(prompt)<=2000:raise ValueError('Escribí una indicación de entre 5 y 2000 caracteres.')
     if not re.fullmatch(r'data:image/png;base64,[A-Za-z0-9+/=]+',image):raise ValueError('La imagen del producto no tiene el formato esperado.')
     raw=base64.b64decode(image.split(',',1)[1],validate=True)
-    if len(raw)>16*1024*1024 or not raw.startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('La imagen PNG supera el límite o está dañada.')
+    if not 24<=len(raw)<=16*1024*1024 or not raw.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise ValueError('La imagen PNG supera el límite o está dañada.')
+    width,height=struct.unpack('>II',raw[16:24])
+    if not (16<=width<=4096 and 16<=height<=4096):
+        raise ValueError('La referencia debe medir entre 16 y 4096 píxeles por lado.')
+    key_color=data.get('keyColor')
+    if key_color is not None and (not isinstance(key_color,str) or key_color not in WAN_KEY_COLORS):
+        raise ValueError('El color de fondo no es válido.')
+    scene_id=str(data.get('sceneId') or '')[:100]
+    project_id=str(data.get('projectId') or '')[:100]
+    request={'prompt':prompt,'negative':str(data.get('negative',''))[:1500],
+        'foreground24':bool(key_color or data.get('foreground24')),'keyColor':key_color,
+        'sceneId':scene_id,'projectId':project_id,'sceneTitle':str(data.get('sceneTitle') or '')[:100],
+        'name':str(data.get('name') or 'Movimiento SALMOS')[:100],
+        'preset':str(data.get('preset') or '')[:40],'camera':camera,'fast':data.get('quality')=='fast',
+        'preserveEyes':data.get('preserveEyes') is True,'ffmpeg':ffmpeg,'width':width,'height':height}
     with WAN_LOCK:
-        if WAN_JOB and WAN_JOB['process'].poll() is None:raise RuntimeError('Ya hay una generación en marcha.')
+        if WAN_JOB and WAN_JOB['process'].poll() is None:
+            raise RuntimeError('Ya hay una generación en marcha.')
         folder=WAN_DATA/uuid.uuid4().hex
-        folder.mkdir(parents=True);(folder/'producto.png').write_bytes(raw)
-        (folder/'request.json').write_text(json.dumps({'prompt':prompt,'negative':str(data.get('negative',''))[:1500], 'foreground24':bool(data.get('foreground24'))}),encoding='utf-8')
-        (folder/'status.json').write_text(json.dumps({'state':'running','message':'Iniciando WanGP instalado…','progress':0}),encoding='utf-8')
-        log=(folder/'motor.log').open('wb')
-        try:process=subprocess.Popen([str((root/'env_venv/Scripts/python.exe').resolve()),str(ROOT/'wan_worker.py'),str(root.resolve()),str(folder.resolve())],cwd=str(root),stdout=log,stderr=subprocess.STDOUT)
-        finally:log.close()
-        WAN_JOB={'id':folder.name,'folder':folder,'process':process}
+        folder.mkdir(parents=True)
+        (folder/'producto.png').write_bytes(raw)
+        (folder/'request.json').write_text(json.dumps(request,ensure_ascii=False),encoding='utf-8')
+        (folder/'status.json').write_text(json.dumps({'state':'running','message':'Preparando movimiento…','progress':0}),encoding='utf-8')
+        with (folder/'motor.log').open('wb') as log:
+            process=subprocess.Popen([str(executable.resolve()),str(ROOT/'wan_worker.py'),str(root.resolve()),str(folder.resolve())],
+                                     cwd=str(root),stdout=log,stderr=subprocess.STDOUT)
+        WAN_JOB={'id':folder.name,'folder':folder,'process':process,'sceneId':scene_id,'projectId':project_id}
     return wan_state()
 
 def wan_clips():
-    import hashlib
     root=wan_root();paths=[]
     if root:
         folders={root/'outputs',root/'outputs_video',root/'videos'}
@@ -251,11 +298,15 @@ def wan_clips():
     result=[]
     for path in sorted(set(paths),key=lambda p:p.stat().st_mtime if p.exists() else 0,reverse=True)[:24]:
         if not path.is_file() or path.stat().st_size>MAX_VIDEO_BYTES:continue
-        foreground24=False
-        try:
-            if path.name=='resultado.mp4' and path.parent.parent.resolve()==WAN_DATA.resolve():foreground24=bool(json.loads((path.parent/'request.json').read_text(encoding='utf-8')).get('foreground24'))
-        except (OSError,ValueError):pass
-        key=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:24];WAN_CLIPS[key]=path.resolve();result.append({'id':key,'name':names.get(key,path.name),'size':path.stat().st_size,'createdAt':path.stat().st_mtime,'foreground24':foreground24})
+        metadata={}
+        if path.name=='resultado.mp4' and path.parent.parent.resolve()==WAN_DATA.resolve():
+            try:metadata=json.loads((path.parent/'request.json').read_text(encoding='utf-8'))
+            except (OSError,ValueError):pass
+        key=wan_clip_id(path);WAN_CLIPS[key]=path.resolve()
+        result.append({'id':key,'name':names.get(key,metadata.get('name') or path.name),'size':path.stat().st_size,
+            'createdAt':path.stat().st_mtime,'foreground24':metadata.get('foreground24',False),'keyColor':metadata.get('keyColor'),
+            'sceneId':metadata.get('sceneId'),'projectId':metadata.get('projectId'),'sceneTitle':metadata.get('sceneTitle'),
+            'hasPoster':bool(metadata and (path.parent/'poster.jpg').is_file())})
     return result
 
 def manage_wan_clip(data,action):
@@ -286,6 +337,18 @@ def manage_wan_clip(data,action):
 def wan_get(handler,path):
     if path=='/api/wan':handler.json_response(wan_state());return True
     if path=='/api/wan/clips':handler.json_response({'clips':wan_clips()});return True
+    if path.startswith('/api/wan/poster/'):
+        key=path.rsplit('/',1)[1];video=WAN_CLIPS.get(key)
+        poster=video.parent/'poster.jpg' if video and video.parent.parent.resolve()==WAN_DATA.resolve() else None
+        if not poster or not poster.is_file():
+            handler.json_response({'error':'Vista previa no disponible.'},404)
+            return True
+        body=poster.read_bytes()
+        handler.send_response(200)
+        handler.send_header('Content-Type','image/jpeg')
+        handler.send_header('Content-Length',str(len(body)));handler.end_headers()
+        handler.wfile.write(body)
+        return True
     if path.startswith('/api/wan/video/'):
         key=path.rsplit('/',1)[1];file=WAN_CLIPS.get(key)
         if not file or not file.is_file():handler.json_response({'error':'El video ya no está disponible.'},404);return True
@@ -350,6 +413,35 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def export_mp3(self):
+        length=int(self.headers.get('Content-Length','0'))
+        if self.headers.get('Content-Type','').split(';')[0]!='audio/wav' or not 44<length<=108*1024*1024:
+            return self.json_response({'error':'Elegí un WAV de hasta diez minutos.'},422)
+        ffmpeg=ffmpeg_executable()
+        if not ffmpeg:
+            return self.json_response({'error':'FFmpeg todavía no está disponible en el iniciador.'},503)
+        with tempfile.TemporaryDirectory(prefix='salmos-mp3-') as temp:
+            source=Path(temp)/'entrada.wav'
+            output=Path(temp)/'salmos.mp3'
+            with source.open('wb') as stream:
+                remaining=length
+                while remaining:
+                    chunk=self.rfile.read(min(remaining,1024*1024))
+                    if not chunk:
+                        return self.json_response({'error':'Se interrumpió la carga del WAV.'},422)
+                    stream.write(chunk)
+                    remaining-=len(chunk)
+            try:
+                subprocess.run([ffmpeg,'-nostdin','-hide_banner','-loglevel','error','-f','wav','-i',str(source),
+                    '-t','601','-vn','-ar','44100','-codec:a','libmp3lame','-b:a','320k',str(output)],
+                    check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=150)
+            except (OSError,subprocess.SubprocessError):
+                return self.json_response({'error':'No se pudo convertir el audio a MP3.'},422)
+            self.send_response(200);self.send_header('Content-Type','audio/mpeg')
+            self.send_header('Content-Length',str(output.stat().st_size));self.end_headers()
+            with output.open('rb') as stream:
+                shutil.copyfileobj(stream,self.wfile)
+
     def do_OPTIONS(self):
         if not self.allowed_origin():
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
@@ -365,10 +457,10 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/music':
             return self.json_response(editor_music_state())
         if path == '/api/health':
-            return self.json_response({'name': 'SALMOS complemento local', 'version': 11, 'wan': wan_state(), 'music': editor_music_state(),
+            return self.json_response({'name': 'SALMOS complemento local', 'version': 12, 'wan': wan_state(), 'music': editor_music_state(),
                 'tts': bool(all_voices()), 'ffmpeg': ffmpeg_executable() is not None, 'voices': all_voices(), 'onlineVoice': has_edge()})
         if project_storage.get(self,path):return
-        if music_bridge.get(self,path):return
+        if music_bridge.get(self,path,EDITOR_SETUP):return
         if wan_get(self,path):return
         if path.startswith('/api/'):
             return self.json_response({'error': 'Acción no disponible.'}, 404)
@@ -385,9 +477,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
         if project_storage.post(self,path):return
+        if EDITOR_SETUP['state'] != 'ready' and path in ('/api/music/transcribe','/api/music/generate','/api/music/mp3','/api/wan/generate','/api/tts'):
+            return self.json_response({'error':'Esperá a que el iniciador indique SALMOS listo.'},409)
+        if path == '/api/music/mp3':
+            return self.export_mp3()
         if path.startswith('/api/music/'):
-            if EDITOR_SETUP['state'] == 'preparing' and path in ('/api/music/transcribe', '/api/music/generate'):
-                return self.json_response({'error': 'El iniciador sigue preparando el audio. Esperá a que diga SALMOS listo.'}, 409)
             wan_job=wan_state().get('job') or {}
             if music_bridge.post(self,path,wan_job.get('state')=='running'):return
         if wan_post(self,path):return

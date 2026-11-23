@@ -86,7 +86,7 @@ def state(job_id=None):
             status['id'] = folder.name
             if job_id and status.get('state') == 'done':
                 status['track'] = track_info(folder, status)
-        return {'audioApi': 2, 'songApi': 1, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
+        return {'audioApi': 2, 'songApi': 2, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
                 'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
 
@@ -206,7 +206,7 @@ def tracks():
     return sorted(rows, key=lambda r: r['createdAt'], reverse=True)
 
 
-def get(handler, path):
+def get(handler, path, setup=None):
     if path == '/api/music':
         handler.json_response(state())
         return True
@@ -218,7 +218,7 @@ def get(handler, path):
         if not re.fullmatch(r'[a-f0-9]{32}', job_id):
             handler.json_response({'error': 'Pedido de música no válido.'}, 400)
         else:
-            handler.json_response(state(job_id))
+            handler.json_response({**state(job_id), 'setup': setup})
         return True
     if path.startswith('/api/music/audio/'):
         track_id = path.rsplit('/', 1)[-1]
@@ -263,6 +263,11 @@ def manage(data, action):
             if not name or len(name) > 100:
                 raise ValueError('Escribí un nombre de hasta 100 caracteres.')
             request['name'] = name
+        elif action == 'lyrics':
+            lyrics = data.get('lyrics')
+            if not isinstance(lyrics, str) or len(lyrics) > 3000:
+                raise ValueError('La letra puede tener hasta 3.000 caracteres.')
+            request['lyrics'] = lyrics
         elif action == 'save':
             request['saved'] = True
         temp = folder / 'request.tmp'
@@ -377,7 +382,7 @@ def post(handler, path, wan_running=False):
         else:
             handler.json_response(result)
         return True
-    if path not in ('/api/music/generate', '/api/music/cancel', '/api/music/rename', '/api/music/save', '/api/music/delete'):
+    if path not in ('/api/music/generate', '/api/music/cancel', '/api/music/rename', '/api/music/save', '/api/music/delete', '/api/music/lyrics'):
         return False
     try:
         if not handler.headers.get('Content-Type', '').startswith('application/json'):
@@ -387,7 +392,7 @@ def post(handler, path, wan_running=False):
             raise ValueError('El pedido supera el tamaño permitido.')
         data = json.loads(handler.rfile.read(length).decode('utf-8'))
         action = path.rsplit('/', 1)[-1]
-        if action in ('rename', 'save', 'delete'):
+        if action in ('rename', 'save', 'delete', 'lyrics'):
             handler.json_response(manage(data, action))
         else:
             handler.json_response(cancel(data.get('id')) if action == 'cancel' else start(data, wan_running), 202)
