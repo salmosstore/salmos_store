@@ -119,9 +119,12 @@ def song_caption(request):
             directions += ' Pronounce Dios in one clear syllable with an audible final s.'
         if request['duration'] <= 30:
             directions += ' Start singing on the first beat. Finish the entire lyric within the clip.'
+        if request.get('reference'):
+            directions = 'Keep the source beat and tempo. ' + directions
     ending = (' End on a resolved final chord.' if request['duration'] <= 30 else
               ' Finish with a short instrumental outro and a resolved final chord.')
-    description = f'{style[:194].rstrip(".")}. {directions}{ending}'
+    style_budget = min(194, 510 - len(directions) - len(ending))
+    description = f'{style[:style_budget].rstrip(".")}. {directions}{ending}'
     return (description + ' ' + other_details).strip()[:512]
 
 
@@ -214,11 +217,17 @@ def run(root, folder):
         if not ok:
             raise RuntimeError(str(message))
         brief = request['duration'] <= 30
+        reference = folder / 'referencia.wav'
+        task = {}
+        if request.get('reference'):
+            if not reference.is_file():
+                raise RuntimeError('Falta el audio de referencia del ritmo.')
+            task = {'task_type': 'cover', 'src_audio': str(reference), 'audio_cover_strength': .72}
         params = GenerationParams(caption=song_caption(request), lyrics=song_lyrics(request), bpm=request.get('bpm'),
             instrumental=request['instrumental'], vocal_language='unknown' if request['instrumental'] else 'es', duration=request['duration'],
             inference_steps=8, guidance_scale=1.0, shift=3.0, infer_method='ode', thinking=False,
             use_cot_metas=False, use_cot_caption=False, use_cot_lyrics=False, use_cot_language=False,
-            seed=request['seed'])
+            seed=request['seed'], **task)
         config = GenerationConfig(batch_size=1, allow_lm_batch=False, audio_format='wav',
             use_random_seed=request['seed'] < 0, seeds=None if request['seed'] < 0 else [request['seed']])
 
@@ -265,6 +274,8 @@ def run(root, folder):
             message = next(iter(str(exc).splitlines()), 'El motor no devolvió un detalle.')
             status('error', 'No se pudo generar. ' + message[:360])
         return 1
+    finally:
+        (folder / 'referencia.wav').unlink(missing_ok=True)
     return 0
 
 
