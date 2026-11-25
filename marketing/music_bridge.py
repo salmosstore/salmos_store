@@ -20,9 +20,10 @@ import uuid
 from pathlib import Path
 
 try:
-    from music_worker import memory_error_status
+    from music_worker import memory_error_status, missing_checkpoints
 except ImportError:
     memory_error_status = None  # Older worker during an initiator update.
+    missing_checkpoints = None
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('SALMOS_DATA', 'E:/SALMOS-IA-datos')) / 'musica'
@@ -92,7 +93,10 @@ def state(job_id=None):
             status['id'] = folder.name
             if job_id and status.get('state') == 'done':
                 status['track'] = track_info(folder, status)
-        return {'audioApi': 2, 'songApi': 4, 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(ace_root()),
+        root = ace_root()
+        missing = missing_checkpoints(root) if root and missing_checkpoints else []
+        return {'audioApi': 2, 'songApi': 5 if missing_checkpoints else 4,
+                'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(root), 'missingCheckpoints': missing,
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
                 'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
 
@@ -116,7 +120,7 @@ def validate_request(data):
         raise ValueError('Elegí un ritmo válido.')
     if voice not in ('auto', 'male', 'female'):
         raise ValueError('Elegí la voz.')
-    if not instrumental and not lyrics:
+    if not instrumental and not re.search(r'[^\W_]', re.sub(r'\[[^\]\n]*\]', '', lyrics)):
         raise ValueError('Escribí la letra que querés cantar.')
     seed = int(data.get('seed', -1))
     if not -1 <= seed <= 2147483647:
@@ -208,7 +212,16 @@ def find_reference(reference, job_id):
     return path, duration
 
 
-def start(data, wan_running=False):
+def external_engine_busy():
+    for port in (7860, 7861):
+        with socket.socket() as sock:
+            sock.settimeout(.10)
+            if sock.connect_ex(('127.0.0.1', port)) == 0:
+                return True
+    return False
+
+
+def start(data, wan_running=False, lyrics_ready=None):
     global JOB
     request = validate_request(data)
     job_id = data.get('requestId')
@@ -218,19 +231,21 @@ def start(data, wan_running=False):
     root = ace_root()
     if not root:
         raise RuntimeError('No encuentro ACE-Step 1.5 en esta PC.')
+    missing = missing_checkpoints(root) if missing_checkpoints else []
+    if missing:
+        raise RuntimeError('Faltan archivos de ACE-Step: ' + ', '.join(missing))
     if wan_running:
         raise RuntimeError('Esperá a que termine el movimiento de video.')
-    for port in (7860, 7861):
-        with socket.socket() as sock:
-            sock.settimeout(.2)
-            if sock.connect_ex(('127.0.0.1', port)) == 0:
-                raise RuntimeError('Cerrá el motor de ACE-Step o WanGP que abriste aparte. Dejá abierta solamente la conexión SALMOS.')
+    if external_engine_busy():
+        raise RuntimeError('Cerrá el motor de ACE-Step o WanGP que abriste aparte. Dejá abierta la conexión SALMOS.')
     with LOCK:
         folder = DATA / job_id
         if folder.is_dir():
             return state(folder.name)
         if busy():
             raise RuntimeError('Ya se está generando una canción.')
+        if not request['instrumental'] and lyrics_ready is False:
+            raise RuntimeError('La revisión de letras no está lista. Volvé a abrir el iniciador con conexión a internet.')
         reference = request['reference']
         if reference:
             source, request['duration'] = find_reference(reference, job_id)
@@ -474,7 +489,7 @@ def save_audio_version(handler, track_id):
     return {'id': track_id, 'saved': True}
 
 
-def post(handler, path, wan_running=False):
+def post(handler, path, wan_running=False, lyrics_ready=None):
     if path == '/api/music/transcribe' or path.startswith(('/api/music/versions/', '/api/music/reference/')):
         try:
             identifier = path.rsplit('/', 1)[-1]
@@ -504,7 +519,7 @@ def post(handler, path, wan_running=False):
         if action in ('rename', 'save', 'delete', 'lyrics'):
             handler.json_response(manage(data, action))
         else:
-            handler.json_response(cancel(data.get('id')) if action == 'cancel' else start(data, wan_running), 202)
+            handler.json_response(cancel(data.get('id')) if action == 'cancel' else start(data, wan_running, lyrics_ready), 202)
     except (ValueError, TypeError, OverflowError, wave.Error, EOFError) as exc:
         handler.json_response({'error': str(exc)}, 400)
     except (OSError, RuntimeError) as exc:

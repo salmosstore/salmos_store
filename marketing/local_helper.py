@@ -49,7 +49,20 @@ def prepare_editor_dependencies():
         except (OSError, subprocess.CalledProcessError):
             missing.append(module)
             print(f'No se pudo preparar {label}. Las demás funciones siguen disponibles.', flush=True)
-    EDITOR_SETUP = {'state': 'ready', 'missing': missing}
+    lyrics_ready = False
+    if 'faster_whisper' not in missing:
+        message = 'Preparando el reconocimiento de la letra en español…'
+        EDITOR_SETUP = {'state': 'preparing', 'message': message}
+        print(message, flush=True)
+        env = {**os.environ, 'HF_HUB_ETAG_TIMEOUT': '8', 'HF_HUB_DOWNLOAD_TIMEOUT': '40'}
+        try:
+            subprocess.run([sys.executable, str(ROOT / 'lyrics_check.py'), '--prepare',
+                            str(music_bridge.DATA.parent / 'modelos-transcripcion')],
+                           env=env, check=True, timeout=180)
+            lyrics_ready = True
+        except (OSError, subprocess.SubprocessError):
+            print('No se pudo preparar la revisión de letras. Podés generar instrumentos o volver a abrir el iniciador con internet.', flush=True)
+    EDITOR_SETUP = {'state': 'ready', 'missing': missing, 'lyricsReady': lyrics_ready}
     print('SALMOS listo. Volvé al Estudio de audio.', flush=True)
 
 
@@ -58,7 +71,9 @@ def editor_music_state():
     state = music_bridge.state()
     if 'faster_whisper' in setup.get('missing', ()):
         state['transcription'] = False
-    return {**state, 'setup': setup}
+    wan_job = wan_state().get('job') or {}
+    return {**state, 'setup': setup, 'wanBusy': wan_job.get('state') == 'running',
+            'externalBusy': music_bridge.external_engine_busy()}
 
 def ffmpeg_executable():
     try:
@@ -395,6 +410,11 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, TypeError):
             return False
 
+    def log_request(self, code='-', size='-'):
+        if self.command == 'GET' and self.path == '/api/music' and code == 200:
+            return
+        super().log_request(code, size)
+
     def end_headers(self):
         origin = self.headers.get('Origin')
         if origin and self.allowed_origin():
@@ -483,7 +503,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.export_mp3()
         if path.startswith('/api/music/'):
             wan_job=wan_state().get('job') or {}
-            if music_bridge.post(self,path,wan_job.get('state')=='running'):return
+            if music_bridge.post(self,path,wan_job.get('state')=='running',EDITOR_SETUP.get('lyricsReady')):return
         if wan_post(self,path):return
         if path not in ('/api/tts', '/api/convert'):
             return self.json_response({'error': 'Acción no disponible.'}, 404)
