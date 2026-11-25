@@ -5,18 +5,16 @@ from importlib import metadata
 import json
 import os
 import re
-import secrets
 import subprocess
 import sys
 import tempfile
 import traceback
-import unicodedata
 from pathlib import Path
 
 
 CHECKPOINT_READER_VERSION = '0.8.0'
 REQUIRED_CHECKPOINTS = ('acestep-v15-turbo', 'vae', 'Qwen3-Embedding-0.6B')
-SONG_API = 6
+SONG_API = 7
 
 
 def missing_checkpoints(root):
@@ -81,71 +79,26 @@ def use_windows_checkpoint_reader(cache, status):
     safetensors.safe_open = open_checkpoint
 
 
-SPANISH_SECTIONS = {'introducción': 'Intro', 'intro': 'Intro', 'verso': 'Verse',
-                    'estrofa': 'Verse', 'coro': 'Chorus', 'estribillo': 'Chorus',
-                    'pre-coro': 'Pre-Chorus', 'puente': 'Bridge', 'final': 'Outro',
-                    'cierre': 'Outro', 'salida': 'Outro'}
-SECTION_TAG = re.compile(r'^\[([^\]\n]+)\]', re.MULTILINE)
-
-
-def vocal_lines(line):
-    if len(line.split()) <= 8 or line.lstrip().startswith('['):
-        return [line.rstrip()]
-    parts = []
-    for phrase in re.split(r'(?<=[,;.!?…])\s+', line.strip()):
-        words = phrase.split()
-        while len(words) > 8:
-            limit = min(8, len(words) - 3)
-            cut = next((i for i in range(limit, 3, -1)
-                        if words[i].casefold() in ('que', 'porque', 'y', 'pero', 'cuando')), limit)
-            parts.append(' '.join(words[:cut]))
-            words = words[cut:]
-        parts.append(' '.join(words))
-    return parts
-
-
 def song_lyrics(request):
-    brief = request['duration'] <= 30
+    if not request['instrumental']:
+        return request['lyrics']
+    return '[Instrumental]' if request['duration'] <= 30 else '[Instrumental]\n\n[Outro]'
+
+
+def song_caption(request):
     if request['instrumental']:
-        return '[Instrumental]' if brief else '[Instrumental]\n\n[Outro]'
-    text = unicodedata.normalize('NFC', request['lyrics']).replace('\r\n', '\n').replace('\r', '\n')
-
-    def section(match):
-        tag = match[1]
-        name, separator, suffix = tag.partition(' ')
-        return '[' + SPANISH_SECTIONS.get(name.casefold(), name) + separator + suffix + ']'
-
-    lines = []
-    for line in SECTION_TAG.sub(section, text).splitlines():
-        lines.extend(vocal_lines(line))
-    text = '\n'.join(lines).strip()
-    if not text.startswith('['):
-        text = ('[Chorus]\n' if brief else '[Verse]\n') + text
-    tags = SECTION_TAG.findall(text)
-    if not brief and not any(re.match(r'outro\b', tag, re.IGNORECASE) for tag in tags):
-        text += '\n\n[Outro]'
-    return text
-
-
-def song_caption(request, simpler_vocals=False):
-    style, _, other_details = request['caption'].partition('. ')
-    if request['instrumental']:
-        directions = 'Instrumental only, no vocals.'
-    else:
-        voice = {'male': 'Male', 'female': 'Female', 'auto': 'Solo'}[request['voice']]
-        directions = (f'{voice} lead in native Latin American Spanish. Sing the written lyrics exactly. '
-                      'Clear consonants, one note per syllable, dry foreground vocals. No wordless sounds or ad libs.')
-        if simpler_vocals:
-            directions += ' Keep the melody in a narrow range, with pauses at line breaks and a soft backing mix.'
-        if request['duration'] <= 30:
-            directions += ' Start singing on the first beat. Finish the entire lyric within the clip.'
-        if request.get('reference'):
-            directions = 'Keep the source beat and tempo. ' + directions
-    ending = (' End on a resolved final chord.' if request['duration'] <= 30 else
-              ' Finish with a short instrumental outro and a resolved final chord.')
-    style_budget = min(194, 510 - len(directions) - len(ending))
-    description = f'{style[:style_budget].rstrip(".")}. {directions}{ending}'
-    return (description + ' ' + other_details).strip()[:512]
+        style, _, details = request['caption'].partition('. ')
+        ending = ('End on a resolved final chord.' if request['duration'] <= 30 else
+                  'Finish with a short instrumental outro and a resolved final chord.')
+        return f'{style[:194].rstrip(".")}. Instrumental only, no vocals. {ending} {details}'.strip()[:512]
+    voice = {'male': 'Solo male lead vocal.', 'female': 'Solo female lead vocal.', 'auto': 'Solo lead vocal.'}
+    directions = (voice[request['voice']] + ' Native Latin American Spanish singing, natural word stress, '
+                  'clear vowels and consonants. Sing the supplied lyrics in order, with space to breathe between lines. '
+                  'Finish with a short instrumental outro and a resolved final chord that rings out.')
+    if request.get('reference'):
+        directions = 'Keep the source beat and tempo. ' + directions
+    caption = request['caption'][:511 - len(directions)].rstrip()
+    return f'{caption} {directions}'
 
 
 def finish_song(source, destination, fade_seconds=2.5):
@@ -245,7 +198,10 @@ def run(root, folder):
             task = {'task_type': 'cover', 'src_audio': str(reference), 'audio_cover_strength': .72}
         lyrics = song_lyrics(request)
         instrumental = request['instrumental']
-        attempts = 1 if instrumental or request['seed'] >= 0 else 3
+        seed = request['seed']
+        random_seed = seed < 0
+        attempts = 3 if not instrumental and random_seed else 1
+        caption = song_caption(request)
         llm = LLMHandler()
 
         def generate(directory, attempt):
@@ -254,15 +210,14 @@ def run(root, folder):
             def report_progress(value, desc=None, **kwargs):
                 status('running', message, min(.95, .15 + .8 * float(value)))
 
-            seed = request['seed'] if request['seed'] >= 0 else secrets.randbelow(2147483647)
-            params = GenerationParams(caption=song_caption(request, simpler_vocals=attempt > 1), lyrics=lyrics, bpm=request.get('bpm'),
+            params = GenerationParams(caption=caption, lyrics=lyrics, bpm=request.get('bpm'),
                 instrumental=instrumental, vocal_language='unknown' if instrumental else 'es', duration=request['duration'],
-                inference_steps=8 if instrumental else (16 if attempt == 1 else 20),
+                inference_steps=8,
                 guidance_scale=1.0, shift=3.0, infer_method='ode', thinking=False,
                 use_cot_metas=False, use_cot_caption=False, use_cot_lyrics=False, use_cot_language=False,
                 seed=seed, **task)
             config = GenerationConfig(batch_size=1, allow_lm_batch=False, audio_format='wav',
-                use_random_seed=False, seeds=[seed])
+                use_random_seed=random_seed, seeds=None if random_seed else [seed])
             status('running', message, .15)
             result = generate_music(handler, llm, params, config, save_dir=str(directory), progress=report_progress)
             if not result.success or not result.audios:
