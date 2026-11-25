@@ -25,6 +25,7 @@ def compare(lyrics, heard):
     return {
         'status': 'match' if match else 'review',
         'coverage': round((len(expected) - len(missing)) / max(1, len(expected)), 3),
+        'similarity': round(alignment.ratio(), 4),
         'missing': list(dict.fromkeys(missing))[:20],
         'heard': heard[:3000],
     }

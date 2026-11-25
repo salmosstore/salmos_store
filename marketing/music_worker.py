@@ -16,6 +16,7 @@ from pathlib import Path
 
 CHECKPOINT_READER_VERSION = '0.8.0'
 REQUIRED_CHECKPOINTS = ('acestep-v15-turbo', 'vae', 'Qwen3-Embedding-0.6B')
+SONG_API = 6
 
 
 def missing_checkpoints(root):
@@ -268,33 +269,44 @@ def run(root, folder):
                 raise RuntimeError(result.error or result.status_message or 'No se generó audio.')
             return result.audios[0]
 
-        best_check = {}
-        for attempt in range(1, attempts + 1):
-            with tempfile.TemporaryDirectory(prefix='toma-', dir=folder) as scratch:
-                candidate = generate(Path(scratch) / 'resultado', attempt)
-                finished = Path(scratch) / 'cancion.wav'
-                duration = finish_song(Path(candidate['path']), finished, fade_seconds=.35 if brief else 2.5)
-                check = None
-                if not instrumental:
-                    status('running', f'Comprobando las palabras cantadas · intento {attempt} de {attempts}', .96)
-                    check = verify_lyrics(finished, folder, duration)
-                    if check.get('status') == 'unchecked':
-                        status('error', 'El iniciador no pudo revisar la letra. Cerralo y volvé a abrirlo.', errorCode='lyrics_unverified')
-                        return 1
-                    if check.get('status') != 'match':
-                        if check.get('coverage', 0) >= best_check.get('coverage', -1):
-                            best_check = check
-                        continue
-                status('running', 'Guardando el audio…', .98)
-                (folder / 'resultado.json').write_text(json.dumps(candidate.get('params', {}), ensure_ascii=False, default=str), encoding='utf-8')
-                finished.replace(folder / 'cancion.wav')
-                status('done', 'Canción lista.' if instrumental else 'Canción lista. Se verificó la letra.', 1,
-                       duration=duration, lyricsCheck=check)
-                break
-        else:
-            status('error', 'La letra cantada no coincidió en la revisión. Podés volver a generar con la misma letra.',
-                   errorCode='lyrics_mismatch', lyricsCheck=best_check)
-            return 1
+        best = None
+        with tempfile.TemporaryDirectory(prefix='tomas-', dir=folder) as scratch:
+            best_audio = Path(scratch) / 'mejor.wav'
+            for attempt in range(1, attempts + 1):
+                with tempfile.TemporaryDirectory(prefix='toma-', dir=scratch) as take:
+                    finished = Path(take) / 'cancion.wav'
+                    try:
+                        candidate = generate(Path(take) / 'resultado', attempt)
+                        duration = finish_song(Path(candidate['path']), finished, fade_seconds=.35 if brief else 2.5)
+                    except Exception:
+                        if best is None:
+                            raise
+                        traceback.print_exc()
+                        break
+                    check = None
+                    if not instrumental:
+                        status('running', f'Comprobando las palabras cantadas · intento {attempt} de {attempts}', .96)
+                        check = verify_lyrics(finished, folder, duration)
+                    verdict = check.get('status') if check else None
+                    exact = instrumental or verdict == 'match'
+                    score = -1
+                    if exact:
+                        score = 2
+                    elif verdict == 'review':
+                        score = check.get('similarity', check.get('coverage', 0))
+                    if best is None or score > best['score']:
+                        finished.replace(best_audio)
+                        best = {'score': score, 'duration': duration, 'check': check, 'params': candidate.get('params', {})}
+                    if exact or verdict == 'unchecked':
+                        break
+            status('running', 'Guardando el audio…', .98)
+            (folder / 'resultado.json').write_text(json.dumps(best['params'], ensure_ascii=False, default=str), encoding='utf-8')
+            best_audio.replace(folder / 'cancion.wav')
+            verdict = (best['check'] or {}).get('status')
+            message = 'Canción lista.' if instrumental else 'Toma lista para revisar.'
+            if verdict == 'match':
+                message = 'Canción lista. Se verificó la letra.'
+            status('done', message, 1, duration=best['duration'], lyricsCheck=best['check'])
     except Exception as exc:
         traceback.print_exc()
         memory = memory_error_status(exc)

@@ -5,14 +5,15 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=27.7';
+  const launcherFile='INICIAR_SALMOS.bat?v=27.8';
   const maxSongDuration=600;
   const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
-  const songApiVersion=5;
+  const songApiVersion=6;
   const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
   const trackLyrics=track=>track.request?.lyrics||track.lyrics||'';
   const lyricKey=lyrics=>lyricWords(lyrics.normalize('NFC')).join(' ').toLocaleLowerCase('es');
   const canUseBeat=track=>track.uploadKind!=='recording'&&!lyricWords(trackLyrics(track)).length;
+  let recentSongId='';
 
   function generationState(data,{instrumental=false,lyrics='',needsLyrics=false,working=false}={}){
     if(working)return {help:'Preparando tu canción…'};
@@ -24,12 +25,12 @@
     if(data.externalBusy)return {help:'Cerrá la ventana aparte de ACE-Step o WanGP para generar desde SALMOS.'};
     if(data.wanBusy)return {help:'Esperando a que termine el movimiento de video…'};
     if(data.job?.state==='running')return {help:'El iniciador ya está generando una canción.'};
-    if(!instrumental&&data.setup.lyricsReady!==true)return {help:'Falta preparar la revisión de letras. Volvé a abrir el iniciador con internet.'};
     if(needsLyrics&&!instrumental){
-      if(!lyricWords(lyrics).length)return {help:'Escribí la letra para poder generar.'};
-      if(lyrics.length>3000)return {help:'La letra puede tener hasta 3.000 caracteres.'};
+      if(!lyricWords(lyrics).length)return {help:'SALMOS listo · Escribí la letra para poder generar.'};
+      if(lyrics.length>3000)return {help:'SALMOS listo · La letra puede tener hasta 3.000 caracteres.'};
     }
-    return {ready:true,help:'SALMOS listo'};
+    const reviewPending=!instrumental&&data.setup.lyricsReady===false;
+    return {ready:true,help:reviewPending?'SALMOS listo · Revisión automática de letra pendiente':'SALMOS listo'};
   }
 
   function monitorInitiator(helperFetch){
@@ -157,6 +158,25 @@
     }
   }
 
+  function syncSongPlayback(host,playing){
+    const highlighted=playing||recentSongId;
+    for(const row of host.querySelectorAll('[data-song-id]')){
+      const isPlaying=!!playing&&row.dataset.songId===playing;
+      const selected=row.dataset.songId===highlighted;
+      const marker=row.querySelector('.song-list-state'),button=row.querySelector('[data-song-play]');
+      row.dataset.songState=selected?(isPlaying?'playing':'recent'):'';
+      marker.hidden=!selected;
+      if(selected)marker.textContent=isPlaying?'Reproduciendo':'Recién generada';
+      const label=isPlaying?'Ⅱ Pausar':'▶ Escuchar';
+      if(button.textContent!==label)button.textContent=label;
+    }
+  }
+
+  function revealSong(host,id){
+    const row=host.querySelector('[data-song-id="'+CSS.escape(id)+'"]');
+    if(row?.getClientRects().length)row.scrollIntoView({block:'nearest'});
+  }
+
   function renderSongGallery(host,tracks,{filter,genres,listen,playing,edit,download,variant,empty,busy=false}){
     const expanded=new Set([...host.querySelectorAll('.song-group:has(details[open])')].map(group=>group.dataset.songGroup));
     const fragment=document.createDocumentFragment();
@@ -168,20 +188,23 @@
       for(const track of group.tracks){
         const row=document.createElement('div'),description=document.createElement('div');
         const title=document.createElement('strong'),meta=document.createElement('small'),actions=document.createElement('div');
-        row.className='song-list-row';actions.className='song-actions20';
+        const heading=document.createElement('div'),marker=document.createElement('span');
+        row.className='song-list-row';row.dataset.songId=track.id;actions.className='song-actions20';
+        heading.className='song-list-title';marker.className='song-list-state';marker.hidden=true;
         title.textContent=track.name||'Mi canción';
         const request=track.request||{};
         const origin=track.uploadKind==='song'?'Canción subida':track.uploadKind==='recording'?'Grabación subida':
           request.parentId?'Versión editada':genres[request.style]?.[0]||(group.lyrics?'Canción':'Audio');
         meta.textContent=[origin,request.instrumental?'Instrumental':'',request.reference?'Sobre '+request.reference.name:'',
           track.duration>0?durationText(track.duration):''].filter(Boolean).join(' · ');
-        description.append(title,meta);
-        if(track.lyricsCheck?.status==='review'){
+        heading.append(title,marker);description.append(heading,meta);
+        if(['review','unchecked'].includes(track.lyricsCheck?.status)){
           const review=document.createElement('small');review.className='song-lyric-review';
           review.textContent='Letra por revisar';review.title=lyricsCheckText(track.lyricsCheck);description.append(review);
         }
-        for(const [label,action] of [[playing===track.id?'Ⅱ Pausar':'▶ Escuchar',listen],['Editar',edit],['Descargar',download]]){
+        for(const [label,action] of [['▶ Escuchar',listen],['Editar',edit],['Descargar',download]]){
           const button=document.createElement('button');button.type='button';button.textContent=label;
+          if(action===listen)button.dataset.songPlay='';
           button.onclick=async()=>{
             button.disabled=true;
             try{await action(track);}
@@ -196,6 +219,7 @@
       fragment.append(card);
     }
     host.replaceChildren(fragment);
+    syncSongPlayback(host,playing);
     if(!groups.length)host.textContent=tracks.length?'No hay audios con este filtro.':empty;
   }
 
@@ -224,7 +248,7 @@
       if(check.missing?.includes('dios'))return 'Revisá la pronunciación. El reconocimiento no detectó «Dios».';
       return 'Escuchá la letra antes de usarla. El reconocimiento detectó diferencias.';
     }
-    return check?.status==='unchecked'?'La letra se envió completa. Podés revisar lo que se cantó desde Editar canción.':'';
+    return check?.status==='unchecked'?'Revisión automática pendiente. Escuchá la toma y comparala con tu letra.':'';
   }
 
   const jsonPost=data=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
@@ -315,11 +339,18 @@
           const track=job.track||(await get('/tracks')).tracks?.find(item=>item.id===expected);
           if(!track){finish('La generación terminó. Actualizá Mis audios para buscar el resultado.','notice',data);return;}
           report('La canción se generó. Abriendo el audio…','working',data);
+          recentSongId=track.id;
           await completed(track);
-          const review=track.lyricsCheck?.status==='review';
-          const message=track.lyricsCheck?.status==='match'?'Canción lista. Se verificó la letra.':
-            'Canción lista. Podés escucharla y guardarla.';
-          finish(review?lyricsCheckText(track.lyricsCheck):message,review?'notice':'success',data);
+          const check=track.lyricsCheck,verdict=check?.status;
+          if(verdict==='review'){
+            const heard=check.heard?.trim();
+            const quote=heard?' El reconocimiento oyó «'+heard.slice(0,160)+(heard.length>160?'…':'')+'».':'';
+            finish('Guardé la toma más cercana a tu letra. Escuchala antes de usarla.'+quote,'notice',data);
+          }else if(verdict==='unchecked'){
+            finish('La toma está disponible. '+lyricsCheckText(check),'notice',data);
+          }else{
+            finish(verdict==='match'?'Canción lista. Se verificó la letra.':'Canción lista. Podés escucharla y guardarla.','success',data);
+          }
         }
         retries=0;
       }catch(error){
@@ -507,6 +538,7 @@
         songFilter.set('all');
         showView('gallery');
         await library();
+        if(visible)revealSong(find('library'),track.id);
         refreshSongs().catch(()=>{});
       }});
     async function request(path,options={},timeout){
@@ -690,6 +722,10 @@
       find('file').disabled=locked;find('transcribe').disabled=!uploadReady||locked||connection?.setup?.state==='preparing';
       find('use-upload').disabled=find('arrange-voice').disabled=!uploadReady||locked;
       const instrumental=modeInput.value==='instrumental';find('lyrics-field').hidden=find('voice-field').hidden=instrumental;
+      if(generating){
+        const after=instrumental?find('duration-help'):find('lyrics-field');
+        if(bar.element.previousElementSibling!==after)after.after(bar.element);
+      }else if(dialog.firstElementChild!==bar.element)dialog.prepend(bar.element);
       const readiness=generationState(connection,{instrumental:!generating||instrumental,lyrics:lyricsInput.value.trim(),
         needsLyrics:generating,working:locked});
       if(locked)readiness.help='';
@@ -961,8 +997,11 @@
     });
     find('copy-lyrics').onclick=()=>copyLyrics(lyricsInput.value).catch(error=>say(error.message,'error'));
     find('new-lyrics').onclick=()=>action('Abriendo una letra nueva…',()=>openLyrics());
-    player.onplay=()=>{recordPlayer.pause();renderAudioLibrary(libraryEntries);};
-    player.onpause=player.onended=()=>renderAudioLibrary(libraryEntries);
+    function syncAudioPlayback(){
+      syncSongPlayback(find('library'),player.paused||player.ended?null:active?.id);
+    }
+    player.onplaying=()=>{recordPlayer.pause();syncAudioPlayback();};
+    player.onpause=player.onended=syncAudioPlayback;
     recordPlayer.onplay=()=>player.pause();
     initiator.subscribe(data=>{
       if(!visible)return;
@@ -990,5 +1029,5 @@
   }
   window.SalmosAudioStudio={install,createSongJob,isConnectionError,estimateSongDuration,durationText,
     maxSongDuration,monitorInitiator,generationBar,generationState,createSongFilter,renderSongGallery,
-    openSongDownload,lyricsCheckText,versionSettings,prepareReference};
+    syncSongPlayback,revealSong,openSongDownload,lyricsCheckText,versionSettings,prepareReference};
 })();

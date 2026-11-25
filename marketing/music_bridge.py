@@ -24,6 +24,10 @@ try:
 except ImportError:
     memory_error_status = None  # Older worker during an initiator update.
     missing_checkpoints = None
+try:
+    from music_worker import SONG_API
+except ImportError:
+    SONG_API = 5 if missing_checkpoints else 4
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('SALMOS_DATA', 'E:/SALMOS-IA-datos')) / 'musica'
@@ -95,7 +99,7 @@ def state(job_id=None):
                 status['track'] = track_info(folder, status)
         root = ace_root()
         missing = missing_checkpoints(root) if root and missing_checkpoints else []
-        return {'audioApi': 2, 'songApi': 5 if missing_checkpoints else 4,
+        return {'audioApi': 2, 'songApi': SONG_API,
                 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(root), 'missingCheckpoints': missing,
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
                 'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
@@ -244,7 +248,7 @@ def start(data, wan_running=False, lyrics_ready=None):
             return state(folder.name)
         if busy():
             raise RuntimeError('Ya se está generando una canción.')
-        if not request['instrumental'] and lyrics_ready is False:
+        if not request['instrumental'] and lyrics_ready is False and SONG_API < 6:
             raise RuntimeError('La revisión de letras no está lista. Volvé a abrir el iniciador con conexión a internet.')
         reference = request['reference']
         if reference:

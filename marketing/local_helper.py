@@ -61,7 +61,7 @@ def prepare_editor_dependencies():
                            env=env, check=True, timeout=180)
             lyrics_ready = True
         except (OSError, subprocess.SubprocessError):
-            print('No se pudo preparar la revisión de letras. Podés generar instrumentos o volver a abrir el iniciador con internet.', flush=True)
+            print('La revisión automática de letras no está disponible. Podés escuchar y revisar la letra de la toma generada.', flush=True)
     EDITOR_SETUP = {'state': 'ready', 'missing': missing, 'lyricsReady': lyrics_ready}
     print('SALMOS listo. Volvé al Estudio de audio.', flush=True)
 

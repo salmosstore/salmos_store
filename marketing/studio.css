@@ -288,7 +288,22 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 .song-gallery-player p{font-weight:650;margin:0 0 6px}
 #audioOnlyStudio .audio-mix [data-edit-controls]{display:grid;gap:8px;padding:0;margin:0}
 #audioOnlyStudio .audio-mix [data-player]{width:100%}
-.song-list-row{display:grid;gap:9px;min-width:0;background:var(--production-panel,#3b2232);padding:10px;border-radius:8px}
+.song-list-row{
+  display:grid;gap:9px;min-width:0;background:var(--production-panel,#3b2232);padding:10px;border-radius:8px;
+  border:1px solid transparent;transition:background .15s,border-color .15s
+}
+.song-list-row:hover,.song-list-row:focus-within{
+  background:color-mix(in srgb,var(--production-accent,#f1a9cc) 12%,var(--production-panel,#3b2232))
+}
+.song-list-row:is([data-song-state=recent],[data-song-state=playing]){
+  background:color-mix(in srgb,var(--production-accent,#f1a9cc) 23%,var(--production-panel,#3b2232));
+  border-color:var(--production-accent,#f1a9cc)
+}
+.song-list-title{display:flex;align-items:center;flex-wrap:wrap;gap:5px 9px}
+.song-list-state{
+  padding:3px 7px;border-radius:5px;background:#f6b7d5;color:#38172a;font-size:11px;font-weight:700
+}
+.song-list-state[hidden]{display:none}
 .song-list-row strong,.song-list-row small{display:block;overflow-wrap:anywhere}
 .song-list-row small{margin-top:4px;color:var(--production-muted,#edcbda)}
 .song-actions20{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
@@ -309,14 +324,18 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
   display:flex;flex:0 0 auto;align-items:center;flex-wrap:wrap;gap:8px 14px;margin:0 0 10px;padding:10px;
   border:1px solid var(--production-line,#87566d);border-radius:10px;background:var(--production-card,#3d2232)
 }
-#audioOnlyStudio .song-generate-bar{position:sticky;top:0;z-index:2}
+#audioOnlyStudio>.song-generate-bar{position:sticky;top:0;z-index:2}
+#aiMusic19>.song-generate-bar,.audio-generation-fields>.song-generate-bar{margin:0}
+#reelSongActions{width:100%}
 .song-generate-bar[hidden],.song-generate-bar [hidden]{display:none!important}
 .song-generate-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:100%}
-.production-reels .song-generate-bar .song-main-action,.song-generate-bar .song-main-action{
+.production-reels #reelSongActions .song-main-action,.song-generate-bar .song-main-action{
   display:inline-flex;align-items:center;justify-content:center;min-height:48px;min-width:205px;
   padding:9px 17px;background:#f6b7d5;color:#38172a;font-size:16px;font-weight:800;text-align:center
 }
-.production-reels .song-generate-bar .song-main-action:disabled{opacity:1;background:#684459;color:#f7dce9;cursor:default}
+.production-reels #reelSongActions .song-main-action:disabled,.song-generate-bar .song-main-action:disabled{
+  opacity:1;background:#684459;color:#f7dce9;cursor:default
+}
 .song-generate-help{flex:1 1 160px;color:var(--production-muted,#f3d7e5);font-size:13px;line-height:1.4}
 .song-generate-help:empty{display:none}
 .song-generate-bar[data-ready=true] .song-generate-help{color:var(--production-ink,#fff0f7)}
@@ -325,6 +344,7 @@ body.production-reels{--production-background:#351d2b;--production-panel:#442235
 .song-generate-bar #aiMusicStatus19[data-state=success]{color:#d7f1e0}
 .song-generate-bar #aiMusicProgress19{width:100%;height:8px}
 #audioOnlyStudio .song-generate-bar [data-status]{flex:1 0 100%;margin:0}
+#audioOnlyStudio .song-generate-bar [data-status][data-state=notice]{background:#ffe9bc;color:#4d3210}
 dialog.song-download{
   width:min(440px,calc(100vw - 22px));padding:18px;border:1px solid var(--production-line);border-radius:14px;
   background:var(--production-panel);color:var(--production-ink)
@@ -338,7 +358,7 @@ dialog.song-download{
 .song-download-options strong,.song-download-options small{display:block}
 .song-download-options small{margin-top:3px}
 @media(max-width:340px){
-  .production-reels .song-generate-bar .song-main-action,.song-generate-bar .song-main-action{min-width:0}
+  .production-reels #reelSongActions .song-main-action,.song-generate-bar .song-main-action{min-width:0}
 }
 
 dialog.song-editor{
