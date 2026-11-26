@@ -25,13 +25,17 @@ except ImportError:
     memory_error_status = None  # Older worker during an initiator update.
     missing_checkpoints = None
 try:
-    from music_worker import SONG_API
+    from music_worker import MAX_SONG_DURATION, SONG_API, minimum_lyric_duration
 except ImportError:
     SONG_API = 5 if missing_checkpoints else 4
+    MAX_SONG_DURATION = 600
+
+    def minimum_lyric_duration(lyrics, bpm):
+        return 10
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('SALMOS_DATA', 'E:/SALMOS-IA-datos')) / 'musica'
-MAX_REFERENCE_BYTES = 600 * 48000 * 2 * 2 + 65536
+MAX_REFERENCE_BYTES = MAX_SONG_DURATION * 48000 * 2 * 2 + 65536
 LOCK = threading.RLock()
 JOB = None
 
@@ -86,6 +90,7 @@ def state(job_id=None):
                 status = {'state': 'running', 'message': 'Terminando el pedido de audio…', 'progress': .99}
             elif exit_code is not None and status.get('state') not in ('done', 'error', 'cancelled'):
                 (folder / 'referencia.wav').unlink(missing_ok=True)
+                (folder / 'ritmo-ampliado.wav').unlink(missing_ok=True)
                 status = stopped_status(folder, exit_code)
                 write_status(folder, status)
         elif job_id and (DATA / job_id / 'status.json').is_file():
@@ -110,14 +115,14 @@ def validate_request(data):
         raise ValueError('Pedido de música no válido.')
     caption = str(data.get('caption', '')).strip()
     lyrics = str(data.get('lyrics', '')).strip()
-    duration = float(data.get('duration', 20))
+    duration = None if data.get('duration') is None else float(data['duration'])
     voice = str(data.get('voice', 'auto'))
     instrumental = data.get('instrumental', False)
     if not isinstance(instrumental, bool):
         raise ValueError('Elegí instrumental o con letra.')
     if not 5 <= len(caption) <= 1200 or len(lyrics) > 3000:
         raise ValueError('Revisá la descripción y la letra.')
-    if not 10 <= duration <= 600:
+    if duration is not None and not 10 <= duration <= MAX_SONG_DURATION:
         raise ValueError('Elegí una duración entre 10 segundos y 10 minutos.')
     bpm = data.get('bpm')
     if bpm is not None and (type(bpm) is not int or not 30 <= bpm <= 300):
@@ -126,6 +131,12 @@ def validate_request(data):
         raise ValueError('Elegí la voz.')
     if not instrumental and not re.search(r'[^\W_]', re.sub(r'\[[^\]\n]*\]', '', lyrics)):
         raise ValueError('Escribí la letra que querés cantar.')
+    minimum_duration = 10 if instrumental else minimum_lyric_duration(lyrics, bpm)
+    if minimum_duration > MAX_SONG_DURATION:
+        raise ValueError('A este tempo, la letra necesita más de 10 minutos. Subí el tempo o dividila en partes.')
+    if duration is None:
+        duration = 20 if instrumental else minimum_duration
+    duration = max(minimum_duration, duration)
     seed = int(data.get('seed', -1))
     if not -1 <= seed <= 2147483647:
         raise ValueError('Semilla no válida.')
@@ -141,7 +152,7 @@ def validate_request(data):
             raise ValueError('Elegí un ritmo válido y escribí la letra para cantar.')
         reference = {'id': reference['id'], 'name': str(reference.get('name', 'Ritmo'))[:100],
                      'uploaded': reference['uploaded']}
-    return {'caption': caption, 'lyrics': lyrics, 'duration': duration, 'voice': voice, 'bpm': bpm,
+    return {'caption': caption, 'lyrics': lyrics, 'duration': duration, 'minimumDuration': minimum_duration, 'voice': voice, 'bpm': bpm,
             'reference': reference, 'versionOf': str(data.get('versionOf') or '')[:128],
             'mood': str(data.get('mood', 'joyful'))[:30], 'rhythm': str(data.get('rhythm', 'medium'))[:30],
             'instruments': [str(value)[:40] for value in instruments], 'saved': False,
@@ -158,7 +169,7 @@ def pcm_duration(path):
             raise ValueError('El ritmo de referencia debe ser un WAV mono o estéreo de 16 bits.')
         frames = audio.getnframes()
         duration = frames / audio.getframerate()
-        if not 10 <= duration <= 600:
+        if not 10 <= duration <= MAX_SONG_DURATION:
             raise ValueError('Elegí un ritmo de entre 10 segundos y 10 minutos.')
         audio.setpos(frames - 1)
         if len(audio.readframes(1)) != audio.getnchannels() * audio.getsampwidth():
@@ -211,7 +222,7 @@ def find_reference(reference, job_id):
             raise ValueError('Ya no encuentro el ritmo original en la PC.')
         path = folder / 'cancion.wav'
         duration = track['duration']
-        if not 10 <= duration <= 600:
+        if not 10 <= duration <= MAX_SONG_DURATION:
             raise ValueError('Elegí un ritmo de entre 10 segundos y 10 minutos.')
     return path, duration
 
@@ -252,7 +263,9 @@ def start(data, wan_running=False, lyrics_ready=None):
             raise RuntimeError('La revisión de letras no está lista. Volvé a abrir el iniciador con conexión a internet.')
         reference = request['reference']
         if reference:
-            source, request['duration'] = find_reference(reference, job_id)
+            source, reference_duration = find_reference(reference, job_id)
+            request['referenceDuration'] = reference_duration
+            request['duration'] = max(request['duration'], reference_duration)
         folder.mkdir(parents=True)
         try:
             if reference:
@@ -295,6 +308,7 @@ def cancel(expected_id=None):
                 JOB['process'].wait(timeout=10)
             write_status(JOB['folder'], {'state': 'cancelled', 'message': 'Generación cancelada.', 'progress': 0})
             (JOB['folder'] / 'referencia.wav').unlink(missing_ok=True)
+            (JOB['folder'] / 'ritmo-ampliado.wav').unlink(missing_ok=True)
     return state()
 
 
@@ -334,7 +348,8 @@ def lyric_diagnostic(folder):
         result = {}
     if not isinstance(result, dict):
         result = {}
-    request_keys = ('lyrics', 'caption', 'style', 'mood', 'rhythm', 'bpm', 'duration', 'instrumental', 'voice', 'seed')
+    request_keys = ('lyrics', 'caption', 'style', 'mood', 'rhythm', 'bpm', 'duration', 'minimumDuration',
+                    'referenceDuration', 'instrumental', 'voice', 'seed')
     engine_keys = ('lyrics', 'caption', 'vocal_language', 'bpm', 'duration', 'seed', 'inference_steps',
                    'guidance_scale', 'shift', 'infer_method', 'thinking', 'task_type', 'audio_cover_strength')
     saved = result.get('salmos')

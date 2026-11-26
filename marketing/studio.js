@@ -691,7 +691,7 @@
   }
 
   function pillSelect(id){const select=$('#'+id);if(!select||select.dataset.pills)return;select.dataset.pills='1';select.hidden=true;const host=document.createElement('div');host.className='choice-buttons';host.setAttribute('role','group');host.setAttribute('aria-label',select.closest('label')?.childNodes[0]?.textContent||id);select.after(host);function rebuild(){host.replaceChildren();for(const option of select.options){const b=document.createElement('button');b.type='button';b.dataset.selectId=id;b.dataset.selectValue=option.value;b.textContent=option.textContent;b.onclick=async()=>{if(id==='transition')beginEffectTrial11();select.value=option.value;select.dispatchEvent(new Event('input',{bubbles:true}));select.dispatchEvent(new Event('change',{bubbles:true}));host.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));syncComponents();if(id==='ttsVoice'){b.disabled=true;try{const ready=await generateTts(false);if(ready){pause();time=0;await play();}}finally{b.disabled=false;}}if(id==='transition')replayScene11();};b.classList.toggle('active',option.value===select.value);b.disabled=select.disabled;host.append(b);}}rebuild();new MutationObserver(rebuild).observe(select,{childList:true});}
-  function compactNumbers(){for(const input of $$('input[type="number"],#musicVolume')){if(input.closest('.number-stepper'))continue;const range=input.type==='range';if(range){input.type='number';input.max='2';input.step='.05';}const wrapper=document.createElement('span');wrapper.className='number-stepper';input.before(wrapper);const minus=document.createElement('button'),plus=document.createElement('button');minus.type=plus.type='button';minus.textContent='−';plus.textContent='+';minus.setAttribute('aria-label','Disminuir '+input.closest('label').childNodes[0].textContent);plus.setAttribute('aria-label','Aumentar '+input.closest('label').childNodes[0].textContent);for(const[b,delta]of[[minus,-1],[plus,1]])b.onclick=()=>{input.focus();const step=Number(input.step)||1,next=Math.min(input.max===''?Infinity:Number(input.max),Math.max(input.min===''?-Infinity:Number(input.min),Number(input.value)+step*delta));input.value=String(Math.round(next*1000)/1000);input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));};wrapper.append(minus,input,plus);}}
+  function compactNumbers(){for(const input of $$('input[type="number"],#musicVolume')){if(input.closest('.number-stepper'))continue;const range=input.type==='range';if(range){input.type='number';input.max='2';input.step='.05';}const wrapper=document.createElement('span');wrapper.className='number-stepper';input.before(wrapper);const minus=document.createElement('button'),plus=document.createElement('button');minus.type=plus.type='button';minus.textContent='−';plus.textContent='+';minus.setAttribute('aria-label','Disminuir '+input.closest('label').childNodes[0].textContent);plus.setAttribute('aria-label','Aumentar '+input.closest('label').childNodes[0].textContent);for(const[b,delta]of[[minus,-1],[plus,1]])b.onclick=()=>{input.focus();const step=Number(input.step)||1,next=Math.min(input.max===''?Infinity:Number(input.max),Math.max(input.min===''?-Infinity:Number(input.min),Number(input.value||input.dataset.stepBase||0)+step*delta));input.value=String(Math.round(next*1000)/1000);input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));};wrapper.append(minus,input,plus);}}
   function tidyEditor(){
     const editor=$('[data-panel="editor"]'),createFold=(title,open=false)=>{const d=document.createElement('details');d.className='editor-fold';d.open=open;const summary=document.createElement('summary');summary.textContent=title;const body=document.createElement('div');body.className='details-body';d.append(summary,body);return[d,body];};
     const archive=document.createElement('div');archive.hidden=true;archive.id='legacyControls';document.body.append(archive);
@@ -712,7 +712,7 @@
     for(const b of $$('[data-template]'))b.onclick=()=>{pause();checkpoint();const l=selectedLayer(),id=b.dataset.template;if(l){l.inheritSceneEffect=false;l.fx=id;l.effect={...T.effects({...l,template:id})};}else{current().template=id;if(['pencil','brush','wipe','before'].includes(id))for(const print of current().components.filter(x=>x.kind==='print')){print.fx=id;print.inheritSceneEffect=true;}current().effect={...T.effects({...current(),template:id})};}syncForm();changed();time=project.scenes.slice(0,active).reduce((n,s)=>n+s.duration,0);play();};
     for(const input of $$('[data-effect]')){input.onfocus=()=>input._before=structuredClone(project);input.oninput=()=>{pause();beginEffectTrial11();const target=effectTarget();effectTrial.touched.add(target.id+':'+input.dataset.effect);target.effect={...T.effects(target),[input.dataset.effect]:checkedValue(input)};changed();};input.onchange=()=>{input._before=null;syncForm();changed();};}$('#rows').removeAttribute('data-scene');$('#rows').onchange=()=>{beginEffectTrial11();effectTarget().rows=Number($('#rows').value);syncForm();changed();};$('#resetEffect').onclick=()=>{cancelEffectTrial();checkpoint();const source=selectedLayer();for(const target of source?scopedLayers(source).map(row=>row.layer):scopeScenes())delete target.effect;syncForm();changed();};$('#previewEffect').textContent='OK';$('#previewEffect').onclick=()=>{pause();syncForm();changed();};
     for(const id of ['palette','ratio','transition','musicCatalog','musicGenre','musicVocals','ttsVoice','ttsPitch','quality','exportFormat','storyFilter','postChannel'])pillSelect(id);compactNumbers();
-    const narrator=$('.narrator-card'),audioPanel=$('[data-panel="audio"]');audioPanel.querySelector('h1').after(narrator);const updater=document.createElement('a');updater.className='button';updater.href='INICIAR_SALMOS.bat?v=28.0';updater.download='INICIAR_SALMOS.bat';updater.textContent='Actualizar conexión local';narrator.querySelector('.button-row').append(updater);const connection=$('#helperUrl').closest('details');if(connection){connection.querySelector('summary').textContent='Si la conexión falla';$('#helperUrl').closest('label').hidden=true;connection.open=false;}$('#ttsStatus').textContent='La conexión de voz se comprueba sola al generar. Si está cerrada o es anterior, usá Actualizar conexión local y abrí el archivo descargado.';$('#connectLocal').textContent='Volver a comprobar conexión';
+    const narrator=$('.narrator-card'),audioPanel=$('[data-panel="audio"]');audioPanel.querySelector('h1').after(narrator);const updater=document.createElement('a');updater.className='button';updater.href='INICIAR_SALMOS.bat?v=28.1';updater.download='INICIAR_SALMOS.bat';updater.textContent='Actualizar conexión local';narrator.querySelector('.button-row').append(updater);const connection=$('#helperUrl').closest('details');if(connection){connection.querySelector('summary').textContent='Si la conexión falla';$('#helperUrl').closest('label').hidden=true;connection.open=false;}$('#ttsStatus').textContent='La conexión de voz se comprueba sola al generar. Si está cerrada o es anterior, usá Actualizar conexión local y abrí el archivo descargado.';$('#connectLocal').textContent='Volver a comprobar conexión';
     for(const card of [...audioPanel.querySelectorAll('.audio-card')])if(card!==narrator&&!card.querySelector('#musicResults')){const heading=card.querySelector('h2'),[d,b]=createFold(heading.textContent,true);heading.remove();b.append(...card.childNodes);card.replaceChildren(d);}
     $('#musicCatalog').dispatchEvent(new Event('change'));$('#musicListen').before(Object.assign(document.createElement('p'),{className:'hint',textContent:'Para escuchar el volumen final usá Escuchar con mi video. La música puede subir hasta 200%. La opción Bajar música reduce suavemente el fondo mientras habla la voz.'}));
     const trial=document.createElement('div');trial.id='musicTrialBar';trial.hidden=true;trial.className='note';trial.innerHTML='<strong id="musicTrialName"></strong><button id="cancelMusicTrial">Terminar prueba y volver a mi música</button>';$('#musicResults').before(trial);$('#cancelMusicTrial').onclick=cancelMusicTrial;$('#playMix').onclick=async()=>{pause();time=0;await play();};$('#stopMix').onclick=pause;$('#saveMusicLibrary').onclick=()=>{if(!project.audio.music||musicTrial)return notify('Elegí una pista antes de guardarla.');libraryTracks=readTracks();if(libraryTracks.some(x=>x.src===project.audio.music))return notify('Ya está guardada.');if(libraryTracks.length>=12)return notify('El listado admite 12 canciones.');try{libraryTracks.push({id:C.uid(),name:project.audio.musicName,src:project.audio.music,genre:$('#musicGenre').value==='all'?'pop':$('#musicGenre').value,vocals:$('#musicVocals').value==='all'?'instrumental':$('#musicVocals').value});writeTracks();notify('Canción guardada en este navegador.');}catch{libraryTracks.pop();notify('No hay espacio. Descargá tu proyecto para conservar el audio.','error');}};
@@ -872,7 +872,7 @@
     const render=async type=>{mode=type;gallery.classList.toggle('giphy-gallery',type==='giphy');gallery.replaceChildren();choices.forEach(b=>b.classList.toggle('active',b.dataset.bgMode===type));if(type==='giphy'){mountGiphyGallery(gallery);return;}if(type==='salmos'){try{const entries=await requestParent('backgrounds');if(reuse&&current().productionBackground)gallery.append(reuse);for(const item of entries){const b=document.createElement('button'),im=new Image();im.src=item.url;im.alt=item.name;b.title=item.name;b.append(im);b.onclick=async()=>{const targets=sceneVisualTargets();b.disabled=true;try{const data=await requestParent('background',{assetId:item.id});await applyScopedBackground({src:await blobData(data.blob),name:item.name},targets);}catch(e){notify(e.message,'error');}finally{b.disabled=false;}};gallery.append(b);}}catch(e){gallery.textContent='Los fondos guardados se cargan al abrir desde SALMOS.';}return;}if(type==='add'){gallery.append(add);return;}for(const [name,motion,palette] of (type==='masculine'?[['Acero','steel','slate'],['Plano azul','blueprint','navy'],['Brasas','embers','coal'],['Niebla','smoke','slate'],['Relieve bosque','terrain','forest'],['Velocidad','speed','burgundy']]:[['Corazones','hearts','pink'],['Pétalos','petals','pink'],['Destellos dorados','stars','gold'],['Luces suaves','bokeh','blue'],['Ondas','waves','lilac'],['Confeti','confetti','cream']])){const b=document.createElement('button'),c=document.createElement('canvas'),label=document.createElement('span');c.width=130;c.height=150;label.textContent=name;b.append(c,label);b.onclick=()=>{applyScopedBackground({motion,palette,name});};gallery.append(b);const context=c.getContext('2d');const tick=now=>{if(!c.isConnected||!['motion','masculine'].includes(mode))return;if(!c.getClientRects().length){requestAnimationFrame(tick);return;}const colors=C.palettes[palette],g=context.createLinearGradient(0,0,130,150);g.addColorStop(0,colors[0]);g.addColorStop(1,colors[1]);context.fillStyle=g;context.fillRect(0,0,130,150);context.save();context.scale(130/720,150/1280);paintBackdrop(context,{bgMotion:motion},now/1000,720,1280);context.restore();requestAnimationFrame(tick);};requestAnimationFrame(tick);}};
     for(const[id,label]of[['salmos','Fondos SALMOS'],['motion','Suaves'],['masculine','Varoniles'],['giphy','GIPHY'],['add','＋ Agregar']]){const b=document.createElement('button');b.textContent=label;b.dataset.bgMode=id;b.onclick=()=>render(id);choices.push(b);bar.append(b);}clear.textContent='Sin fondo';bar.append(clear);bg.replaceChildren(bar,gallery);$('#oldReelsPanels').append(oldShelf,salmos);oldShelf.hidden=true;salmos.hidden=true;render('motion');
     const startLink=document.createElement('a');
-    startLink.className='button';startLink.href='INICIAR_SALMOS.bat?v=28.0';startLink.download='INICIAR_SALMOS.bat';
+    startLink.className='button';startLink.href='INICIAR_SALMOS.bat?v=28.1';startLink.download='INICIAR_SALMOS.bat';
     startLink.textContent='Descargar iniciador';$('[data-drawer="narration"] .button-row').append(startLink);compactNumbers();
   }
 
@@ -1865,7 +1865,7 @@
       <div id="aiStyleChoices19" class="choice-buttons" aria-label="Estilo musical"></div>
       <label>Detalles (opcional)<textarea id="aiMusicStyle19" rows="2" maxlength="700" placeholder="Por ejemplo: más batería, piano alegre, voz cálida…"></textarea></label>
       <label>Letra<textarea id="aiMusicLyrics19" rows="4" maxlength="3000"></textarea></label>
-      <div class="ai-music-actions19"><label>Duración en segundos<input id="aiMusicDuration19" type="number" min="10" max="${audio.maxSongDuration}" step="1" placeholder="Automática" aria-describedby="reelSongDuration"></label></div>
+      <div class="ai-music-actions19"><label>Duración total (s)<input id="aiMusicDuration19" type="number" min="10" max="${audio.maxSongDuration}" step="1" aria-describedby="reelSongDuration"></label></div>
       <small id="reelSongDuration"></small>
       <div id="aiMusicLibrary"><div id="aiMusicTracks19" class="song-library"></div></div>`;
     $('#musicResults').before(panel);
@@ -1910,6 +1910,8 @@
       if(bar.element.previousElementSibling!==after)after.after(bar.element);
       const readiness=audio.generationState(musicInitiator.data,{instrumental:!composing||settings.instrumental,
         lyrics:settings.lyrics,needsLyrics:composing,working});
+      const timingError=composing&&audio.songTimingError(reelSongTiming(settings));
+      if(readiness.ready&&timingError){readiness.ready=false;readiness.help=timingError;}
       if(working)readiness.help='';
       bar.update(readiness,{label:composing&&settings.variant?'Generar versión nueva':'Generar canción',
         job:!!song.id,cancelling:sending});
@@ -1953,6 +1955,11 @@
     }
     for(const input of panel.querySelectorAll('input,textarea'))input.onchange=persistAi19;
     for(const input of [$('#aiMusicLyrics19'),$('#aiMusicDuration19')])input.addEventListener('input',syncReelSongDuration);
+    $('#aiMusicDuration19').onchange=()=>{
+      const input=$('#aiMusicDuration19'),{minimum}=reelSongTiming(aiSettings19());
+      if(input.valueAsNumber<minimum&&minimum<=audio.maxSongDuration)input.value=minimum;
+      persistAi19();
+    };
     bar.generate.onclick=async()=>{
       if(sending||song.id)return;
       if(select.value!=='ai19'){
@@ -1962,10 +1969,6 @@
         return;
       }
       const {variant,...request}=aiSettings19();
-      request.duration??=reelSongEstimate(request);
-      if(!variant?.sameBeat&&(!Number.isInteger(request.duration)||request.duration<10||request.duration>audio.maxSongDuration)){
-        return notify('Elegí una duración entre 10 segundos y 10 minutos.','error');
-      }
       pause();persistAi19();sending=true;progress.removeAttribute('value');
       setStatus('Comprobando el iniciador…','working');syncReelGenerate();
       try{
@@ -1980,10 +1983,15 @@
             if(!track)throw Error('Elegí nuevamente el ritmo desde Mis audios.');
             setStatus('Preparando el ritmo de referencia…','working');
             source=await audio.prepareReference(track,T);
-            request.duration=source.duration||request.duration;
+            request.duration=null;
             request.bpm=track.request?.bpm||null;
           }
         }
+        const timing=audio.songTiming(request,{reelDuration:C.totalDuration(project.scenes),referenceDuration:source?.duration||0});
+        const error=audio.songTimingError(timing);
+        if(error)throw Error(error);
+        request.duration=timing.seconds;
+        if(request.instrumental)request.lyrics='';
         await song.start(request,connection,source);
       }catch(error){setStatus(audio.isConnectionError(error)?'El iniciador no respondió. Revisá que siga abierto.':error.message,'error');}
       finally{sending=false;syncReelGenerate();}
@@ -2064,7 +2072,7 @@
     const audio=window.SalmosAudioStudio,settings=audio.versionSettings(track,sameBeat),request=track.request||{};
     project.audio.aiMusic19={...aiDefault19,...settings,style:settings.style||'house',duration:null,
       mood:request.mood||'joyful',rhythm:'style',instruments:request.instruments||[],details:request.details||'',
-      variant:{id:track.id,name:track.name,sameBeat,duration:track.duration}};
+      variant:{id:track.id,name:track.name,sameBeat,duration:track.duration,bpm:settings.bpm}};
     showReelSongForm();
     $('#aiMusicVariant').scrollIntoView({block:'nearest'});
     (sameBeat?$('#aiMusicLyrics19'):$('#aiStyleChoices19 button.active'))?.focus({preventScroll:true});
@@ -2076,20 +2084,23 @@
     select.dispatchEvent(new Event('change',{bubbles:true}));
     $$('[data-select-id=musicCatalog]').forEach(button=>button.classList.toggle('active',button.dataset.selectValue===select.value));
   }
-  function reelSongEstimate(settings){
-    return window.SalmosAudioStudio.estimateSongDuration(settings.instrumental?'':settings.lyrics,settings.bpm,
-      settings.instrumental?C.totalDuration(project.scenes):0);
+  function reelSongTiming(settings){
+    const reference=settings.variant?.sameBeat?settings.variant:null;
+    const song=reference?{...settings,bpm:reference.bpm||null,duration:null}:settings;
+    return window.SalmosAudioStudio.songTiming(song,{reelDuration:C.totalDuration(project.scenes),
+      referenceDuration:reference?.duration||0});
   }
   function syncReelSongDuration(){
     const label=$('#reelSongDuration');
     if(!label)return;
-    const settings=aiSettings19(),estimate=reelSongEstimate(settings),duration=C.totalDuration(project.scenes);
-    const seconds=settings.duration??estimate,format=window.SalmosAudioStudio.durationText;
-    const short=!settings.instrumental&&settings.lyrics&&settings.duration!==null&&settings.duration<estimate*.75;
-    label.textContent=(settings.variant?.sameBeat?'Se toma la duración del ritmo de referencia. ':
-      settings.duration===null?'Canción automática · '+format(estimate)+'. ':
-      short?'Duración sugerida para la letra · '+format(estimate)+'. ':'')+
-      'Tu reel dura '+format(duration)+'.'+(seconds>Math.ceil(duration)?' Podés recortar la canción al usarla en el reel.':'');
+    const audio=window.SalmosAudioStudio,duration=C.totalDuration(project.scenes),timing=reelSongTiming(aiSettings19());
+    const input=$('#aiMusicDuration19');
+    input.min=timing.minimum;
+    input.placeholder=String(Math.round(timing.automatic));
+    input.dataset.stepBase=String(timing.automatic);
+    const length=audio.songTimingText(timing);
+    label.textContent=length+' Tu reel dura '+audio.durationText(duration)+'.'+
+      (!audio.songTimingError(timing)&&timing.seconds>Math.ceil(duration)?' Podés recortar la canción al usarla en el reel.':'');
     syncReelGenerate();
   }
   function restoreAi19(){
@@ -2118,8 +2129,7 @@
     panel.querySelector('[data-ai-mode19="instrumental"]').disabled=sameBeat;
     for(const button of panel.querySelectorAll('[data-ai-rhythm20]'))button.disabled=sameBeat;
     const duration=$('#aiMusicDuration19');duration.disabled=sameBeat;
-    if(sameBeat)duration.placeholder=settings.variant.duration?String(Math.round(settings.variant.duration)):'Del ritmo';
-    else duration.placeholder='Automática';
+    for(const button of duration.closest('.number-stepper')?.querySelectorAll('button')||[])button.disabled=sameBeat;
     syncReelSongDuration();
   }
   const aiHidden20=()=>new Set(jsonStore13('salmos-ai-hidden20',[]));

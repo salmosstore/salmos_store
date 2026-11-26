@@ -5,10 +5,10 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=28.0';
+  const launcherFile='INICIAR_SALMOS.bat?v=28.1';
   const maxSongDuration=600;
   const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
-  const songApiVersion=8;
+  const songApiVersion=9;
   const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
   const trackLyrics=track=>track.request?.lyrics||track.lyrics||'';
   const lyricKey=lyrics=>lyricWords(lyrics.normalize('NFC')).join(' ').toLocaleLowerCase('es');
@@ -246,6 +246,7 @@
     if(check?.status==='match')return 'El reconocimiento local detectó las palabras de la letra.';
     if(check?.status==='review'){
       if(check.missing?.includes('dios'))return 'Revisá la pronunciación. El reconocimiento no detectó «Dios».';
+      if(check.missingEnding)return 'Revisá el final. El reconocimiento detectó que faltan palabras de la última parte.';
       return 'Escuchá la letra antes de usarla. El reconocimiento detectó diferencias.';
     }
     return check?.status==='unchecked'?'Revisión automática pendiente. Escuchá la toma y comparala con tu letra.':'';
@@ -261,13 +262,44 @@
     return [minutes&&minutes+' min',(rest||!minutes)&&rest+' s'].filter(Boolean).join(' ');
   }
 
-  function estimateSongDuration(lyrics,bpm,reelDuration=0){
-    const words=lyricWords(lyrics).length;
-    const reelSeconds=reelDuration>0?Math.min(maxSongDuration,Math.max(10,Math.ceil(reelDuration))):0;
-    if(!words)return reelSeconds||60;
+  function minimumLyricDuration(lyrics,bpm){
+    // Keep this estimate in sync with minimum_lyric_duration in music_worker.py.
+    const phrases=lyrics.normalize('NFC').replace(/\[[^\]\n]*\]/g,'').split(/[\r\n.!?;:…]+/);
+    let beats=0,syllables=0;
+    for(const phrase of phrases){
+      const words=lyricWords(phrase);
+      const count=words.reduce((sum,word)=>sum+Math.max(1,word.match(/[aeiouáéíóúü]+/gi)?.length||0),0);
+      syllables+=count;
+      beats+=4*Math.ceil(Math.max(count*1.1,words.length*1.75)/4);
+    }
+    if(!syllables)return 10;
     const beat=60/(Number(bpm)||122);
-    const seconds=words*1.6*beat+16*beat+5;
-    return Math.min(maxSongDuration,Math.max(45,Math.ceil(seconds/15)*15));
+    const seconds=Math.max(beats*beat,syllables*.45)+16*beat+6;
+    return Math.max(45,5*Math.ceil(seconds/5));
+  }
+
+  function songTiming({lyrics='',bpm,instrumental,duration},{reelDuration=0,referenceDuration=0}={}){
+    const minimum=instrumental?10:minimumLyricDuration(lyrics,bpm);
+    const defaultLength=reelDuration>0?Math.max(10,Math.min(maxSongDuration,Math.ceil(reelDuration))):60;
+    const automatic=referenceDuration?Math.max(referenceDuration,minimum):minimum>10?minimum:defaultLength;
+    const selected=Number.isFinite(duration)?Math.ceil(duration):automatic;
+    return {minimum,automatic,seconds:Math.max(selected,minimum,referenceDuration),referenceDuration};
+  }
+
+  function songTimingError(timing){
+    if(timing.minimum>maxSongDuration)return 'A este tempo, la letra necesita más de 10 minutos. Subí el tempo o dividila en partes.';
+    return timing.seconds>maxSongDuration?'Elegí una duración de hasta 10 minutos.':'';
+  }
+
+  function songTimingText(timing){
+    const error=songTimingError(timing);
+    if(error)return error;
+    const {minimum,seconds,referenceDuration}=timing,parts=[];
+    if(minimum>10)parts.push('Mínimo para esta letra · '+durationText(minimum)+'.');
+    if(seconds!==minimum||minimum===10)parts.push('Se generará · '+durationText(seconds)+'.');
+    if(referenceDuration&&seconds>referenceDuration)parts.push('El ritmo se repite para que entre la letra.');
+    if(!referenceDuration&&minimum>10&&seconds-minimum>=5)parts.push('El tiempo extra se pide como cierre instrumental.');
+    return parts.join(' ');
   }
 
   function jobMessage(job,readerVersion){
@@ -505,9 +537,9 @@
           <label data-lyric-picker hidden>Usar una letra guardada<select data-choose-lyric></select></label>
         </div>
         <div class="form-grid"><label>Estilo<select data-genre></select></label><label>Ritmo<select data-bpm><option value="style">Según el estilo</option><option value="80">Suave · 80 BPM</option><option value="100">Medio · 100 BPM</option><option value="122">Ágil · 122 BPM</option><option value="132">Rápido · 132 BPM</option><option value="155">Muy rápido · 155 BPM</option></select></label>
-        <label>Duración<select data-duration aria-describedby="songDurationHelp"><option value="auto">Automática</option>${durationChoices.map(seconds=>`<option value="${seconds}">${durationText(seconds)}</option>`).join('')}<option value="custom">Personalizada</option></select></label>
+        <label>Duración total<select data-duration aria-describedby="songDurationHelp"><option value="auto">Automática</option>${durationChoices.map(seconds=>`<option value="${seconds}">${durationText(seconds)}</option>`).join('')}<option value="custom">Personalizada</option></select></label>
         <label data-voice-field>Voz<select data-voice><option value="auto">Automática</option><option value="female">Femenina</option><option value="male">Masculina</option></select></label>
-        <label data-custom-duration-field hidden>Duración en segundos<input type="number" data-custom-duration min="10" max="${maxSongDuration}" step="1" value="120"></label></div>
+        <label data-custom-duration-field hidden>Duración en segundos<input type="number" data-custom-duration min="10" max="${maxSongDuration}" step="1" value="120" aria-describedby="songDurationHelp"></label></div>
         <small id="songDurationHelp" data-duration-help></small></div></section>
         <section class="audio-mix" data-gallery>
         <div class="audio-layer-heading"><div data-filters></div></div>
@@ -686,11 +718,11 @@
       if(!rows.length)host.textContent='Acá aparecen las letras que todavía no tienen canción.';
     }
     const chosenBpm=()=>variant?.sameBeat?variant.track.request?.bpm||null:Number(bpmInput.value)||genres[find('genre').value]?.[2]||122;
-    function songDuration(){
-      const estimate=estimateSongDuration(modeInput.value==='instrumental'?'':lyricsInput.value,chosenBpm());
-      if(variant?.sameBeat)return {estimate,desired:variant.track.duration||estimate};
-      return {estimate,desired:durationInput.value==='auto'?estimate:
-        Number(durationInput.value==='custom'?customDuration.value:durationInput.value)};
+    function songDuration(referenceDuration=variant?.sameBeat?variant.track.duration||0:0){
+      const choice=durationInput.value;
+      const duration=choice==='custom'?customDuration.valueAsNumber:choice==='auto'?null:Number(choice);
+      return songTiming({lyrics:lyricsInput.value,bpm:chosenBpm(),instrumental:modeInput.value==='instrumental',
+        duration:variant?.sameBeat?null:duration},{referenceDuration});
     }
     function showView(next){
       view=next;
@@ -735,6 +767,8 @@
       }else if(dialog.firstElementChild!==bar.element)dialog.prepend(bar.element);
       const readiness=generationState(connection,{instrumental:!generating||instrumental,lyrics:lyricsInput.value.trim(),
         needsLyrics:generating,working:locked});
+      const timing=songDuration(),timingError=generating&&songTimingError(timing);
+      if(readiness.ready&&timingError){readiness.ready=false;readiness.help=timingError;}
       if(locked)readiness.help='';
       bar.update(readiness,{label:generating&&variant?'Generar versión nueva':'Generar canción',job:!!song.id,cancelling:busy});
       find('save-upload').disabled=!uploadReady||locked||uploadSaved;
@@ -748,13 +782,13 @@
       const diskCopy=active?.localOnly&&!active.uploadKind;
       find('save-original').textContent=diskCopy?'Guardar copia en la PC':active?.saved?'✓ Guardado':'Guardar original';
       find('save-original').disabled=!!active?.saved&&!diskCopy;
-      const {estimate,desired}=songDuration(),durationHelp=find('duration-help');
-      find('custom-duration-field').hidden=durationInput.value!=='custom';
-      const tooShort=!instrumental&&lyricsInput.value.trim()&&desired>=10&&desired<estimate*.75;
-      durationHelp.textContent=sameBeat?(variant.track.duration?'Duración del ritmo · '+durationText(variant.track.duration):'Se toma la duración del ritmo original.'):
-        durationInput.value==='auto'?'Duración estimada · '+durationText(estimate):
-        tooShort?'Sugerida para esta letra · '+durationText(estimate)+'. Este tiempo podría cortar versos.':'';
-      durationHelp.hidden=!durationHelp.textContent;
+      const automatic=durationInput.options[0],automaticLabel='Automática · '+durationText(timing.automatic);
+      if(automatic.textContent!==automaticLabel)automatic.textContent=automaticLabel;
+      for(const option of durationInput.options)option.disabled=/^\d+$/.test(option.value)&&Number(option.value)<timing.minimum;
+      if(durationInput.selectedOptions[0]?.disabled){durationInput.value='auto';saveLyricsDraft();}
+      customDuration.min=timing.minimum;
+      find('custom-duration-field').hidden=sameBeat||durationInput.value!=='custom';
+      find('duration-help').textContent=songTimingText(timing);
     }
     async function action(message,fn){
       if(busy)return;busy=true;say(message,'working');sync();
@@ -809,7 +843,7 @@
       const remote=!!t.remote&&!t.localOnly;
       if(remote){
         const status=await connect();
-        if(!(status.songApi>=songApiVersion)&&name!==t.name)await api('/rename',jsonPost({id:t.id,name}));
+        if(!(status.songApi>=8)&&name!==t.name)await api('/rename',jsonPost({id:t.id,name}));
         const saved=await api('/save',jsonPost({id:t.id,name}));
         if(saved.id!==t.id||saved.name!==name||!saved.saved)throw Error('No se pudo confirmar el nombre guardado.');
       }
@@ -995,10 +1029,11 @@
         const readiness=generationState(status,{instrumental,lyrics,needsLyrics:true});
         if(!readiness.ready)throw Error(readiness.help);
         const source=variant?.sameBeat?await prepareReference(variant.track,tools):null;
-        const duration=source?.duration||songDuration().desired;
-        if(!Number.isFinite(duration)||duration<10||duration>maxSongDuration)throw Error('Elegí una duración entre 10 segundos y 10 minutos.');
+        const timing=songDuration(source?.duration),error=songTimingError(timing);
+        if(error)throw Error(error);
         const bpm=chosenBpm(),payload={name:nameInput.value.trim()||'Mi canción',style,caption:genres[style][1],lyrics:instrumental?'':lyrics,
-          bpm,rhythm:({100:'slow',122:'medium',132:'fast'})[bpm],duration,voice:find('voice').value,instrumental,versionOf:variant?.track.id};
+          bpm,rhythm:({100:'slow',122:'medium',132:'fast'})[bpm],duration:timing.seconds,
+          voice:find('voice').value,instrumental,versionOf:variant?.track.id};
         await song.start(payload,status,source);
       });
     };
@@ -1008,6 +1043,11 @@
     };
     find('save-original').onclick=()=>action('Guardando el audio…',()=>saveOriginal(active,active.name));
     durationInput.onchange=customDuration.oninput=modeInput.onchange=()=>{saveLyricsDraft();sync();};
+    customDuration.onchange=()=>{
+      const {minimum}=songDuration();
+      if(customDuration.valueAsNumber<minimum&&minimum<=maxSongDuration)customDuration.value=minimum;
+      saveLyricsDraft();sync();
+    };
     bpmInput.onchange=find('genre').onchange=sync;
     nameInput.oninput=saveLyricsDraft;
     lyricsInput.oninput=()=>{saveLyricsDraft();sync();};
@@ -1048,7 +1088,7 @@
     sync();
     return {editTrack,activate,deactivate};
   }
-  window.SalmosAudioStudio={install,createSongJob,isConnectionError,estimateSongDuration,durationText,
+  window.SalmosAudioStudio={install,createSongJob,isConnectionError,songTiming,songTimingError,songTimingText,durationText,
     maxSongDuration,monitorInitiator,generationBar,generationState,createSongFilter,renderSongGallery,
     syncSongPlayback,revealSong,openSongDownload,lyricsCheckText,versionSettings,prepareReference};
 })();

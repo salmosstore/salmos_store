@@ -22,11 +22,13 @@ def compare(lyrics, heard):
     for operation, start, end, _, _ in alignment.get_opcodes():
         if operation in ('delete', 'replace'):
             missing.extend(expected[start:end])
+    last_match = max((run.a + run.size for run in alignment.get_matching_blocks() if run.size), default=0)
     return {
         'status': 'match' if match else 'review',
         'coverage': round((len(expected) - len(missing)) / max(1, len(expected)), 3),
         'similarity': round(alignment.ratio(), 4),
         'missing': list(dict.fromkeys(missing))[:20],
+        'missingEnding': len(recognized) < len(expected) and len(expected) - last_match >= 3,
         'heard': heard[:3000],
     }
 
@@ -57,11 +59,12 @@ def check_audio(source, lyrics, cache):
                              download_root=str(cache), local_files_only=True)
         segments, _ = model.transcribe(str(source), language='es', beam_size=5,
                                        condition_on_previous_text=False)
-        heard = ' '.join(s.text.strip() for s in segments if s.text.strip() and s.no_speech_prob < .85)
+        voice = [segment for segment in segments if segment.text.strip() and segment.no_speech_prob < .85]
+        heard = ' '.join(segment.text.strip() for segment in voice)
     except Exception as exc:
         print(f'Revisión local de letra no disponible: {type(exc).__name__}', file=sys.stderr)
         return {'status': 'unchecked'}
-    return compare(lyrics, heard)
+    return {**compare(lyrics, heard), 'lastVoiceEnd': max((getattr(segment, 'end', 0) for segment in voice), default=0)}
 
 
 if __name__ == '__main__':
