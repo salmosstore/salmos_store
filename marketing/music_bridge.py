@@ -397,16 +397,20 @@ def get(handler, path, setup=None):
             handler.json_response({'error': 'Canción no válida.'}, 400)
             return True
         audio = DATA / track_id / 'cancion.wav'
-        if not audio.is_file():
+        try:
+            stream = audio.open('rb')
+        except FileNotFoundError:
             handler.json_response({'error': 'No encuentro esa canción.'}, 404)
             return True
-        handler.send_response(200)
-        handler.send_header('Content-Type', 'audio/wav')
-        handler.send_header('Content-Length', str(audio.stat().st_size))
-        handler.end_headers()
-        with audio.open('rb') as stream:
-            import shutil
-            shutil.copyfileobj(stream, handler.wfile)
+        with stream:
+            try:
+                handler.send_response(200)
+                handler.send_header('Content-Type', 'audio/wav')
+                handler.send_header('Content-Length', str(os.fstat(stream.fileno()).st_size))
+                handler.end_headers()
+                shutil.copyfileobj(stream, handler.wfile)
+            except ConnectionError:
+                handler.close_connection = True
         return True
     return False
 

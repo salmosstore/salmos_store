@@ -28,7 +28,7 @@ def compare(lyrics, heard):
         'coverage': round((len(expected) - len(missing)) / max(1, len(expected)), 3),
         'similarity': round(alignment.ratio(), 4),
         'missing': list(dict.fromkeys(missing))[:20],
-        'missingEnding': len(recognized) < len(expected) and len(expected) - last_match >= 3,
+        'missingEnding': bool(expected) and len(expected) - last_match >= min(2, len(expected)),
         'recognizedWords': len(recognized),
         'heard': heard[:3000],
     }

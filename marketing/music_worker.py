@@ -17,7 +17,7 @@ from pathlib import Path
 
 CHECKPOINT_READER_VERSION = '0.8.0'
 REQUIRED_CHECKPOINTS = ('acestep-v15-turbo', 'vae', 'Qwen3-Embedding-0.6B')
-SONG_API = 10
+SONG_API = 11
 MODEL = 'acestep-v15-turbo'
 MAX_SONG_DURATION = 600
 
@@ -114,16 +114,20 @@ def minimum_lyric_duration(lyrics, bpm):
     return max(45, 5 * ceil(seconds / 5))
 
 
-def breath_lines(line):
+def breath_lines(line, max_syllables):
     for phrase in re.split(r'(?<=[,;:.!?…])\s+', line):
+        phrase_words = [(word, syllables_in(word)) for word in phrase.split()]
+        remaining = sum(count for _, count in phrase_words)
         words, syllables = [], 0
-        for word in phrase.split():
-            count = syllables_in(word)
-            if words and syllables + count > 12:
+        for word, count in phrase_words:
+            # Leave a short phrase together instead of pushing its last word onto its own line.
+            short_tail = syllables + remaining > max_syllables and syllables >= max_syllables // 2 and remaining - count < 3
+            if words and (syllables + count > max_syllables or short_tail):
                 yield ' '.join(words)
                 words, syllables = [], 0
             words.append(word)
             syllables += count
+            remaining -= count
         if words:
             yield ' '.join(words)
 
@@ -131,6 +135,10 @@ def breath_lines(line):
 def extended_instrumental_ending(request):
     minimum = request.get('minimumDuration', request['duration'])
     return not request.get('reference') and request['duration'] - minimum >= 5
+
+
+def is_short_lyric(text):
+    return len(LYRIC_WORD.findall(LYRIC_TAG.sub('', text))) <= 24
 
 
 def song_lyrics(request, shorter_lines=False):
@@ -143,10 +151,12 @@ def song_lyrics(request, shorter_lines=False):
         name, separator, suffix = tag.partition(' ')
         return '[' + SPANISH_SECTIONS.get(name.casefold(), name) + separator + suffix + ']'
 
+    wrap_phrases = shorter_lines or is_short_lyric(text)
     lines = []
     for line in SECTION_TAG.sub(section, text).splitlines():
-        if line.strip() and not line.lstrip().startswith('[') and shorter_lines:
-            lines.extend(breath_lines(line))
+        if wrap_phrases and line.strip() and not line.lstrip().startswith('['):
+            # Format long phrases before the first take. Keep the words, punctuation and section order.
+            lines.extend(breath_lines(line, 8 if shorter_lines else 10))
             continue
         if not line.lstrip().startswith('[') and len(line.split()) > 12:
             line = re.sub(r'([,;.!?…])\s+(?=\S)', r'\1\n', line)
@@ -176,8 +186,8 @@ def song_caption(request, retry=False):
                   'clear vowels and consonants. Sing the supplied lyrics in order, with space to breathe between lines.')
     if request.get('reference'):
         directions = 'Keep the source beat and tempo. ' + directions
-    if retry:
-        lead = directions + ' The lead vocal starts early over continuous accompaniment. ' + ending
+    if retry or is_short_lyric(request['lyrics']):
+        lead = directions + ' The lead vocal enters in the opening bars. ' + ending
         return f'{lead} {request["caption"]}'[:512].rstrip()
     directions += ' ' + ending
     return f'{request["caption"][:511 - len(directions)].rstrip()} {directions}'
@@ -371,7 +381,7 @@ def run(root, folder):
             elif instrumental:
                 message = 'Probando una última toma instrumental…'
             else:
-                message = 'Probando una última toma con la voz desde el comienzo…'
+                message = 'Probando una última toma para mejorar la letra…'
 
             def report_progress(value, desc=None, **kwargs):
                 status('running', message, min(.95, .15 + .8 * float(value)))
