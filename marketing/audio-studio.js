@@ -5,10 +5,10 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=27.9';
+  const launcherFile='INICIAR_SALMOS.bat?v=28.0';
   const maxSongDuration=600;
   const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
-  const songApiVersion=7;
+  const songApiVersion=8;
   const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
   const trackLyrics=track=>track.request?.lyrics||track.lyrics||'';
   const lyricKey=lyrics=>lyricWords(lyrics.normalize('NFC')).join(' ').toLocaleLowerCase('es');
@@ -428,37 +428,31 @@
     options.className='song-download-options';status.setAttribute('role','status');
     close.textContent='Cancelar';close.onclick=()=>dialog.close();
     let working=false;
-    for(const [label,description,mp3] of [['MP3','Archivo más liviano',true],
-      ['Mejor calidad','Archivo original',false]]){
+    const formats=[['MP3','Archivo más liviano','mp3'],['Mejor calidad','Archivo original','original']];
+    if(/^[a-f0-9]{32}$/.test(track.id)&&!track.localOnly&&!track.uploadKind&&!track.request?.audioEdit){
+      formats.push(['Diagnóstico de letra','Letra y ajustes de esta toma','diagnostic']);
+    }
+    for(const [label,description,format] of formats){
       const button=document.createElement('button'),title=document.createElement('strong'),detail=document.createElement('small');
       title.textContent=label;detail.textContent=description;button.append(title,detail);options.append(button);
+      button.dataset.downloadFormat=format;
       button.onclick=async()=>{
         if(working)return;
         working=true;close.disabled=true;
         for(const choice of options.children)choice.disabled=true;
-        status.textContent=mp3?'Preparando el MP3…':'Buscando el archivo original…';
+        const messages={mp3:'Preparando el MP3…',original:'Buscando el archivo original…',diagnostic:'Leyendo los ajustes de la toma…'};
+        status.textContent=messages[format];
         try{
-          let blob=await trackBlob(track,helperFetch);
-          const originalExt=(track.fileName||blob.name||'').split('.').pop()?.toLowerCase();
-          const mime=blob.type.split(';')[0];
-          let extension=Object.hasOwn(audioTypes,originalExt)?originalExt:
-            Object.keys(audioTypes).find(ext=>audioTypes[ext]===mime)||'wav';
-          if(mp3&&extension!=='mp3'){
-            const wav=extension==='wav'&&blob.size<=108*1024*1024?blob:
-              tools.waveBlob(await stereoAudio(blob));
-            const response=await helperFetch('/api/music/mp3',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},180000);
-            blob=await response.blob();
-            extension='mp3';
-          }
+          const {blob,extension}=await songDownloadFile(track,format,{helperFetch,tools});
           const url=URL.createObjectURL(blob),link=document.createElement('a');
           link.href=url;
-          link.download=(name.textContent.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim().replace(/[ .]+$/g,'')||'Audio SALMOS')+'.'+extension;
+          const base=name.textContent.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim().replace(/[ .]+$/g,'')||'Audio SALMOS';
+          link.download=base+(format==='diagnostic'?' - diagnostico-'+track.id.slice(0,8):'')+'.'+extension;
           document.body.append(link);link.click();link.remove();
           setTimeout(()=>URL.revokeObjectURL(url),30000);
           dialog.close();
         }catch(error){
-          status.textContent=!error.status&&isConnectionError(error)?(mp3?'Abrí el iniciador para preparar el MP3.':
-            'Abrí el iniciador para recuperar el archivo original de tu PC.'):error.message;
+          status.textContent=!error.status&&isConnectionError(error)?'Abrí el iniciador para descargar este archivo.':error.message;
         }finally{
           working=false;close.disabled=false;
           for(const choice of options.children)choice.disabled=false;
@@ -468,6 +462,22 @@
     dialog.oncancel=event=>{if(working)event.preventDefault();};
     dialog.onclose=()=>dialog.remove();
     dialog.append(heading,name,options,status,close);document.body.append(dialog);dialog.showModal();
+  }
+  async function songDownloadFile(track,format,{helperFetch,tools}){
+    if(format==='diagnostic'){
+      const response=await helperFetch('/api/music/diagnostic/'+track.id,{cache:'no-store'});
+      const report=await response.json();
+      return {blob:new Blob([JSON.stringify(report,null,2)],{type:'application/json'}),extension:'json'};
+    }
+    const blob=await trackBlob(track,helperFetch);
+    const originalExt=(track.fileName||blob.name||'').split('.').pop()?.toLowerCase();
+    const mime=blob.type.split(';')[0];
+    const extension=Object.hasOwn(audioTypes,originalExt)?originalExt:
+      Object.keys(audioTypes).find(ext=>audioTypes[ext]===mime)||'wav';
+    if(format==='original'||extension==='mp3')return {blob,extension};
+    const wav=extension==='wav'&&blob.size<=108*1024*1024?blob:tools.waveBlob(await stereoAudio(blob));
+    const response=await helperFetch('/api/music/mp3',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},180000);
+    return {blob:await response.blob(),extension:'mp3'};
   }
   function install({host,helperFetch,initiator,dbAction,tools,genres,refreshSongs,hiddenSongs,pause}){
     const dialog=document.createElement('section');dialog.id='audioOnlyStudio';
@@ -521,7 +531,7 @@
     const player=find('player'),recordPlayer=find('upload-player');
     let recording=null,recordingURL='',savedUpload=null,active=null,sourceURL='',busy=false,gallerySeq=0;
     let visible=false,listed=false,view='gallery',variant=null;
-    let libraryEntries=new Map(),savedLyrics=[],remoteTracks=[];
+    let libraryEntries=new Map(),savedLyrics=[],remoteTracks=[],remoteRevision=0;
     const songFilter=createSongFilter(()=>renderAudioLibrary(libraryEntries));
     find('filters').append(songFilter.element);
     const song=createSongJob({helperFetch,storageKey:'salmos-active-audio-job',
@@ -582,10 +592,11 @@
       const record={id,name,blob,fileName,uploadKind,duration,createdAt,lyrics,kind:'ai-music19',saved20:true,localOnly:true};
       try{await put(record);}
       catch{throw Error('El navegador no pudo guardar ese archivo. El original sigue disponible para descargar.');}
-      if(recording?.id===id)savedUpload=record;
+      if(recording?.id===id){savedUpload=record;uploadName.value=record.name;}
       if(active?.id===id){active={...record,saved:true};find('source-name').textContent=record.name;}
       say('Audio guardado en Mis audios.','success');
       await library();
+      await refreshSongs().catch(()=>{});
     }
     const lyricsDraftKey='salmos-audio-lyrics-draft';
     const lyricsIdPrefix='audio-lyrics:';
@@ -765,7 +776,7 @@
       const local=await localTracks().catch(()=>[]),entries=new Map(local.map(t=>[t.id,t]));
       for(const t of remoteTracks){
         const previous=entries.get(t.id);
-        entries.set(t.id,{...previous,...t,request:{...t.request,...previous?.request,saved:t.request?.saved||previous?.request?.saved},
+        entries.set(t.id,{...previous,...t,request:{...previous?.request,...t.request,saved:t.request?.saved||previous?.request?.saved},
           remote:true,localOnly:false,saved20:t.request?.saved||previous?.saved20});
       }
       if(seq!==gallerySeq)return;
@@ -774,8 +785,9 @@
       renderLyricsLibrary();
     }
     async function refreshLibrary(){
-      remoteTracks=(await api('/tracks')).tracks||[];
-      await library();
+      const revision=++remoteRevision;
+      const {tracks}=await api('/tracks');
+      if(revision===remoteRevision){remoteTracks=tracks||[];await library();}
     }
     function renderAudioLibrary(entries){
       const hidden=hiddenSongs();
@@ -794,13 +806,28 @@
     }
     async function saveOriginal(t,name){
       if(t.uploadKind){await saveUpload({...t,name});return;}
-      if(t.remote||t.localOnly)await connect().catch(()=>{});
-      const generated=!!(t.generated||t.remote&&!t.request?.audioEdit);
-      if(generated&&t.remote&&name!==t.name)await api('/rename',jsonPost({id:t.id,name}));
-      const record=await saveBlob({...t,name},t.blob,t.request?.parentId||'',generated);
-      if(active?.id===t.id){active={...active,...record,saved:true};find('source-name').textContent=record.name;}
+      const remote=!!t.remote&&!t.localOnly;
+      if(remote){
+        const status=await connect();
+        if(!(status.songApi>=songApiVersion)&&name!==t.name)await api('/rename',jsonPost({id:t.id,name}));
+        const saved=await api('/save',jsonPost({id:t.id,name}));
+        if(saved.id!==t.id||saved.name!==name||!saved.saved)throw Error('No se pudo confirmar el nombre guardado.');
+      }
+      const previous=await dbAction('assets','readonly',store=>store.get(t.id)).catch(()=>null);
+      const request={...previous?.request,...t.request,name,saved:true};
+      const {blob,...metadata}={...previous,...t,kind:'ai-music19',name,request,remote,localOnly:!remote,saved20:true,saved:true};
+      const record={...metadata,blob};
+      try{await put(record);}catch(error){if(!remote)throw error;}
+      if(remote){
+        remoteRevision++;
+        remoteTracks=[metadata,...remoteTracks.filter(track=>track.id!==t.id)];
+      }
+      if(active?.id===t.id){active=record;find('source-name').textContent=name;}
+      await library();
+      await refreshSongs({updated:metadata}).catch(()=>{});
+      say(name===t.name?'Audio guardado.':'Nombre guardado.','success');
     }
-    async function editTrack(track,{reel,onApply,trim,voice=false}={}){
+    async function editTrack(track,{reel,onApply,onSavedOriginal,trim,voice=false}={}){
       pause();
       if(active?.id!==track.id||!active.blob)await loadTrack(track);
       const source={...active,...track,blob:active.blob};
@@ -809,7 +836,7 @@
       await window.SalmosSongEditor.open({track:source,blob:source.blob,tools,reel,trim,
         settings:draft?.settings,voice,style:source.request?.style||find('genre').value,bpm:source.request?.bpm||chosenBpm(),notify:say,
         onDraft:settings=>put({id:draftKey,kind:'song-edit',settings}),
-        onSaveOriginal:name=>saveOriginal(source,name),
+        onSaveOriginal:async name=>{await saveOriginal(source,name);onSavedOriginal?.(name);},
         onSaveVersion:version=>saveBlob({...version,id:newId(),request:{...source.request,lyrics:version.lyrics}},version.blob,source.id),
         onLyrics:async lyrics=>{
           const lyricsCheck=(source.request?.lyrics||source.lyrics)===lyrics?source.lyricsCheck:null;
@@ -857,6 +884,7 @@
             await api('/delete',jsonPost({id:source.id}));
           }
           await dbAction('assets','readwrite',s=>{s.delete(draftKey);return s.delete(source.id);});
+          remoteRevision++;
           remoteTracks=remoteTracks.filter(track=>track.id!==source.id);
           if(savedUpload?.id===source.id)savedUpload=null;
           if(active?.id===source.id){
@@ -864,23 +892,20 @@
             if(sourceURL)URL.revokeObjectURL(sourceURL);
             sourceURL='';active=null;find('source-name').textContent='Elegí o subí un audio para escucharlo y editarlo.';
           }
-          await library();await refreshSongs().catch(()=>{});sync();say('Audio borrado.','success');
+          await library();await refreshSongs({deletedId:source.id}).catch(()=>{});sync();say('Audio borrado.','success');
         },
         onApply});
     }
-    async function saveBlob(t,blob,parentId='',generated=false){
+    async function saveBlob(t,blob,parentId=''){
       let remote=false,reason='';
       if(initiator.data)try{
-        if(generated)await api('/save',jsonPost({id:t.id}));
-        else{
-          await api('/versions/'+t.id+'?'+new URLSearchParams({name:t.name,parent:parentId}),{method:'POST',headers:{'Content-Type':'audio/wav'},body:blob});
-          if(typeof t.request?.lyrics==='string'&&t.request.lyrics)
-            await api('/lyrics',jsonPost({id:t.id,lyrics:t.request.lyrics})).catch(()=>{});
-        }
+        await api('/versions/'+t.id+'?'+new URLSearchParams({name:t.name,parent:parentId}),{method:'POST',headers:{'Content-Type':'audio/wav'},body:blob});
+        if(typeof t.request?.lyrics==='string'&&t.request.lyrics)
+          await api('/lyrics',jsonPost({id:t.id,lyrics:t.request.lyrics})).catch(()=>{});
         remote=true;
       }catch(e){reason=e.message;}
       const record={kind:'ai-music19',id:t.id,name:t.name,duration:t.duration,createdAt:t.createdAt||Date.now()/1000,lyricsCheck:t.lyricsCheck,
-        request:{...t.request,name:t.name,duration:t.duration,saved:true,parentId,audioEdit:!generated},saved20:true,remote,localOnly:!remote,generated,blob};
+        request:{...t.request,name:t.name,duration:t.duration,saved:true,parentId,audioEdit:true},saved20:true,remote,localOnly:!remote,blob};
       try{await put(record);}catch(e){if(!remote)throw Error('No se pudo guardar el audio en la PC ni en este navegador. Podés descargar el WAV.');}
       say(remote?'Audio guardado en tu PC.':['Audio guardado en este navegador.',reason].filter(Boolean).join(' '),'success');
       await library();if(initiator.data)refreshSongs().catch(()=>{});return record;

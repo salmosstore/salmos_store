@@ -324,6 +324,32 @@ def tracks():
     return sorted(rows, key=lambda r: r['createdAt'], reverse=True)
 
 
+def lyric_diagnostic(folder):
+    track = track_info(folder, read_status(folder))
+    if track is None or track['request'].get('audioEdit'):
+        return None
+    try:
+        result = json.loads((folder / 'resultado.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        result = {}
+    if not isinstance(result, dict):
+        result = {}
+    request_keys = ('lyrics', 'caption', 'style', 'mood', 'rhythm', 'bpm', 'duration', 'instrumental', 'voice', 'seed')
+    engine_keys = ('lyrics', 'caption', 'vocal_language', 'bpm', 'duration', 'seed', 'inference_steps',
+                   'guidance_scale', 'shift', 'infer_method', 'thinking', 'task_type', 'audio_cover_strength')
+    saved = result.get('salmos')
+    if not isinstance(saved, dict):
+        saved = {}
+    engine = {key: result[key] for key in engine_keys if key in result and isinstance(result[key], (str, int, float, bool))}
+    return {
+        'nombre': track['name'], 'duracionAudio': track['duration'], 'creada': track['createdAt'],
+        'pedido': {key: track['request'][key] for key in request_keys if key in track['request']},
+        'entradaAlMotor': saved.get('input'), 'datosDevueltosPorMotor': engine,
+        'motor': {key: saved[key] for key in ('songApi', 'model', 'inferenceSha256', 'randomSeed') if key in saved},
+        'revisionLetra': track['lyricsCheck'],
+    }
+
+
 def get(handler, path, setup=None):
     if path == '/api/music':
         handler.json_response(state())
@@ -337,6 +363,17 @@ def get(handler, path, setup=None):
             handler.json_response({'error': 'Pedido de música no válido.'}, 400)
         else:
             handler.json_response({**state(job_id), 'setup': setup})
+        return True
+    if path.startswith('/api/music/diagnostic/'):
+        track_id = path.rsplit('/', 1)[-1]
+        if not re.fullmatch(r'[a-f0-9]{32}', track_id):
+            handler.json_response({'error': 'Canción no válida.'}, 400)
+            return True
+        diagnostic = lyric_diagnostic(DATA / track_id)
+        if diagnostic is None:
+            handler.json_response({'error': 'No se encontraron los datos de esta canción.'}, 404)
+        else:
+            handler.json_response(diagnostic)
         return True
     if path.startswith('/api/music/audio/'):
         track_id = path.rsplit('/', 1)[-1]
@@ -364,9 +401,9 @@ def manage(data, action):
     if not re.fullmatch(r'[a-f0-9]{32}', track_id):
         raise ValueError('Canción no válida.')
     folder = DATA / track_id
-    if not (folder / 'request.json').is_file():
-        raise ValueError('No encuentro esa canción.')
     with LOCK:
+        if not (folder / 'request.json').is_file():
+            raise ValueError('No encuentro esa canción.')
         if JOB and JOB['id'] == track_id and JOB['process'].poll() is None:
             raise RuntimeError('Esperá a que termine la generación.')
         if action == 'delete':
@@ -376,12 +413,13 @@ def manage(data, action):
                 JOB = None
             return {'deleted': track_id}
         request = json.loads((folder / 'request.json').read_text(encoding='utf-8'))
-        if action == 'rename':
-            name = str(data.get('name', '')).strip()
+        if action == 'rename' or (action == 'save' and 'name' in data):
+            name = data.get('name')
+            name = name.strip() if isinstance(name, str) else ''
             if not name or len(name) > 100:
                 raise ValueError('Escribí un nombre de hasta 100 caracteres.')
             request['name'] = name
-        elif action == 'lyrics':
+        if action == 'lyrics':
             lyrics = data.get('lyrics')
             if not isinstance(lyrics, str) or len(lyrics) > 3000:
                 raise ValueError('La letra puede tener hasta 3.000 caracteres.')

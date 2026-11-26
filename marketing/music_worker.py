@@ -1,6 +1,7 @@
 """One ACE-Step generation per process with a low-memory model loader."""
 from __future__ import annotations
 from functools import wraps
+from hashlib import sha256
 from importlib import metadata
 import json
 import os
@@ -9,12 +10,14 @@ import subprocess
 import sys
 import tempfile
 import traceback
+import unicodedata
 from pathlib import Path
 
 
 CHECKPOINT_READER_VERSION = '0.8.0'
 REQUIRED_CHECKPOINTS = ('acestep-v15-turbo', 'vae', 'Qwen3-Embedding-0.6B')
-SONG_API = 7
+SONG_API = 8
+MODEL = 'acestep-v15-turbo'
 
 
 def missing_checkpoints(root):
@@ -79,10 +82,34 @@ def use_windows_checkpoint_reader(cache, status):
     safetensors.safe_open = open_checkpoint
 
 
+SPANISH_SECTIONS = {'introducción': 'Intro', 'intro': 'Intro', 'verso': 'Verse',
+                    'estrofa': 'Verse', 'coro': 'Chorus', 'estribillo': 'Chorus',
+                    'pre-coro': 'Pre-Chorus', 'puente': 'Bridge', 'final': 'Outro',
+                    'cierre': 'Outro', 'salida': 'Outro'}
+SECTION_TAG = re.compile(r'^\[([^\]\n]+)\]', re.MULTILINE)
+
+
 def song_lyrics(request):
-    if not request['instrumental']:
-        return request['lyrics']
-    return '[Instrumental]' if request['duration'] <= 30 else '[Instrumental]\n\n[Outro]'
+    if request['instrumental']:
+        return '[Instrumental]' if request['duration'] <= 30 else '[Instrumental]\n\n[Outro]'
+    text = unicodedata.normalize('NFC', request['lyrics']).replace('\r\n', '\n').replace('\r', '\n')
+
+    def section(match):
+        tag = match[1]
+        name, separator, suffix = tag.partition(' ')
+        return '[' + SPANISH_SECTIONS.get(name.casefold(), name) + separator + suffix + ']'
+
+    lines = []
+    for line in SECTION_TAG.sub(section, text).splitlines():
+        if not line.lstrip().startswith('[') and len(line.split()) > 12:
+            line = re.sub(r'([,;.!?…])\s+(?=\S)', r'\1\n', line)
+        lines.append(line.rstrip())
+    text = '\n'.join(lines).strip()
+    if not text.startswith('['):
+        text = '[Verse]\n' + text
+    if not any(re.match(r'outro\b', tag, re.IGNORECASE) for tag in SECTION_TAG.findall(text)):
+        text += '\n\n[Outro]'
+    return text
 
 
 def song_caption(request):
@@ -143,6 +170,13 @@ def verify_lyrics(source, folder, duration):
         return {'status': 'unchecked'}
 
 
+def engine_fingerprint(root):
+    try:
+        return sha256((root / 'acestep' / 'inference.py').read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def run(root, folder):
     os.chdir(root)
     sys.path.insert(0, str(root))
@@ -184,7 +218,7 @@ def run(root, folder):
         from acestep.llm_inference import LLMHandler
         from acestep.inference import GenerationParams, GenerationConfig, generate_music
         handler = AceStepHandler()
-        message, ok = handler.initialize_service(project_root=str(root), config_path='acestep-v15-turbo',
+        message, ok = handler.initialize_service(project_root=str(root), config_path=MODEL,
             device='cuda', use_flash_attention=False, compile_model=True, offload_to_cpu=True,
             offload_dit_to_cpu=True, quantization='int8_weight_only', use_mlx_dit=False)
         if not ok:
@@ -202,6 +236,11 @@ def run(root, folder):
         random_seed = seed < 0
         attempts = 3 if not instrumental and random_seed else 1
         caption = song_caption(request)
+        inputs = {'caption': caption, 'lyrics': lyrics, 'bpm': request.get('bpm'), 'instrumental': instrumental,
+                  'vocal_language': 'unknown' if instrumental else 'es', 'duration': request['duration'],
+                  'inference_steps': 8, 'guidance_scale': 1.0, 'shift': 3.0, 'infer_method': 'ode',
+                  'thinking': False, 'use_cot_metas': False, 'use_cot_caption': False,
+                  'use_cot_lyrics': False, 'use_cot_language': False, 'seed': seed}
         llm = LLMHandler()
 
         def generate(directory, attempt):
@@ -210,12 +249,7 @@ def run(root, folder):
             def report_progress(value, desc=None, **kwargs):
                 status('running', message, min(.95, .15 + .8 * float(value)))
 
-            params = GenerationParams(caption=caption, lyrics=lyrics, bpm=request.get('bpm'),
-                instrumental=instrumental, vocal_language='unknown' if instrumental else 'es', duration=request['duration'],
-                inference_steps=8,
-                guidance_scale=1.0, shift=3.0, infer_method='ode', thinking=False,
-                use_cot_metas=False, use_cot_caption=False, use_cot_lyrics=False, use_cot_language=False,
-                seed=seed, **task)
+            params = GenerationParams(**inputs, **task)
             config = GenerationConfig(batch_size=1, allow_lm_batch=False, audio_format='wav',
                 use_random_seed=random_seed, seeds=None if random_seed else [seed])
             status('running', message, .15)
@@ -255,7 +289,9 @@ def run(root, folder):
                     if exact or verdict == 'unchecked':
                         break
             status('running', 'Guardando el audio…', .98)
-            (folder / 'resultado.json').write_text(json.dumps(best['params'], ensure_ascii=False, default=str), encoding='utf-8')
+            result = {**(best['params'] or {}), 'salmos': {'songApi': SONG_API, 'model': MODEL,
+                'inferenceSha256': engine_fingerprint(root), 'input': inputs, 'randomSeed': random_seed}}
+            (folder / 'resultado.json').write_text(json.dumps(result, ensure_ascii=False, default=str), encoding='utf-8')
             best_audio.replace(folder / 'cancion.wav')
             verdict = (best['check'] or {}).get('status')
             message = 'Canción lista.' if instrumental else 'Toma lista para revisar.'

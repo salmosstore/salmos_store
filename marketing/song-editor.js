@@ -280,9 +280,11 @@
     let previewContext,playbackMix,previewNoise,scheduledThrough=0,scheduled=[];
     const playedLive=new Map();
     const edited=()=>settings.lanes.some(lane=>lane.notes.length)||settings.clean!==0||settings.volume!==100||!!settings.effect;
-    const lyrics=track.request?.lyrics||track.lyrics;
-    find('name').value=track.name||'Mi canción';
-    find('lyric').value=lyrics||'';
+    const lyrics=track.request?.lyrics||track.lyrics||'';
+    const originalName=track.name||'Mi canción';
+    const originalSaved=!!(track.saved||track.saved20||track.request?.saved);
+    find('name').value=originalName;
+    find('lyric').value=lyrics;
     find('lyric-box').hidden=!options.onLyrics&&!lyrics;
     find('save-lyric').hidden=!options.onLyrics;
     find('check-lyric').hidden=!options.onCheckLyrics||!lyrics;
@@ -294,8 +296,8 @@
       find('review-label').hidden=check?.status!=='review';
     }
     showLyricCheck(track.lyricsCheck);
-    find('original').disabled=!!track.saved&&!track.localOnly;
-    if(find('original').disabled)find('original').textContent='✓ Original guardado';
+    syncSaveButtons();
+    find('name').oninput=find('lyric').oninput=syncSaveButtons;
     find('delete').hidden=!options.onDelete;
     find('apply').hidden=!options.onApply;
     find('reel').hidden=!reel;
@@ -309,7 +311,14 @@
     for(let n=24;n<=84;n++)find('pitch').add(new Option(noteNames[n%12]+(Math.floor(n/12)-1),n));
 
     function show(message){find('song-status').textContent=message;}
-    function name(){return find('name').value.trim()||track.name||'Mi canción';}
+    function name(){return find('name').value.trim()||originalName;}
+    function syncSaveButtons(){
+      const renamed=name()!==originalName;
+      const original=find('original');
+      original.disabled=originalSaved&&!renamed;
+      original.textContent=renamed?'Guardar nombre':originalSaved?'✓ Original guardado':'Guardar original';
+      find('save').hidden=renamed&&!dirty&&find('lyric').value===lyrics;
+    }
     function showReel(value=head,playback=false){
       if(!reel)return;
       const relative=(Math.max(0,value-settings.start)+(playback?reelElapsed:0))/(reel.rate||1);
@@ -324,6 +333,7 @@
     }
     function change(){
       dirty=true;mixSerial++;rendered=null;
+      syncSaveButtons();
       if(playing)clearSchedule();
       playbackMix?.configure(settings);
       refresh();
@@ -624,9 +634,13 @@
       const {lane,note}=activeNote;
       lane.notes=lane.notes.filter(entry=>entry!==note);activeNote=null;change();
     };
-    find('original').onclick=()=>doAction('Guardando original…',async()=>{
-      await options.onSaveOriginal(name());find('original').disabled=true;find('original').textContent='✓ Original guardado';show('Original guardado.');
-    });
+    find('original').onclick=()=>{
+      const title=name();
+      return doAction(title===originalName?'Guardando el original…':'Guardando el nombre…',async()=>{
+        await options.onSaveOriginal(title);
+        dialog.close();
+      });
+    };
     find('save').onclick=()=>doAction('Preparando la versión…',async()=>{
       const version=name()===track.name?name().slice(0,90)+' · versión':name();
       await options.onSaveVersion({name:version,blob:await result(),duration:settings.end-settings.start,lyrics:find('lyric').value});
