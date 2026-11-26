@@ -35,6 +35,15 @@ body dialog.category-delete38{width:min(520px,calc(100vw - 24px))}
 .saved-price-heading{font-size:.75rem;color:var(--muted)}
 .custom-product-prices{margin:20px 0}
 .custom-product-prices>summary,.custom-price-individual>summary{cursor:pointer;padding:8px 0;font-weight:700;font-size:.9rem}
+.chart-saved-styles{display:grid;gap:8px;padding:12px;margin:0 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.chart-saved-styles-head,.chart-style-list,.chart-style-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.chart-saved-styles-head{justify-content:space-between}
+.chart-style-list{max-height:140px;overflow-y:auto;padding:3px}
+.chart-saved-styles .btn{width:auto;min-height:34px;padding:6px 10px;white-space:normal;overflow-wrap:anywhere}
+.chart-style-form{align-items:flex-end}
+.chart-style-form .field{flex:1 1 165px;margin:0}
+.chart-saved-styles [hidden],.chart-saved-styles p:empty{display:none!important}
+.chart-saved-styles p{margin:0;color:var(--muted);font-size:.84rem}
 .chart-wrapper-controls{border:1px solid var(--line);border-radius:12px;padding:12px;margin:3px 0;min-width:0;display:grid;gap:10px}
 .chart-wrapper-controls legend{padding:0 5px;font-size:.9rem;font-weight:700}
 .chart-wrapper-color-row{display:flex;align-items:end;gap:8px}
@@ -44,6 +53,17 @@ body dialog.category-delete38{width:min(520px,calc(100vw - 24px))}
 .chart-wrapper-controls [type=range]{width:100%;accent-color:var(--accent,#e98eb8);cursor:pointer}
 .chart-wrapper-controls output{float:right;font-variant-numeric:tabular-nums}
 .chart-wrapper-controls>[data-chart-save-style]{justify-self:end;width:auto;padding:8px 12px;min-height:34px}
+.chart-annotation-controls{min-width:0;margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
+.chart-annotation-controls legend{padding:0 5px;font-weight:700}
+.chart-price-toggle,.chart-colors-list,.chart-colors-list>div{display:flex;align-items:center;gap:8px}
+.chart-price-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.chart-price-fields .field{margin:0}
+.chart-price-fields p{grid-column:1/-1;margin:0;color:var(--muted);font-size:.84rem}
+.chart-price-fields p:empty,.chart-colors-list:empty{display:none}
+.chart-colors-list{flex-wrap:wrap;margin-bottom:8px}
+.chart-colors-list>div{gap:4px}
+.chart-colors-list input{width:36px;height:32px;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2);cursor:pointer}
+.chart-colors-list .icon-btn{width:28px;min-width:28px;height:28px}
 .chart-export-preview>img.chart-picking-color{cursor:crosshair!important;outline:2px solid var(--accent,#e98eb8)}
 @media(max-width:600px){.settings-section38>summary{padding:14px 12px;gap:8px}.settings-section38>summary h3{font-size:1rem}.settings-section-count{font-size:.66rem;max-width:110px}.settings-section-body{padding:12px}.saved-rules-grid{grid-template-columns:1fr}.saved-price-row{grid-template-columns:minmax(100px,1.2fr) repeat(2,minmax(70px,1fr));font-size:.74rem;gap:7px}.saved-price-heading{font-size:.65rem}.settings-card-heading{flex-wrap:wrap}body dialog.settings-editor38 .dialog-body{padding:12px}.chart-wrapper-color-row{align-items:center}}
 
