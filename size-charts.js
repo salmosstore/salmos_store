@@ -33,7 +33,10 @@
   }
   function savedStyles(){
     return Object.entries(ctx.settings()).filter(([key])=>key.startsWith(styleKeyPrefix))
-      .map(([,value])=>readSavedStyle(value)).filter(Boolean)
+      .map(([id,value])=>{
+        const entry=readSavedStyle(value);
+        return entry&&{...entry,id};
+      }).filter(Boolean)
       .sort((a,b)=>b.savedAt-a.savedAt||a.name.localeCompare(b.name,'es'));
   }
   let lastDownload;
@@ -51,7 +54,12 @@
   }
   function card(chart){return `<article class="size-chart-card"><div class="size-chart-sheet" data-chart-preview="${esc(chart.id)}"><span class="size-chart-loading">Preparando imagen…</span></div><div class="size-chart-actions"><button type="button" class="icon-btn" data-size-chart-edit="${esc(chart.id)}" title="Editar tabla" aria-label="Editar ${esc(chart.title)}"><i class="fa-solid fa-pen"></i></button><button type="button" class="icon-btn" data-size-chart-export="${esc(chart.id)}" title="Descargar imagen" aria-label="Descargar ${esc(chart.title)}"><i class="fa-solid fa-download"></i></button><button type="button" class="icon-btn" data-size-chart-share="${esc(chart.id)}" title="Compartir imagen" aria-label="Compartir ${esc(chart.title)}"><i class="fa-solid fa-share-nodes"></i></button></div></article>`;}
   function gallery(){return `<section class="size-charts-section"><div class="admin-section-head"><div><h2>Tablas de talles</h2><p class="muted">Medidas en centímetros · ancho de axila a axila y largo desde el hombro</p></div><button type="button" class="btn btn-ghost" data-size-chart-new>+ Nueva tabla</button></div><div class="size-chart-gallery">${all().map(card).join('')||'<p>Agregá una tabla de talles.</p>'}</div></section>`;}
-  async function save(charts){const payload=JSON.stringify(charts);await ctx.api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{[key]:payload}})});ctx.settings()[key]=payload;ctx.changed?.();}
+  async function save(charts,extraSettings={}){
+    const settings={...extraSettings,[key]:JSON.stringify(charts)};
+    await ctx.api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings})});
+    Object.assign(ctx.settings(),settings);
+    ctx.changed?.();
+  }
   function rowHtml(row={size:'',width:'',height:''}){return `<tr data-size-chart-row><td><input class="input" data-chart-size value="${esc(row.size)}" maxlength="40" required aria-label="Talle"></td><td><input class="input" data-chart-width type="number" min=".1" max="1000" step="any" value="${row.width}" required aria-label="Ancho en centímetros"></td><td><input class="input" data-chart-height type="number" min=".1" max="1000" step="any" value="${row.height}" required aria-label="Largo en centímetros"></td><td><button type="button" class="icon-btn" data-chart-remove-row aria-label="Quitar talle">×</button></td></tr>`;}
   function edit(id=''){
     const current=all().find(chart=>chart.id===id),draft=current||{id:crypto.randomUUID(),title:'',productType:'shirt',fit:'Clásica',materialClass:'ADULTOS',notes:'Medidas aproximadas',rows:[{size:'',width:'',height:''}]},dialog=ctx.dialog('sizeChartEditorDialog',current?'Editar tabla de talles':'Nueva tabla de talles');dialog.classList.add('size-chart-editor');
@@ -236,44 +244,62 @@
     dialog.classList.remove('tiny-dialog');
     dialog.classList.add('size-chart-export');
     const body=dialog.querySelector('.dialog-body');
+    let footer=dialog.querySelector('.chart-export-footer');
+    if(!footer){
+      footer=document.createElement('footer');
+      footer.className='dialog-foot chart-export-footer';
+      body.after(footer);
+    }
+    footer.innerHTML=`
+      <label class="field">Calidad<select class="select" data-chart-quality>
+        <option value="max">Máxima calidad</option><option value="small">Menos de 5 MB · WhatsApp</option>
+      </select></label>
+      <div class="admin-actions">
+        <button type="button" class="btn btn-primary" data-chart-download>Descargar</button>
+        <button type="button" class="btn btn-ghost" data-chart-share>Compartir</button>
+      </div>`;
     body.innerHTML=`
-      <section class="chart-saved-styles" aria-label="Estilos guardados">
-        <div class="chart-saved-styles-head">
-          <strong>Estilos guardados</strong>
-          <button type="button" class="btn btn-ghost" data-chart-add-style
-            aria-expanded="false" aria-controls="chartStyleForm">+ Agregar estilo</button>
-        </div>
-        <div class="chart-style-list" data-chart-styles></div>
-        <form class="chart-style-form" id="chartStyleForm" hidden>
-          <label class="field">Nombre del estilo<input class="input" name="name" maxlength="60" required></label>
-          <button type="submit" class="btn btn-primary">Guardar estilo</button>
-          <button type="button" class="btn btn-ghost" data-chart-cancel-style>Cancelar</button>
-        </form>
-        <p data-chart-style-status role="status"></p>
-      </section>
       <div class="chart-export-layout">
-        <section class="chart-export-preview">
-          <img data-chart-preview alt="Vista previa de ${esc(chart.title)}">
-          <p data-chart-preview-status role="status">Preparando vista previa…</p>
-        </section>
+        <div class="chart-export-media">
+          <div class="chart-export-preview">
+            <img data-chart-preview alt="Vista previa de ${esc(chart.title)}">
+            <p data-chart-preview-status role="status">Preparando vista previa…</p>
+          </div>
+          <section class="chart-backgrounds" aria-label="Fondos">
+            <div class="chart-backgrounds-head">
+              <strong>Fondos</strong>
+              <label class="chart-background-custom" data-chart-color-field hidden>
+                Color del fondo<input type="color" data-chart-color>
+              </label>
+              <input class="input" type="search" data-chart-background-search
+                placeholder="Buscar fondo…" aria-label="Buscar un fondo">
+            </div>
+            <div class="chart-background-grid" data-chart-background-grid role="group" aria-label="Fondos con miniaturas"></div>
+            <p data-chart-background-empty hidden>No hay fondos para esa búsqueda.</p>
+          </section>
+        </div>
         <section class="chart-export-controls">
-          <strong>${esc(chart.title)}</strong>
-          <button type="button" class="btn btn-ghost" data-chart-garment>Subir imagen</button>
-          <label class="field">Fondo<select class="select" data-chart-background>${ctx.backgroundOptions()}</select></label>
-          <input class="input" type="search" data-chart-background-search
-            placeholder="Buscar entre tus fondos…" aria-label="Buscar un fondo">
-          <div class="chart-background-grid" data-chart-background-grid role="group" aria-label="Fondos con miniaturas"></div>
-          <label class="field" data-chart-color-field hidden><input type="color" data-chart-color aria-label="Color del fondo"></label>
+          <div class="chart-export-controls-head">
+            <strong>${esc(chart.title)}</strong>
+            <button type="button" class="btn btn-ghost" data-chart-garment>Subir imagen</button>
+          </div>
+          <section class="chart-saved-styles">
+            <label class="field">Estilos guardados<select class="select" data-chart-styles></select></label>
+            <form class="chart-style-form" data-chart-style-form>
+              <label class="field">Nombre del estilo<input class="input" name="name" maxlength="60" required></label>
+              <button type="submit" class="btn btn-ghost">Guardar estilo</button>
+            </form>
+            <p data-chart-style-status role="status"></p>
+          </section>
           <fieldset class="chart-wrapper-controls">
             <legend>Wrapper de la tabla</legend>
             <div class="chart-wrapper-color-row">
               <label class="field">Color<input type="color" data-chart-wrapper-color></label>
-              <button type="button" class="btn btn-ghost" data-chart-wrapper-eyedropper>⌖ Cuentagotas del fondo</button>
+              <button type="button" class="btn btn-ghost" data-chart-wrapper-eyedropper>Cuentagotas del fondo</button>
             </div>
-            <label class="field">Opacidad <output data-chart-wrapper-opacity-value></output>
+            <label class="field chart-wrapper-opacity"><span>Opacidad <output data-chart-wrapper-opacity-value></output></span>
               <input type="range" min="0" max="100" step="1" data-chart-wrapper-opacity>
             </label>
-            <button type="button" class="btn btn-ghost" data-chart-save-style>Guardar para esta tabla</button>
           </fieldset>
           <fieldset class="chart-annotation-controls">
             <legend>Etiqueta de precios</legend>
@@ -288,20 +314,15 @@
           </fieldset>
           <fieldset class="chart-annotation-controls">
             <legend>Colores disponibles</legend>
-            <div class="chart-colors-list" data-chart-colors></div>
-            <button type="button" class="btn btn-ghost" data-chart-add-color>+ Agregar color</button>
+            <div class="chart-color-tools">
+              <div class="chart-colors-list" data-chart-colors></div>
+              <button type="button" class="btn btn-ghost" data-chart-add-color>+ Agregar color</button>
+            </div>
           </fieldset>
-          <label class="field">Calidad<select class="select" data-chart-quality>
-            <option value="max">Máxima calidad</option><option value="small">Menos de 5 MB · WhatsApp</option>
-          </select></label>
-          <div class="admin-actions">
-            <button type="button" class="btn btn-primary" data-chart-download>Descargar</button>
-            <button type="button" class="btn btn-ghost" data-chart-share>Compartir</button>
-          </div>
         </section>
       </div>`;
-    const field=selector=>body.querySelector(selector);
-    const select=field('[data-chart-background]'),color=field('[data-chart-color]');
+    const field=selector=>dialog.querySelector(selector);
+    const color=field('[data-chart-color]');
     const wrapper=field('[data-chart-wrapper-color]'),opacity=field('[data-chart-wrapper-opacity]');
     const opacityLabel=field('[data-chart-wrapper-opacity-value]'),quality=field('[data-chart-quality]');
     const preview=field('[data-chart-preview]'),status=field('[data-chart-preview-status]');
@@ -362,23 +383,28 @@
       priceStatus.textContent='';
       schedule();
     };
-    select.prepend(new Option('SALMOS · modo claro','salmos-light'));
-    if(![...select.options].some(option=>option.value==='pink')){
-      select.add(new Option('Rosa suave','pink'),Math.min(2,select.options.length));
+    const backgroundOptions=document.createElement('select');
+    backgroundOptions.innerHTML=ctx.backgroundOptions();
+    backgroundOptions.prepend(new Option('SALMOS · modo claro','salmos-light'));
+    if(![...backgroundOptions.options].some(option=>option.value==='pink')){
+      backgroundOptions.add(new Option('Rosa suave','pink'),Math.min(2,backgroundOptions.length));
     }
+    const backgrounds=new Map([...backgroundOptions.options].map(option=>[option.value,option.textContent]));
+    let background=defaultStyle.background;
 
-    const grid=field('[data-chart-background-grid]');
+    const grid=field('[data-chart-background-grid]'),search=field('[data-chart-background-search]');
+    const backgroundEmpty=field('[data-chart-background-empty]');
     const observer=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
       for(const entry of entries)if(entry.isIntersecting){
         observer.unobserve(entry.target);
         entry.target._loadThumb?.();
       }
     },{root:grid,rootMargin:'80px'}):null;
-    const buttons=[...select.options].map(option=>{
+    const buttons=[...backgrounds].map(([value,label])=>{
       const button=document.createElement('button');
       button.type='button';
       button.className='chart-background-choice';
-      button.dataset.value=option.value;
+      button.dataset.value=value;
       const swatch=document.createElement('span');
       swatch.className='chart-background-thumb';
       const fills={
@@ -388,12 +414,12 @@
         transparent:'repeating-conic-gradient(#e1ccda 0% 25%,#fff7fb 0% 50%) 0 0/12px 12px',
         color:'linear-gradient(130deg,#f6c4dc,#c9d8ef,#d2e2c4)'
       };
-      swatch.style.background=fills[option.value]||'radial-gradient(ellipse at 0 0,#8a5b22,transparent),#0c0b0b';
-      if(option.value.startsWith('asset:')){
+      swatch.style.background=fills[value]||'radial-gradient(ellipse at 0 0,#8a5b22,transparent),#0c0b0b';
+      if(value.startsWith('asset:')){
         swatch.textContent='…';
         button._loadThumb=async()=>{
           try{
-            const image=await ctx.background(Number(option.value.slice(6)));
+            const image=await ctx.background(Number(value.slice(6)));
             if(!image)throw Error();
             const thumb=new Image();
             thumb.src=image.src;
@@ -408,79 +434,88 @@
         else button._loadThumb();
       }
       const name=document.createElement('small');
-      name.textContent=option.textContent;
+      name.textContent=label;
       button.append(swatch,name);
-      button.onclick=()=>{select.value=option.value;selectionChanged();};
+      button.onclick=()=>{
+        if(value!==background){
+          background=value;
+          styleSelect.value='';
+          selectionChanged();
+        }
+        if(value==='color')color.focus();
+      };
       grid.append(button);
       return button;
     });
 
-    const currentStyle=()=>({background:select.value,color:color.value,wrapperColor:wrapper.value,wrapperOpacity:Number(opacity.value)/100});
+    const currentStyle=()=>({background,color:color.value,wrapperColor:wrapper.value,wrapperOpacity:Number(opacity.value)/100});
     function setStyle(style){
-      select.value=style.background;
+      background=backgrounds.has(style.background)?style.background:defaultStyle.background;
       color.value=style.color;
       wrapper.value=style.wrapperColor;
       opacity.value=Math.round(style.wrapperOpacity*100);
       opacityLabel.value=opacity.value+'%';
     }
 
-    const styleList=field('[data-chart-styles]'),styleStatus=field('[data-chart-style-status]');
-    const styleForm=field('#chartStyleForm'),styleName=styleForm.elements.namedItem('name');
-    const addStyle=field('[data-chart-add-style]');
-    function refreshStyles(){
+    const styleSelect=field('[data-chart-styles]'),styleStatus=field('[data-chart-style-status]');
+    const styleForm=field('[data-chart-style-form]'),styleName=styleForm.elements.namedItem('name');
+    let stylesById=new Map(),suggestedName='';
+    function refreshStyles(selected=styleSelect.value){
       const styles=savedStyles(),last=lastDownloadStyle();
-      if(last)styles.unshift(last);
-      styleList.replaceChildren(...styles.map(entry=>{
-        const button=document.createElement('button');
-        button.type='button';
-        button.className='btn btn-ghost';
-        button.textContent=entry.name;
-        const background=[...select.options].find(option=>option.value===entry.style.background);
-        button.title=background?
-          background.textContent+' · Wrapper al '+Math.round(entry.style.wrapperOpacity*100)+'%':
-          'El fondo guardado ya no está disponible';
-        button.onclick=()=>{
-          if(!background){
-            styleStatus.textContent='El fondo de «'+entry.name+'» ya no está disponible.';
-            return;
-          }
-          setStyle(entry.style);
-          selectionChanged();
-          styleStatus.textContent='Estilo «'+entry.name+'» aplicado.';
-        };
-        return button;
+      if(last)styles.unshift({...last,id:'last-download'});
+      stylesById=new Map(styles.map(entry=>[entry.id,entry]));
+      const placeholder=new Option(styles.length?'Elegí un estilo':'Todavía no hay estilos guardados','');
+      styleSelect.replaceChildren(placeholder,...styles.map(entry=>{
+        const label=backgrounds.has(entry.style.background)?entry.name:entry.name+' (fondo no disponible)';
+        return new Option(label,entry.id);
       }));
-      styleList.hidden=!styles.length;
+      styleSelect.value=stylesById.has(selected)?selected:'';
+      styleSelect.disabled=!styles.length;
     }
-    function toggleStyleForm(open){
-      styleForm.hidden=!open;
-      addStyle.setAttribute('aria-expanded',String(open));
-      if(open)styleName.focus();
-      else addStyle.focus();
+    function suggestStyleName(){
+      const useSuggestion=!styleName.value.trim()||styleName.value===suggestedName;
+      const taken=new Set([...stylesById.values()].map(entry=>norm(entry.name)));
+      const prefix='Estilo '+backgrounds.get(background);
+      let number=1;
+      do{
+        const suffix=' '+number++;
+        suggestedName=prefix.slice(0,styleName.maxLength-suffix.length).trimEnd()+suffix;
+      }while(taken.has(norm(suggestedName)));
+      if(useSuggestion)styleName.value=suggestedName;
     }
-    addStyle.onclick=()=>{
-      styleStatus.textContent='';
-      if(styleForm.hidden){
-        styleName.value=(select.selectedOptions[0]?.textContent||'').slice(0,styleName.maxLength);
-        toggleStyleForm(true);
-        styleName.select();
-      }else toggleStyleForm(false);
+    styleSelect.onchange=()=>{
+      const entry=stylesById.get(styleSelect.value);
+      if(!entry)return;
+      if(!backgrounds.has(entry.style.background)){
+        styleStatus.textContent='El fondo de «'+entry.name+'» ya no está disponible.';
+        styleSelect.value='';
+        return;
+      }
+      setStyle(entry.style);
+      search.value='';
+      filterBackgrounds();
+      selectionChanged();
+      styleStatus.textContent='Estilo «'+entry.name+'» aplicado.';
     };
-    field('[data-chart-cancel-style]').onclick=()=>toggleStyleForm(false);
     styleForm.onsubmit=async event=>{
       event.preventDefault();
       const name=styleName.value.trim(),submit=styleForm.querySelector('[type=submit]');
       if(!name){styleName.focus();styleStatus.textContent='Escribí un nombre para el estilo.';return;}
       if(submit.disabled)return;
-      const key=styleKeyPrefix+crypto.randomUUID();
-      const value=JSON.stringify({name,style:currentStyle(),savedAt:Date.now()});
+      const id=styleKeyPrefix+crypto.randomUUID(),style=currentStyle();
+      const value=JSON.stringify({name,style,savedAt:Date.now()});
       submit.disabled=true;
       try{
-        await ctx.api('/api/admin/settings',{method:'PUT',body:JSON.stringify({settings:{[key]:value}})});
-        ctx.settings()[key]=value;
+        const charts=all(),target=charts.find(item=>item.id===chart.id);
+        if(!target)throw Error('Guardá primero la tabla.');
+        target.exportStyle=style;
+        await save(charts,{[id]:value});
+        chart.exportStyle=style;
         if(dialog.open&&styleForm.isConnected){
-          refreshStyles();
-          toggleStyleForm(false);
+          const applied=JSON.stringify(currentStyle())===JSON.stringify(style);
+          refreshStyles(applied?id:styleSelect.value);
+          if(styleName.value.trim()===name)styleName.value='';
+          suggestStyleName();
           styleStatus.textContent='Estilo «'+name+'» guardado.';
         }
       }catch(error){
@@ -527,36 +562,29 @@
       timer=setTimeout(()=>prepare().catch(error=>status.textContent=error.message),130);
     }
     function selectionChanged(){
-      field('[data-chart-color-field]').hidden=select.value!=='color';
-      for(const button of buttons)button.setAttribute('aria-pressed',String(button.dataset.value===select.value));
+      field('[data-chart-color-field]').hidden=background!=='color';
+      for(const button of buttons)button.setAttribute('aria-pressed',String(button.dataset.value===background));
+      suggestStyleName();
       schedule();
     }
     field('[data-chart-garment]').onclick=async()=>{
       if(await pickGarment(chart))selectionChanged();
     };
-    select.onchange=selectionChanged;
-    color.oninput=wrapper.oninput=quality.onchange=schedule;
-    opacity.oninput=()=>{opacityLabel.value=opacity.value+'%';schedule();};
-    field('[data-chart-background-search]').oninput=event=>{
-      const query=norm(event.target.value);
+    function styleChanged(){
+      styleSelect.value='';
+      schedule();
+    }
+    color.oninput=wrapper.oninput=styleChanged;
+    quality.onchange=schedule;
+    opacity.oninput=()=>{opacityLabel.value=opacity.value+'%';styleChanged();};
+    function filterBackgrounds(){
+      const query=norm(search.value);
       for(const button of buttons)button.hidden=!norm(button.textContent).includes(query);
-    };
-    field('[data-chart-save-style]').onclick=async event=>{
-      const button=event.currentTarget,charts=all(),index=charts.findIndex(item=>item.id===chart.id),style=currentStyle();
-      button.disabled=true;
-      try{
-        if(index<0)throw Error('Guardá primero la tabla.');
-        charts[index].exportStyle=style;
-        await save(charts);
-        chart.exportStyle=style;
-        status.textContent='Estilo guardado para esta tabla.';
-        ctx.toast('Estilo de tabla guardado','success');
-      }catch(error){
-        status.textContent=error.message;
-      }finally{
-        button.disabled=false;
-      }
-    };
+      const hasMatches=buttons.some(button=>!button.hidden);
+      grid.hidden=!hasMatches;
+      backgroundEmpty.hidden=hasMatches;
+    }
+    search.oninput=filterBackgrounds;
 
     picker.onclick=async()=>{
       if(picking){schedule();return;}
@@ -590,7 +618,7 @@
         ).data;
         if(!pixel[3]){status.textContent='Ese punto es transparente. Elegí una parte del fondo con color.';return;}
         wrapper.value='#'+[...pixel.slice(0,3)].map(value=>value.toString(16).padStart(2,'0')).join('');
-        schedule();
+        styleChanged();
       }catch{
         schedule();
         status.textContent='No se pudo tomar ese color. Podés elegirlo con el selector de color.';
@@ -628,9 +656,7 @@
       }
     };
 
-    const style={...defaultStyle,...chart.exportStyle};
-    if(![...select.options].some(option=>option.value===style.background))style.background=defaultStyle.background;
-    setStyle(style);
+    setStyle({...defaultStyle,...chart.exportStyle});
     refreshStyles();
     dialog.addEventListener('close',()=>{
       clearTimeout(timer);
@@ -641,7 +667,7 @@
     dialog.showModal();
     selectionChanged();
   }
-  function styles(){if(document.getElementById('salmosSizeChartsV2Style'))return;const style=document.createElement('style');style.id='salmosSizeChartsV2Style';style.textContent=`.size-chart-body{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:10px;align-items:center;padding:12px 8px;background:rgba(255,253,248,.86);border-radius:12px}.size-chart-body>.size-chart-garments{width:100%;height:220px!important;min-height:0!important;display:block}.size-chart-body>.size-chart-garments img{width:100%;height:100%;object-fit:contain}.size-chart-body table{width:100%;margin:0!important}.size-chart-body table th,.size-chart-body table td{font-size:12px;padding:8px 4px}.size-chart-body+small{margin-top:10px;display:block}.size-chart-garments>img{width:100%;height:100%;object-fit:contain}.size-chart-sheet{background:#fffdf8!important;color:#211b17!important}.size-chart-sheet table,.size-chart-sheet small{color:#211b17!important}.size-chart-garments{min-height:150px!important}.size-chart-garments>img{max-height:220px}body .size-chart-brand>.size-chart-brand-lockup{width:100%!important;height:100%!important;max-width:100%!important;object-fit:contain}body .size-chart-sheet>.size-chart-garments{width:100%!important;max-width:none!important;height:100%!important}body dialog.size-chart-export{width:min(1100px,96vw)!important;max-width:1100px!important;max-height:94dvh!important}.chart-export-layout{display:grid;grid-template-columns:minmax(270px,1.2fr) minmax(270px,1fr);gap:16px;align-items:start}.chart-export-preview{position:sticky;top:0;min-width:0}.chart-export-preview>img{display:block;width:100%;max-height:70dvh;object-fit:contain;background:repeating-conic-gradient(#ecd6e2 0% 25%,#fff4fa 0% 50%) 0 0/14px 14px;border:1px solid #dca1bd;border-radius:10px}.chart-export-preview>p{font-size:12px;line-height:1.4}.chart-export-controls{display:grid;gap:10px}.chart-background-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-height:340px;overflow:auto;padding:3px}.chart-background-choice{min-width:0;display:flex!important;flex-direction:column;gap:4px;padding:4px!important;border:1px solid #dcabc2!important;background:#fff2f9!important;color:#5d2942!important;border-radius:9px!important}.chart-background-choice[aria-pressed=true]{outline:2px solid #b74c80;outline-offset:-2px}.chart-background-choice[hidden]{display:none!important}.chart-background-choice>small{font-size:10px;line-height:1.3;overflow-wrap:anywhere}.chart-background-thumb{display:flex;align-items:center;justify-content:center;width:100%;height:58px;border-radius:6px;overflow:hidden;color:#b7648d}.chart-background-thumb>img{width:100%;height:100%;object-fit:cover}.chart-export-controls .admin-actions{display:flex;gap:7px;flex-wrap:wrap}@media(max-width:650px){.chart-export-layout{grid-template-columns:1fr}.chart-export-preview{position:relative}.chart-export-preview>img{max-height:43dvh}.chart-background-grid{max-height:220px}}`;style.textContent+='.size-chart-sheet>.size-chart-garments{height:190px!important;min-height:150px!important}.size-chart-garments>img{max-height:190px}';style.textContent+=`body .size-chart-card .size-chart-sheet[data-chart-preview]{display:block!important;aspect-ratio:1!important;min-height:0!important;height:auto!important;padding:0!important;border:0!important;outline:0!important;overflow:hidden!important;border-radius:10px!important;background:#fffdf8!important;line-height:0!important}body .size-chart-card .size-chart-sheet[data-chart-preview]>img{display:block!important;width:100%!important;height:auto!important;aspect-ratio:1!important;max-height:none!important;object-fit:contain!important;margin:0!important;padding:0!important}body .size-chart-loading{display:flex;align-items:center;justify-content:center;aspect-ratio:1;line-height:1.4;color:#533447;font-size:12px}.size-chart-card .size-chart-actions{margin-top:10px!important}`;style.textContent+=`body .size-chart-card .size-chart-sheet[data-chart-preview][data-failed]{line-height:1.4!important;display:flex!important;align-items:center;justify-content:center}.chart-garment-picker{width:min(1000px,92vw);max-height:88vh;border-radius:16px;background:#fff0f7;padding:16px}.chart-garment-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;max-height:65vh;overflow:auto}.chart-garment-grid button{padding:5px;border-radius:12px;border:1px solid #b86690;background:#fff8fc}.chart-garment-grid img{display:block;width:100%;height:170px;object-fit:contain}.chart-garment-picker>button{margin-top:10px}`;document.head.append(style);}
+  function styles(){if(document.getElementById('salmosSizeChartsV2Style'))return;const style=document.createElement('style');style.id='salmosSizeChartsV2Style';style.textContent=`.size-chart-body{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:10px;align-items:center;padding:12px 8px;background:rgba(255,253,248,.86);border-radius:12px}.size-chart-body>.size-chart-garments{width:100%;height:220px!important;min-height:0!important;display:block}.size-chart-body>.size-chart-garments img{width:100%;height:100%;object-fit:contain}.size-chart-body table{width:100%;margin:0!important}.size-chart-body table th,.size-chart-body table td{font-size:12px;padding:8px 4px}.size-chart-body+small{margin-top:10px;display:block}.size-chart-garments>img{width:100%;height:100%;object-fit:contain}.size-chart-sheet{background:#fffdf8!important;color:#211b17!important}.size-chart-sheet table,.size-chart-sheet small{color:#211b17!important}.size-chart-garments{min-height:150px!important}.size-chart-garments>img{max-height:220px}body .size-chart-brand>.size-chart-brand-lockup{width:100%!important;height:100%!important;max-width:100%!important;object-fit:contain}body .size-chart-sheet>.size-chart-garments{width:100%!important;max-width:none!important;height:100%!important}`;style.textContent+='.size-chart-sheet>.size-chart-garments{height:190px!important;min-height:150px!important}.size-chart-garments>img{max-height:190px}';style.textContent+=`body .size-chart-card .size-chart-sheet[data-chart-preview]{display:block!important;aspect-ratio:1!important;min-height:0!important;height:auto!important;padding:0!important;border:0!important;outline:0!important;overflow:hidden!important;border-radius:10px!important;background:#fffdf8!important;line-height:0!important}body .size-chart-card .size-chart-sheet[data-chart-preview]>img{display:block!important;width:100%!important;height:auto!important;aspect-ratio:1!important;max-height:none!important;object-fit:contain!important;margin:0!important;padding:0!important}body .size-chart-loading{display:flex;align-items:center;justify-content:center;aspect-ratio:1;line-height:1.4;color:#533447;font-size:12px}.size-chart-card .size-chart-actions{margin-top:10px!important}`;style.textContent+=`body .size-chart-card .size-chart-sheet[data-chart-preview][data-failed]{line-height:1.4!important;display:flex!important;align-items:center;justify-content:center}.chart-garment-picker{width:min(1000px,92vw);max-height:88vh;border-radius:16px;background:#fff0f7;padding:16px}.chart-garment-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;max-height:65vh;overflow:auto}.chart-garment-grid button{padding:5px;border-radius:12px;border:1px solid #b86690;background:#fff8fc}.chart-garment-grid img{display:block;width:100%;height:170px;object-fit:contain}.chart-garment-picker>button{margin-top:10px}`;document.head.append(style);}
   let bound=false;
   function init(context){ctx=context;styles();setTimeout(hydrateGarments,0);if(!bound){bound=true;document.addEventListener('click',event=>{const button=event.target.closest('[data-size-chart-edit],[data-size-chart-export],[data-size-chart-share],[data-size-chart-new]');if(!button)return;event.preventDefault();if(button.hasAttribute('data-size-chart-new'))edit();if(button.dataset.sizeChartEdit)edit(button.dataset.sizeChartEdit);if(button.dataset.sizeChartExport)exportDialog(button.dataset.sizeChartExport);if(button.dataset.sizeChartShare)exportDialog(button.dataset.sizeChartShare,true);});}return {all,reference,gallery,edit,renderImage,save};}
   new MutationObserver(()=>hydrateGarments()).observe(document.body,{childList:true,subtree:true});window.SalmosSizeCharts={init,setSources(value){sources=value;garmentPhotos.clear();document.querySelectorAll('[data-chart-preview]').forEach(el=>delete el.dataset.loaded);hydrateGarments();}};
