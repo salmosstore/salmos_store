@@ -361,6 +361,7 @@ def lyric_diagnostic(folder):
         'pedido': {key: track['request'][key] for key in request_keys if key in track['request']},
         'entradaAlMotor': saved.get('input'), 'datosDevueltosPorMotor': engine,
         'motor': {key: saved[key] for key in ('songApi', 'model', 'inferenceSha256', 'randomSeed') if key in saved},
+        'medicionAudio': saved.get('audio'), 'tomasDescartadas': saved.get('rejectedAttempts', []),
         'revisionLetra': track['lyricsCheck'],
     }
 

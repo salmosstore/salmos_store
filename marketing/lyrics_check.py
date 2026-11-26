@@ -29,6 +29,7 @@ def compare(lyrics, heard):
         'similarity': round(alignment.ratio(), 4),
         'missing': list(dict.fromkeys(missing))[:20],
         'missingEnding': len(recognized) < len(expected) and len(expected) - last_match >= 3,
+        'recognizedWords': len(recognized),
         'heard': heard[:3000],
     }
 
