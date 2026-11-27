@@ -25,6 +25,11 @@
     deep:'house',organic:'house',dance:'house',funk:'urban',hiphop:'urban',trap:'urban',reggaeton:'urban',
     rnb:'urban',worship:'acoustic',gospel:'rock',ballad:'acoustic',bossa:'acoustic',lofi:'acoustic',merengue:'salsa'
   };
+  const instrumentPatterns={
+    kick:[0,2],snare:[1,2],clap:[1,2],hat:[.5,1],openHat:[.5,2],
+    tom:[3,4],shaker:[.5,.5],cymbal:[0,4],bass:[0,2,36],
+    keys:[1,2,60],pluck:[.5,1,60],bell:[2,4,72],pad:[0,4,60]
+  };
 
   function bufferNoise(ctx){
     const noise=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate),data=noise.getChannelData(0);
@@ -79,20 +84,38 @@
     return value;
   }
 
-  function seedRhythm(settings,style,from,to){
-    const pattern=voicePresets[style]||voicePresets[voiceRhythms[style]]||voicePresets.acoustic;
+  function seedRhythm(settings,style,from,to,chosen){
+    const groove=voicePresets[style]||voicePresets[voiceRhythms[style]]||voicePresets.acoustic;
+    const part=chosen?groove.filter(([name])=>name===chosen):groove;
+    const pattern=part.length?part:[[chosen,...instrumentPatterns[chosen]]];
     const beat=60/settings.bpm;
+    const added=[];
+    for(const lane of settings.lanes)if(pattern.some(([name])=>name===lane.instrument)){
+      lane.notes=lane.notes.flatMap(note=>{
+        if(!note.autoPattern)return [note];
+        const spacing=note.each*beat;
+        const before=clamp(Math.ceil((from-note.at)/spacing-1e-8),0,note.count);
+        const after=clamp(Math.ceil((to-note.at)/spacing-1e-8),0,note.count);
+        if(before===after)return [note];
+        const kept=[];
+        if(before)kept.push({...note,count:before});
+        if(after<note.count)kept.push({...note,id:id(),at:note.at+after*spacing,count:note.count-after});
+        return kept;
+      });
+    }
     for(const [instrument,offset,each,pitch=48] of pattern){
-      const at=from+offset*beat;
-      if(at>=to)continue;
+      const at=from+offset*beat<to?from+offset*beat:from;
       let lane=settings.lanes.find(row=>row.instrument===instrument);
       if(!lane){
+        if(settings.lanes.length>=20)continue;
         lane={id:id(),instrument,volume:instrument==='shaker'||instrument==='hat'?18:27,notes:[]};
         settings.lanes.push(lane);
       }
-      lane.notes.push({id:id(),at,length:drums.has(instrument)?.16:.36,pitch,velocity:73,each,
-        count:Math.min(5000,Math.ceil((to-at)/(each*beat)))});
+      const note={id:id(),at,length:drums.has(instrument)?.16:.36,pitch,velocity:73,each,autoPattern:true,
+        count:Math.min(5000,Math.max(1,Math.ceil((to-at)/(each*beat))))};
+      lane.notes.push(note);added.push({lane,note});
     }
+    return added;
   }
 
   function mixGraph(ctx,input){
@@ -209,7 +232,7 @@
         <section class="song-arrange" aria-labelledby="songInstrumentsTitle">
           <h3 id="songInstrumentsTitle">Recorte e instrumentos</h3>
           <div class="song-transport-row">
-          <div class="song-toolbar song-transport"><button class="primary" data-play>▶ Escuchar fragmento</button><output data-clock></output>
+          <div class="song-toolbar song-transport"><button class="primary" data-play>▶ Escuchar fragmento</button><output data-clock aria-live="off"></output>
             <label class="song-repeat"><input data-loop type="checkbox"> Repetir fragmento</label>
             <label>Zoom<select data-zoom><option value="1">Completo</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="32">32×</option></select></label>
             <label data-pan-label hidden>Desplazar<input data-pan type="range" min="0" step=".01" value="0"></label></div>
@@ -228,13 +251,13 @@
             <summary>Cómo colocar sonidos y cortar el audio</summary>
             <ul>
               <li>Arrastrá <strong>I</strong> y <strong>F</strong> para elegir el fragmento. Hacé clic en la onda para ubicar la línea amarilla.</li>
-              <li><strong>Agregar instrumento</strong> abre una fila debajo de la onda. Hacé clic en la fila para colocar el sonido en ese punto, o tocá <strong>Tocar ahora</strong> mientras escuchás. Arrastrá un sonido para moverlo.</li>
-              <li><strong>Agregar acompañamiento</strong> coloca un patrón del estilo desde la línea amarilla hasta el final del fragmento.</li>
+              <li><strong>Agregar instrumento</strong> deja una pista con un ritmo inicial debajo de la onda. Hacé clic en la fila o en <strong>Tocar ahora</strong> para sumar golpes. Arrastrá un golpe o ajustá sus repeticiones.</li>
+              <li><strong>Agregar acompañamiento</strong> coloca varias pistas del estilo. Si el cursor está al final, arranca al inicio del recorte.</li>
               <li id="songBeatHelp"><strong>120 pulsos por minuto</strong> son dos por segundo. Los pulsos guían la cuadrícula y las repeticiones. Con <strong>Libre</strong>, el sonido queda donde hacés clic.</li>
             </ul>
           </details>
           <div class="song-timeline">
-            <div class="song-timeline-row">
+            <div class="song-timeline-row song-original-row">
               <strong class="song-track-name">Audio original</strong>
               <div class="song-timeline-visual">
                 <div class="song-ruler" data-ruler></div>
@@ -256,15 +279,33 @@
             `<button type="button" data-effect="${value}" aria-pressed="false">${label}</button>`).join('')}</div>
           <div class="song-controls"><label>Intensidad del efecto<input data-effect-amount type="range" min="0" max="100"></label>
             <label>Volumen original<input data-volume type="range" min="0" max="150"></label>
-            <label>Mejorar voz<input data-clean type="range" min="0" max="100"></label></div>
+            <label>Realce vocal<input data-clean type="range" min="0" max="100"></label></div>
         </section>
+        <details class="song-voice-tools" data-voice-box hidden>
+          <summary>Voz limpia y acompañamiento</summary>
+          <div class="song-toolbar"><label>Qué contiene el audio<select data-voice-source>
+            <option value="voice">Solo mi voz</option><option value="mix">Voz con música de fondo</option>
+          </select></label><button data-prepare-voice>Preparar solo la voz</button>
+          <a data-voice-launcher class="button" hidden download="INICIAR_SALMOS.bat">Descargar iniciador</a></div>
+          <p data-voice-status role="status"></p>
+          <div data-voice-result hidden>
+            <audio data-voice-preview controls preload="metadata" aria-label="Escuchar solo la voz"></audio>
+            <div class="song-toolbar"><button data-save-voice>Guardar voz sola</button>
+            <label>Estilo del acompañamiento<select data-arrange-style></select></label>
+            <button class="primary" data-generate-voice disabled>Generar versión con mi voz</button></div>
+            <audio data-arrangement controls preload="metadata" aria-label="Escuchar versión con acompañamiento" hidden></audio>
+          </div>
+        </details>
       </div>
       <div class="song-sidebar">
         <aside class="song-reel" data-reel hidden><h3>Vista previa del reel</h3><canvas data-frame aria-label="Vista previa del reel"></canvas>
-          <p data-frame-time></p></aside>
-        <details data-lyric-box><summary>Letra de la canción <small data-review-label hidden>Revisar</small></summary>
+          <p data-frame-time></p><p data-reel-ended role="status" hidden>Fin del reel · El audio sigue.</p></aside>
+        <details data-lyric-box><summary>Letra y estilo <small data-review-label hidden>Revisar</small></summary>
           <label>Letra adjunta<textarea data-lyric rows="3" maxlength="3000" placeholder="Pegá la letra que querés guardar con este audio"></textarea></label>
-          <div class="song-toolbar"><button data-save-lyric>Guardar letra adjunta</button><button data-check-lyric hidden>Revisar lo cantado</button></div>
+          <div class="song-toolbar"><button data-save-lyric>Guardar letra adjunta</button><button data-check-lyric hidden>Revisar lo cantado</button>
+            <button data-unlink-lyric hidden>Pasar a Instrumental</button></div>
+          <div class="song-toolbar" data-style-controls hidden><label>Género en la galería<select data-gallery-style></select></label>
+            <button data-save-style>Guardar género</button></div>
           <p data-lyric-check role="status" hidden></p></details>
       </div></div>
       <footer><button data-delete class="song-delete">Descartar canción</button><div class="song-toolbar">
@@ -275,19 +316,31 @@
     const fields={start:find('start'),end:find('end')};
     const url=URL.createObjectURL(blob);
     player.src=url;player.preload='auto';player.playbackRate=reel?.rate||1;player.preservesPitch=true;
-    let reelElapsed=0,head=settings.start,left=0,zoom=1,activeNote=null,tick=0,playing=false;
+    let reelElapsed=0,reelFrameTime,head=settings.start,left=0,zoom=1,activeNote=null,tick=0,playing=false;
     let locked=false,mixSerial=0,rendered=null,dirty=!!options.voice;
     let previewContext,playbackMix,previewNoise,scheduledThrough=0,scheduled=[];
     const playedLive=new Map();
     const edited=()=>settings.lanes.some(lane=>lane.notes.length)||settings.clean!==0||settings.volume!==100||!!settings.effect;
-    const lyrics=track.request?.lyrics||track.lyrics||'';
+    let lyrics=track.request?.lyrics??track.lyrics??'';
     const originalName=track.name||'Mi canción';
     const originalSaved=!!(track.saved||track.saved20||track.request?.saved);
     find('name').value=originalName;
     find('lyric').value=lyrics;
     find('lyric-box').hidden=!options.onLyrics&&!lyrics;
     find('save-lyric').hidden=!options.onLyrics;
+    find('unlink-lyric').hidden=!options.onLyrics||!!track.request?.instrumental&&!lyrics;
     find('check-lyric').hidden=!options.onCheckLyrics||!lyrics;
+    find('style-controls').hidden=!options.onStyle;
+    find('voice-box').hidden=!options.onPrepareVoice;
+    find('voice-box').open=!!options.voice;
+    find('voice-source').value=track.uploadKind==='recording'||track.request?.voiceOnly?'voice':'mix';
+    find('voice-launcher').href=options.launcher||'';
+    for(const key of ['gallery-style','arrange-style']){
+      const select=find(key);
+      select.add(new Option('Sin género elegido',''));
+      for(const [id,[label]] of Object.entries(options.genres||{}))select.add(new Option(label,id));
+      select.value=key==='arrange-style'?options.style||'house':track.request?.galleryStyle??track.request?.style??'';
+    }
     function showLyricCheck(check){
       const label=find('lyric-check');
       const detail=window.SalmosAudioStudio.lyricsCheckText(check);
@@ -319,17 +372,22 @@
       original.textContent=renamed?'Guardar nombre':originalSaved?'✓ Original guardado':'Guardar original';
       find('save').hidden=renamed&&!dirty&&find('lyric').value===lyrics;
     }
-    function showReel(value=head,playback=false){
+    function showReel(){
       if(!reel)return;
-      const relative=(Math.max(0,value-settings.start)+(playback?reelElapsed:0))/(reel.rate||1);
+      const relative=(Math.max(0,head-settings.start)+reelElapsed)/player.playbackRate;
       const at=reel.position(relative);
-      reel.draw(find('frame'),at);
-      find('frame-time').textContent=timeText(at)+' / '+timeText(reel.duration)+' · '+reel.caption(at);
+      if(at!==reelFrameTime){
+        reel.draw(find('frame'),at);
+        find('frame-time').textContent=timeText(at)+' / '+timeText(reel.duration)+' · '+reel.caption(at);
+        reelFrameTime=at;
+      }
+      find('reel-ended').hidden=!playing||at<reel.duration;
     }
     function stop(){
       playing=false;player.pause();cancelAnimationFrame(tick);clearSchedule(true);
       if(playbackMix)playbackMix.master.value=0;
       find('play').textContent='▶ Escuchar fragmento';
+      find('reel-ended').hidden=true;
     }
     function change(){
       dirty=true;mixSerial++;rendered=null;
@@ -346,6 +404,7 @@
     const percent=seconds=>(seconds-left)/span()*100;
     function setHead(value){
       head=playing?clamp(value,settings.start,Math.max(settings.start,settings.end-.02)):clamp(value,0,duration);
+      reelElapsed=0;
       if(playing){
         player.currentTime=head;
         clearSchedule(true);
@@ -359,7 +418,7 @@
         mark.hidden=pos<0||pos>100;
         mark.style.left=clamp(pos,0,100)+'%';
       }
-      find('clock').value=timeText(head)+' · '+timeText(settings.end-settings.start)+' seleccionados';
+      find('clock').value='Audio '+timeText(head)+' · '+timeText(settings.end-settings.start)+' seleccionados';
     }
     function paint(){
       const width=Math.max(1,Math.round(wave.clientWidth*devicePixelRatio)),height=Math.max(1,Math.round(wave.clientHeight*devicePixelRatio));
@@ -378,7 +437,7 @@
       if(!Number.isFinite(value))return;
       if(playing)stop();
       settings[key]=key==='start'?clamp(value,0,Math.max(0,settings.end-.02)):clamp(value,Math.min(duration,settings.start+.02),duration);
-      head=settings[key];change();showReel();
+      reelElapsed=0;head=settings[key];change();showReel();
     }
     function timeline(){
       for(const key of ['start','end']){
@@ -437,7 +496,7 @@
     function renderLanes(){
       const host=find('lanes');host.replaceChildren();
       for(const lane of settings.lanes){
-        const row=document.createElement('div');row.className='song-lane song-timeline-row';
+        const row=document.createElement('div');row.className='song-lane song-timeline-row';row.dataset.laneId=lane.id;
         const title=document.createElement('div');title.className='song-lane-title';
         const label=document.createElement('strong');label.textContent=instruments[lane.instrument];
         const volume=document.createElement('input');volume.type='range';volume.max=100;volume.value=lane.volume;
@@ -484,7 +543,7 @@
               };
               marker.onpointerup=marker.onpointercancel=()=>{
                 marker.onpointermove=null;
-                if(moved){marker.onclick=null;activeNote={lane,note};change();}
+                if(moved){marker.onclick=null;note.autoPattern=false;activeNote={lane,note};change();}
               };
             };
             line.append(marker);
@@ -538,37 +597,38 @@
     function finishFragment(){
       if(!playing)return;
       if(!find('loop').checked){
-        head=settings.end;stop();drawHead();showReel(head,true);return;
+        head=settings.end;stop();drawHead();showReel();return;
       }
       reelElapsed+=settings.end-settings.start;
       clearSchedule(true);
       player.currentTime=head=settings.start;
       if(player.paused)player.play().catch(error=>{stop();show(error.message);});
-      drawHead();showReel(head,true);
+      drawHead();showReel();
     }
     function updatePlayback(){
       if(!playing)return;
       const pos=player.currentTime;
-      if(reel&&(pos-settings.start+reelElapsed)/player.playbackRate>=reel.duration){stop();return;}
       if(pos>=settings.end){
         finishFragment();
       }else if(!player.seeking&&!player.paused){
         const fade=fadeTime(settings,settings.end-settings.start);
         playbackMix.master.value=clamp(Math.min(pos-settings.start,settings.end-pos)/fade,0,1);
         scheduleSounds(pos);
-        head=pos;drawHead();showReel(head,true);
+        head=pos;drawHead();showReel();
       }
       if(playing)tick=requestAnimationFrame(updatePlayback);
     }
     async function play(){
-      if(playing){head=player.currentTime;stop();drawHead();return;}
-      const start=head>=settings.start&&head<settings.end-.025?head:settings.start;
+      if(playing){head=player.currentTime;stop();drawHead();showReel();return;}
+      voicePlayer.pause();arrangementPlayer.pause();
+      const resume=head>=settings.start&&head<settings.end-.025;
       await doAction('Preparando la escucha…',async()=>{
         const context=liveContext();
         playbackMix||=mixGraph(context,context.createMediaElementSource(player));
         playbackMix.configure(settings);
         playbackMix.master.value=0;
-        player.currentTime=start;reelElapsed=0;clearSchedule(true);
+        if(!resume){head=settings.start;reelElapsed=0;}
+        player.currentTime=head;clearSchedule(true);
         try{await Promise.all([context.resume(),player.play()]);}
         catch(error){stop();throw error;}
         playing=true;show('');find('play').textContent='Ⅱ Pausar';
@@ -591,7 +651,7 @@
       find('set-'+key).onclick=()=>bound(key,head);
     }
     wave.onpointerdown=event=>{if(!event.target.closest('button'))setHead(point(event,wave));};
-    find('full').onclick=()=>{stop();settings.start=0;settings.end=duration;head=0;change();showReel();};
+    find('full').onclick=()=>{stop();settings.start=0;settings.end=duration;reelElapsed=0;head=0;change();showReel();};
     find('zoom').onchange=()=>{
       zoom=Number(find('zoom').value);left=clamp(head-span()/2,0,duration-span());
       find('pan-label').hidden=zoom===1;find('pan').max=duration-span();find('pan').value=left;refresh();
@@ -611,20 +671,29 @@
     for(const button of find('effects').children)button.onclick=()=>{
       settings.effect=button.dataset.effect;refreshEffectButtons();change();
     };
-    find('add').onclick=()=>{
-      if(settings.lanes.length>=20){show('Ya hay 20 pistas.');return;}
-      settings.lanes.push({id:id(),instrument:find('instruments').value,volume:45,notes:[]});change();
-    };
-    find('rhythm').onclick=()=>{
-      const from=clamp(playing?player.currentTime:head,settings.start,settings.end);
-      if(from>=settings.end){show('Poné la línea amarilla antes del final del fragmento.');return;}
-      seedRhythm(settings,options.style,from,settings.end);change();
-    };
+    function addPattern(instrument){
+      const cursor=clamp(playing?player.currentTime:head,settings.start,settings.end);
+      const from=cursor>=settings.end-Math.min(.25,(settings.end-settings.start)/2)?settings.start:cursor;
+      const added=seedRhythm(settings,options.style,from,settings.end,instrument);
+      if(!added.length){show('Ya hay 20 pistas.');return;}
+      activeNote=added[0];
+      if(instrument)settings.lanes=[activeNote.lane,...settings.lanes.filter(lane=>lane!==activeNote.lane)];
+      if(!playing)setHead(from);
+      change();
+      const timeline=find('lanes').parentElement;
+      if(instrument)timeline.scrollTop=0;
+      else dialog.querySelector('[data-lane-id="'+activeNote.lane.id+'"]')?.scrollIntoView({block:'nearest'});
+      show(instrument?instruments[instrument]+' · Ritmo colocado desde '+timeText(from)+'.':
+        'Acompañamiento colocado desde '+timeText(from)+'. Tocá Escuchar para probarlo.');
+    }
+    find('add').onclick=()=>addPattern(find('instruments').value);
+    find('rhythm').onclick=()=>addPattern();
     for(const [key,min,max] of [['at',0,duration],['length',.03,10],['pitch',24,84],['velocity',1,100],['count',1,5000],['each',.125,32]]){
       const input=find(key);
       input.onchange=()=>{
         if(!activeNote)return;
         const note=activeNote.note;
+        note.autoPattern=false;
         note[key]=clamp(input.value===''?note[key]:Number(input.value),min,max);
         if(key==='count')note[key]=Math.round(note[key]);
         input.value=note[key];change();
@@ -647,9 +716,24 @@
       show('Versión guardada. El original sigue disponible.');
     });
     find('save-lyric').onclick=()=>doAction('Guardando la letra…',async()=>{
-      showLyricCheck(await options.onLyrics(find('lyric').value));
+      const value=find('lyric').value;
+      showLyricCheck(await options.onLyrics(value));
+      lyrics=value;
+      find('unlink-lyric').hidden=false;
       find('check-lyric').hidden=!options.onCheckLyrics||!find('lyric').value.trim();
       show('Letra guardada con el audio.');
+    });
+    find('unlink-lyric').onclick=()=>doAction('Pasando a Instrumental…',async()=>{
+      await options.onLyrics('',{instrumental:true});
+      lyrics=find('lyric').value='';
+      find('check-lyric').hidden=find('unlink-lyric').hidden=true;
+      showLyricCheck(null);
+      show('Audio movido a Sin letra. Se conservó el mismo archivo.');
+      syncSaveButtons();
+    });
+    find('save-style').onclick=()=>doAction('Guardando el género…',async()=>{
+      await options.onStyle(find('gallery-style').value);
+      show('Género de la ficha guardado.');
     });
     find('check-lyric').onclick=()=>doAction('Revisando las palabras de la canción…',async()=>{
       const check=await options.onCheckLyrics(find('lyric').value);
@@ -673,12 +757,79 @@
       if(!window.confirm('¿Seguro que querés borrar «'+name()+'» de tus audios?'))return;
       void doAction('Borrando canción…',async()=>{await options.onDelete();dirty=false;dialog.close();});
     };
-    find('close').onclick=()=>{if(!locked)dialog.close();};
-    dialog.oncancel=event=>{if(locked)event.preventDefault();};
+    let preparedVoice=null,voiceURL='',arrangementURL='',voiceBusy=false,voiceGenerating=false,voiceMessage='';
+    const voicePlayer=find('voice-preview'),arrangementPlayer=find('arrangement');
+    function syncVoice(){
+      const ready=options.voiceReadiness?.()||{};
+      find('prepare-voice').disabled=voiceBusy||voiceGenerating||!ready.canClean;
+      find('voice-source').disabled=voiceBusy||voiceGenerating;
+      find('save-voice').disabled=voiceBusy||voiceGenerating;
+      find('generate-voice').disabled=!preparedVoice||voiceBusy||voiceGenerating||!ready.ready||!find('arrange-style').value;
+      find('voice-launcher').hidden=!ready.download;
+      find('voice-status').textContent=voiceMessage||ready.help||'';
+    }
+    const stopWatchingVoice=options.watchVoice?.(syncVoice);
+    find('arrange-style').onchange=syncVoice;
+    find('voice-source').onchange=()=>{
+      preparedVoice=null;voiceMessage='';
+      voicePlayer.pause();arrangementPlayer.pause();find('voice-result').hidden=true;
+      syncVoice();
+    };
+    find('prepare-voice').onclick=async()=>{
+      stop();voicePlayer.pause();arrangementPlayer.pause();
+      voiceBusy=true;voiceMessage='Preparando la voz en tu PC…';syncVoice();
+      try{
+        preparedVoice=await options.onPrepareVoice(find('voice-source').value,message=>{voiceMessage=message;syncVoice();});
+        if(voiceURL)URL.revokeObjectURL(voiceURL);
+        voiceURL=URL.createObjectURL(preparedVoice.blob);
+        voicePlayer.src=voiceURL;find('voice-result').hidden=false;arrangementPlayer.hidden=true;
+        if(preparedVoice.bpm){
+          settings.bpm=clamp(preparedVoice.bpm,40,240);find('bpm').value=settings.bpm;refresh();
+        }
+        voiceMessage=preparedVoice.bpm?'Voz lista · '+settings.bpm+' BPM detectados. Podés ajustar el valor antes de generar.':
+          'Voz lista. Usá el BPM del editor para elegir el pulso del acompañamiento.';
+      }catch(error){voiceMessage=error.message;}
+      finally{voiceBusy=false;syncVoice();}
+    };
+    find('save-voice').onclick=()=>doAction('Guardando la voz sola…',async()=>{
+      await options.onSaveVoice({...preparedVoice,lyrics:find('lyric').value,name:name().slice(0,86)+' · voz limpia'});
+      show('Voz guardada en Mis audios.');
+    });
+    find('generate-voice').onclick=async()=>{
+      if(voiceGenerating||!preparedVoice)return;
+      stop();voicePlayer.pause();arrangementPlayer.pause();
+      voiceGenerating=true;voiceMessage='Enviando tu voz limpia al iniciador…';syncVoice();
+      try{
+        await options.onArrangeVoice({...preparedVoice,lyrics:find('lyric').value,style:find('arrange-style').value,
+          bpm:settings.bpm,name:name().slice(0,78)+' · con acompañamiento',
+          report(message,state){
+            voiceMessage=message;voiceGenerating=state==='working';syncVoice();
+          },
+          async complete(track){
+            if(!dialog.open)return;
+            voiceMessage='Versión guardada en Mis audios.';syncVoice();
+            try{
+              const result=await options.readTrack(track);
+              if(!dialog.open)return;
+              if(arrangementURL)URL.revokeObjectURL(arrangementURL);
+              arrangementURL=URL.createObjectURL(result);
+              arrangementPlayer.src=arrangementURL;arrangementPlayer.hidden=false;
+            }catch{ /* La copia sigue en la galería. */ }
+          }});
+      }catch(error){voiceGenerating=false;voiceMessage=error.message;syncVoice();}
+    };
+    voicePlayer.onplay=()=>{stop();arrangementPlayer.pause();};
+    arrangementPlayer.onplay=()=>{stop();voicePlayer.pause();};
+    syncVoice();
+    find('close').onclick=()=>{if(!locked&&!voiceBusy)dialog.close();};
+    dialog.oncancel=event=>{if(locked||voiceBusy)event.preventDefault();};
     dialog.addEventListener('keydown',event=>event.stopPropagation());
     const resize=new ResizeObserver(paint);
     dialog.onclose=()=>{
       stop();resize.disconnect();player.removeAttribute('src');player.load();URL.revokeObjectURL(url);
+      stopWatchingVoice?.();voicePlayer.pause();arrangementPlayer.pause();
+      if(voiceURL)URL.revokeObjectURL(voiceURL);
+      if(arrangementURL)URL.revokeObjectURL(arrangementURL);
       previewContext?.close().catch(()=>{});
       if(dirty)Promise.resolve(options.onDraft?.(settings)).catch(error=>options.notify?.(error.message,'error'));
       dialog.remove();

@@ -12,12 +12,13 @@ import sys
 import tempfile
 import traceback
 import unicodedata
+import wave
 from pathlib import Path
 
 
 CHECKPOINT_READER_VERSION = '0.8.0'
 REQUIRED_CHECKPOINTS = ('acestep-v15-turbo', 'vae', 'Qwen3-Embedding-0.6B')
-SONG_API = 11
+SONG_API = 12
 MODEL = 'acestep-v15-turbo'
 MAX_SONG_DURATION = 600
 
@@ -151,28 +152,24 @@ def song_lyrics(request, shorter_lines=False):
         name, separator, suffix = tag.partition(' ')
         return '[' + SPANISH_SECTIONS.get(name.casefold(), name) + separator + suffix + ']'
 
-    wrap_phrases = shorter_lines or is_short_lyric(text)
     lines = []
     for line in SECTION_TAG.sub(section, text).splitlines():
-        if wrap_phrases and line.strip() and not line.lstrip().startswith('['):
-            # Format long phrases before the first take. Keep the words, punctuation and section order.
-            lines.extend(breath_lines(line, 8 if shorter_lines else 10))
-            continue
-        if not line.lstrip().startswith('[') and len(line.split()) > 12:
-            line = re.sub(r'([,;.!?…])\s+(?=\S)', r'\1\n', line)
+        if not line.lstrip().startswith('['):
+            if shorter_lines and line.strip():
+                lines.extend(breath_lines(line, 12))
+                continue
+            if len(line.split()) > 12:
+                line = re.sub(r'([,;.!?…])\s+(?=\S)', r'\1\n', line)
         lines.append(line.rstrip())
     text = '\n'.join(lines).strip()
     if not text.startswith('['):
         text = '[Verse]\n' + text
     if not any(re.match(r'outro\b', tag, re.IGNORECASE) for tag in SECTION_TAG.findall(text)):
-        if extended_instrumental_ending(request):
-            text += '\n\n[Outro - instrumental]'
-        elif not shorter_lines:
-            text += '\n\n[Outro]'
+        text += '\n\n[Outro - instrumental]' if extended_instrumental_ending(request) else '\n\n[Outro]'
     return text
 
 
-def song_caption(request, retry=False):
+def song_caption(request):
     if request['instrumental']:
         style, _, details = request['caption'].partition('. ')
         ending = ('End on a resolved final chord.' if request['duration'] <= 30 else
@@ -186,9 +183,6 @@ def song_caption(request, retry=False):
                   'clear vowels and consonants. Sing the supplied lyrics in order, with space to breathe between lines.')
     if request.get('reference'):
         directions = 'Keep the source beat and tempo. ' + directions
-    if retry or is_short_lyric(request['lyrics']):
-        lead = directions + ' The lead vocal enters in the opening bars. ' + ending
-        return f'{lead} {request["caption"]}'[:512].rstrip()
     directions += ' ' + ending
     return f'{request["caption"][:511 - len(directions)].rstrip()} {directions}'
 
@@ -215,18 +209,21 @@ def extend_reference(path, duration):
         temporary.unlink(missing_ok=True)
 
 
-def finish_song(source, destination, fade_seconds=2.5):
+def finish_song(source, destination, fade_seconds=2.5, start=0, end=None):
     import numpy as np
     import soundfile as sf
 
     temporary = destination.with_suffix('.tmp')
     try:
         with sf.SoundFile(source) as original:
-            duration = original.frames / original.samplerate
+            first = round(start * original.samplerate)
+            last = min(original.frames, round(end * original.samplerate)) if end is not None else original.frames
+            duration = (last - first) / original.samplerate
             if duration <= 0:
                 raise RuntimeError('El motor devolvió un audio vacío.')
-            count = max(1, min(original.frames, round(original.samplerate * min(fade_seconds, duration * .1))))
-            fade_start = original.frames - count
+            original.seek(first)
+            count = max(1, min(last - first, round(original.samplerate * min(fade_seconds, duration * .1))))
+            fade_start = last - count
             with sf.SoundFile(temporary, 'w', samplerate=original.samplerate, channels=original.channels,
                               format='WAV', subtype=original.subtype) as output:
                 while original.tell() < fade_start:
@@ -247,21 +244,23 @@ def measure_audio(source):
     import soundfile as sf
 
     with sf.SoundFile(source) as audio:
-        block_size = max(1, audio.samplerate // 4)
-        interval = block_size / audio.samplerate
-        duration = audio.frames / audio.samplerate
+        rate = audio.samplerate
+        block_size = max(1, rate // 4)
+        interval = block_size / rate
+        duration = audio.frames / rate
         levels = []
         for block in audio.blocks(blocksize=block_size, dtype='float32', always_2d=True):
             if not np.isfinite(block).all():
                 raise ValueError('El motor devolvió muestras de audio inválidas.')
             levels.append(float(np.mean(np.square(block), dtype=np.float64)))
-    # Ignore near-silent padding, allowing for quiet intros and natural fades.
-    threshold = max(1e-6, max(levels, default=0) * 1e-4)
+    # Compare against the typical upper portion of the take, not one loud transient.
+    nominal = float(np.percentile(levels, 80)) if levels else 0.0
+    threshold = max(2.5e-7, nominal * 1e-5)
     audible = [index for index, level in enumerate(levels) if level >= threshold]
     leading = audible[0] * interval if audible else duration
     trailing = max(0, duration - (audible[-1] + 1) * interval) if audible else duration
     gap = max(((right - left - 1) * interval for left, right in zip(audible, audible[1:])), default=0)
-    return {'duration': duration, 'audibleSeconds': min(duration, len(audible) * interval),
+    return {'duration': duration, 'sampleRate': rate, 'audibleSeconds': min(duration, len(audible) * interval),
             'leadingSilence': leading, 'trailingSilence': trailing, 'longestGap': gap}
 
 
@@ -277,12 +276,21 @@ def audio_problem(quality, requested):
     duration = quality['duration']
     if duration + min(2, max(.5, requested * .03)) < requested:
         return 'short_audio'
-    edge_limit = min(6, max(3, duration * .12))
-    gap_limit = min(8, max(4, duration * .15))
-    if (quality['audibleSeconds'] < duration * .65 or
-            max(quality['leadingSilence'], quality['trailingSilence']) > edge_limit or quality['longestGap'] > gap_limit):
+    gap_limit = min(16, max(7, duration * .25))
+    if quality['audibleSeconds'] < max(2.5, duration * .52) or quality['longestGap'] > gap_limit:
         return 'silent_audio'
     return None
+
+
+def take_plan(request):
+    duration = request['duration']
+    yield duration, 8, False
+    if request['seed'] >= 0:
+        return
+    if not request['instrumental'] and not request.get('reference'):
+        duration = min(MAX_SONG_DURATION, max(90, duration))
+    yield duration, 8, False
+    yield duration, 12, not request['instrumental'] and is_short_lyric(request['lyrics'])
 
 
 def verify_lyrics(source, folder, duration):
@@ -308,6 +316,9 @@ def engine_fingerprint(root):
 
 
 def run(root, folder):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from voice_tools import denoise_filter, ffmpeg, ffmpeg_path, mix_voice
+
     os.chdir(root)
     sys.path.insert(0, str(root))
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
@@ -353,41 +364,41 @@ def run(root, folder):
             offload_dit_to_cpu=True, quantization='int8_weight_only', use_mlx_dit=False)
         if not ok:
             raise RuntimeError(str(message))
-        brief = request['duration'] <= 30
         reference = folder / 'referencia.wav'
+        recorded_voice = request.get('recordedVoice', False)
         task = {}
         if request.get('reference'):
             if not reference.is_file():
-                raise RuntimeError('Falta el audio de referencia del ritmo.')
-            if request['duration'] > request.get('referenceDuration', request['duration']):
-                status('running', 'Ampliando el ritmo para que entre toda la letra…', .12)
-                extend_reference(reference, request['duration'])
-            task = {'task_type': 'cover', 'src_audio': str(reference), 'audio_cover_strength': .72}
-        instrumental = request['instrumental']
+                raise RuntimeError('Falta el audio de referencia.')
+            if not recorded_voice:
+                if request['duration'] > request.get('referenceDuration', request['duration']):
+                    status('running', 'Ampliando el ritmo para que entre toda la letra…', .12)
+                    extend_reference(reference, request['duration'])
+                task = {'task_type': 'cover', 'src_audio': str(reference), 'audio_cover_strength': .72}
+        instrumental = request['instrumental'] or recorded_voice
         seed = request['seed']
         random_seed = seed < 0
-        attempts = 2 if random_seed else 1
+        plan = list(take_plan({**request, 'instrumental': instrumental}))
         inputs = {'bpm': request.get('bpm'), 'instrumental': instrumental,
-                  'vocal_language': 'unknown' if instrumental else 'es', 'duration': request['duration'],
-                  'inference_steps': 8, 'guidance_scale': 1.0, 'shift': 3.0, 'infer_method': 'ode',
+                  'vocal_language': 'unknown' if instrumental else 'es',
+                  'guidance_scale': 1.0, 'shift': 3.0, 'infer_method': 'ode',
                   'thinking': False, 'use_cot_metas': False, 'use_cot_caption': False,
                   'use_cot_lyrics': False, 'use_cot_language': False, 'seed': seed}
         llm = LLMHandler()
+        binary = ffmpeg_path()
 
-        def generate(directory, attempt):
-            retry = attempt > 1
-            if not retry:
-                message = 'Generando tu canción…'
-            elif instrumental:
-                message = 'Probando una última toma instrumental…'
-            else:
-                message = 'Probando una última toma para mejorar la letra…'
+        def generate(directory, attempt, duration, steps, shorter_lines):
+            mode = 'acompañamiento para tu voz' if recorded_voice else 'canción'
+            message = f'Generando {mode} · toma {attempt} de {len(plan)} · {duration:g} s…'
 
             def report_progress(value, desc=None, **kwargs):
                 status('running', message, min(.95, .15 + .8 * float(value)))
 
-            take_inputs = {**inputs, 'caption': song_caption(request, retry=retry),
-                           'lyrics': song_lyrics(request, shorter_lines=retry)}
+            prompt = {**request, 'duration': duration, 'instrumental': instrumental}
+            if duration > request['duration']:
+                prompt['minimumDuration'] = duration
+            take_inputs = {**inputs, 'duration': duration, 'inference_steps': steps,
+                           'caption': song_caption(prompt), 'lyrics': song_lyrics(prompt, shorter_lines)}
             params = GenerationParams(**take_inputs, **task)
             config = GenerationConfig(batch_size=1, allow_lm_batch=False, audio_format='wav',
                 use_random_seed=random_seed, seeds=None if random_seed else [seed])
@@ -401,64 +412,77 @@ def run(root, folder):
         rejected = []
         with tempfile.TemporaryDirectory(prefix='tomas-', dir=folder) as scratch:
             best_audio = Path(scratch) / 'mejor.wav'
-            for attempt in range(1, attempts + 1):
+            for attempt, (target, steps, shorter_lines) in enumerate(plan, 1):
                 with tempfile.TemporaryDirectory(prefix='toma-', dir=scratch) as take:
-                    finished = Path(take) / 'cancion.wav'
+                    working = Path(take)
+                    finished = working / 'cancion.wav'
                     try:
-                        candidate, take_inputs = generate(Path(take) / 'resultado', attempt)
+                        candidate, take_inputs = generate(working / 'resultado', attempt, target, steps, shorter_lines)
                         source = Path(candidate['path'])
                         quality = measure_audio(source)
                         duration = quality['duration']
-                        problem = audio_problem(quality, request['duration'])
+                        problem = audio_problem(quality, target)
                         check = None
-                        fade = .35 if brief else 2.5
                         if not instrumental and not problem:
-                            status('running', f'Comprobando las palabras cantadas · intento {attempt} de {attempts}', .96)
+                            status('running', f'Comprobando lo cantado · toma {attempt} de {len(plan)}…', .96)
                             check = verify_lyrics(source, folder, duration)
-                            voice_end = check.get('lastVoiceEnd')
-                            fade = min(fade, max(.08, duration - voice_end)) if voice_end else .35
                             if check['status'] == 'review':
-                                recognized = check.get('recognizedWords')
-                                if recognized is None:
-                                    recognized = len(LYRIC_WORD.findall(check.get('heard', '')))
+                                recognized = check.get('recognizedWords', len(LYRIC_WORD.findall(check.get('heard', ''))))
                                 if not recognized:
                                     problem = 'no_lyrics_heard'
-                                elif check['coverage'] < .6:
+                                elif check['coverage'] < .45:
                                     problem = 'lyrics_mismatch'
                         if problem:
                             rejected.append({'errorCode': problem, 'audio': quality, 'lyricsCheck': check,
                                              'input': take_inputs, 'seed': (candidate.get('params') or {}).get('seed')})
                             continue
-                        finish_song(source, finished, fade_seconds=fade)
-                    except Exception:
-                        if best is None and not rejected:
+                        if recorded_voice:
+                            status('running', 'Ajustando la base y mezclando tu voz limpia…', .975)
+                            mix_voice(reference, source, finished, binary, request.get('bpm') or 120,
+                                      max(duration, request['referenceDuration']))
+                            with wave.open(str(finished), 'rb') as mixed:
+                                duration = mixed.getnframes() / mixed.getframerate()
+                        else:
+                            clean = working / 'audio-limpio.wav'
+                            ffmpeg(binary, '-i', source, '-af', denoise_filter(quality['sampleRate'], 5, -60),
+                                   '-c:a', 'pcm_s24le', clean)
+                            voice_end = (check or {}).get('lastVoiceEnd')
+                            fade = .35 if voice_end is None else min(1.6, max(.08, duration - voice_end))
+                            # Remove surplus near-silence at the borders after evaluating the whole performance.
+                            start = max(0, quality['leadingSilence'] - .45) if not request.get('reference') and quality['leadingSilence'] >= 3 else 0
+                            end = max(voice_end or 0, duration - quality['trailingSilence'] + .6) if quality['trailingSilence'] >= 3 else None
+                            duration = finish_song(clean, finished, fade_seconds=fade, start=start, end=end)
+                    except Exception as error:
+                        if memory_error_status(error):
                             raise
                         traceback.print_exc()
-                        break
+                        rejected.append({'errorCode': 'engine_error',
+                                         'message': next(iter(str(error).splitlines()), '')[:200]})
+                        continue
                     verdict = check.get('status') if check else None
                     exact = instrumental or verdict == 'match'
-                    score = -1
-                    if exact:
-                        score = 2
-                    elif verdict == 'review':
+                    score = 2 if exact else -1
+                    if verdict == 'review':
                         score = check.get('similarity', check.get('coverage', 0))
                         if check.get('missingEnding'):
-                            score -= .1
+                            score -= .2
                     if best is None or score > best['score']:
                         finished.replace(best_audio)
                         best = {'score': score, 'duration': duration, 'check': check, 'audio': quality,
                                 'params': candidate.get('params', {}), 'input': take_inputs}
-                    if exact or verdict == 'unchecked' or (check['coverage'] >= .8 and not check['missingEnding']):
+                    if exact or verdict == 'unchecked':
                         break
             if not best:
-                failure = rejected[-1]
+                failure = next((row for row in reversed(rejected) if row['errorCode'] != 'engine_error'), rejected[-1])
                 (folder / 'resultado.json').write_text(json.dumps({'tomasDescartadas': rejected}, ensure_ascii=False, default=str), encoding='utf-8')
                 code = failure['errorCode']
-                message = TAKE_ERRORS[code]
+                message = TAKE_ERRORS.get(code, 'El motor no pudo completar el audio. ' + failure.get('message', ''))
                 if code == 'silent_audio':
                     audio = failure['audio']
                     message += f" Se midieron {audio['audibleSeconds']:.1f} s audibles de {audio['duration']:.1f} s."
-                status('error', message, errorCode=code, lyricsCheck=failure['lyricsCheck'])
+                if len(rejected) > 1:
+                    message += f' Se probaron {len(rejected)} tomas.'
+                status('error', message, errorCode=code, lyricsCheck=failure.get('lyricsCheck'))
                 return 1
             status('running', 'Guardando el audio…', .98)
             result = {**(best['params'] or {}), 'salmos': {'songApi': SONG_API, 'model': MODEL,
@@ -467,7 +491,7 @@ def run(root, folder):
             (folder / 'resultado.json').write_text(json.dumps(result, ensure_ascii=False, default=str), encoding='utf-8')
             best_audio.replace(folder / 'cancion.wav')
             verdict = (best['check'] or {}).get('status')
-            message = 'Canción lista.' if instrumental else 'Toma lista para revisar.'
+            message = 'Versión con tu voz lista.' if recorded_voice else 'Canción lista.' if instrumental else 'Toma lista para revisar.'
             if verdict == 'match':
                 message = 'Canción lista. Se verificó la letra.'
             status('done', message, 1, duration=best['duration'], lyricsCheck=best['check'])

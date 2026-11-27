@@ -16,8 +16,10 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import uuid
 from pathlib import Path
+from voice_tools import cleanup_voice, ffmpeg, ffmpeg_path, separate_voice, tempo_grid
 
 try:
     from music_worker import memory_error_status, missing_checkpoints
@@ -38,6 +40,8 @@ DATA = Path(os.environ.get('SALMOS_DATA', 'E:/SALMOS-IA-datos')) / 'musica'
 MAX_REFERENCE_BYTES = MAX_SONG_DURATION * 48000 * 2 * 2 + 65536
 LOCK = threading.RLock()
 JOB = None
+VOICE_LOCK = threading.Lock()
+VOICE_STAGE = None
 
 
 def ace_root():
@@ -107,7 +111,7 @@ def state(job_id=None):
         return {'audioApi': 2, 'songApi': SONG_API,
                 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(root), 'missingCheckpoints': missing,
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
-                'transcriptionStage': TRANSCRIPTION_STAGE, 'job': status}
+                'transcriptionStage': TRANSCRIPTION_STAGE, 'voiceStage': VOICE_STAGE, 'job': status}
 
 
 def validate_request(data):
@@ -118,6 +122,8 @@ def validate_request(data):
     duration = None if data.get('duration') is None else float(data['duration'])
     voice = str(data.get('voice', 'auto'))
     instrumental = data.get('instrumental', False)
+    reference = data.get('reference')
+    with_recorded_voice = isinstance(reference, dict) and reference.get('kind') == 'voice'
     if not isinstance(instrumental, bool):
         raise ValueError('Elegí instrumental o con letra.')
     if not 5 <= len(caption) <= 1200 or len(lyrics) > 3000:
@@ -129,9 +135,9 @@ def validate_request(data):
         raise ValueError('Elegí un ritmo válido.')
     if voice not in ('auto', 'male', 'female'):
         raise ValueError('Elegí la voz.')
-    if not instrumental and not re.search(r'[^\W_]', re.sub(r'\[[^\]\n]*\]', '', lyrics)):
+    if not instrumental and not with_recorded_voice and not re.search(r'[^\W_]', re.sub(r'\[[^\]\n]*\]', '', lyrics)):
         raise ValueError('Escribí la letra que querés cantar.')
-    minimum_duration = 10 if instrumental else minimum_lyric_duration(lyrics, bpm)
+    minimum_duration = 10 if instrumental or with_recorded_voice else minimum_lyric_duration(lyrics, bpm)
     if minimum_duration > MAX_SONG_DURATION:
         raise ValueError('A este tempo, la letra necesita más de 10 minutos. Subí el tempo o dividila en partes.')
     if duration is None:
@@ -143,15 +149,15 @@ def validate_request(data):
     instruments = data.get('instruments', [])
     if not isinstance(instruments, list) or len(instruments) > 16:
         raise ValueError('Revisá los instrumentos elegidos.')
-    reference = data.get('reference')
     if reference is not None:
-        if (instrumental or not isinstance(reference, dict)
+        if ((instrumental and not with_recorded_voice) or not isinstance(reference, dict)
                 or not isinstance(reference.get('id'), str) or not 1 <= len(reference['id']) <= 128
                 or type(reference.get('uploaded')) is not bool
+                or (with_recorded_voice and (not reference['uploaded'] or instrumental))
                 or (not reference['uploaded'] and not re.fullmatch(r'[a-f0-9]{32}', reference['id']))):
             raise ValueError('Elegí un ritmo válido y escribí la letra para cantar.')
         reference = {'id': reference['id'], 'name': str(reference.get('name', 'Ritmo'))[:100],
-                     'uploaded': reference['uploaded']}
+                     'uploaded': reference['uploaded'], 'kind': 'voice' if with_recorded_voice else 'beat'}
     return {'caption': caption, 'lyrics': lyrics, 'duration': duration, 'minimumDuration': minimum_duration, 'voice': voice, 'bpm': bpm,
             'reference': reference, 'versionOf': str(data.get('versionOf') or '')[:128],
             'mood': str(data.get('mood', 'joyful'))[:30], 'rhythm': str(data.get('rhythm', 'medium'))[:30],
@@ -163,39 +169,92 @@ def reference_inbox():
     return DATA / 'referencias-pendientes'
 
 
-def pcm_duration(path):
+def pcm_duration(path, minimum=10):
     with wave.open(str(path), 'rb') as audio:
         if audio.getnchannels() not in (1, 2) or audio.getsampwidth() != 2 or not 8000 <= audio.getframerate() <= 48000:
             raise ValueError('El ritmo de referencia debe ser un WAV mono o estéreo de 16 bits.')
         frames = audio.getnframes()
         duration = frames / audio.getframerate()
-        if not 10 <= duration <= MAX_SONG_DURATION:
-            raise ValueError('Elegí un ritmo de entre 10 segundos y 10 minutos.')
+        if not minimum <= duration <= MAX_SONG_DURATION:
+            raise ValueError(f'Elegí un audio de entre {minimum:g} segundos y 10 minutos.')
         audio.setpos(frames - 1)
         if len(audio.readframes(1)) != audio.getnchannels() * audio.getsampwidth():
             raise ValueError('El audio de referencia está incompleto.')
         return duration
 
 
-def upload_reference(handler, job_id):
-    if not re.fullmatch(r'[a-f0-9]{32}', job_id):
-        raise ValueError('El pedido de referencia no es válido.')
+def read_wav_upload(handler, path):
     size = int(handler.headers.get('Content-Length', '0'))
     if handler.headers.get('Content-Type', '').split(';')[0] != 'audio/wav' or not 44 < size <= MAX_REFERENCE_BYTES:
         raise ValueError('Usá un WAV de hasta 10 minutos.')
+    with path.open('wb') as output:
+        while size:
+            chunk = handler.rfile.read(min(size, 65536))
+            if not chunk:
+                raise ValueError('Se interrumpió la carga del audio.')
+            output.write(chunk)
+            size -= len(chunk)
+
+
+def serve_clean_voice(handler):
+    global VOICE_STAGE
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(handler.path).query)
+    mode = query.get('source', [''])[0]
+    if mode not in ('voice', 'mix'):
+        raise ValueError('Indicá si el audio trae acompañamiento.')
+    with LOCK:
+        if busy() or not VOICE_LOCK.acquire(blocking=False):
+            raise RuntimeError('Esperá a que termine el otro pedido de audio.')
+    try:
+        def report(message):
+            global VOICE_STAGE
+            VOICE_STAGE = message
+
+        report('Recibiendo la grabación…')
+        DATA.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.voz-', dir=DATA) as directory:
+            folder = Path(directory)
+            raw, prepared, stem, clean = (folder / name for name in ('entrada.wav', 'pcm.wav', 'voz.wav', 'limpia.wav'))
+            read_wav_upload(handler, raw)
+            duration = pcm_duration(raw, minimum=.25)
+            binary = ffmpeg_path()
+            if mode == 'mix':
+                ffmpeg(binary, '-i', raw, '-ac', '2', '-ar', '44100', '-c:a', 'pcm_s16le', prepared)
+                separate_voice(prepared, stem, DATA.parent / 'modelos-voz', report)
+            else:
+                stem = raw
+            report('Reduciendo el ruido de la voz…')
+            cleanup_voice(stem, clean, binary)
+            grid = tempo_grid(clean)
+            with clean.open('rb') as stream:
+                handler.send_response(200)
+                handler.send_header('Content-Type', 'audio/wav')
+                handler.send_header('Content-Length', str(clean.stat().st_size))
+                handler.send_header('Access-Control-Expose-Headers', 'X-Salmos-BPM, X-Salmos-Duration')
+                handler.send_header('X-Salmos-Duration', str(duration))
+                if grid:
+                    handler.send_header('X-Salmos-BPM', str(grid[0]))
+                handler.end_headers()
+                try:
+                    shutil.copyfileobj(stream, handler.wfile)
+                except ConnectionError:
+                    handler.close_connection = True
+    finally:
+        VOICE_STAGE = None
+        VOICE_LOCK.release()
+
+
+def upload_reference(handler, job_id):
+    if not re.fullmatch(r'[a-f0-9]{32}', job_id):
+        raise ValueError('El pedido de referencia no es válido.')
     inbox = reference_inbox()
     inbox.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(prefix='ritmo-', suffix='.tmp', dir=inbox, delete=False) as output:
             temporary = Path(output.name)
-            while size:
-                chunk = handler.rfile.read(min(size, 65536))
-                if not chunk:
-                    raise ValueError('Se interrumpió la carga del ritmo.')
-                output.write(chunk)
-                size -= len(chunk)
-        duration = pcm_duration(temporary)
+        read_wav_upload(handler, temporary)
+        duration = pcm_duration(temporary, minimum=.25)
         with LOCK:
             if not (DATA / job_id).exists():
                 temporary.replace(inbox / (job_id + '.wav'))
@@ -214,7 +273,7 @@ def find_reference(reference, job_id):
         path = reference_inbox() / (job_id + '.wav')
         if not path.is_file():
             raise ValueError('Todavía falta cargar el ritmo de referencia.')
-        duration = pcm_duration(path)
+        duration = pcm_duration(path, minimum=.25 if reference.get('kind') == 'voice' else 10)
     else:
         folder = DATA / reference['id']
         track = track_info(folder, read_status(folder))
@@ -257,7 +316,7 @@ def start(data, wan_running=False, lyrics_ready=None):
         folder = DATA / job_id
         if folder.is_dir():
             return state(folder.name)
-        if busy():
+        if busy() or VOICE_LOCK.locked():
             raise RuntimeError('Ya se está generando una canción.')
         if not request['instrumental'] and lyrics_ready is False and SONG_API < 6:
             raise RuntimeError('La revisión de letras no está lista. Volvé a abrir el iniciador con conexión a internet.')
@@ -266,6 +325,8 @@ def start(data, wan_running=False, lyrics_ready=None):
             source, reference_duration = find_reference(reference, job_id)
             request['referenceDuration'] = reference_duration
             request['duration'] = max(request['duration'], reference_duration)
+            if reference.get('kind') == 'voice':
+                request['recordedVoice'] = True
         folder.mkdir(parents=True)
         try:
             if reference:
@@ -282,6 +343,8 @@ def start(data, wan_running=False, lyrics_ready=None):
         env['PYTHONPATH'] = str(root.resolve())
         env['PYTHONUTF8'] = '1'
         env['SALMOS_EDITOR_PYTHON'] = sys.executable
+        if binary := ffmpeg_path():
+            env['SALMOS_MUSIC_FFMPEG'] = binary
         try:
             with (folder / 'motor.log').open('wb') as log:
                 process = subprocess.Popen([str((root / 'python_embeded/python.exe').resolve()),
@@ -439,15 +502,23 @@ def manage(data, action):
             if not name or len(name) > 100:
                 raise ValueError('Escribí un nombre de hasta 100 caracteres.')
             request['name'] = name
+        if action == 'classify':
+            style = data.get('style', '')
+            if not isinstance(style, str) or (style and not re.fullmatch(r'[a-z0-9_-]{1,32}', style)):
+                raise ValueError('Elegí un estilo de la galería.')
+            request['galleryStyle'] = style
         if action == 'lyrics':
-            lyrics = data.get('lyrics')
+            mark_instrumental = data.get('instrumental') is True
+            lyrics = '' if mark_instrumental else data.get('lyrics')
             if not isinstance(lyrics, str) or len(lyrics) > 3000:
                 raise ValueError('La letra puede tener hasta 3.000 caracteres.')
-            if lyrics != request.get('lyrics'):
+            if mark_instrumental or lyrics != request.get('lyrics'):
                 status = read_status(folder)
                 if status.pop('lyricsCheck', None):
                     write_status(folder, status)
             request['lyrics'] = lyrics
+            if mark_instrumental or lyrics.strip():
+                request['instrumental'] = mark_instrumental
         elif action == 'save':
             request['saved'] = True
         temp = folder / 'request.tmp'
@@ -505,6 +576,9 @@ def save_audio_version(handler, track_id):
     query = urllib.parse.parse_qs(urllib.parse.urlsplit(handler.path).query)
     name = query.get('name', [''])[0].strip()
     parent_id = query.get('parent', [''])[0]
+    kind = query.get('kind', [''])[0]
+    if kind not in ('', 'voice'):
+        raise ValueError('Tipo de versión no válido.')
     if not name or len(name) > 100 or (parent_id and not re.fullmatch(r'[a-f0-9]{32}', parent_id)) or track_id == parent_id:
         raise ValueError('Revisá el nombre de la versión.')
     size = int(handler.headers.get('Content-Length', '0'))
@@ -538,6 +612,8 @@ def save_audio_version(handler, track_id):
             except FileNotFoundError:
                 pass  # The original can also be a recording saved only in the browser.
         request.update(name=name, duration=duration, saved=True, parentId=parent_id, audioEdit=True)
+        if kind == 'voice':
+            request.update(voiceOnly=True, instrumental=False, lyrics='')
         (folder / 'request.json').write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
         write_status(folder, {'state':'done','message':'Versión guardada','progress':1})
         with LOCK:
@@ -552,6 +628,17 @@ def save_audio_version(handler, track_id):
 
 
 def post(handler, path, wan_running=False, lyrics_ready=None):
+    if path == '/api/music/voice':
+        try:
+            serve_clean_voice(handler)
+        except (ValueError, wave.Error, EOFError) as exc:
+            handler.json_response({'error': str(exc) or 'No se pudo leer la grabación.'}, 422)
+        except (OSError, RuntimeError, ImportError) as exc:
+            handler.json_response({'error': str(exc) or 'No se pudo preparar la voz.'}, 503)
+        except Exception:
+            traceback.print_exc()
+            handler.json_response({'error': 'Falló la separación de voz. El detalle quedó en la ventana del iniciador.'}, 503)
+        return True
     if path == '/api/music/transcribe' or path.startswith(('/api/music/versions/', '/api/music/reference/')):
         try:
             identifier = path.rsplit('/', 1)[-1]
@@ -568,7 +655,7 @@ def post(handler, path, wan_running=False, lyrics_ready=None):
         else:
             handler.json_response(result)
         return True
-    if path not in ('/api/music/generate', '/api/music/cancel', '/api/music/rename', '/api/music/save', '/api/music/delete', '/api/music/lyrics'):
+    if path not in ('/api/music/generate', '/api/music/cancel', '/api/music/rename', '/api/music/save', '/api/music/delete', '/api/music/lyrics', '/api/music/classify'):
         return False
     try:
         if not handler.headers.get('Content-Type', '').startswith('application/json'):
@@ -578,7 +665,7 @@ def post(handler, path, wan_running=False, lyrics_ready=None):
             raise ValueError('El pedido supera el tamaño permitido.')
         data = json.loads(handler.rfile.read(length).decode('utf-8'))
         action = path.rsplit('/', 1)[-1]
-        if action in ('rename', 'save', 'delete', 'lyrics'):
+        if action in ('rename', 'save', 'delete', 'lyrics', 'classify'):
             handler.json_response(manage(data, action))
         else:
             handler.json_response(cancel(data.get('id')) if action == 'cancel' else start(data, wan_running, lyrics_ready), 202)

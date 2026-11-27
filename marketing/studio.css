@@ -392,6 +392,7 @@ dialog.song-editor{
 .song-sidebar{position:sticky;top:70px;align-self:start}
 .song-editor-layout aside{display:grid;gap:8px;justify-items:center}
 .song-editor-layout aside canvas{width:100%;max-height:52vh;object-fit:contain;border-radius:7px;background:#21121b}
+.song-reel [data-reel-ended]{font-size:12px;color:#ffe0ad;text-align:center}
 .song-sidebar summary small{font-size:11px;color:#ffe0ad;margin-left:4px}
 .song-editor-layout .song-instructions{margin:0;padding:6px 9px;background:#301b29;color:#fde4f0;font-size:13px}
 .song-instructions summary{cursor:pointer;font-weight:650}
@@ -428,6 +429,12 @@ dialog.song-editor{
 .song-timeline-row{display:grid;grid-template-columns:minmax(0,151px) minmax(0,1fr);gap:8px;align-items:end}
 .song-timeline-visual{min-width:0;margin-inline:12px}
 .song-track-name{align-self:center;font-size:13px}
+.song-original-row{position:sticky;top:0;z-index:4;padding-bottom:4px;background:var(--production-panel,#422537)}
+.song-voice-tools{min-width:0;padding:10px;border:1px solid var(--production-line,#78455f);border-radius:8px}
+.song-voice-tools>summary{cursor:pointer;font-weight:700}
+.song-voice-tools .song-toolbar{margin-top:8px}
+.song-voice-tools audio{display:block;width:100%;max-width:580px;margin-top:8px}
+.song-voice-tools [data-voice-status]{margin:5px 0;font-size:12px}
 .song-lanes{display:grid;gap:6px;margin:7px 0 0}
 .song-lanes>p{font-size:12px;color:var(--production-muted,#edcbda)}
 .song-lane-title{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:4px;min-width:0;font-size:12px}
