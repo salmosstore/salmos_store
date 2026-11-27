@@ -77,10 +77,9 @@
     const start=clamp(Number(stored?.start??trim?.start)||0,0,Math.max(0,duration-.02));
     const end=clamp(Number(stored?.end??trim?.end)||duration,Math.min(duration,start+.02),duration);
     const value={start,end,bpm:clamp(Number(stored?.bpm??bpm)||120,40,240),snap:String(stored?.snap??0),
-      clean:stored?.clean??(voice?60:0),volume:stored?.volume??100,effect:stored?.effect||'',
+      clean:stored?.clean??0,volume:stored?.volume??100,effect:stored?.effect||'',
       effectAmount:stored?.effectAmount??70,
       lanes:Array.isArray(stored?.lanes)?structuredClone(stored.lanes):[]};
-    if(voice&&!value.lanes.length)seedRhythm(value,style,start,end);
     return value;
   }
 
@@ -218,9 +217,11 @@
   }
 
   async function open(options){
-    const {track,blob,tools,reel}=options;
-    const buffer=await offline(1).decodeAudioData(await blob.arrayBuffer()).catch(()=>{throw Error('No se pudo abrir el audio.');});
-    const duration=buffer.duration;
+    const {track,tools,reel}=options;
+    const originalBlob=options.blob;
+    let blob=options.working?.blob||originalBlob;
+    let buffer=await offline(1).decodeAudioData(await blob.arrayBuffer()).catch(()=>{throw Error('No se pudo abrir el audio.');});
+    let duration=buffer.duration;
     if(!duration||duration>601)throw Error('Elegí un audio de hasta diez minutos.');
     const settings=initialSettings(duration,options.settings,options.trim,options.voice,options.style,options.bpm);
     const dialog=document.createElement('dialog');
@@ -230,7 +231,7 @@
       <button data-close aria-label="Cerrar edición">×</button></header>
       <div class="song-editor-layout"><div class="song-main">
         <section class="song-arrange" aria-labelledby="songInstrumentsTitle">
-          <h3 id="songInstrumentsTitle">Recorte e instrumentos</h3>
+          <div class="song-source-title"><h3 id="songInstrumentsTitle" data-source-label>Audio original</h3><label>Escuchar<select data-source-version><option value="original">Original subido</option></select></label></div>
           <div class="song-transport-row">
           <div class="song-toolbar song-transport"><button class="primary" data-play>▶ Escuchar fragmento</button><output data-clock aria-live="off"></output>
             <label class="song-repeat"><input data-loop type="checkbox"> Repetir fragmento</label>
@@ -241,8 +242,8 @@
             <div><label>Hasta (segundos)<input data-end type="number" min="0" step=".01"></label><button data-set-end>Final aquí</button></div>
             <button data-full>Restablecer recorte</button></div></div>
           <div class="song-toolbar" aria-label="Agregar instrumentos">
-            <label>Instrumento<select data-instruments></select></label><button data-add>＋ Agregar instrumento</button>
-            <button data-rhythm>Agregar acompañamiento</button>
+            <label>Instrumento<select data-instruments></select></label><button data-add>＋ Agregar</button>
+            <button data-rhythm>＋ Acompañamiento</button>
             <label>Pulsos por minuto (BPM)<input type="number" data-bpm min="40" max="240" step="1" aria-describedby="songBeatHelp"></label>
             <label>Colocar sonidos<select data-snap aria-describedby="songBeatHelp"><option value="0">Libre</option><option value="1">Cada pulso</option>
               <option value="0.5">Cada medio pulso</option><option value=".25">Cada cuarto de pulso</option></select></label>
@@ -251,14 +252,14 @@
             <summary>Cómo colocar sonidos y cortar el audio</summary>
             <ul>
               <li>Arrastrá <strong>I</strong> y <strong>F</strong> para elegir el fragmento. Hacé clic en la onda para ubicar la línea amarilla.</li>
-              <li><strong>Agregar instrumento</strong> deja una pista con un ritmo inicial debajo de la onda. Hacé clic en la fila o en <strong>Tocar ahora</strong> para sumar golpes. Arrastrá un golpe o ajustá sus repeticiones.</li>
-              <li><strong>Agregar acompañamiento</strong> coloca varias pistas del estilo. Si el cursor está al final, arranca al inicio del recorte.</li>
+              <li><strong>＋ Agregar</strong> deja una pista con un ritmo inicial debajo de la onda. Hacé clic en la fila o en <strong>Tocar ahora</strong> para sumar golpes. Arrastrá un golpe o ajustá sus repeticiones.</li>
+              <li><strong>＋ Acompañamiento</strong> coloca varias pistas del estilo. Si el cursor está al final, arranca al inicio del recorte.</li>
               <li id="songBeatHelp"><strong>120 pulsos por minuto</strong> son dos por segundo. Los pulsos guían la cuadrícula y las repeticiones. Con <strong>Libre</strong>, el sonido queda donde hacés clic.</li>
             </ul>
           </details>
           <div class="song-timeline">
             <div class="song-timeline-row song-original-row">
-              <strong class="song-track-name">Audio original</strong>
+              <strong class="song-track-name" data-wave-label>Audio original</strong>
               <div class="song-timeline-visual">
                 <div class="song-ruler" data-ruler></div>
                 <div class="song-wave" data-wave><canvas aria-hidden="true"></canvas><div class="song-region" data-region></div>
@@ -267,6 +268,7 @@
             </div>
             <div data-lanes class="song-lanes" aria-label="Pistas de instrumentos"></div>
           </div>
+          <nav class="song-lane-pages" data-lane-pages hidden aria-label="Ver otras pistas"><button data-lanes-back>← Anteriores</button><output data-lanes-position></output><button data-lanes-next>Siguientes →</button></nav>
           <fieldset data-note hidden><legend>Nota seleccionada</legend><div class="song-note-fields">
             <label>En (s)<input data-at type="number" min="0" step=".01"></label><label>Duración (s)<input data-length type="number" min=".03" max="10" step=".01"></label>
             <label data-pitch-label>Nota<select data-pitch></select></label><label>Intensidad <input data-velocity type="range" min="1" max="100"></label>
@@ -281,25 +283,30 @@
             <label>Volumen original<input data-volume type="range" min="0" max="150"></label>
             <label>Realce vocal<input data-clean type="range" min="0" max="100"></label></div>
         </section>
-        <details class="song-voice-tools" data-voice-box hidden>
-          <summary>Voz limpia y acompañamiento</summary>
-          <div class="song-toolbar"><label>Qué contiene el audio<select data-voice-source>
-            <option value="voice">Solo mi voz</option><option value="mix">Voz con música de fondo</option>
-          </select></label><button data-prepare-voice>Preparar solo la voz</button>
+        <section class="song-voice-tools" data-voice-box hidden>
+          <h3>Limpiar y acompañar tu voz</h3>
+          <p>Aplicá la limpieza y escuchala en la onda de la izquierda. Después elegí cómo acompañar tu grabación.</p>
+          <div class="song-toolbar"><label>Audio subido<select data-voice-source>
+            <option value="mix">Voz con música o ruidos de fondo</option><option value="voice">Grabación de voz sola</option>
+          </select></label><label>Limpieza<select data-noise-strength><option value=".95">Fuerte</option><option value=".7">Moderada</option></select></label>
+          <button data-prepare-voice class="primary">Aplicar limpieza a la pista</button>
           <a data-voice-launcher class="button" hidden download="INICIAR_SALMOS.bat">Descargar iniciador</a></div>
           <p data-voice-status role="status"></p>
+          <progress data-voice-progress hidden aria-label="Procesando el audio"></progress>
           <div data-voice-result hidden>
-            <audio data-voice-preview controls preload="metadata" aria-label="Escuchar solo la voz"></audio>
             <div class="song-toolbar"><button data-save-voice>Guardar voz sola</button>
             <label>Estilo del acompañamiento<select data-arrange-style></select></label>
-            <button class="primary" data-generate-voice disabled>Generar versión con mi voz</button></div>
-            <audio data-arrangement controls preload="metadata" aria-label="Escuchar versión con acompañamiento" hidden></audio>
+            <button class="primary" data-generate-voice disabled>Generar acompañamiento</button></div>
+            <p>La voz conserva su tiempo y sus palabras. La grabación guía el ritmo de los instrumentos.</p>
+            <button data-load-result hidden>Cargar el resultado en esta pista</button>
           </div>
-        </details>
+        </section>
       </div>
       <div class="song-sidebar">
         <aside class="song-reel" data-reel hidden><h3>Vista previa del reel</h3><canvas data-frame aria-label="Vista previa del reel"></canvas>
           <p data-frame-time></p><p data-reel-ended role="status" hidden>Fin del reel · El audio sigue.</p></aside>
+        <div class="song-side-tabs" role="tablist" aria-label="Opciones de edición"><button role="tab" data-editor-tab="voice" aria-selected="true">Voz y estilo</button><button role="tab" data-editor-tab="lyrics" aria-selected="false">Letra</button><button role="tab" data-editor-tab="notes" aria-selected="false" hidden>Nota</button><button role="tab" data-editor-tab="help" aria-selected="false">Cómo usarlo</button></div>
+        <div data-editor-panel="voice"></div><div data-editor-panel="lyrics" hidden></div><div data-editor-panel="help" hidden></div><div data-editor-panel="notes" hidden></div>
         <details data-lyric-box><summary>Letra y estilo <small data-review-label hidden>Revisar</small></summary>
           <label>Letra adjunta<textarea data-lyric rows="3" maxlength="3000" placeholder="Pegá la letra que querés guardar con este audio"></textarea></label>
           <div class="song-toolbar"><button data-save-lyric>Guardar letra adjunta</button><button data-check-lyric hidden>Revisar lo cantado</button>
@@ -312,12 +319,16 @@
         <button data-original>Guardar original</button><button data-wav>Descargar WAV</button><button data-mp3>Descargar MP3</button>
         <button data-save>Guardar como nueva versión</button><button data-apply class="primary" hidden>✓ Usar en el reel</button></div></footer>`;
     const $=selector=>dialog.querySelector(selector),find=key=>$('[data-'+key+']');
-    const peaks=waveform(buffer),wave=find('wave'),surface=wave.querySelector('canvas'),player=new Audio();
+    let peaks=waveform(buffer);
+    const wave=find('wave'),surface=wave.querySelector('canvas'),player=new Audio();
     const fields={start:find('start'),end:find('end')};
-    const url=URL.createObjectURL(blob);
+    let url=URL.createObjectURL(blob);
     player.src=url;player.preload='auto';player.playbackRate=reel?.rate||1;player.preservesPitch=true;
     let reelElapsed=0,reelFrameTime,head=settings.start,left=0,zoom=1,activeNote=null,tick=0,playing=false;
-    let locked=false,mixSerial=0,rendered=null,dirty=!!options.voice;
+    let locked=false,mixSerial=0,rendered=null,dirty=!!options.working,lanePage=0;
+    const sources=new Map([['original',{blob:originalBlob,label:'Audio original'}]]);
+    let selectedSource=options.working?'working':'original';
+    if(options.working)sources.set('working',options.working);
     let previewContext,playbackMix,previewNoise,scheduledThrough=0,scheduled=[];
     const playedLive=new Map();
     const edited=()=>settings.lanes.some(lane=>lane.notes.length)||settings.clean!==0||settings.volume!==100||!!settings.effect;
@@ -332,8 +343,19 @@
     find('check-lyric').hidden=!options.onCheckLyrics||!lyrics;
     find('style-controls').hidden=!options.onStyle;
     find('voice-box').hidden=!options.onPrepareVoice;
-    find('voice-box').open=!!options.voice;
-    find('voice-source').value=track.uploadKind==='recording'||track.request?.voiceOnly?'voice':'mix';
+    find('voice-source').value=track.request?.voiceOnly?'voice':'mix';
+    dialog.querySelector('[data-editor-panel=voice]').append(find('voice-box'));
+    dialog.querySelector('[data-editor-panel=lyrics]').append(find('lyric-box'));
+    dialog.querySelector('[data-editor-panel=notes]').append(find('note'));
+    const instructions=dialog.querySelector('.song-instructions');
+    instructions.open=true;find('lyric-box').open=true;
+    dialog.querySelector('[data-editor-panel=help]').append(instructions);
+    function chooseEditorPanel(id){
+      const button=dialog.querySelector('[data-editor-tab='+id+']');
+      for(const tab of dialog.querySelectorAll('[data-editor-tab]'))tab.setAttribute('aria-selected',String(tab===button));
+      for(const panel of dialog.querySelectorAll('[data-editor-panel]'))panel.hidden=panel.dataset.editorPanel!==id;
+    }
+    for(const button of dialog.querySelectorAll('[data-editor-tab]'))button.onclick=()=>chooseEditorPanel(button.dataset.editorTab);
     find('voice-launcher').href=options.launcher||'';
     for(const key of ['gallery-style','arrange-style']){
       const select=find(key);
@@ -457,7 +479,11 @@
     function noteEditor(){
       const selection=find('note');
       selection.hidden=!activeNote;
-      if(!activeNote)return;
+      dialog.querySelector('[data-editor-tab=notes]').hidden=!activeNote;
+      if(!activeNote){
+        if(!dialog.querySelector('[data-editor-panel=notes]').hidden)chooseEditorPanel('voice');
+        return;
+      }
       const {lane,note}=activeNote;
       find('pitch-label').hidden=drums.has(lane.instrument);
       for(const key of ['at','length','pitch','velocity','count','each']){
@@ -491,11 +517,18 @@
       const note={id:id(),at:quantize(seconds),length:drums.has(lane.instrument)?.16:.38,pitch:lane.instrument==='bass'?36:60,velocity:80,each:1,count:1};
       lane.notes.push(note);activeNote={lane,note};
       if(live||playing&&Math.abs(note.at-player.currentTime)<.10)playedLive.set(note.id,note.at);
-      change();audition(lane,note);
+      change();chooseEditorPanel('notes');audition(lane,note);
     }
     function renderLanes(){
       const host=find('lanes');host.replaceChildren();
-      for(const lane of settings.lanes){
+      const timeline=find('lanes').parentElement;
+      const pageSize=Math.max(1,Math.min(12,Math.floor((timeline.clientHeight-dialog.querySelector('.song-original-row').offsetHeight-42)/54)));
+      const pages=Math.max(1,Math.ceil(settings.lanes.length/pageSize));
+      lanePage=clamp(lanePage,0,pages-1);
+      find('lane-pages').hidden=pages<2;
+      find('lanes-position').textContent=(lanePage*pageSize+1)+'–'+Math.min(settings.lanes.length,(lanePage+1)*pageSize)+' de '+settings.lanes.length;
+      find('lanes-back').disabled=lanePage===0;find('lanes-next').disabled=lanePage===pages-1;
+      for(const lane of settings.lanes.slice(lanePage*pageSize,(lanePage+1)*pageSize)){
         const row=document.createElement('div');row.className='song-lane song-timeline-row';row.dataset.laneId=lane.id;
         const title=document.createElement('div');title.className='song-lane-title';
         const label=document.createElement('strong');label.textContent=instruments[lane.instrument];
@@ -529,7 +562,7 @@
             marker.style.left=barStart+'%';marker.style.width=Math.max(0,clamp(percent(at+note.length),0,100)-barStart)+'%';
             marker.setAttribute('aria-label',instruments[lane.instrument]+' en '+timeText(at));
             marker.title=marker.getAttribute('aria-label')+(note.count>1?' · patrón repetido':'');
-            marker.onclick=event=>{event.stopPropagation();activeNote={lane,note};refresh();audition(lane,note);};
+            marker.onclick=event=>{event.stopPropagation();activeNote={lane,note};refresh();chooseEditorPanel('notes');audition(lane,note);};
             marker.onpointerdown=event=>{
               if(event.button!==0)return;
               marker.setPointerCapture(event.pointerId);
@@ -556,7 +589,7 @@
       }
       drawHead();
     }
-    function refresh(){timeline();renderLanes();noteEditor();}
+    function refresh(){timeline();noteEditor();renderLanes();}
     async function result(){
       if(rendered)return rendered;
       const revision=mixSerial,data=await render(buffer,settings);
@@ -620,7 +653,6 @@
     }
     async function play(){
       if(playing){head=player.currentTime;stop();drawHead();showReel();return;}
-      voicePlayer.pause();arrangementPlayer.pause();
       const resume=head>=settings.start&&head<settings.end-.025;
       await doAction('Preparando la escucha…',async()=>{
         const context=liveContext();
@@ -674,10 +706,13 @@
     function addPattern(instrument){
       const cursor=clamp(playing?player.currentTime:head,settings.start,settings.end);
       const from=cursor>=settings.end-Math.min(.25,(settings.end-settings.start)/2)?settings.start:cursor;
-      const added=seedRhythm(settings,options.style,from,settings.end,instrument);
+      const added=seedRhythm(settings,find('arrange-style').value||options.style,from,settings.end,instrument);
       if(!added.length){show('Ya hay 20 pistas.');return;}
       activeNote=added[0];
       if(instrument)settings.lanes=[activeNote.lane,...settings.lanes.filter(lane=>lane!==activeNote.lane)];
+      lanePage=0;
+      dialog.querySelector('[data-editor-tab=notes]').hidden=false;
+      chooseEditorPanel('notes');
       if(!playing)setHead(from);
       change();
       const timeline=find('lanes').parentElement;
@@ -688,6 +723,8 @@
     }
     find('add').onclick=()=>addPattern(find('instruments').value);
     find('rhythm').onclick=()=>addPattern();
+    find('lanes-back').onclick=()=>{lanePage--;renderLanes();};
+    find('lanes-next').onclick=()=>{lanePage++;renderLanes();};
     for(const [key,min,max] of [['at',0,duration],['length',.03,10],['pitch',24,84],['velocity',1,100],['count',1,5000],['each',.125,32]]){
       const input=find(key);
       input.onchange=()=>{
@@ -712,7 +749,7 @@
     };
     find('save').onclick=()=>doAction('Preparando la versión…',async()=>{
       const version=name()===track.name?name().slice(0,90)+' · versión':name();
-      await options.onSaveVersion({name:version,blob:await result(),duration:settings.end-settings.start,lyrics:find('lyric').value});
+      await options.onSaveVersion({name:version,blob:await result(),duration:settings.end-settings.start,lyrics:find('lyric').value,request:sources.get(selectedSource).request});
       show('Versión guardada. El original sigue disponible.');
     });
     find('save-lyric').onclick=()=>doAction('Guardando la letra…',async()=>{
@@ -757,81 +794,105 @@
       if(!window.confirm('¿Seguro que querés borrar «'+name()+'» de tus audios?'))return;
       void doAction('Borrando canción…',async()=>{await options.onDelete();dirty=false;dialog.close();});
     };
-    let preparedVoice=null,voiceURL='',arrangementURL='',voiceBusy=false,voiceGenerating=false,voiceMessage='';
-    const voicePlayer=find('voice-preview'),arrangementPlayer=find('arrangement');
+    let preparedVoice=null,voiceBusy=false,voiceGenerating=false,voiceMessage='',latestResult=null;
+    function updateSourceChoices(){
+      const select=find('source-version');select.replaceChildren();
+      for(const [id,entry] of sources)select.add(new Option(entry.label,id));
+      select.value=selectedSource;
+      find('source-label').textContent=find('wave-label').textContent=sources.get(selectedSource).label;
+    }
+    async function useSource(entry,id){
+      const decoded=await offline(1).decodeAudioData(await entry.blob.arrayBuffer());
+      if(!decoded.length||decoded.duration>601)throw Error('No se recibió un audio válido para esta pista.');
+      stop();
+      const full=settings.start===0&&Math.abs(settings.end-duration)<.1;
+      blob=entry.blob;buffer=decoded;duration=decoded.duration;peaks=waveform(buffer);
+      sources.set(id,entry);selectedSource=id;
+      URL.revokeObjectURL(url);url=URL.createObjectURL(blob);player.src=url;player.load();
+      settings.start=clamp(settings.start,0,Math.max(0,duration-.02));
+      settings.end=full?duration:clamp(settings.end,settings.start+.02,duration);
+      head=clamp(head,settings.start,settings.end);left=0;settings.clean=0;find('clean').value=0;
+      fields.start.max=fields.end.max=duration;
+      updateSourceChoices();change();
+    }
+    find('source-version').onchange=()=>doAction('Cambiando la pista…',async()=>{
+      const id=find('source-version').value;
+      await useSource(sources.get(id),id);
+    });
     function syncVoice(){
       const ready=options.voiceReadiness?.()||{};
       find('prepare-voice').disabled=voiceBusy||voiceGenerating||!ready.canClean;
-      find('voice-source').disabled=voiceBusy||voiceGenerating;
-      find('save-voice').disabled=voiceBusy||voiceGenerating;
+      find('voice-source').disabled=find('noise-strength').disabled=voiceBusy||voiceGenerating;
+      find('save-voice').disabled=!preparedVoice||voiceBusy||voiceGenerating;
       find('generate-voice').disabled=!preparedVoice||voiceBusy||voiceGenerating||!ready.ready||!find('arrange-style').value;
+      find('voice-progress').hidden=!voiceBusy&&!voiceGenerating;
       find('voice-launcher').hidden=!ready.download;
       find('voice-status').textContent=voiceMessage||ready.help||'';
     }
     const stopWatchingVoice=options.watchVoice?.(syncVoice);
     find('arrange-style').onchange=syncVoice;
-    find('voice-source').onchange=()=>{
+    find('voice-source').onchange=find('noise-strength').onchange=()=>{
       preparedVoice=null;voiceMessage='';
-      voicePlayer.pause();arrangementPlayer.pause();find('voice-result').hidden=true;
-      syncVoice();
+      find('voice-result').hidden=true;syncVoice();
     };
     find('prepare-voice').onclick=async()=>{
-      stop();voicePlayer.pause();arrangementPlayer.pause();
-      voiceBusy=true;voiceMessage='Preparando la voz en tu PC…';syncVoice();
+      if(voiceBusy||voiceGenerating)return;
+      stop();voiceBusy=true;voiceMessage='Limpiando la grabación…';syncVoice();
       try{
-        preparedVoice=await options.onPrepareVoice(find('voice-source').value,message=>{voiceMessage=message;syncVoice();});
-        if(voiceURL)URL.revokeObjectURL(voiceURL);
-        voiceURL=URL.createObjectURL(preparedVoice.blob);
-        voicePlayer.src=voiceURL;find('voice-result').hidden=false;arrangementPlayer.hidden=true;
-        if(preparedVoice.bpm){
-          settings.bpm=clamp(preparedVoice.bpm,40,240);find('bpm').value=settings.bpm;refresh();
-        }
-        voiceMessage=preparedVoice.bpm?'Voz lista · '+settings.bpm+' BPM detectados. Podés ajustar el valor antes de generar.':
-          'Voz lista. Usá el BPM del editor para elegir el pulso del acompañamiento.';
-      }catch(error){voiceMessage=error.message;}
+        preparedVoice=await options.onPrepareVoice(find('voice-source').value,
+          message=>{voiceMessage=message;syncVoice();},
+          {blob:originalBlob,strength:Number(find('noise-strength').value)});
+        await useSource({...preparedVoice,label:'Voz limpia',request:{...track.request,voiceOnly:true}},'clean');
+        find('voice-result').hidden=false;
+        if(preparedVoice.bpm){settings.bpm=clamp(preparedVoice.bpm,40,240);find('bpm').value=settings.bpm;refresh();}
+        voiceMessage='Limpieza aplicada a la pista. Tocá Escuchar fragmento para oírla y compararla con Original subido.';
+      }catch(error){preparedVoice=null;voiceMessage=error.message;}
       finally{voiceBusy=false;syncVoice();}
     };
     find('save-voice').onclick=()=>doAction('Guardando la voz sola…',async()=>{
       await options.onSaveVoice({...preparedVoice,lyrics:find('lyric').value,name:name().slice(0,86)+' · voz limpia'});
       show('Voz guardada en Mis audios.');
     });
+    async function receiveArrangement(track){
+      latestResult=track;
+      if(!dialog.open)return;
+      voiceGenerating=true;voiceMessage='Recibiendo el resultado en esta pista…';syncVoice();
+      try{
+        const output=await options.readTrack(track);
+        if(!dialog.open)return;
+        const style=options.genres?.[track.request?.style]?.[0]||'acompañamiento';
+        await useSource({blob:output,label:'Resultado · '+style,request:track.request},'result');
+        find('load-result').hidden=true;
+        voiceMessage='Resultado listo en la onda. Tocá Escuchar fragmento. Podés comparar Original, Voz limpia y Resultado.';
+        show('Resultado aplicado a la pista.');
+      }catch(error){
+        find('load-result').hidden=false;
+        voiceMessage='El resultado se guardó, pero falta cargarlo aquí. '+error.message;
+      }finally{voiceGenerating=false;syncVoice();}
+    }
+    find('load-result').onclick=()=>receiveArrangement(latestResult);
     find('generate-voice').onclick=async()=>{
       if(voiceGenerating||!preparedVoice)return;
-      stop();voicePlayer.pause();arrangementPlayer.pause();
-      voiceGenerating=true;voiceMessage='Enviando tu voz limpia al iniciador…';syncVoice();
+      stop();voiceGenerating=true;voiceMessage='Enviando tu voz limpia al iniciador…';syncVoice();
       try{
         await options.onArrangeVoice({...preparedVoice,lyrics:find('lyric').value,style:find('arrange-style').value,
           bpm:settings.bpm,name:name().slice(0,78)+' · con acompañamiento',
           report(message,state){
             voiceMessage=message;voiceGenerating=state==='working';syncVoice();
           },
-          async complete(track){
-            if(!dialog.open)return;
-            voiceMessage='Versión guardada en Mis audios.';syncVoice();
-            try{
-              const result=await options.readTrack(track);
-              if(!dialog.open)return;
-              if(arrangementURL)URL.revokeObjectURL(arrangementURL);
-              arrangementURL=URL.createObjectURL(result);
-              arrangementPlayer.src=arrangementURL;arrangementPlayer.hidden=false;
-            }catch{ /* La copia sigue en la galería. */ }
-          }});
+          complete:receiveArrangement});
       }catch(error){voiceGenerating=false;voiceMessage=error.message;syncVoice();}
     };
-    voicePlayer.onplay=()=>{stop();arrangementPlayer.pause();};
-    arrangementPlayer.onplay=()=>{stop();voicePlayer.pause();};
-    syncVoice();
+    updateSourceChoices();syncVoice();
     find('close').onclick=()=>{if(!locked&&!voiceBusy)dialog.close();};
     dialog.oncancel=event=>{if(locked||voiceBusy)event.preventDefault();};
     dialog.addEventListener('keydown',event=>event.stopPropagation());
     const resize=new ResizeObserver(paint);
     dialog.onclose=()=>{
       stop();resize.disconnect();player.removeAttribute('src');player.load();URL.revokeObjectURL(url);
-      stopWatchingVoice?.();voicePlayer.pause();arrangementPlayer.pause();
-      if(voiceURL)URL.revokeObjectURL(voiceURL);
-      if(arrangementURL)URL.revokeObjectURL(arrangementURL);
+      stopWatchingVoice?.();
       previewContext?.close().catch(()=>{});
-      if(dirty)Promise.resolve(options.onDraft?.(settings)).catch(error=>options.notify?.(error.message,'error'));
+      if(dirty)Promise.resolve(options.onDraft?.(settings,selectedSource==='original'?null:{blob,label:sources.get(selectedSource).label,request:sources.get(selectedSource).request})).catch(error=>options.notify?.(error.message,'error'));
       dialog.remove();
     };
     document.body.append(dialog);dialog.showModal();resize.observe(wave);refresh();showReel();

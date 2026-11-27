@@ -12,6 +12,8 @@ import wave
 MODEL_NAME = 'Kim_Vocal_2.onnx'
 MODEL_URL = 'https://huggingface.co/nomadkaraoke/public_uvr_models/resolve/main/' + MODEL_NAME
 MODEL_SHA256 = 'ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b'
+NOISE_URL = 'https://raw.githubusercontent.com/richardpl/arnndn-models/master/cb.rnnn'
+NOISE_SHA256 = 'f1357c4e5be9dee8467bead486dfced2d75b640c26ad0b594fa7f102322371d9'
 RATE, FFT_SIZE, HOP, BINS, FRAMES = 44100, 7680, 1024, 3072, 256
 SEGMENT = (FRAMES - 1) * HOP
 OVERLAP = 24 * HOP
@@ -28,36 +30,36 @@ def ffmpeg_path():
         return shutil.which('ffmpeg')
 
 
-def ffmpeg(binary, *args):
+def ffmpeg(binary, *args, cwd=None):
     if not binary:
         raise RuntimeError('Falta FFmpeg en el iniciador. Volvé a abrirlo para terminar la instalación.')
     try:
         subprocess.run([binary, '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', *map(str, args)],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=300)
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=300, cwd=cwd)
     except (OSError, subprocess.SubprocessError) as error:
         raise RuntimeError('No se pudo procesar el sonido con FFmpeg.') from error
 
 
-def vocal_model(directory, report):
+def cached_model(directory, name, url, checksum, limit, report):
     directory.mkdir(parents=True, exist_ok=True)
-    model = directory / MODEL_NAME
+    model = directory / name
     if model.is_file():
         with model.open('rb') as source:
-            if sha256(source.read()).hexdigest() == MODEL_SHA256:
+            if sha256(source.read()).hexdigest() == checksum:
                 return model
-    report('Descargando el modelo de separación vocal por primera vez…')
+    report('Descargando el modelo de limpieza por primera vez…')
     partial = model.with_suffix('.tmp')
     try:
         digest = sha256()
         size = 0
-        with urlopen(MODEL_URL, timeout=40) as source, partial.open('wb') as output:
+        with urlopen(url, timeout=40) as source, partial.open('wb') as output:
             while chunk := source.read(1024 * 1024):
                 size += len(chunk)
-                if size > 75_000_000:
+                if size > limit:
                     raise RuntimeError('La descarga del separador de voz supera el tamaño esperado.')
                 digest.update(chunk)
                 output.write(chunk)
-        if digest.hexdigest() != MODEL_SHA256:
+        if digest.hexdigest() != checksum:
             raise RuntimeError('La descarga del separador de voz quedó incompleta.')
         partial.replace(model)
     except OSError as error:
@@ -65,6 +67,10 @@ def vocal_model(directory, report):
     finally:
         partial.unlink(missing_ok=True)
     return model
+
+
+def vocal_model(directory, report):
+    return cached_model(directory, MODEL_NAME, MODEL_URL, MODEL_SHA256, 75_000_000, report)
 
 
 def predict_segment(data, infer):
@@ -141,54 +147,104 @@ def denoise_filter(rate, reduction, floor, track_noise=False):
     return f'apad=pad_len={delay},{noise},atrim=start_sample={delay},asetpts=PTS-STARTPTS'
 
 
-def cleanup_voice(source, destination, binary):
+def cleanup_voice(source, destination, binary, model_dir=None, strength=.95, report=lambda message: None):
+    source, destination = source.resolve(), destination.resolve()
+    directory = (model_dir or destination.parent / 'modelos-voz').resolve()
+    model = cached_model(directory, 'cb.rnnn', NOISE_URL, NOISE_SHA256, 500_000, report)
+    report('Quitando ruido de fondo con el modelo de voz…')
+    # RNNoise has one 10 ms analysis frame of latency. Flush it before removing it.
+    effect = (f'aresample=48000,highpass=f=65,apad=pad_len=480,arnndn=m={model.name}:mix={strength:.3f},'
+              'atrim=start_sample=480,asetpts=PTS-STARTPTS')
     ffmpeg(binary, '-i', source, '-af',
-           f'aresample={RATE},highpass=f=62,{denoise_filter(RATE, 14, -49, True)},'
-           'acompressor=threshold=0.125:ratio=2:attack=12:release=110:makeup=1.35',
-           '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', destination)
+           effect, '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', destination, cwd=directory)
 
 
-def tempo_grid(path, expected=None):
-    """Estimate a regular pulse from transients. An unmetered voice can return None."""
+def rhythm_analysis(path, expected=None):
+    """Track regular attacks over the full performance in small PCM blocks."""
     import numpy as np
     with wave.open(str(path), 'rb') as source:
         if source.getsampwidth() != 2:
             return None
         sample_rate = source.getframerate()
         hop = sample_rate // 100
-        data = np.frombuffer(source.readframes(sample_rate * 45), dtype='<i2')
-        data = data.reshape(-1, source.getnchannels()).mean(axis=1)
-    if len(data) < hop * 450:
+        levels = []
+        while raw := source.readframes(hop * 2000):
+            pcm = np.frombuffer(raw, dtype='<i2').reshape(-1, source.getnchannels()).mean(axis=1)
+            block = pcm[:len(pcm) // hop * hop].reshape(-1, hop)
+            levels.append(np.log1p(np.sqrt(np.mean(block ** 2, axis=1))))
+    level = np.concatenate(levels) if levels else np.array([])
+    if len(level) < 450:
         return None
-    block = data[:len(data) // hop * hop].reshape(-1, hop)
-    level = np.log1p(np.sqrt(np.mean(block ** 2, axis=1)))
     flux = np.maximum(0, np.diff(level, prepend=level[0]))
     power = (flux ** 2).sum()
     if power < 1e-8:
         return None
-    low, high = (max(30, expected * .78), min(300, expected * 1.24)) if expected else (68, 174)
+    low, high = (max(30, expected * .80), min(300, expected * 1.20)) if expected else (68, 174)
     candidates = range(round(6000 / high), round(6000 / low) + 1)
     period = max(candidates, key=lambda lag: np.dot(flux[lag:], flux[:-lag]))
-    correlation = np.dot(flux[period:], flux[:-period]) / power
-    if correlation < .20:
+    confidence = float(np.dot(flux[period:], flux[:-period]) / power)
+    if confidence < .22:
         return None
-    phase = np.bincount(np.arange(len(flux)) % period, weights=flux, minlength=period).argmax()
-    return round(6000 / period), float(phase) * hop / sample_rate
+    phase = int(np.bincount(np.arange(len(flux)) % period, weights=flux, minlength=period).argmax())
+    beats = []
+    radius = max(2, round(period * .18))
+    local_level = float(np.percentile(flux[flux > 0], 40))
+    for predicted in range(phase, len(flux), period):
+        first, last = max(0, predicted-radius), min(len(flux), predicted+radius+1)
+        at = first + int(np.argmax(flux[first:last]))
+        if flux[at] < local_level:
+            at = predicted
+        beats.append(at * hop / sample_rate)
+    return {'bpm': round(6000 / period), 'beats': beats, 'confidence': confidence}
+
+
+def tempo_grid(path, expected=None):
+    analysis = rhythm_analysis(path, expected)
+    return (analysis['bpm'], analysis['beats'][0]) if analysis else None
+
+
+def align_backing(voice, backing, output, binary, bpm, length):
+    """Map phrases of the instrumental to the recording. Voice samples are untouched."""
+    source, base = rhythm_analysis(voice, bpm), rhythm_analysis(backing, bpm)
+    points = [(0., 0.)]
+    if source and base:
+        for index in range(4, min(len(source['beats']), len(base['beats'])), 4):
+            target, origin = source['beats'][index], base['beats'][index]
+            if min(target, origin) < .5 or max(target, origin) >= length-.5:
+                continue
+            # Reject uncertain octave matches or discontinuities instead of warping
+            # the music to an implausible beat map.
+            previous_origin, previous_target = points[-1]
+            ratio = (origin-previous_origin)/(target-previous_target)
+            if .85 <= ratio <= 1.18 and abs(target-origin) < 1:
+                points.append((origin, target))
+    points.append((length, length))
+    if len(points) == 2:
+        ffmpeg(binary, '-i', backing, '-af', f'apad=whole_dur={length},atrim=duration={length}',
+               '-ar', str(RATE), '-c:a', 'pcm_s16le', output)
+        return
+    segments = len(points)-1
+    graph = ['[0:a]asplit=' + str(segments) + ''.join(f'[part{i}]' for i in range(segments))]
+    for index, ((start, target_start), (end, target_end)) in enumerate(zip(points, points[1:])):
+        duration = target_end-target_start
+        speed = (end-start)/duration
+        graph.append(f'[part{index}]atrim=start={start:.6f}:end={end:.6f},asetpts=PTS-STARTPTS,'
+                     f'atempo={speed:.6f},apad=whole_dur={duration:.6f},atrim=duration={duration:.6f},'
+                     f'afade=t=in:d=0.003,afade=t=out:st={max(0,duration-.003):.6f}:d=0.003[clip{index}]')
+    graph.append(''.join(f'[clip{i}]' for i in range(segments))+f'concat=n={segments}:v=0:a=1[out]')
+    ffmpeg(binary, '-i', backing, '-filter_complex', ';'.join(graph), '-map', '[out]',
+           '-ar', str(RATE), '-c:a', 'pcm_s16le', output)
 
 
 def mix_voice(voice, accompaniment, output, binary, bpm, length):
-    """Stretch and align only the backing. The recorded voice remains on its timeline."""
     backing_pcm = output.with_name('base-pcm.wav')
+    aligned = output.with_name('base-sincronizada.wav')
     ffmpeg(binary, '-i', accompaniment, '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', backing_pcm)
-    source_grid, base_grid = tempo_grid(voice, bpm), tempo_grid(backing_pcm, bpm)
-    speed = bpm / base_grid[0] if base_grid else 1
-    shift = (source_grid[1] if source_grid else 0) - (base_grid[1] / speed if base_grid else 0)
-    sync = f',adelay={round(shift * 1000)}:all=1' if shift >= 0 else f',atrim=start={-shift:.4f},asetpts=PTS-STARTPTS'
+    align_backing(voice, backing_pcm, aligned, binary, bpm, length)
     fade = min(1.8, length / 8)
-    graph = (f'[0:a]aresample={RATE},apad=whole_dur={length:.3f},asplit[voice][guide];'
-             f'[1:a]{denoise_filter(RATE, 6, -56)},atempo={speed:.6f}{sync},volume=0.46,apad=whole_dur={length:.3f},'
-             f'afade=t=out:st={length - fade:.3f}:d={fade:.3f}[base];'
+    graph = (f'[0:a]aresample={RATE},apad=whole_dur={length:.6f},asplit[voice][guide];'
+             f'[1:a]volume=0.46,afade=t=out:st={length-fade:.6f}:d={fade:.6f}[base];'
              '[base][guide]sidechaincompress=threshold=0.08:ratio=2.5:attack=15:release=170[duck];'
              '[voice][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.92:level=0:latency=1[mix]')
-    ffmpeg(binary, '-i', voice, '-i', backing_pcm, '-filter_complex', graph, '-map', '[mix]',
-           '-t', f'{length:.3f}', '-c:a', 'pcm_s16le', output)
+    ffmpeg(binary, '-i', voice, '-i', aligned, '-filter_complex', graph, '-map', '[mix]',
+           '-t', f'{length:.6f}', '-c:a', 'pcm_s16le', output)

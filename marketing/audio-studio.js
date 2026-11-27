@@ -5,10 +5,10 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=28.6';
+  const launcherFile='INICIAR_SALMOS.bat?v=28.7';
   const maxSongDuration=600;
   const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
-  const songApiVersion=12;
+  const songApiVersion=13;
   const connectionAttempts=2;
   const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
   const trackLyrics=track=>track.request?.lyrics??track.lyrics??'';
@@ -621,12 +621,13 @@
         sync();
       },
       async completed(track){
-        void arrangementRun?.complete(track);
+        const editorRun=arrangementRun;
         remoteTracks=[track,...remoteTracks.filter(item=>item.id!==track.id)];
         songFilter.set('all');
-        showView('gallery');
+        if(editorRun)await editorRun.complete(track);
+        else showView('gallery');
         await library();
-        if(visible)revealSong(find('library'),track.id);
+        if(visible&&!editorRun)revealSong(find('library'),track.id);
         refreshSongs().catch(()=>{});
       }});
     async function request(path,options={},timeout){
@@ -931,11 +932,11 @@
         await library();await refreshSongs({updated}).catch(()=>{});
       }
       await window.SalmosSongEditor.open({track:source,blob:source.blob,tools,reel,trim,
-        settings:draft?.settings,voice,genres,launcher:launcherFile,readTrack,
+        settings:draft?.settings,working:draft?.working,voice,genres,launcher:launcherFile,readTrack,
         style:source.request?.galleryStyle||source.request?.style||find('genre').value,bpm:source.request?.bpm||chosenBpm(),notify:say,
-        onDraft:settings=>put({id:draftKey,kind:'song-edit',settings}),
+        onDraft:(settings,working)=>put({id:draftKey,kind:'song-edit',settings,working}),
         onSaveOriginal:async name=>{await saveOriginal(source,name);onSavedOriginal?.(name);},
-        onSaveVersion:version=>saveBlob({...version,id:newId(),request:{...source.request,lyrics:version.lyrics}},version.blob,source.id),
+        onSaveVersion:version=>saveBlob({...version,id:newId(),request:{...(version.request||source.request),lyrics:version.lyrics}},version.blob,source.id),
         onLyrics:async (lyrics,{instrumental=false}={})=>{
           const lyricsCheck=!instrumental&&trackLyrics(source)===lyrics?source.lyricsCheck:null;
           if(source.remote&&!source.localOnly){
@@ -965,13 +966,13 @@
           initiator.watch(viewer,true);
           return()=>{stop();initiator.watch(viewer,false);};
         },
-        onPrepareVoice:async (sourceType,report)=>{
+        onPrepareVoice:async (sourceType,report,input)=>{
           const status=await connect();
           if(status.songApi<songApiVersion)throw Error('Actualizá el iniciador para preparar solo la voz.');
-          const wav=tools.waveBlob(await stereoAudio(source.blob));
+          const wav=tools.waveBlob(await stereoAudio(input?.blob||source.blob));
           const stop=initiator.subscribe(data=>{if(data?.voiceStage)report(data.voiceStage);});
           try{
-            const response=await request('/voice?source='+encodeURIComponent(sourceType),
+            const response=await request('/voice?'+new URLSearchParams({source:sourceType,strength:String(input?.strength??.95)}),
               {method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},20*60*1000);
             const blob=await response.blob(),length=Number(response.headers.get('Content-Length'));
             if(!blob.size||length&&length!==blob.size)throw Error('La voz limpia se recibió incompleta.');
@@ -987,7 +988,7 @@
           try{
             const status=await connect();
             await song.start({recordedVoice:true,instrumental:false,name,lyrics,style,bpm,
-              duration:Math.max(10,Math.min(maxSongDuration,Math.ceil(duration+1))),caption:genres[style][1],
+              duration:Math.max(10,Math.min(maxSongDuration,duration)),caption:genres[style][1],
               versionOf:source.id},status,{wav:blob,reference:{id:source.id,name:source.name,uploaded:true,kind:'voice'}});
           }catch(error){arrangementRun=null;throw error;}
         },

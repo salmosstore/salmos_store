@@ -224,7 +224,13 @@ def serve_clean_voice(handler):
             else:
                 stem = raw
             report('Reduciendo el ruido de la voz…')
-            cleanup_voice(stem, clean, binary)
+            try:
+                strength = float(query.get('strength', ['.95'])[0])
+            except ValueError:
+                raise ValueError('Elegí la intensidad de limpieza.')
+            if not .3 <= strength <= 1:
+                raise ValueError('Elegí la intensidad de limpieza.')
+            cleanup_voice(stem, clean, binary, DATA.parent / 'modelos-voz', strength, report)
             grid = tempo_grid(clean)
             with clean.open('rb') as stream:
                 handler.send_response(200)
