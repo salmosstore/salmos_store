@@ -18,8 +18,10 @@ from pathlib import Path
 
 CHECKPOINT_READER_VERSION = '0.8.0'
 REQUIRED_CHECKPOINTS = ('acestep-v15-turbo', 'vae', 'Qwen3-Embedding-0.6B')
-SONG_API = 14
+SONG_API = 15
 MODEL = 'acestep-v15-turbo'
+LYRIC_PLANNER = 'acestep-5Hz-lm-0.6B'
+PLANNER_REVISION = '148d8ea0225bdab342ee1ae3a354275ccd60ca80'
 MAX_SONG_DURATION = 600
 
 
@@ -111,8 +113,29 @@ def minimum_lyric_duration(lyrics, bpm):
 
 
 def song_lyrics(request):
-    # The working original profile sent the user's text without rewriting it.
-    return '[Instrumental]' if request['instrumental'] else request['lyrics']
+    if request['instrumental']:
+        return '[Instrumental]'
+    text = request['lyrics']
+    # Section/line boundaries guide short verses without replacing a single word.
+    if not LYRIC_TAG.search(text) and len(LYRIC_WORD.findall(text)) < 90:
+        text = '[Verse]\n' + re.sub(r'(?<=[.!?]) +', '\n', text)
+    return text
+
+
+def prepare_lyric_planner(root, status):
+    """Fetch the official small planner once; keep inference offline afterward."""
+    os.environ['HF_HUB_OFFLINE'] = '0'
+    os.environ['TRANSFORMERS_OFFLINE'] = '0'
+    from huggingface_hub import snapshot_download
+    directory = root / 'checkpoints' / LYRIC_PLANNER
+    required = ('config.json', 'model.safetensors', 'tokenizer.json', 'tokenizer_config.json')
+    if not all((directory / name).is_file() for name in required):
+        status('running', 'Preparando el modelo para ordenar la letra (descarga única de 1,4 GB)…', .03)
+        snapshot_download(repo_id='ACE-Step/' + LYRIC_PLANNER, revision=PLANNER_REVISION,
+                          local_dir=str(directory), allow_patterns=['*.json', '*.safetensors', '*.txt', '*.jinja'])
+    if not all((directory / name).is_file() for name in required):
+        raise RuntimeError('El modelo para ordenar la letra quedó incompleto. No se inició la generación.')
+    return LYRIC_PLANNER
 
 
 def song_caption(request):
@@ -223,8 +246,7 @@ def run(root, folder):
     os.environ['TORCHINDUCTOR_CACHE_DIR'] = str(cache / 'torch')
     os.environ['TRITON_CACHE_DIR'] = str(cache / 'triton')
     os.environ['HF_MODULES_CACHE'] = str(cache / 'huggingface-modules')
-    os.environ['HF_HUB_OFFLINE'] = '1'
-    os.environ['TRANSFORMERS_OFFLINE'] = '1'
+    os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
 
     def status(state, message, progress=0, **detail):
         temp = folder / 'status.tmp'
@@ -238,6 +260,10 @@ def run(root, folder):
         missing = missing_checkpoints(root)
         if missing:
             raise RuntimeError('Falta instalar el modelo: ' + ', '.join(missing))
+        with_lyrics = not request['instrumental'] and not request.get('recordedVoice')
+        planner_name = prepare_lyric_planner(root, status) if with_lyrics else None
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'
         loading_message = 'Cargando el modelo instalado…'
         if sys.platform == 'win32':
             os.environ['HF_ENABLE_PARALLEL_LOADING'] = 'false'
@@ -253,6 +279,13 @@ def run(root, folder):
         from acestep.handler import AceStepHandler
         from acestep.llm_inference import LLMHandler
         from acestep.inference import GenerationParams, GenerationConfig, generate_music
+        llm = LLMHandler()
+        if planner_name:
+            status('running', 'Preparando la estructura de la letra en tu PC…', .07)
+            message, ok = llm.initialize(checkpoint_dir=str(root / 'checkpoints'), lm_model_path=planner_name,
+                                         backend='pt', device='cpu', offload_to_cpu=False)
+            if not ok:
+                raise RuntimeError('No se pudo preparar la letra: ' + str(message)[:240])
         handler = AceStepHandler()
         message, ok = handler.initialize_service(project_root=str(root), config_path=MODEL,
             device='cuda', use_flash_attention=False, compile_model=True, offload_to_cpu=True,
@@ -275,7 +308,7 @@ def run(root, folder):
         inputs = {'caption': song_caption(prompt), 'lyrics': song_lyrics(prompt),
                   'instrumental': instrumental, 'vocal_language': 'es', 'duration': request['duration'],
                   'inference_steps': 8, 'guidance_scale': 1.0, 'shift': 3.0, 'infer_method': 'ode',
-                  'thinking': False, 'use_cot_metas': False, 'use_cot_caption': False,
+                  'thinking': with_lyrics, 'use_cot_metas': False, 'use_cot_caption': False,
                   'use_cot_lyrics': False, 'use_cot_language': False, 'seed': seed}
         # Preserve the original text-to-song defaults. Tempo is explicit for a backing
         # or a source-conditioned cover, where it belongs to an existing performance.
@@ -290,7 +323,7 @@ def run(root, folder):
             status('running', message, min(.94, .15 + .78 * float(value)))
 
         status('running', message, .15)
-        result = generate_music(handler, LLMHandler(), params, config,
+        result = generate_music(handler, llm, params, config,
                                 save_dir=str(folder / 'resultado'), progress=progress)
         if not result.success or not result.audios:
             raise RuntimeError(result.error or result.status_message or 'No se generó audio.')
@@ -300,7 +333,7 @@ def run(root, folder):
         duration = quality['duration']
         problem = audio_problem(quality, request['duration'])
         diagnostic = {**(candidate.get('params') or {}), 'salmos': {
-            'songApi': SONG_API, 'model': MODEL, 'inferenceSha256': engine_fingerprint(root),
+            'songApi': SONG_API, 'model': MODEL, 'lyricPlanner': planner_name, 'inferenceSha256': engine_fingerprint(root),
             'input': {**inputs, **task}, 'audio': quality}}
         (folder / 'resultado.json').write_text(json.dumps(diagnostic, ensure_ascii=False, default=str), encoding='utf-8')
         if problem:

@@ -12,8 +12,6 @@ import wave
 MODEL_NAME = 'Kim_Vocal_2.onnx'
 MODEL_URL = 'https://huggingface.co/nomadkaraoke/public_uvr_models/resolve/main/' + MODEL_NAME
 MODEL_SHA256 = 'ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b'
-NOISE_URL = 'https://raw.githubusercontent.com/richardpl/arnndn-models/master/cb.rnnn'
-NOISE_SHA256 = 'f1357c4e5be9dee8467bead486dfced2d75b640c26ad0b594fa7f102322371d9'
 RATE, FFT_SIZE, HOP, BINS, FRAMES = 44100, 7680, 1024, 3072, 256
 SEGMENT = (FRAMES - 1) * HOP
 OVERLAP = 24 * HOP
@@ -148,16 +146,78 @@ def denoise_filter(rate, reduction, floor, track_noise=False):
     return f'apad=pad_len={delay},{noise},atrim=start_sample={delay},asetpts=PTS-STARTPTS'
 
 
-def cleanup_voice(source, destination, binary, model_dir=None, strength=.95, report=lambda message: None):
+GTCRN_URL = 'https://raw.githubusercontent.com/Xiaobin-Rong/gtcrn/main/stream/onnx_models/gtcrn_simple.onnx'
+GTCRN_SHA256 = 'b4718df6228e7bdf1a8a435cf98f838636eb2fd331acabf86ba87c5192ebcb87'
+
+
+def cleanup_voice(source, destination, binary, model_dir=None, strength=.95, report=lambda message: None, reference=None):
+    """DNS-trained speech enhancement, with an energy guard against added noise."""
+    import numpy as np
+    import onnxruntime as ort
+    ort.disable_telemetry_events()
     source, destination = source.resolve(), destination.resolve()
     directory = (model_dir or destination.parent / 'modelos-voz').resolve()
-    model = cached_model(directory, 'cb.rnnn', NOISE_URL, NOISE_SHA256, 500_000, report)
-    report('Quitando ruido de fondo con el modelo de voz…')
-    # RNNoise has one 10 ms analysis frame of latency. Flush it before removing it.
-    effect = (f'aresample=48000,highpass=f=65,apad=pad_len=480,arnndn=m={model.name}:mix={strength:.3f},'
-              'atrim=start_sample=480,asetpts=PTS-STARTPTS')
-    ffmpeg(binary, '-i', source, '-af',
-           effect, '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', destination, cwd=directory)
+    model = cached_model(directory, 'gtcrn-dns3.onnx', GTCRN_URL, GTCRN_SHA256, 1_000_000, report)
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = min(2, os.cpu_count() or 1)
+    session = ort.InferenceSession(str(model), sess_options=options, providers=['CPUExecutionProvider'])
+    input_pcm = destination.with_name('voz-16k.wav')
+    output_pcm = destination.with_name('limpieza-16k.wav')
+    ffmpeg(binary, '-i', source, '-ac', '2', '-ar', '16000', '-c:a', 'pcm_s16le', input_pcm)
+    with wave.open(str(source), 'rb') as original:
+        length = original.getnframes()/original.getframerate()
+    with wave.open(str(input_pcm), 'rb') as stream:
+        data = np.frombuffer(stream.readframes(stream.getnframes()), '<i2').reshape(-1, 2).astype('float32')/32768
+    window = np.sqrt(np.hanning(513)[:-1]).astype('float32')
+    enhanced = np.zeros_like(data)
+    for channel in range(2):
+        padded = np.pad(data[:, channel], (256, 512), mode='reflect')
+        frames = np.lib.stride_tricks.sliding_window_view(padded, 512)[::256]
+        spectra = np.fft.rfft(frames*window).astype('complex64')
+        result = np.zeros(len(padded), dtype='float32')
+        weight = np.zeros(len(padded), dtype='float32')
+        states = {name:np.zeros(shape, dtype='float32') for name,shape in (
+            ('conv_cache',(2,1,16,16,33)),('tra_cache',(2,3,1,1,16)),('inter_cache',(2,1,33,16)))}
+        for index, spectrum in enumerate(spectra):
+            if index % 125 == 0:
+                report(f'Quitando ruidos de fondo · {round(100*(channel+index/len(spectra))/2)}%…')
+            packed = np.stack((spectrum.real, spectrum.imag), axis=-1)[None,:,None,:]
+            output,conv,tra,inter = session.run(None, {'mix':packed, **states})
+            states.update(conv_cache=conv, tra_cache=tra, inter_cache=inter)
+            spectrum_out = output[0,:,0,0]+1j*output[0,:,0,1]
+            segment = np.fft.irfft(spectrum_out, n=512).astype('float32')
+            offset = index*256
+            result[offset:offset+512] += segment*window
+            weight[offset:offset+512] += window**2
+        output = result[256:256+len(data)]/np.maximum(weight[256:256+len(data)], 1e-7)
+        if not np.isfinite(output).all():
+            raise RuntimeError('El modelo devolvió muestras inválidas.')
+        enhanced[:, channel] = output*strength+data[:, channel]*(1-strength)
+    with wave.open(str(output_pcm), 'wb') as stream:
+        stream.setparams((2,2,16000,0,'NONE','not compressed'))
+        stream.writeframes(np.rint(np.clip(enhanced,-.9999,.9999)*32768).astype('<i2').tobytes())
+    target = round(length*RATE)
+    ffmpeg(binary, '-i', output_pcm, '-af', f'highpass=f=90,aresample={RATE},apad=whole_len={target},atrim=end_sample={target}',
+           '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', destination)
+    reference_pcm = destination.with_name('referencia-limpieza.wav')
+    ffmpeg(binary, '-i', reference or source, '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', reference_pcm)
+    with wave.open(str(reference_pcm), 'rb') as stream:
+        original = np.frombuffer(stream.readframes(stream.getnframes()), '<i2').reshape(-1,2).astype('float32')
+    with wave.open(str(destination), 'rb') as stream:
+        params=stream.getparams();clean=np.frombuffer(stream.readframes(stream.getnframes()), '<i2').reshape(-1,2).astype('float32')
+    if len(original)!=len(clean):
+        raise RuntimeError('La duración cambió durante la limpieza.')
+    # Enhancement may not create audible material in a silent portion of the recording.
+    hop=441;gains=[]
+    for start in range(0,len(clean),hop):
+        before=float(np.sqrt(np.mean(original[start:start+hop]**2)))
+        after=float(np.sqrt(np.mean(clean[start:start+hop]**2)))
+        gains.append(0. if before<4 else min(1.,before/max(after,1e-6)))
+    centers=np.arange(len(gains))*hop+hop/2
+    gain=np.interp(np.arange(len(clean)),centers,gains)
+    with wave.open(str(destination), 'wb') as stream:
+        stream.setparams(params);stream.writeframes(np.rint(clean*gain[:,None]).astype('<i2').tobytes())
+
 
 
 def replace_region(original, processed, output, start, end, offset):

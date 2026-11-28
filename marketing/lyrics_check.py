@@ -22,12 +22,15 @@ def compare(lyrics, heard):
     for operation, start, end, _, _ in alignment.get_opcodes():
         if operation in ('delete', 'replace'):
             missing.extend(expected[start:end])
+    first_match = min((run.a for run in alignment.get_matching_blocks() if run.size), default=len(expected))
     last_match = max((run.a + run.size for run in alignment.get_matching_blocks() if run.size), default=0)
     return {
         'status': 'match' if match else 'review',
         'coverage': round((len(expected) - len(missing)) / max(1, len(expected)), 3),
         'similarity': round(alignment.ratio(), 4),
         'missing': list(dict.fromkeys(missing))[:20],
+        'missingBeginning': bool(expected) and first_match >= min(2, len(expected)),
+        'openingWords': ' '.join(expected[:min(7, first_match)]),
         'missingEnding': bool(expected) and len(expected) - last_match >= min(2, len(expected)),
         'recognizedWords': len(recognized),
         'heard': heard[:3000],

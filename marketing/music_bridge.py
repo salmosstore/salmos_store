@@ -241,7 +241,7 @@ def serve_clean_voice(handler):
                 stem = fragment
             report('Reduciendo el ruido del fragmento…' if partial else 'Reduciendo el ruido de la voz…')
             cleaned_part = folder / 'tramo-limpio.wav'
-            cleanup_voice(stem, cleaned_part, binary, DATA.parent / 'modelos-voz', strength, report)
+            cleanup_voice(stem, cleaned_part, binary, DATA.parent / 'modelos-voz', strength, report, reference=fragment)
             if partial:
                 replace_region(prepared, cleaned_part, clean, start, end, offset)
             else:
@@ -475,12 +475,14 @@ def get(handler, path, setup=None):
         else:
             handler.json_response(diagnostic)
         return True
-    if path.startswith('/api/music/audio/'):
+    if path.startswith(('/api/music/audio/', '/api/music/original/')):
         track_id = path.rsplit('/', 1)[-1]
         if not re.fullmatch(r'[a-f0-9]{32}', track_id):
             handler.json_response({'error': 'Canción no válida.'}, 400)
             return True
-        audio = DATA / track_id / 'cancion.wav'
+        audio = DATA / track_id / ('cancion-original.wav' if path.startswith('/api/music/original/') else 'cancion.wav')
+        if not audio.is_file() and path.startswith('/api/music/original/'):
+            audio = DATA / track_id / 'cancion.wav'
         try:
             stream = audio.open('rb')
         except FileNotFoundError:
@@ -648,6 +650,46 @@ def save_audio_version(handler, track_id):
     return {'id': track_id, 'saved': True}
 
 
+def replace_audio(handler, track_id):
+    """Commit an explicit edit to the same track, retaining its first audio."""
+    if not re.fullmatch(r'[a-f0-9]{32}', track_id):
+        raise ValueError('Canción no válida.')
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(handler.path).query)
+    name = query.get('name', [''])[0].strip()
+    revision = int(query.get('revision', ['0'])[0])
+    if not name or len(name) > 100:
+        raise ValueError('Escribí un nombre de hasta 100 caracteres.')
+    folder = DATA / track_id
+    with tempfile.TemporaryDirectory(dir=DATA, prefix='.edicion-') as temp:
+        staged = Path(temp) / 'audio.wav'
+        read_wav_upload(handler, staged)
+        duration = pcm_duration(staged, minimum=.02)
+        with LOCK:
+            if JOB and JOB['id'] == track_id and JOB['process'].poll() is None:
+                raise RuntimeError('Esperá a que termine la generación.')
+            request = json.loads((folder / 'request.json').read_text(encoding='utf-8'))
+            if int(request.get('editRevision', 0)) != revision:
+                raise ValueError('Esta canción cambió en otra ventana. Volvé a abrirla antes de guardar.')
+            original = folder / 'cancion-original.wav'
+            if not original.is_file():
+                shutil.copyfile(folder / 'cancion.wav', original)
+                shutil.copyfile(folder / 'request.json', folder / 'pedido-original.json')
+            kind = query.get('kind', ['edited'])[0]
+            style = query.get('style', [''])[0][:40]
+            request.update(name=name, duration=duration, saved=True, hasOriginal=True, editRevision=revision+1,
+                           audioEdit=True, voiceOnly=kind == 'clean', recordedVoice=kind == 'arranged')
+            if kind == 'arranged' and style:
+                request['style'] = style
+            request_tmp = folder / 'request.tmp'
+            request_tmp.write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
+            staged.replace(folder / 'cancion.wav')
+            request_tmp.replace(folder / 'request.json')
+            status = read_status(folder)
+            status.update(state='done', duration=duration, message='Cambios guardados', progress=1)
+            write_status(folder, status)
+    return {'id': track_id, 'name': name, 'saved': True, 'duration': duration, 'request': request}
+
+
 def post(handler, path, wan_running=False, lyrics_ready=None):
     if path == '/api/music/voice':
         try:
@@ -660,11 +702,13 @@ def post(handler, path, wan_running=False, lyrics_ready=None):
             traceback.print_exc()
             handler.json_response({'error': 'Falló la separación de voz. El detalle quedó en la ventana del iniciador.'}, 503)
         return True
-    if path == '/api/music/transcribe' or path.startswith(('/api/music/versions/', '/api/music/reference/')):
+    if path == '/api/music/transcribe' or path.startswith(('/api/music/versions/', '/api/music/reference/', '/api/music/replace/')):
         try:
             identifier = path.rsplit('/', 1)[-1]
             if path.startswith('/api/music/reference/'):
                 result = upload_reference(handler, identifier)
+            elif path.startswith('/api/music/replace/'):
+                result = replace_audio(handler, identifier)
             elif path.startswith('/api/music/versions/'):
                 result = save_audio_version(handler, identifier)
             else:

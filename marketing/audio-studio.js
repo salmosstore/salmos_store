@@ -5,10 +5,10 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=28.9';
+  const launcherFile='INICIAR_SALMOS.bat?v=28.10';
   const maxSongDuration=600;
   const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
-  const songApiVersion=14;
+  const songApiVersion=15;
   const connectionAttempts=2;
   const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
   const trackLyrics=track=>track.request?.lyrics??track.lyrics??'';
@@ -256,6 +256,7 @@
   function lyricsCheckText(check){
     if(check?.status==='match')return 'El reconocimiento local detectó las palabras de la letra.';
     if(check?.status==='review'){
+      if(check.missingBeginning)return 'Revisá el comienzo: el reconocimiento no detectó «'+check.openingWords+'».';
       if(check.missing?.includes('dios'))return 'Revisá la pronunciación. El reconocimiento no detectó «Dios».';
       if(check.missingEnding)return 'Revisá el final. El reconocimiento encontró diferencias en la última parte.';
       return 'Escuchá la letra antes de usarla. El reconocimiento detectó diferencias.';
@@ -922,6 +923,9 @@
       const draftKey='song-edit:'+source.id;
       const draft=await dbAction('assets','readonly',s=>s.get(draftKey));
       let original=await dbAction('assets','readonly',s=>s.get('song-original:'+source.id));
+      if(!original&&source.remote&&source.request?.hasOriginal)try{
+        original={blob:await (await request('/original/'+source.id,{cache:'no-store'})).blob(),name:source.name,sourceId:source.id};
+      }catch{}
       if(!original){
         const parentId=source.request?.versionOf||source.request?.parentId;
         const parent=parentId&&(libraryEntries.get(parentId)||await dbAction('assets','readonly',s=>s.get(parentId)));
@@ -952,7 +956,30 @@
         settings:draft?.settings,working:draft?.working,voice,genres,launcher:launcherFile,readTrack,
         style:source.request?.galleryStyle||source.request?.style||find('genre').value,bpm:source.request?.bpm||chosenBpm(),notify:say,
         onDraft:(settings,working)=>put({id:draftKey,kind:'song-edit',settings,working}),
-        onSaveOriginal:async name=>{await saveOriginal(source,name);onSavedOriginal?.(name);},
+        onClearDraft:()=>dbAction('assets','readwrite',s=>s.delete(draftKey)),
+        onDownload:version=>openSongDownload({...source,...version,id:newId(),localOnly:true,request:{audioEdit:true}},
+          {helperFetch,readTrack:async()=>version.blob,tools}),
+        onSaveChanges:async edit=>{
+          let nextBlob=source.blob,duration=source.duration,request={...source.request,...edit.request,name:edit.name,saved:true};
+          await retainOriginal(source);
+          if(edit.blob){
+            nextBlob=tools.waveBlob(await stereoAudio(edit.blob));
+            const decoded=await stereoAudio(nextBlob);duration=decoded.duration;
+            if(source.remote&&!source.localOnly){
+              const status=await connect();
+              if(status.songApi<15)throw Error('Actualizá y abrí el iniciador para guardar sobre esta misma canción.');
+              const saved=await api('/replace/'+source.id+'?'+new URLSearchParams({name:edit.name,revision:String(source.request?.editRevision||0),kind:request.recordedVoice?'arranged':request.voiceOnly?'clean':'edited',style:request.style||''}),
+                {method:'POST',headers:{'Content-Type':'audio/wav'},body:nextBlob},180000);
+              request={...saved.request,...request,hasOriginal:true,editRevision:saved.request.editRevision};
+            }
+          }else await saveOriginal(source,edit.name);
+          if(source.remote&&!source.localOnly&&edit.lyrics!==trackLyrics(source))await api('/lyrics',jsonPost({id:source.id,lyrics:edit.lyrics}));
+          request={...request,lyrics:edit.lyrics,duration};
+          await storeMetadata(request,{name:edit.name,blob:nextBlob,duration,saved20:true,saved:true,...(edit.blob&&source.uploadKind?{fileName:edit.name+'.wav'}:{})});
+          if(active?.id===source.id)selectAudio({...source,saved:true},nextBlob);
+          onSavedOriginal?.(edit.name);
+          return {blob:nextBlob,duration,request};
+        },
         onSaveVersion:async version=>retainOriginal(await saveBlob({...version,id:newId(),request:{...(version.request||source.request),lyrics:version.lyrics}},version.blob,source.id)),
         onLyrics:async (lyrics,{instrumental=false}={})=>{
           const lyricsCheck=!instrumental&&trackLyrics(source)===lyrics?source.lyricsCheck:null;
@@ -1077,6 +1104,7 @@
         onApply});
     }
     async function saveBlob(t,blob,parentId=''){
+      blob=tools.waveBlob(await stereoAudio(blob));
       let remote=false,reason='';
       if(initiator.data)try{
         await api('/versions/'+t.id+'?'+new URLSearchParams({name:t.name,parent:parentId,kind:t.request?.voiceOnly?'voice':''}),
