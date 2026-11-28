@@ -34,15 +34,16 @@
       }if(line)result.push(line);
     }return result;
   }
-  async function passageFile(text,reference){
+  async function passageFile(text,reference,appearance){
     const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1500;const ctx=canvas.getContext('2d');
     const gradient=ctx.createLinearGradient(0,0,1200,1500);gradient.addColorStop(0,'#8b4567');gradient.addColorStop(1,'#311928');ctx.fillStyle=gradient;ctx.fillRect(0,0,1200,1500);
     try{const bg=await image(new URL('admin-nina-ojos-bg.png',document.baseURI).href),scale=Math.max(1200/bg.width,1500/bg.height);ctx.drawImage(bg,(1200-bg.width*scale)/2,(1500-bg.height*scale)/2,bg.width*scale,bg.height*scale);}catch{}
-    ctx.fillStyle='#fff0f2ed';ctx.beginPath();ctx.roundRect(75,110,1050,1280,46);ctx.fill();
-    ctx.strokeStyle='#ad7957';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(100,135,1000,1230,32);ctx.stroke();
+    const width=1200*appearance.width/100,left=(1200-width)/2;
+    ctx.fillStyle=appearance.color+Math.round(appearance.opacity*2.55).toString(16).padStart(2,'0');ctx.beginPath();ctx.roundRect(left,110,width,1280,46);ctx.fill();
+    ctx.strokeStyle='#ad7957';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(left+25,135,width-50,1230,32);ctx.stroke();
     ctx.textAlign='center';ctx.fillStyle='#9a6077';ctx.font='26px Georgia';ctx.fillText('✦   SU PALABRA NOS ACOMPAÑA   ✦',600,215);
     let size=54,wrapped;
-    do{ctx.font=size+'px Georgia';wrapped=lines(ctx,text,850);if(wrapped.length*size*1.45<=830)break;size-=2;}while(size>24);
+    do{ctx.font=size+'px Georgia';wrapped=lines(ctx,text,width-160);if(wrapped.length*size*1.45<=830)break;size-=2;}while(size>24);
     ctx.fillStyle='#402437';let y=380+(830-wrapped.length*size*1.45)/2;
     for(const line of wrapped){ctx.fillText(line,600,y);y+=size*1.45;}
     ctx.font='bold 38px Georgia';ctx.fillText(reference||'',600,1235);ctx.font='24px Georgia';ctx.fillText('NTV',600,1282);
@@ -56,10 +57,32 @@
     const quote=document.createElement('blockquote'),cite=document.createElement('p'),brand=document.createElement('small');
     card.className='passage-art';wrapper.className='passage-wrapper';ornament.textContent='✦';ornament.setAttribute('aria-hidden','true');
     quote.textContent=text;cite.textContent=reference+' · NTV';brand.textContent='SALMOS · creer amar crear';wrapper.append(ornament,quote,cite,brand);card.append(wrapper);
+    const appearance={color:'#fff0f2',opacity:93,width:88};
+    try{const stored=JSON.parse(localStorage.getItem('salmos-passage-wrapper')||'null');if(/^#[0-9a-f]{6}$/i.test(stored?.color))appearance.color=stored.color;if(Number.isFinite(stored?.opacity))appearance.opacity=Math.max(0,Math.min(100,stored.opacity));if(Number.isFinite(stored?.width))appearance.width=Math.max(60,Math.min(100,stored.width));}catch{}
+    const controls=document.createElement('div');controls.className='passage-controls';
+    const inputs={};
+    for(const [key,title,type,min,max] of [['color','Color del wrapper','color'],['opacity','Opacidad','range',0,100],['width','Ancho del wrapper','range',60,100]]){
+      const label=document.createElement('label'),input=document.createElement('input'),value=document.createElement('output');
+      label.textContent=title;input.type=type;input.value=appearance[key];input.dataset.passageControl=key;
+      if(type==='range'){input.min=min;input.max=max;input.step=1;}label.append(input,value);controls.append(label);inputs[key]={input,value};
+    }
     const footer=document.createElement('footer'),send=document.createElement('button'),save=document.createElement('button'),status=document.createElement('p');
     send.textContent='Compartir por WhatsApp';send.className='btn btn-primary';save.textContent='Descargar placa';save.className='btn btn-ghost';send.disabled=save.disabled=true;status.setAttribute('role','status');
-    footer.append(send,save);dialog.append(card,status,footer);status.textContent='Preparando la placa…';
-    passageFile(text,reference).then(file=>{if(!dialog.open)return;status.textContent='Elegí WhatsApp al compartir la imagen.';send.disabled=save.disabled=false;send.onclick=()=>share([file],status);save.onclick=()=>download(file);}).catch(error=>{status.textContent=error.message;});
+    footer.append(send,save);dialog.append(controls,card,status,footer);
+    let latest=null,serial=0,timer;
+    send.onclick=()=>{if(latest)share([latest],status);};save.onclick=()=>{if(latest)download(latest);};
+    function update(){
+      wrapper.style.background=appearance.color+Math.round(appearance.opacity*2.55).toString(16).padStart(2,'0');
+      wrapper.style.width=appearance.width+'%';
+      for(const key of ['opacity','width'])inputs[key].value.textContent=appearance[key]+'%';
+      try{localStorage.setItem('salmos-passage-wrapper',JSON.stringify(appearance));}catch{}
+      send.disabled=save.disabled=true;const turn=++serial;clearTimeout(timer);status.textContent='Preparando la placa…';
+      timer=setTimeout(()=>passageFile(text,reference,{...appearance}).then(file=>{
+        if(!dialog.open||turn!==serial)return;latest=file;send.disabled=save.disabled=false;status.textContent='Elegí WhatsApp al compartir la imagen.';
+      }).catch(error=>{if(turn===serial)status.textContent=error.message;}),140);
+    }
+    for(const [key,{input}] of Object.entries(inputs))input.oninput=()=>{appearance[key]=key==='color'?input.value:Number(input.value);update();};
+    update();
     return dialog;
   }
   async function designFile(asset,quality,apiUrl){

@@ -27,3 +27,4 @@
   #montageWorkspace details.montage-level[open]>.montage-choices{display:flex;flex-wrap:wrap!important;width:auto!important;max-height:220px;overflow:auto!important;margin:0 8px 8px}
   .admin-media-dialog>footer>.btn{flex:1 1 140px;justify-content:center}.passage-dialog{max-height:calc(100dvh - 16px)}
 }
+.passage-controls{display:flex;flex-shrink:0;flex-wrap:wrap;gap:10px 16px;padding:10px 18px;border-bottom:1px solid #d89bb944}.passage-controls label{display:flex;align-items:center;gap:7px;font:13px system-ui;min-width:0;flex:1 1 170px}.passage-controls input[type=range]{width:100%;min-width:60px;accent-color:#e697bb}.passage-controls input[type=color]{width:42px;min-width:42px;height:30px;padding:2px}.passage-controls output{min-width:36px}.passage-art .passage-wrapper{box-sizing:border-box;margin-inline:auto}.passage-dialog .passage-art{padding-inline:0}
