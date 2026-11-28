@@ -18,7 +18,7 @@ from pathlib import Path
 
 CHECKPOINT_READER_VERSION = '0.8.0'
 REQUIRED_CHECKPOINTS = ('acestep-v15-turbo', 'vae', 'Qwen3-Embedding-0.6B')
-SONG_API = 13
+SONG_API = 14
 MODEL = 'acestep-v15-turbo'
 MAX_SONG_DURATION = 600
 
@@ -310,7 +310,14 @@ def run(root, folder):
         if recorded_voice:
             status('running', 'Sincronizando los instrumentos y conservando tu voz…', .96)
             duration = request['referenceDuration']
-            mix_voice(reference, source, folder / 'cancion.wav', ffmpeg_path(), request.get('bpm') or 120, duration)
+            backing = folder / 'instrumentos.wav'
+            editor_python = os.environ.get('SALMOS_EDITOR_PYTHON') or sys.executable
+            status('running', 'Separando los instrumentos de las voces generadas…', .95)
+            subprocess.run([editor_python, '-I', str(Path(__file__).resolve().with_name('voice_tools.py')),
+                            '--instruments', str(source), str(backing), str(folder.parent.parent / 'modelos-voz')],
+                           check=True, timeout=max(180, duration*2))
+            status('running', 'Mezclando los instrumentos al volumen de tu voz limpia…', .98)
+            mix_voice(reference, backing, folder / 'cancion.wav', ffmpeg_path(), request.get('bpm') or 120, duration)
         else:
             # Keep the model output as it was generated. No automatic denoising,
             # added fade, edge trimming, discarded lyric takes or hidden retries.

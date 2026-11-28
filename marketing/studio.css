@@ -497,6 +497,13 @@ dialog.song-editor{
  .song-editor .song-source-title{align-items:start;flex-direction:column;gap:5px}
 }
 
+.song-source-buttons{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0}
+.song-source-buttons button{flex:1 1 110px;font-size:12px}
+.song-source-buttons [aria-pressed=true]{color:#2b1622;background:#eeabc9;border-color:#eeabc9}
+.song-editor .song-clean-selection{grid-column:1/-1;display:flex;align-items:center;gap:7px}
+.song-editor .song-clean-selection input{width:15px;height:15px;accent-color:#eeabc9}
+.song-editor [data-clean-range]{grid-column:1/-1;margin:0;color:#edcbda;font-size:12px}
+.song-editor [data-save-voice]{width:100%;margin-top:5px}
 @media(min-width:900px) and (max-height:800px){
  .song-editor header,.song-editor footer{padding:7px 12px}
  .song-editor h2{font-size:21px}

@@ -19,7 +19,7 @@ import time
 import traceback
 import uuid
 from pathlib import Path
-from voice_tools import cleanup_voice, ffmpeg, ffmpeg_path, separate_voice, tempo_grid
+from voice_tools import cleanup_voice, ffmpeg, ffmpeg_path, separate_voice, tempo_grid, replace_region
 
 try:
     from music_worker import memory_error_status, missing_checkpoints
@@ -217,20 +217,35 @@ def serve_clean_voice(handler):
             raw, prepared, stem, clean = (folder / name for name in ('entrada.wav', 'pcm.wav', 'voz.wav', 'limpia.wav'))
             read_wav_upload(handler, raw)
             duration = pcm_duration(raw, minimum=.25)
-            binary = ffmpeg_path()
-            if mode == 'mix':
-                ffmpeg(binary, '-i', raw, '-ac', '2', '-ar', '44100', '-c:a', 'pcm_s16le', prepared)
-                separate_voice(prepared, stem, DATA.parent / 'modelos-voz', report)
-            else:
-                stem = raw
-            report('Reduciendo el ruido de la voz…')
             try:
                 strength = float(query.get('strength', ['.95'])[0])
+                start = float(query.get('start', ['0'])[0])
+                end = float(query.get('end', [str(duration)])[0])
             except ValueError:
-                raise ValueError('Elegí la intensidad de limpieza.')
-            if not .3 <= strength <= 1:
-                raise ValueError('Elegí la intensidad de limpieza.')
-            cleanup_voice(stem, clean, binary, DATA.parent / 'modelos-voz', strength, report)
+                raise ValueError('Revisá la intensidad y el fragmento de limpieza.')
+            if not .3 <= strength <= 1 or not 0 <= start < end <= duration+.002:
+                raise ValueError('Elegí un fragmento válido dentro del audio.')
+            end = min(duration, end)
+            partial = start > 0 or end < duration-.002
+            binary = ffmpeg_path()
+            ffmpeg(binary, '-i', raw, '-ac', '2', '-ar', '44100', '-c:a', 'pcm_s16le', prepared)
+            offset = max(0, start-1)
+            fragment = prepared
+            if partial:
+                fragment = folder / 'fragmento.wav'
+                ffmpeg(binary, '-i', prepared, '-ss', offset, '-t', min(duration, end+1)-offset,
+                       '-c:a', 'pcm_s16le', fragment)
+            if mode == 'mix':
+                separate_voice(fragment, stem, DATA.parent / 'modelos-voz', report)
+            else:
+                stem = fragment
+            report('Reduciendo el ruido del fragmento…' if partial else 'Reduciendo el ruido de la voz…')
+            cleaned_part = folder / 'tramo-limpio.wav'
+            cleanup_voice(stem, cleaned_part, binary, DATA.parent / 'modelos-voz', strength, report)
+            if partial:
+                replace_region(prepared, cleaned_part, clean, start, end, offset)
+            else:
+                cleaned_part.replace(clean)
             grid = tempo_grid(clean)
             with clean.open('rb') as stream:
                 handler.send_response(200)

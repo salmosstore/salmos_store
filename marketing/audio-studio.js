@@ -5,10 +5,10 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=28.7';
+  const launcherFile='INICIAR_SALMOS.bat?v=28.8';
   const maxSongDuration=600;
   const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
-  const songApiVersion=13;
+  const songApiVersion=14;
   const connectionAttempts=2;
   const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
   const trackLyrics=track=>track.request?.lyrics??track.lyrics??'';
@@ -972,7 +972,7 @@
           const wav=tools.waveBlob(await stereoAudio(input?.blob||source.blob));
           const stop=initiator.subscribe(data=>{if(data?.voiceStage)report(data.voiceStage);});
           try{
-            const response=await request('/voice?'+new URLSearchParams({source:sourceType,strength:String(input?.strength??.95)}),
+            const response=await request('/voice?'+new URLSearchParams({source:sourceType,strength:String(input?.strength??.95),...(input?.start!==undefined?{start:String(input.start),end:String(input.end)}:{})}),
               {method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},20*60*1000);
             const blob=await response.blob(),length=Number(response.headers.get('Content-Length'));
             if(!blob.size||length&&length!==blob.size)throw Error('La voz limpia se recibió incompleta.');

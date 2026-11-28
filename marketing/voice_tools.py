@@ -105,6 +105,7 @@ def separate_voice(source, output, model_dir, report):
     except ImportError as error:
         raise RuntimeError('Falta ONNX Runtime. Abrí el iniciador para completar la instalación de extracción de letra.') from error
 
+    ort.disable_telemetry_events()
     model = vocal_model(model_dir, report)
     options = ort.SessionOptions()
     options.intra_op_num_threads = min(4, os.cpu_count() or 1)
@@ -157,6 +158,60 @@ def cleanup_voice(source, destination, binary, model_dir=None, strength=.95, rep
               'atrim=start_sample=480,asetpts=PTS-STARTPTS')
     ffmpeg(binary, '-i', source, '-af',
            effect, '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', destination, cwd=directory)
+
+
+def replace_region(original, processed, output, start, end, offset):
+    """Replace only the requested samples, with a short blend inside the selection."""
+    import numpy as np
+    with wave.open(str(original), 'rb') as source:
+        params = source.getparams()
+        audio = np.frombuffer(source.readframes(source.getnframes()), '<i2').reshape(-1, 2).copy()
+    with wave.open(str(processed), 'rb') as source:
+        clean = np.frombuffer(source.readframes(source.getnframes()), '<i2').reshape(-1, 2)
+    first, last = round(start * RATE), min(len(audio), round(end * RATE))
+    origin = round((start-offset) * RATE)
+    selected = clean[origin:origin+last-first].astype('float32')
+    if len(selected) != last-first:
+        raise RuntimeError('La limpieza del fragmento se recibió incompleta.')
+    weight = np.ones(len(selected), dtype='float32')
+    fade = min(round(.025 * RATE), len(selected)//4)
+    if fade:
+        if first:
+            weight[:fade] = np.linspace(0, 1, fade)
+        if last < len(audio):
+            weight[-fade:] = np.linspace(1, 0, fade)
+    audio[first:last] = np.rint(selected*weight[:, None]+audio[first:last]*(1-weight[:, None])).astype('<i2')
+    with wave.open(str(output), 'wb') as destination:
+        destination.setparams(params)
+        destination.writeframes(audio.tobytes())
+
+
+def extract_instruments(source, destination, model_dir, report):
+    """Subtract the vocal stem before a generated backing is mixed with the recording."""
+    import numpy as np
+    binary = ffmpeg_path()
+    pcm = destination.with_name('base-estereo.wav')
+    vocals = destination.with_name('voces-generadas.wav')
+    ffmpeg(binary, '-i', source, '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', pcm)
+    separate_voice(pcm, vocals, model_dir, report)
+    with wave.open(str(pcm), 'rb') as original, wave.open(str(vocals), 'rb') as voice, wave.open(str(destination), 'wb') as output:
+        output.setparams(original.getparams())
+        while frames := original.readframes(RATE):
+            data = np.frombuffer(frames, '<i2').astype('int32')
+            stem = np.frombuffer(voice.readframes(len(data)//2), '<i2').astype('int32')
+            if len(data) != len(stem):
+                raise RuntimeError('La separación de instrumentos quedó incompleta.')
+            output.writeframes(np.clip(data-stem, -32768, 32767).astype('<i2').tobytes())
+
+
+def active_level(path):
+    import numpy as np
+    levels = []
+    with wave.open(str(path), 'rb') as source:
+        while raw := source.readframes(source.getframerate()//5):
+            samples = np.frombuffer(raw, '<i2').astype('float32')/32768
+            levels.append(float(np.sqrt(np.mean(samples**2))))
+    return float(np.percentile(levels, 80)) if levels else 0
 
 
 def rhythm_analysis(path, expected=None):
@@ -242,9 +297,19 @@ def mix_voice(voice, accompaniment, output, binary, bpm, length):
     ffmpeg(binary, '-i', accompaniment, '-ac', '2', '-ar', str(RATE), '-c:a', 'pcm_s16le', backing_pcm)
     align_backing(voice, backing_pcm, aligned, binary, bpm, length)
     fade = min(1.8, length / 8)
+    base_gain = min(.7, .4 * active_level(voice) / max(active_level(aligned), 1e-5))
     graph = (f'[0:a]aresample={RATE},apad=whole_dur={length:.6f},asplit[voice][guide];'
-             f'[1:a]volume=0.46,afade=t=out:st={length-fade:.6f}:d={fade:.6f}[base];'
+             f'[1:a]volume={base_gain:.6f},afade=t=out:st={length-fade:.6f}:d={fade:.6f}[base];'
              '[base][guide]sidechaincompress=threshold=0.08:ratio=2.5:attack=15:release=170[duck];'
              '[voice][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.92:level=0:latency=1[mix]')
     ffmpeg(binary, '-i', voice, '-i', aligned, '-filter_complex', graph, '-map', '[mix]',
            '-t', f'{length:.6f}', '-c:a', 'pcm_s16le', output)
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--instruments', nargs=3, metavar=('SOURCE', 'OUTPUT', 'MODELS'))
+    args = parser.parse_args()
+    if args.instruments:
+        extract_instruments(*(Path(value).resolve() for value in args.instruments), report=print)

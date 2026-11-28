@@ -231,7 +231,7 @@
       <button data-close aria-label="Cerrar edición">×</button></header>
       <div class="song-editor-layout"><div class="song-main">
         <section class="song-arrange" aria-labelledby="songInstrumentsTitle">
-          <div class="song-source-title"><h3 id="songInstrumentsTitle" data-source-label>Audio original</h3><label>Escuchar<select data-source-version><option value="original">Original subido</option></select></label></div>
+          <div class="song-source-title"><h3 id="songInstrumentsTitle" data-source-label>Audio original</h3></div>
           <div class="song-transport-row">
           <div class="song-toolbar song-transport"><button class="primary" data-play>▶ Escuchar fragmento</button><output data-clock aria-live="off"></output>
             <label class="song-repeat"><input data-loop type="checkbox"> Repetir fragmento</label>
@@ -286,18 +286,20 @@
         <section class="song-voice-tools" data-voice-box hidden>
           <h3>Limpiar y acompañar tu voz</h3>
           <p>Aplicá la limpieza y escuchala en la onda de la izquierda. Después elegí cómo acompañar tu grabación.</p>
-          <div class="song-toolbar"><label>Audio subido<select data-voice-source>
+          <div class="song-toolbar" data-clean-settings><label>Audio subido<select data-voice-source>
             <option value="mix">Voz con música o ruidos de fondo</option><option value="voice">Grabación de voz sola</option>
           </select></label><label>Limpieza<select data-noise-strength><option value=".95">Fuerte</option><option value=".7">Moderada</option></select></label>
-          <button data-prepare-voice class="primary">Aplicar limpieza a la pista</button>
+          <label class="song-clean-selection"><input data-clean-selection type="checkbox"> Limpiar sólo la selección I–F</label><p data-clean-range></p></div>
+          <div class="song-toolbar"><button data-prepare-voice class="primary">Limpiar audio</button><button data-update-clean hidden>Actualizar limpieza</button>
           <a data-voice-launcher class="button" hidden download="INICIAR_SALMOS.bat">Descargar iniciador</a></div>
           <p data-voice-status role="status"></p>
           <progress data-voice-progress hidden aria-label="Procesando el audio"></progress>
           <div data-voice-result hidden>
-            <div class="song-toolbar"><button data-save-voice>Guardar voz sola</button>
-            <label>Estilo del acompañamiento<select data-arrange-style></select></label>
+            <div class="song-toolbar" data-generate-settings><label>Estilo del acompañamiento<select data-arrange-style></select></label>
             <button class="primary" data-generate-voice disabled>Generar acompañamiento</button></div>
-            <p>La voz conserva su tiempo y sus palabras. La grabación guía el ritmo de los instrumentos.</p>
+            <div class="song-source-buttons" data-source-buttons role="group" aria-label="Comparar audios"></div>
+            <button data-save-voice>Guardar audio limpio</button>
+            <p>Marcá I–F en la onda para revisar un ruido concreto.</p>
             <button data-load-result hidden>Cargar el resultado en esta pista</button>
           </div>
         </section>
@@ -327,9 +329,12 @@
     let reelElapsed=0,reelFrameTime,head=settings.start,left=0,zoom=1,activeNote=null,tick=0,playing=false;
     let locked=false,mixSerial=0,rendered=null,dirty=!!options.working,lanePage=0;
     const sources=new Map([['original',{blob:originalBlob,label:'Audio original'}]]);
-    let selectedSource=options.working?'working':'original';
-    if(options.working)sources.set('working',options.working);
-    let previewContext,playbackMix,previewNoise,scheduledThrough=0,scheduled=[];
+    let selectedSource=options.working?.source||(options.working?(options.working.request?.voiceOnly?'clean':'result'):'original');
+    if(options.working&&selectedSource!=='original')sources.set(selectedSource,
+      {blob:options.working.blob,label:options.working.label,request:options.working.request});
+    if(options.working?.cleaned)sources.set('clean',
+      {...options.working.cleaned,label:'Versión limpia',request:{voiceOnly:true}});
+    let previewContext,playbackMix,previewNoise,scheduledThrough=0,scheduled=[],rawPlayback=false;
     const playedLive=new Map();
     const edited=()=>settings.lanes.some(lane=>lane.notes.length)||settings.clean!==0||settings.volume!==100||!!settings.effect;
     let lyrics=track.request?.lyrics??track.lyrics??'';
@@ -589,7 +594,9 @@
       }
       drawHead();
     }
-    function refresh(){timeline();noteEditor();renderLanes();}
+    function refresh(){timeline();noteEditor();renderLanes();
+      find('clean-range').textContent='Selección · '+timeText(settings.start)+' — '+timeText(settings.end);
+    }
     async function result(){
       if(rendered)return rendered;
       const revision=mixSerial,data=await render(buffer,settings);
@@ -613,6 +620,7 @@
       if(all)playedLive.clear();
     }
     function scheduleSounds(position){
+      if(rawPlayback)return;
       const speed=player.playbackRate,now=previewContext.currentTime;
       const from=Math.max(settings.start,scheduledThrough,position-.020);
       const until=Math.min(settings.end,position+.12*speed);
@@ -651,13 +659,14 @@
       }
       if(playing)tick=requestAnimationFrame(updatePlayback);
     }
-    async function play(){
+    async function play(options={}){
       if(playing){head=player.currentTime;stop();drawHead();showReel();return;}
       const resume=head>=settings.start&&head<settings.end-.025;
       await doAction('Preparando la escucha…',async()=>{
         const context=liveContext();
         playbackMix||=mixGraph(context,context.createMediaElementSource(player));
-        playbackMix.configure(settings);
+        rawPlayback=options.raw===true;
+        playbackMix.configure(rawPlayback?{...settings,effect:'',clean:0,volume:100}:settings);
         playbackMix.master.value=0;
         if(!resume){head=settings.start;reelElapsed=0;}
         player.currentTime=head;clearSchedule(true);
@@ -794,11 +803,24 @@
       if(!window.confirm('¿Seguro que querés borrar «'+name()+'» de tus audios?'))return;
       void doAction('Borrando canción…',async()=>{await options.onDelete();dirty=false;dialog.close();});
     };
-    let preparedVoice=null,voiceBusy=false,voiceGenerating=false,voiceMessage='',latestResult=null;
+    let preparedVoice=options.working?.cleaned||(options.working?.request?.voiceOnly?
+      {blob:options.working.blob,duration,bpm:settings.bpm}:null);
+    let voiceBusy=false,voiceGenerating=false,voiceMessage='',latestResult=null;
     function updateSourceChoices(){
-      const select=find('source-version');select.replaceChildren();
-      for(const [id,entry] of sources)select.add(new Option(entry.label,id));
-      select.value=selectedSource;
+      const host=find('source-buttons');host.replaceChildren();
+      for(const id of ['original','clean','result']){
+        const entry=sources.get(id);if(!entry)continue;
+        const button=document.createElement('button');button.type='button';button.dataset.listenSource=id;
+        button.textContent=id==='original'?'Escuchar original':entry.request?.voiceOnly||id==='clean'?'Escuchar versión limpia':'Escuchar resultado';
+        button.setAttribute('aria-pressed',String(id===selectedSource));
+        button.onclick=async()=>{
+          if(locked||voiceBusy)return;
+          if(selectedSource===id&&playing){head=player.currentTime;stop();return;}
+          await doAction('Abriendo el audio…',()=>useSource(entry,id));
+          if(selectedSource===id)await play({raw:true});
+        };
+        host.append(button);
+      }
       find('source-label').textContent=find('wave-label').textContent=sources.get(selectedSource).label;
     }
     async function useSource(entry,id){
@@ -812,16 +834,15 @@
       settings.start=clamp(settings.start,0,Math.max(0,duration-.02));
       settings.end=full?duration:clamp(settings.end,settings.start+.02,duration);
       head=clamp(head,settings.start,settings.end);left=0;settings.clean=0;find('clean').value=0;
+      settings.effect='';refreshEffectButtons();
       fields.start.max=fields.end.max=duration;
       updateSourceChoices();change();
     }
-    find('source-version').onchange=()=>doAction('Cambiando la pista…',async()=>{
-      const id=find('source-version').value;
-      await useSource(sources.get(id),id);
-    });
     function syncVoice(){
       const ready=options.voiceReadiness?.()||{};
       find('prepare-voice').disabled=voiceBusy||voiceGenerating||!ready.canClean;
+      find('update-clean').disabled=voiceBusy||voiceGenerating||!ready.canClean;
+      find('clean-selection').disabled=voiceBusy||voiceGenerating;
       find('voice-source').disabled=find('noise-strength').disabled=voiceBusy||voiceGenerating;
       find('save-voice').disabled=!preparedVoice||voiceBusy||voiceGenerating;
       find('generate-voice').disabled=!preparedVoice||voiceBusy||voiceGenerating||!ready.ready||!find('arrange-style').value;
@@ -831,27 +852,45 @@
     }
     const stopWatchingVoice=options.watchVoice?.(syncVoice);
     find('arrange-style').onchange=syncVoice;
-    find('voice-source').onchange=find('noise-strength').onchange=()=>{
-      preparedVoice=null;voiceMessage='';
-      find('voice-result').hidden=true;syncVoice();
-    };
-    find('prepare-voice').onclick=async()=>{
+    let reviewing=false;
+    function showCleanSettings(showSettings){
+      reviewing=showSettings;
+      find('clean-settings').hidden=!showSettings;
+      find('update-clean').hidden=!preparedVoice||!showSettings;
+      find('voice-result').hidden=!preparedVoice;
+      find('generate-settings').hidden=showSettings;
+      find('prepare-voice').textContent=preparedVoice?(showSettings?'Cerrar revisión':'Revisar limpieza'):'Limpiar audio';
+    }
+    async function cleanAudio(){
       if(voiceBusy||voiceGenerating)return;
-      stop();voiceBusy=true;voiceMessage='Limpiando la grabación…';syncVoice();
+      const partial=find('clean-selection').checked;
+      stop();voiceBusy=true;voiceMessage=partial?'Limpiando el fragmento seleccionado…':'Limpiando el audio…';syncVoice();
       try{
-        preparedVoice=await options.onPrepareVoice(find('voice-source').value,
+        const previous=preparedVoice;
+        const result=await options.onPrepareVoice(find('voice-source').value,
           message=>{voiceMessage=message;syncVoice();},
-          {blob:originalBlob,strength:Number(find('noise-strength').value)});
-        await useSource({...preparedVoice,label:'Voz limpia',request:{...track.request,voiceOnly:true}},'clean');
-        find('voice-result').hidden=false;
-        if(preparedVoice.bpm){settings.bpm=clamp(preparedVoice.bpm,40,240);find('bpm').value=settings.bpm;refresh();}
-        voiceMessage='Limpieza aplicada a la pista. Tocá Escuchar fragmento para oírla y compararla con Original subido.';
-      }catch(error){preparedVoice=null;voiceMessage=error.message;}
+          {blob:partial&&previous?previous.blob:originalBlob,strength:Number(find('noise-strength').value),
+           start:partial?settings.start:undefined,end:partial?settings.end:undefined});
+        preparedVoice=result;
+        const entry={...result,label:'Versión limpia',request:{...track.request,voiceOnly:true}};
+        if(partial){
+          const region={start:settings.start,end:settings.end};
+          await useSource(entry,'clean');
+          settings.start=region.start;settings.end=region.end;head=settings.start;refresh();
+        }else{
+          await useSource(entry,'clean');
+          if(!previous&&result.bpm){settings.bpm=clamp(result.bpm,40,240);find('bpm').value=settings.bpm;refresh();}
+        }
+        showCleanSettings(false);
+        voiceMessage=partial?'Fragmento actualizado. El resto del audio se conservó.':'Versión limpia lista para escuchar.';
+      }catch(error){voiceMessage=error.message;}
       finally{voiceBusy=false;syncVoice();}
-    };
-    find('save-voice').onclick=()=>doAction('Guardando la voz sola…',async()=>{
-      await options.onSaveVoice({...preparedVoice,lyrics:find('lyric').value,name:name().slice(0,86)+' · voz limpia'});
-      show('Voz guardada en Mis audios.');
+    }
+    find('prepare-voice').onclick=()=>preparedVoice?showCleanSettings(!reviewing):cleanAudio();
+    find('update-clean').onclick=cleanAudio;
+    find('save-voice').onclick=()=>doAction('Guardando el audio limpio…',async()=>{
+      await options.onSaveVoice({...preparedVoice,lyrics:find('lyric').value,name:name().slice(0,86)+' · audio limpio'});
+      show('Audio limpio guardado en Mis audios.');
     });
     async function receiveArrangement(track){
       latestResult=track;
@@ -883,7 +922,7 @@
           complete:receiveArrangement});
       }catch(error){voiceGenerating=false;voiceMessage=error.message;syncVoice();}
     };
-    updateSourceChoices();syncVoice();
+    showCleanSettings(!preparedVoice);updateSourceChoices();syncVoice();
     find('close').onclick=()=>{if(!locked&&!voiceBusy)dialog.close();};
     dialog.oncancel=event=>{if(locked||voiceBusy)event.preventDefault();};
     dialog.addEventListener('keydown',event=>event.stopPropagation());
@@ -892,7 +931,9 @@
       stop();resize.disconnect();player.removeAttribute('src');player.load();URL.revokeObjectURL(url);
       stopWatchingVoice?.();
       previewContext?.close().catch(()=>{});
-      if(dirty)Promise.resolve(options.onDraft?.(settings,selectedSource==='original'?null:{blob,label:sources.get(selectedSource).label,request:sources.get(selectedSource).request})).catch(error=>options.notify?.(error.message,'error'));
+      if(dirty)Promise.resolve(options.onDraft?.(settings,selectedSource==='original'&&!preparedVoice?null:
+        {blob,label:sources.get(selectedSource).label,request:sources.get(selectedSource).request,
+         source:selectedSource,cleaned:preparedVoice})).catch(error=>options.notify?.(error.message,'error'));
       dialog.remove();
     };
     document.body.append(dialog);dialog.showModal();resize.observe(wave);refresh();showReel();
