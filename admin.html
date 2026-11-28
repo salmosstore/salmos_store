@@ -29,6 +29,7 @@
 <link rel="stylesheet" href="shipping-requests.css?v=40.0">
   <link rel="stylesheet" href="storefront-backgrounds.css?v=45.0">
   <link rel="stylesheet" href="web-projects.css?v=46.0">
+  <link rel="stylesheet" href="admin-media-share.css?v=50.9">
 </head>
 <body>
   <div class="admin-layout">
@@ -260,7 +261,7 @@
 
   <dialog class="admin-dialog design-preview-dialog" id="designPreviewDialog">
     <div class="dialog-shell">
-      <div class="dialog-head"><div><div class="admin-eyebrow">Diseño original</div><h2 id="designPreviewTitle">Vista previa</h2></div><div class="admin-actions"><button class="icon-btn" type="button" id="downloadDesignOriginalBtn" data-download-original-design="" title="Descargar diseño original" aria-label="Descargar diseño original"><i class="fa-solid fa-download" aria-hidden="true"></i></button><button class="icon-btn" type="button" id="closeDesignPreviewBtn">×</button></div></div>
+      <div class="dialog-head"><div><div class="admin-eyebrow">Diseño original</div><h2 id="designPreviewTitle">Vista previa</h2></div><div class="admin-actions"><button class="icon-btn" type="button" id="shareDesignOriginalBtn" data-share-design="" aria-label="Compartir diseño" title="Compartir diseño"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i></button><button class="icon-btn" type="button" id="downloadDesignOriginalBtn" data-download-original-design="" title="Descargar diseño original" aria-label="Descargar diseño original"><i class="fa-solid fa-download" aria-hidden="true"></i></button><button class="icon-btn" type="button" id="closeDesignPreviewBtn">×</button></div></div>
       <div class="dialog-body design-preview-layout"><div class="design-preview-stage" id="designPreviewStage"></div><aside class="design-preview-meta" id="designPreviewMeta"></aside></div>
     </div>
   </dialog>
@@ -302,7 +303,8 @@
   <script src="web-projects-shared.js?v=46.0" defer></script>
   <script src="web-projects-admin.js?v=46.0" defer></script>
   <script src="sheet-detection.js?v=48.3" defer></script>
-  <script src="admin.js?v=48.5&amp;mkt=27.0" defer></script>
+  <script src="admin-media-share.js?v=50.9" defer></script>
+  <script src="admin.js?v=50.9&amp;mkt=28.9" defer></script>
   <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js?v=46.0',{updateViaCache:'none'}).catch(()=>{}));</script>
 
   <datalist id="designDestinations"><option value="Remeras"><option value="Chombas"><option value="Buzos"><option value="Tazas"><option value="Mates"><option value="Vasos"><option value="Termos"><option value="Gorras"><option value="Bolsos"></datalist>
