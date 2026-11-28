@@ -218,8 +218,8 @@
 
   async function open(options){
     const {track,tools,reel}=options;
-    const originalBlob=options.blob;
-    let blob=options.working?.blob||originalBlob;
+    const originalBlob=options.originalBlob||options.blob;
+    let blob=options.working?.blob||options.blob;
     let buffer=await offline(1).decodeAudioData(await blob.arrayBuffer()).catch(()=>{throw Error('No se pudo abrir el audio.');});
     let duration=buffer.duration;
     if(!duration||duration>601)throw Error('Elegí un audio de hasta diez minutos.');
@@ -231,7 +231,7 @@
       <button data-close aria-label="Cerrar edición">×</button></header>
       <div class="song-editor-layout"><div class="song-main">
         <section class="song-arrange" aria-labelledby="songInstrumentsTitle">
-          <div class="song-source-title"><h3 id="songInstrumentsTitle" data-source-label>Audio original</h3></div>
+          <div class="song-source-title"><h3 id="songInstrumentsTitle" data-source-label>Audio original</h3><button type="button" data-listen-original>Escuchar original</button></div>
           <div class="song-transport-row">
           <div class="song-toolbar song-transport"><button class="primary" data-play>▶ Escuchar fragmento</button><output data-clock aria-live="off"></output>
             <label class="song-repeat"><input data-loop type="checkbox"> Repetir fragmento</label>
@@ -311,7 +311,8 @@
         <div data-editor-panel="voice"></div><div data-editor-panel="lyrics" hidden></div><div data-editor-panel="help" hidden></div><div data-editor-panel="notes" hidden></div>
         <details data-lyric-box><summary>Letra y estilo <small data-review-label hidden>Revisar</small></summary>
           <label>Letra adjunta<textarea data-lyric rows="3" maxlength="3000" placeholder="Pegá la letra que querés guardar con este audio"></textarea></label>
-          <div class="song-toolbar"><button data-save-lyric>Guardar letra adjunta</button><button data-check-lyric hidden>Revisar lo cantado</button>
+          <div class="song-toolbar"><button data-extract-lyric>Extraer letra</button><button data-save-lyric>Guardar letra adjunta</button><button data-check-lyric hidden>Revisar lo cantado</button>
+            <button data-diagnostic>Descargar diagnóstico</button>
             <button data-unlink-lyric hidden>Pasar a Instrumental</button></div>
           <div class="song-toolbar" data-style-controls hidden><label>Género en la galería<select data-gallery-style></select></label>
             <button data-save-style>Guardar género</button></div>
@@ -329,7 +330,8 @@
     let reelElapsed=0,reelFrameTime,head=settings.start,left=0,zoom=1,activeNote=null,tick=0,playing=false;
     let locked=false,mixSerial=0,rendered=null,dirty=!!options.working,lanePage=0;
     const sources=new Map([['original',{blob:originalBlob,label:'Audio original'}]]);
-    let selectedSource=options.working?.source||(options.working?(options.working.request?.voiceOnly?'clean':'result'):'original');
+    let selectedSource=options.working?.source||(options.working?(options.working.request?.voiceOnly?'clean':'result'):originalBlob!==options.blob?'result':'original');
+    if(!options.working&&selectedSource==='result')sources.set('result',{blob:options.blob,label:'Audio con acompañamiento',request:track.request});
     if(options.working&&selectedSource!=='original')sources.set(selectedSource,
       {blob:options.working.blob,label:options.working.label,request:options.working.request});
     if(options.working?.cleaned)sources.set('clean',
@@ -344,6 +346,8 @@
     find('lyric').value=lyrics;
     find('lyric-box').hidden=!options.onLyrics&&!lyrics;
     find('save-lyric').hidden=!options.onLyrics;
+    find('extract-lyric').hidden=!options.onExtractLyrics;
+    find('diagnostic').hidden=!options.onDiagnostic||!!track.uploadKind;
     find('unlink-lyric').hidden=!options.onLyrics||!!track.request?.instrumental&&!lyrics;
     find('check-lyric').hidden=!options.onCheckLyrics||!lyrics;
     find('style-controls').hidden=!options.onStyle;
@@ -785,6 +789,13 @@
       const check=await options.onCheckLyrics(find('lyric').value);
       showLyricCheck(check);show('');
     });
+    find('extract-lyric').onclick=()=>doAction('Extrayendo la letra de este audio…',async()=>{
+      find('lyric').value=await options.onExtractLyrics(blob);syncSaveButtons();
+      show('Letra extraída. Tocá Guardar letra adjunta para conservarla.');
+    });
+    find('diagnostic').onclick=()=>doAction('Preparando el diagnóstico de esta toma…',async()=>{
+      const report=await options.onDiagnostic();download(report.blob,name()+' - diagnostico.json');show(report.message||'Diagnóstico descargado.');
+    });
     find('wav').onclick=()=>doAction('Preparando el WAV…',async()=>{
       const originalWav=/^audio\/(x-)?wav/i.test(blob.type)&&!edited()&&settings.start===0&&settings.end===duration;
       download(originalWav?blob:floatWav(await render(buffer,settings)),name()+'.wav');show('WAV listo.');
@@ -838,6 +849,12 @@
       fields.start.max=fields.end.max=duration;
       updateSourceChoices();change();
     }
+    find('listen-original').onclick=async()=>{
+      if(locked||voiceBusy)return;
+      if(selectedSource==='original'&&playing){head=player.currentTime;stop();return;}
+      await doAction('Abriendo el original…',()=>useSource(sources.get('original'),'original'));
+      if(selectedSource==='original')await play({raw:true});
+    };
     function syncVoice(){
       const ready=options.voiceReadiness?.()||{};
       find('prepare-voice').disabled=voiceBusy||voiceGenerating||!ready.canClean;
@@ -903,7 +920,7 @@
         await useSource({blob:output,label:'Resultado · '+style,request:track.request},'result');
         find('load-result').hidden=true;
         voiceMessage='Resultado listo en la onda. Tocá Escuchar fragmento. Podés comparar Original, Voz limpia y Resultado.';
-        show('Resultado aplicado a la pista.');
+        show('Resultado de prueba. Guardar como nueva versión lo agrega a tu galería.');
       }catch(error){
         find('load-result').hidden=false;
         voiceMessage='El resultado se guardó, pero falta cargarlo aquí. '+error.message;
