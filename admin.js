@@ -55,7 +55,10 @@
     }
     desktop.addEventListener('change',sync);
     const text=qs('#adminDailyPassageText');text.setAttribute('role','button');text.setAttribute('aria-label','Abrir el pasaje en grande');
-    const openPassage=()=>window.SalmosAdminMedia.openPassage(figure.dataset.passageText,figure.dataset.passageReference);
+    const openPassage=()=>window.SalmosAdminMedia.openPassage(figure.dataset.passageText,figure.dataset.passageReference,{loadBackgrounds:async()=>{
+      const assets=state.designAssets.length?state.designAssets:(await api('/api/admin/design-assets')).items||[];
+      return assets.filter(asset=>asset.scope!=='clients'&&asset.kind!=='sheet'&&!Number(asset.hidden)&&(!asset.mime_type||asset.mime_type.startsWith('image/'))).map(asset=>({id:'design-'+asset.id,name:asset.name||asset.file_name||'Diseño SALMOS',thumb:designThumbnailUrl(asset),src:apiUrl('/api/admin/design-assets/'+Number(asset.id)+'/file')}));
+    }});
     text.addEventListener('click',openPassage);
     text.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();openPassage();}});
     qsa('[data-daily-passage-step]',figure).forEach(button=>button.addEventListener('click',()=>{if(!passages?.length)return;if(selectionDay!==today())render();manualOffset+=Number(button.dataset.dailyPassageStep);render();}));
