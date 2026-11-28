@@ -299,7 +299,15 @@
           <progress data-voice-progress hidden aria-label="Procesando el audio"></progress>
           </div><div class="song-style-column" data-voice-result hidden>
             <div class="song-toolbar" data-generate-settings><label>Estilo del acompañamiento<select data-arrange-style></select></label>
-            <button class="primary" data-generate-voice disabled>Generar acompañamiento</button></div>
+            <button class="primary" data-generate-voice disabled>Crear acompañamiento</button></div>
+            <div class="song-arrange-levels"><label>Batería<input data-backing-drums type="range" min="0" max="100" value="35"></label><label>Guitarra<input data-backing-guitar type="range" min="0" max="100" value="30"></label></div>
+            <p class="song-backing-help">Batería y guitarra grabadas acompañan tu voz limpia. Los instrumentos se colocan sobre el pulso de tu grabación.</p>
+            <details class="song-backing-adjust"><summary>Ajustar el ritmo o la tonalidad</summary>
+              <div class="song-tempo-row"><label>Pulsos por minuto<input data-backing-bpm type="number" min="45" max="200" placeholder="Automático"></label><button data-tap-tempo type="button">Marcar el pulso</button>
+              <label>Tonalidad<select data-backing-key><option value="">Automática</option></select></label></div>
+              <p class="song-backing-help">Si la batería queda fuera de tiempo, escuchá tu voz y tocá Marcar el pulso cuatro veces siguiendo la canción. Volvé a crear el acompañamiento; tu voz se conserva.</p>
+            </details>
+            <p class="song-backing-help"><a href="instrumentos-creditos.txt" target="_blank" rel="noopener">Instrumentos y créditos</a></p>
             </div><div class="song-comparison"><h3>Versiones del audio</h3><div class="song-source-buttons" data-source-buttons role="group" aria-label="Comparar audios"></div>
             <p>Marcá I–F para trabajar un ruido. Guardar cambios conserva el audio entero, salvo que marques Guardar sólo el fragmento.</p>
             <button data-load-result hidden>Cargar el resultado en esta pista</button>
@@ -379,8 +387,11 @@
     for(const key of ['gallery-style','arrange-style']){
       const select=find(key);
       select.add(new Option('Sin género elegido',''));
-      for(const [id,[label]] of Object.entries(options.genres||{}))select.add(new Option(label,id));
-      select.value=key==='arrange-style'?options.style||'house':track.request?.galleryStyle??track.request?.style??'';
+      for(const [id,[label]] of Object.entries(options.genres||{})){
+        if(key==='arrange-style'&&!['rock','urban','ballad','gospel','worship','reggae'].includes(id))continue;
+        select.add(new Option(label,id));
+      }
+      select.value=key==='arrange-style'?(['rock','urban','ballad','gospel','worship','reggae'].includes(options.style)?options.style:'rock'):track.request?.galleryStyle??track.request?.style??'';
     }
     function showLyricCheck(check){
       const label=find('lyric-check');
@@ -887,6 +898,10 @@
     }
     const stopWatchingVoice=options.watchVoice?.(syncVoice);
     find('arrange-style').onchange=syncVoice;
+    const backingNoteNames=['Do','Do#','Re','Mib','Mi','Fa','Fa#','Sol','Lab','La','Sib','Si'];
+    for(let mode=0;mode<2;mode++)for(let tonic=0;tonic<12;tonic++)find('backing-key').add(new Option(backingNoteNames[tonic]+(mode?' menor':' mayor'),String(mode*12+tonic)));
+    const taps=[];
+    find('tap-tempo').onclick=()=>{const now=performance.now();if(taps.length&&now-taps[taps.length-1]>2000)taps.length=0;taps.push(now);if(taps.length>8)taps.shift();if(taps.length>=3){const bpm=Math.round(60000*(taps.length-1)/(taps[taps.length-1]-taps[0]));if(bpm>=45&&bpm<=200)find('backing-bpm').value=bpm;}find('tap-tempo').textContent=taps.length<4?'Marcar el pulso · '+taps.length+'/4':'Pulso marcado';};
     let reviewing=false;
     function showCleanSettings(showSettings){
       reviewing=showSettings;
@@ -942,7 +957,8 @@
         const style=options.genres?.[track.request?.style]?.[0]||'acompañamiento';
         await useSource({blob:output,label:'Resultado · '+style,request:track.request},'result');
         find('load-result').hidden=true;
-        voiceMessage='Resultado listo en la onda. Comparalo con Original y Versión limpia usando los botones.';
+        const detail=track.request?.backingDetails;
+        voiceMessage=detail?detail.instruments.join(' + ')+' · '+detail.bpm+' pulsos/min · '+detail.key+'. '+(detail.estimated?'Pulso estimado: podés ajustarlo en Ajustar el ritmo.':'Podés comparar con la voz limpia.'):'Resultado listo en la onda. Comparalo con Original y Versión limpia usando los botones.';
         show('Resultado de prueba. Guardar cambios actualiza esta canción; Más → Guardar copia conserva otra ficha.');
       }catch(error){
         find('load-result').hidden=false;
@@ -955,7 +971,7 @@
       stop();voiceGenerating=true;voiceMessage='Enviando tu voz limpia al iniciador…';syncVoice();
       try{
         await options.onArrangeVoice({...preparedVoice,lyrics:find('lyric').value,style:find('arrange-style').value,
-          bpm:settings.bpm,name:name().slice(0,78)+' · con acompañamiento',
+          bpm:find('backing-bpm').value?Number(find('backing-bpm').value):null,key:find('backing-key').value!==''?Number(find('backing-key').value):null,drums:Number(find('backing-drums').value),guitar:Number(find('backing-guitar').value),name:name().slice(0,78)+' · con acompañamiento',
           report(message,state){
             voiceMessage=message;voiceGenerating=state==='working';syncVoice();
           },

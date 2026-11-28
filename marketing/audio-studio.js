@@ -5,10 +5,10 @@
   const audioTypes={aac:'audio/aac',flac:'audio/flac',m4a:'audio/mp4',mp3:'audio/mpeg',ogg:'audio/ogg',
     opus:'audio/ogg',wav:'audio/wav',webm:'audio/webm',aif:'audio/aiff',aiff:'audio/aiff'};
   const audioName=file=>file.name.replace(/\.[^.]+$/,'').trim().slice(0,100)||'Audio subido';
-  const launcherFile='INICIAR_SALMOS.bat?v=28.10';
+  const launcherFile='INICIAR_SALMOS.bat?v=28.11';
   const maxSongDuration=600;
   const durationChoices=[10,15,20,30,45,60,90,120,150,180,240,300,360,600];
-  const songApiVersion=15;
+  const songApiVersion=16;
   const connectionAttempts=2;
   const lyricWords=text=>(text||'').replace(/\[[^\]\n]*\]/g,'').match(/[\p{L}\p{N}]+/gu)||[];
   const trackLyrics=track=>track.request?.lyrics??track.lyrics??'';
@@ -968,7 +968,7 @@
             if(source.remote&&!source.localOnly){
               const status=await connect();
               if(status.songApi<15)throw Error('Actualizá y abrí el iniciador para guardar sobre esta misma canción.');
-              const saved=await api('/replace/'+source.id+'?'+new URLSearchParams({name:edit.name,revision:String(source.request?.editRevision||0),kind:request.recordedVoice?'arranged':request.voiceOnly?'clean':'edited',style:request.style||''}),
+              const saved=await api('/replace/'+source.id+'?'+new URLSearchParams({name:edit.name,revision:String(source.request?.editRevision||0),kind:request.recordedVoice?'arranged':request.voiceOnly?'clean':'edited',style:request.style||'',bpm:String(request.bpm||''),backing:request.backing||''}),
                 {method:'POST',headers:{'Content-Type':'audio/wav'},body:nextBlob},180000);
               request={...saved.request,...request,hasOriginal:true,editRevision:saved.request.editRevision};
             }
@@ -1027,9 +1027,9 @@
           await storeMetadata({...source.request,galleryStyle:style});
         },
         voiceReadiness(){
-          const data=initiator.data,ready=generationState(data,{instrumental:true,working:!!song.id});
-          return {...ready,canClean:data?.songApi>=songApiVersion&&data.setup?.state==='ready'&&
-            !data.voiceStage&&!song.id&&data.job?.state!=='running'};
+          const data=initiator.data,ready=data?.songApi>=16&&data.setup?.state==='ready'&&!data.voiceStage&&!data.externalBusy&&!data.wanBusy&&data.job?.state!=='running';
+          return {ready:!!(ready&&data.backingReady),canClean:!!ready,download:!data||data.songApi<16,
+            help:!data?'Abrí el iniciador.':data.songApi<16?'Actualizá y abrí el iniciador.':data.setup?.state!=='ready'?'Esperá a que el iniciador diga SALMOS listo.':data.voiceStage||(!data.backingReady?'Falta la biblioteca de instrumentos. Abrí el iniciador actualizado.':'')};
         },
         watchVoice(listener){
           const viewer=Symbol('voice-editor'),stop=initiator.subscribe(listener);
@@ -1052,15 +1052,22 @@
         },
         onSaveVoice:async prepared=>retainOriginal(await saveBlob({...prepared,id:newId(),request:{lyrics:prepared.lyrics,
           bpm:prepared.bpm,voiceOnly:true,instrumental:false}},prepared.blob,source.id)),
-        onArrangeVoice:async ({blob,duration,bpm,style,name,lyrics,report,complete})=>{
+        onArrangeVoice:async ({blob,style,name,lyrics,bpm,key,drums,guitar,report,complete})=>{
           if(song.id||arrangementRun)throw Error('Ya hay una versión en curso.');
-          arrangementRun={report,complete,original};
+          arrangementRun={report,complete,original};report('Colocando los instrumentos sobre tu voz…','working');
+          const stop=initiator.subscribe(data=>{if(data?.voiceStage)report(data.voiceStage,'working');});
           try{
             const status=await connect();
-            await song.start({recordedVoice:true,instrumental:false,name,lyrics,style,bpm,
-              duration:Math.max(10,Math.min(maxSongDuration,duration)),caption:genres[style][1],
-              versionOf:source.id},status,{wav:blob,reference:{id:source.id,name:source.name,uploaded:true,kind:'voice'}});
-          }catch(error){arrangementRun=null;throw error;}
+            if(status.songApi<16||!status.backingReady)throw Error('Descargá y abrí el iniciador actualizado para cargar los instrumentos.');
+            if(status.setup?.state!=='ready')throw Error('Esperá a que el iniciador indique SALMOS listo.');
+            const wav=tools.waveBlob(await stereoAudio(blob));
+            const response=await request('/accompaniment?'+new URLSearchParams({style,drums:String(drums),guitar:String(guitar),...(bpm?{bpm:String(bpm)}:{}),...(key!==null?{key:String(key)}:{})}),
+              {method:'POST',headers:{'Content-Type':'audio/wav'},body:wav},180000);
+            const audio=await response.blob(),detail=JSON.parse(response.headers.get('X-Salmos-Accompaniment')||'{}');
+            if(!audio.size)throw Error('No se recibió el acompañamiento. Tu voz limpia sigue disponible.');
+            await complete({id:newId(),name,duration:detail.duration,blob:audio,localOnly:true,
+              request:{lyrics,style,galleryStyle:style,bpm:detail.bpm,instrumental:false,recordedVoice:true,voiceOnly:false,backing:'sampled-instruments-v1',backingDetails:detail}});
+          }finally{stop();arrangementRun=null;void initiator.check();}
         },
         onCheckLyrics:async lyrics=>{
           const status=await connect();
@@ -1107,7 +1114,7 @@
       blob=tools.waveBlob(await stereoAudio(blob));
       let remote=false,reason='';
       if(initiator.data)try{
-        await api('/versions/'+t.id+'?'+new URLSearchParams({name:t.name,parent:parentId,kind:t.request?.voiceOnly?'voice':''}),
+        await api('/versions/'+t.id+'?'+new URLSearchParams({name:t.name,parent:parentId,kind:t.request?.recordedVoice?'arranged':t.request?.voiceOnly?'voice':'',style:t.request?.style||'',bpm:String(t.request?.bpm||''),backing:t.request?.backing||''}),
           {method:'POST',headers:{'Content-Type':'audio/wav'},body:blob});
         if(typeof t.request?.lyrics==='string'&&t.request.lyrics)
           await api('/lyrics',jsonPost({id:t.id,lyrics:t.request.lyrics})).catch(()=>{});

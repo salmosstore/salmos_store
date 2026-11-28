@@ -497,7 +497,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json_response({'error': 'Origen no autorizado.'}, 403)
         path = urllib.parse.urlparse(self.path).path
         if project_storage.post(self,path):return
-        if EDITOR_SETUP['state'] != 'ready' and path in ('/api/music/transcribe','/api/music/voice','/api/music/generate','/api/music/mp3','/api/wan/generate','/api/tts'):
+        if EDITOR_SETUP['state'] != 'ready' and path in ('/api/music/transcribe','/api/music/voice','/api/music/accompaniment','/api/music/generate','/api/music/mp3','/api/wan/generate','/api/tts'):
             return self.json_response({'error':'Esperá a que el iniciador indique SALMOS listo.'},409)
         if path == '/api/music/mp3':
             return self.export_mp3()

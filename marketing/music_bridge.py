@@ -111,7 +111,8 @@ def state(job_id=None):
         return {'audioApi': 2, 'songApi': SONG_API,
                 'musicReaderVersion': 1 if memory_error_status else 0, 'installed': bool(root), 'missingCheckpoints': missing,
                 'transcription': importlib.util.find_spec('faster_whisper') is not None,
-                'transcriptionStage': TRANSCRIPTION_STAGE, 'voiceStage': VOICE_STAGE, 'job': status}
+                'transcriptionStage': TRANSCRIPTION_STAGE, 'voiceStage': VOICE_STAGE, 'job': status,
+                'backingReady': (ROOT / 'instrumentos.zip').is_file()}
 
 
 def validate_request(data):
@@ -263,6 +264,42 @@ def serve_clean_voice(handler):
     finally:
         VOICE_STAGE = None
         VOICE_LOCK.release()
+
+
+def serve_accompaniment(handler):
+    global VOICE_STAGE
+    from accompaniment import render_accompaniment
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(handler.path).query)
+    with LOCK:
+        if busy() or not VOICE_LOCK.acquire(blocking=False):
+            raise RuntimeError('Esperá a que termine el otro pedido de audio.')
+    try:
+        def report(message):
+            global VOICE_STAGE
+            VOICE_STAGE = message
+        report('Recibiendo tu voz limpia…')
+        DATA.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.acompanamiento-', dir=DATA) as temporary:
+            folder=Path(temporary);raw=folder/'entrada.wav';source=folder/'voz.wav';output=folder/'mezcla.wav'
+            read_wav_upload(handler,raw);pcm_duration(raw,minimum=.25)
+            ffmpeg(ffmpeg_path(),'-i',raw,'-ac','2','-ar','44100','-c:a','pcm_s16le',source)
+            bpm=float(query['bpm'][0]) if query.get('bpm') else None
+            key=int(query['key'][0]) if query.get('key') else None
+            if key is not None and not 0<=key<24:raise ValueError('Elegí una tonalidad válida.')
+            detail=render_accompaniment(source,output,ROOT/'instrumentos.zip',ffmpeg_path(),
+                style=query.get('style',['rock'])[0],bpm=bpm,key=key,
+                drum_level=float(query.get('drums',['35'])[0])/100,guitar_level=float(query.get('guitar',['30'])[0])/100,report=report)
+            handler.send_response(200)
+            handler.send_header('Content-Type','audio/wav')
+            handler.send_header('Content-Length',str(output.stat().st_size))
+            handler.send_header('X-Salmos-Accompaniment',json.dumps(detail,ensure_ascii=True,separators=(',',':')))
+            handler.send_header('Access-Control-Expose-Headers','X-Salmos-Accompaniment, Content-Length')
+            handler.end_headers()
+            try:
+                with output.open('rb') as f:shutil.copyfileobj(f,handler.wfile)
+            except ConnectionError:handler.close_connection=True
+    finally:
+        VOICE_STAGE=None;VOICE_LOCK.release()
 
 
 def upload_reference(handler, job_id):
@@ -600,7 +637,7 @@ def save_audio_version(handler, track_id):
     name = query.get('name', [''])[0].strip()
     parent_id = query.get('parent', [''])[0]
     kind = query.get('kind', [''])[0]
-    if kind not in ('', 'voice'):
+    if kind not in ('', 'voice', 'arranged'):
         raise ValueError('Tipo de versión no válido.')
     if not name or len(name) > 100 or (parent_id and not re.fullmatch(r'[a-f0-9]{32}', parent_id)) or track_id == parent_id:
         raise ValueError('Revisá el nombre de la versión.')
@@ -636,7 +673,20 @@ def save_audio_version(handler, track_id):
                 pass  # The original can also be a recording saved only in the browser.
         request.update(name=name, duration=duration, saved=True, parentId=parent_id, audioEdit=True)
         if kind == 'voice':
-            request.update(voiceOnly=True, instrumental=False, lyrics='')
+            request.update(voiceOnly=True, recordedVoice=False, instrumental=False, lyrics='')
+        if kind == 'arranged':
+            request.update(voiceOnly=False, recordedVoice=True, instrumental=False, style=query.get('style',['rock'])[0][:40],galleryStyle=query.get('style',['rock'])[0][:40])
+            if query.get('backing')==['sampled-instruments-v1']:request['backing']='sampled-instruments-v1'
+            if query.get('bpm'):
+                bpm=float(query['bpm'][0])
+                if 45<=bpm<=200:request['bpm']=bpm
+        if parent_id:
+            parent=DATA/parent_id
+            original=parent/'cancion-original.wav'
+            if not original.is_file():original=parent/'cancion.wav'
+            if original.is_file():
+                shutil.copyfile(original,folder/'cancion-original.wav');request['hasOriginal']=True
+            else:request.pop('hasOriginal',None)
         (folder / 'request.json').write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
         write_status(folder, {'state':'done','message':'Versión guardada','progress':1})
         with LOCK:
@@ -679,7 +729,13 @@ def replace_audio(handler, track_id):
             request.update(name=name, duration=duration, saved=True, hasOriginal=True, editRevision=revision+1,
                            audioEdit=True, voiceOnly=kind == 'clean', recordedVoice=kind == 'arranged')
             if kind == 'arranged' and style:
+                request['instrumental'] = False
                 request['style'] = style
+                request['galleryStyle'] = style
+                if query.get('backing') == ['sampled-instruments-v1']:request['backing'] = 'sampled-instruments-v1'
+                if query.get('bpm'):
+                    bpm=float(query['bpm'][0])
+                    if 45<=bpm<=200:request['bpm']=bpm
             request_tmp = folder / 'request.tmp'
             request_tmp.write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
             staged.replace(folder / 'cancion.wav')
@@ -691,9 +747,11 @@ def replace_audio(handler, track_id):
 
 
 def post(handler, path, wan_running=False, lyrics_ready=None):
-    if path == '/api/music/voice':
+    if path in ('/api/music/voice','/api/music/accompaniment'):
         try:
-            serve_clean_voice(handler)
+            if wan_running:raise RuntimeError('Esperá a que termine el movimiento de video.')
+            if path.endswith('/accompaniment'):serve_accompaniment(handler)
+            else:serve_clean_voice(handler)
         except (ValueError, wave.Error, EOFError) as exc:
             handler.json_response({'error': str(exc) or 'No se pudo leer la grabación.'}, 422)
         except (OSError, RuntimeError, ImportError) as exc:

@@ -650,3 +650,27 @@ dialog.song-editor{
   .production-reels #studioHome{padding:16px}
   .production-reels #savedProjects{grid-template-columns:minmax(0,268px)}
 }
+/* Controles de audio legibles, con botones del ancho de su contenido. */
+.song-editor{font:15px/1.4 system-ui}
+.song-editor button{font-size:15px;min-height:38px;padding:8px 15px;border-radius:19px;flex:none}
+.song-editor label{font-size:14px;line-height:1.35}
+.song-editor .song-side-tabs{display:flex;flex-wrap:wrap;gap:8px}
+.song-editor .song-side-tabs button{width:auto;min-width:115px;flex:none}
+.song-editor .song-source-buttons button{flex:0 1 auto;min-width:105px;max-width:210px;font-size:14px}
+.song-editor .song-voice-tools{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:start}
+.song-editor .song-clean-column{flex:0 1 260px}.song-editor .song-style-column{flex:0 1 365px}.song-editor .song-comparison{flex:0 1 410px}
+.song-editor .song-voice-tools .song-toolbar>button,.song-editor .song-style-column .song-toolbar>button{flex:0 0 auto;min-width:0;width:auto;max-width:100%;font-size:15px}
+.song-editor .song-voice-tools h3{font-size:16px}.song-editor .song-voice-tools .song-comparison>p{font-size:13px}
+.song-editor .song-voice-tools select{max-width:330px}
+.song-editor .song-voice-tools .song-toolbar>label{flex:1 1 110px}
+.song-editor .song-voice-tools .song-toolbar>label.song-clean-selection{flex:1 0 100%}
+.song-editor .song-voice-tools .song-source-buttons{flex-wrap:wrap}
+.song-editor .song-arrange button,.song-editor .song-arrange select,.song-editor .song-arrange input:not([type=range]):not([type=checkbox]){font-size:14px;min-height:35px}
+.song-editor .song-track-name{font-size:14px}.song-editor [data-clock]{font-size:14px}
+.song-editor .song-more>summary{font-size:14px;border-radius:18px}
+.song-editor .song-voice-tools .song-arrange-levels{display:flex;flex-wrap:wrap;gap:8px 14px;margin:9px 0}
+.song-arrange-levels label{width:140px}.song-arrange-levels input[type=range]{width:100%}
+.song-editor .song-tempo-row{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:8px 0}
+.song-editor .song-tempo-row label{width:145px}.song-editor .song-tempo-row input{width:100%}
+.song-editor .song-voice-tools .song-backing-help{font-size:13px;line-height:1.45;margin:7px 0}
+@media(max-width:700px){.song-editor .song-voice-tools>div{flex:1 1 100%;width:100%}.song-editor .song-side-tabs button{min-width:0}.song-editor .song-arrange-levels label{flex:1;min-width:110px}}

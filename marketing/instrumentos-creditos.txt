@@ -1,0 +1,11 @@
+SALMOS — Instrumentos de acompañamiento
+
+Guitarras: tonejs-instruments, Nicholaus P. Brosowsky y autores originales detallados en https://github.com/nbrosowsky/tonejs-instruments/blob/master/sample-source-info.txt
+Fuente: https://github.com/nbrosowsky/tonejs-instruments
+Licencia de las muestras: Creative Commons Attribution 3.0, https://creativecommons.org/licenses/by/3.0/
+
+Batería: Virtuosity Drums — Versilian Studios y Karoryfer Samples, interpretada por Austin McMahon.
+Fuente: https://github.com/sfzinstruments/virtuosity_drums
+Licencia: CC0 1.0, https://creativecommons.org/publicdomain/zero/1.0/
+
+Adaptaciones para SALMOS: conversión mono PCM16 a 44.1 kHz, recorte del silencio previo y del final, fundido de salida y ajuste de nivel.
